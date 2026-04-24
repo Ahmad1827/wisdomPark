@@ -1,23 +1,60 @@
 #include <SFML/Graphics.hpp>
-#include <iostream>
 #include <cmath>
-#include <string>
+#include <vector>
+#include <memory>
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode(800, 600), "Software Desen - S: Salveaza, E: Guma, C: Sterge");
+    sf::RenderWindow window(sf::VideoMode(800, 600), "Wisdom Park - AI Helper Alpha");
     window.setFramerateLimit(60);
 
-    sf::RenderTexture canvas;
-    canvas.create(800, 600);
-    canvas.clear(sf::Color::White);
+    std::vector<std::unique_ptr<sf::RenderTexture>> frames;
+    int currentFrame = 0;
 
-    sf::Sprite canvasSprite(canvas.getTexture());
+    auto addNewFrame = [&]() {
+        auto tex = std::make_unique<sf::RenderTexture>();
+        tex->create(800, 600);
+        tex->clear(sf::Color::Transparent);
+        frames.push_back(std::move(tex));
+        };
+
+    addNewFrame();
 
     bool isDrawing = false;
     sf::Vector2f lastPos;
     float brushSize = 5.0f;
     sf::Color brushColor = sf::Color::Black;
-    int saveCount = 0;
+
+    bool isPlaying = false;
+    sf::Clock playClock;
+    float timePerFrame = 1.0f / 12.0f;
+
+    sf::RectangleShape parkGround(sf::Vector2f(800, 100));
+    parkGround.setPosition(0, 500);
+    parkGround.setFillColor(sf::Color(34, 139, 34));
+
+    sf::RectangleShape redStall(sf::Vector2f(40, 40));
+    redStall.setPosition(20, 530);
+    redStall.setFillColor(sf::Color::Red);
+
+    sf::RectangleShape blueStall(sf::Vector2f(40, 40));
+    blueStall.setPosition(70, 530);
+    blueStall.setFillColor(sf::Color::Blue);
+
+    sf::RectangleShape greenStall(sf::Vector2f(40, 40));
+    greenStall.setPosition(120, 530);
+    greenStall.setFillColor(sf::Color::Green);
+
+    sf::RectangleShape eraser(sf::Vector2f(40, 40));
+    eraser.setPosition(170, 530);
+    eraser.setFillColor(sf::Color::White);
+    eraser.setOutlineThickness(2);
+    eraser.setOutlineColor(sf::Color::Black);
+
+    sf::CircleShape aiMascot(30);
+    aiMascot.setPosition(700, 520);
+    aiMascot.setFillColor(sf::Color(0, 191, 255));
+
+    bool aiActive = false;
 
     while (window.isOpen()) {
         sf::Event event;
@@ -27,62 +64,104 @@ int main() {
 
             if (event.type == sf::Event::KeyPressed) {
                 if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::B) brushColor = sf::Color::Black;
-                if (event.key.code == sf::Keyboard::Num2) brushColor = sf::Color::Red;
-                if (event.key.code == sf::Keyboard::Num3) brushColor = sf::Color::Green;
-                if (event.key.code == sf::Keyboard::Num4) brushColor = sf::Color::Blue;
-                if (event.key.code == sf::Keyboard::Num5) brushColor = sf::Color::Yellow;
-                if (event.key.code == sf::Keyboard::E) brushColor = sf::Color::White;
-                if (event.key.code == sf::Keyboard::C) canvas.clear(sf::Color::White);
+                if (event.key.code == sf::Keyboard::C) frames[currentFrame]->clear(sf::Color::Transparent);
 
-                if (event.key.code == sf::Keyboard::S) {
-                    saveCount++;
-                    std::string filename = "desen_" + std::to_string(saveCount) + ".png";
-                    sf::Image screenshot = canvas.getTexture().copyToImage();
-                    if (screenshot.saveToFile(filename)) {
-                        std::cout << "Salvat cu succes: " << filename << std::endl;
-                    }
-                    else {
-                        std::cout << "Eroare la salvare!" << std::endl;
-                    }
+                if (event.key.code == sf::Keyboard::Right && !isPlaying) {
+                    currentFrame++;
+                    if (currentFrame >= frames.size()) addNewFrame();
+                }
+                if (event.key.code == sf::Keyboard::Left && !isPlaying) {
+                    if (currentFrame > 0) currentFrame--;
+                }
+
+                if (event.key.code == sf::Keyboard::Space) {
+                    isPlaying = true;
+                    currentFrame = 0;
+                    playClock.restart();
                 }
             }
 
-            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                isDrawing = true;
-                lastPos = sf::Vector2f(event.mouseButton.x, event.mouseButton.y);
-
-                sf::CircleShape dot(brushSize / 2.f);
-                dot.setOrigin(brushSize / 2.f, brushSize / 2.f);
-                dot.setPosition(lastPos);
-                dot.setFillColor(brushColor);
-                canvas.draw(dot);
-                canvas.display();
+            if (event.type == sf::Event::KeyReleased) {
+                if (event.key.code == sf::Keyboard::Space) {
+                    isPlaying = false;
+                }
             }
 
-            if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
-                isDrawing = false;
-            }
+            if (!isPlaying) {
+                if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                    sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
 
-            if (event.type == sf::Event::MouseMoved && isDrawing) {
-                sf::Vector2f currentPos(event.mouseMove.x, event.mouseMove.y);
-                sf::Vector2f d = currentPos - lastPos;
-                float length = std::sqrt(d.x * d.x + d.y * d.y);
+                    if (redStall.getGlobalBounds().contains(mousePos)) {
+                        brushColor = sf::Color::Red;
+                    }
+                    else if (blueStall.getGlobalBounds().contains(mousePos)) {
+                        brushColor = sf::Color::Blue;
+                    }
+                    else if (greenStall.getGlobalBounds().contains(mousePos)) {
+                        brushColor = sf::Color::Green;
+                    }
+                    else if (eraser.getGlobalBounds().contains(mousePos)) {
+                        brushColor = sf::Color::Transparent;
+                    }
+                    else if (aiMascot.getGlobalBounds().contains(mousePos)) {
+                        aiActive = !aiActive;
+                        if (aiActive) parkGround.setFillColor(sf::Color(255, 223, 0));
+                        else parkGround.setFillColor(sf::Color(34, 139, 34));
+                    }
+                    else if (mousePos.y < 500) {
+                        isDrawing = true;
+                        lastPos = mousePos;
 
-                sf::RectangleShape line(sf::Vector2f(length, brushSize));
-                line.setOrigin(0, brushSize / 2.f);
-                line.setPosition(lastPos);
-                line.setRotation(std::atan2(d.y, d.x) * 180.f / 3.14159265f);
-                line.setFillColor(brushColor);
-                canvas.draw(line);
+                        sf::CircleShape dot(brushSize / 2.f);
+                        dot.setOrigin(brushSize / 2.f, brushSize / 2.f);
+                        dot.setPosition(lastPos);
+                        dot.setFillColor(brushColor);
+                        if (brushColor == sf::Color::Transparent)
+                            frames[currentFrame]->draw(dot, sf::RenderStates(sf::BlendNone));
+                        else
+                            frames[currentFrame]->draw(dot);
+                        frames[currentFrame]->display();
+                    }
+                }
 
-                sf::CircleShape circle(brushSize / 2.f);
-                circle.setOrigin(brushSize / 2.f, brushSize / 2.f);
-                circle.setPosition(currentPos);
-                circle.setFillColor(brushColor);
-                canvas.draw(circle);
+                if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+                    isDrawing = false;
+                }
 
-                canvas.display();
-                lastPos = currentPos;
+                if (event.type == sf::Event::MouseMoved && isDrawing) {
+                    sf::Vector2f currentPos(event.mouseMove.x, event.mouseMove.y);
+
+                    if (currentPos.y >= 500) {
+                        isDrawing = false;
+                        continue;
+                    }
+
+                    sf::Vector2f d = currentPos - lastPos;
+                    float length = std::sqrt(d.x * d.x + d.y * d.y);
+
+                    sf::RectangleShape line(sf::Vector2f(length, brushSize));
+                    line.setOrigin(0, brushSize / 2.f);
+                    line.setPosition(lastPos);
+                    line.setRotation(std::atan2(d.y, d.x) * 180.f / 3.14159265f);
+                    line.setFillColor(brushColor);
+
+                    sf::CircleShape circle(brushSize / 2.f);
+                    circle.setOrigin(brushSize / 2.f, brushSize / 2.f);
+                    circle.setPosition(currentPos);
+                    circle.setFillColor(brushColor);
+
+                    if (brushColor == sf::Color::Transparent) {
+                        frames[currentFrame]->draw(line, sf::RenderStates(sf::BlendNone));
+                        frames[currentFrame]->draw(circle, sf::RenderStates(sf::BlendNone));
+                    }
+                    else {
+                        frames[currentFrame]->draw(line);
+                        frames[currentFrame]->draw(circle);
+                    }
+
+                    frames[currentFrame]->display();
+                    lastPos = currentPos;
+                }
             }
 
             if (event.type == sf::Event::MouseWheelScrolled) {
@@ -94,19 +173,36 @@ int main() {
             }
         }
 
-        window.clear(sf::Color::White);
-        window.draw(canvasSprite);
+        if (isPlaying) {
+            if (playClock.getElapsedTime().asSeconds() >= timePerFrame) {
+                currentFrame++;
+                if (currentFrame >= frames.size()) {
+                    currentFrame = 0;
+                }
+                playClock.restart();
+            }
+        }
 
-        sf::CircleShape brushPreview(brushSize / 2.f);
-        brushPreview.setFillColor(brushColor);
-        brushPreview.setOutlineThickness(1);
-        brushPreview.setOutlineColor(brushColor == sf::Color::White ? sf::Color::Black : sf::Color(200, 200, 200));
-        brushPreview.setPosition(10, 10);
-        window.draw(brushPreview);
+        window.clear(sf::Color::White);
+
+        if (!isPlaying && currentFrame > 0) {
+            sf::Sprite onionSkin(frames[currentFrame - 1]->getTexture());
+            onionSkin.setColor(sf::Color(255, 255, 255, 60));
+            window.draw(onionSkin);
+        }
+
+        sf::Sprite currentSprite(frames[currentFrame]->getTexture());
+        window.draw(currentSprite);
+
+        window.draw(parkGround);
+        window.draw(redStall);
+        window.draw(blueStall);
+        window.draw(greenStall);
+        window.draw(eraser);
+        window.draw(aiMascot);
 
         window.display();
     }
 
     return 0;
 }
-// 1011
