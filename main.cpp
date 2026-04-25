@@ -2,61 +2,63 @@
 #include <cmath>
 #include <vector>
 #include <memory>
+#include "AIHelper.h"
 
-int main() {
-    sf::RenderWindow window(sf::VideoMode(800, 600), "Wisdom Park - AI Helper Alpha");
-    window.setFramerateLimit(60);
-
+class WisdomPark {
+private:
+    sf::RenderWindow window;
     std::vector<std::unique_ptr<sf::RenderTexture>> frames;
-    int currentFrame = 0;
+    int currentFrame;
 
-    auto addNewFrame = [&]() {
+    bool isDrawing;
+    sf::Vector2f lastPos;
+    float brushSize;
+    sf::Color brushColor;
+
+    bool isPlaying;
+    sf::Clock playClock;
+    float timePerFrame;
+
+    sf::RectangleShape parkGround;
+    sf::RectangleShape redStall;
+    sf::RectangleShape blueStall;
+    sf::RectangleShape greenStall;
+    sf::RectangleShape eraser;
+
+    AIHelper aiMascot;
+
+    void addNewFrame() {
         auto tex = std::make_unique<sf::RenderTexture>();
         tex->create(800, 600);
         tex->clear(sf::Color::Transparent);
         frames.push_back(std::move(tex));
-        };
+    }
 
-    addNewFrame();
+    void setupUI() {
+        parkGround.setSize(sf::Vector2f(800, 100));
+        parkGround.setPosition(0, 500);
+        parkGround.setFillColor(sf::Color(34, 139, 34));
 
-    bool isDrawing = false;
-    sf::Vector2f lastPos;
-    float brushSize = 5.0f;
-    sf::Color brushColor = sf::Color::Black;
+        redStall.setSize(sf::Vector2f(40, 40));
+        redStall.setPosition(20, 530);
+        redStall.setFillColor(sf::Color::Red);
 
-    bool isPlaying = false;
-    sf::Clock playClock;
-    float timePerFrame = 1.0f / 12.0f;
+        blueStall.setSize(sf::Vector2f(40, 40));
+        blueStall.setPosition(70, 530);
+        blueStall.setFillColor(sf::Color::Blue);
 
-    sf::RectangleShape parkGround(sf::Vector2f(800, 100));
-    parkGround.setPosition(0, 500);
-    parkGround.setFillColor(sf::Color(34, 139, 34));
+        greenStall.setSize(sf::Vector2f(40, 40));
+        greenStall.setPosition(120, 530);
+        greenStall.setFillColor(sf::Color::Green);
 
-    sf::RectangleShape redStall(sf::Vector2f(40, 40));
-    redStall.setPosition(20, 530);
-    redStall.setFillColor(sf::Color::Red);
+        eraser.setSize(sf::Vector2f(40, 40));
+        eraser.setPosition(170, 530);
+        eraser.setFillColor(sf::Color::White);
+        eraser.setOutlineThickness(2);
+        eraser.setOutlineColor(sf::Color::Black);
+    }
 
-    sf::RectangleShape blueStall(sf::Vector2f(40, 40));
-    blueStall.setPosition(70, 530);
-    blueStall.setFillColor(sf::Color::Blue);
-
-    sf::RectangleShape greenStall(sf::Vector2f(40, 40));
-    greenStall.setPosition(120, 530);
-    greenStall.setFillColor(sf::Color::Green);
-
-    sf::RectangleShape eraser(sf::Vector2f(40, 40));
-    eraser.setPosition(170, 530);
-    eraser.setFillColor(sf::Color::White);
-    eraser.setOutlineThickness(2);
-    eraser.setOutlineColor(sf::Color::Black);
-
-    sf::CircleShape aiMascot(30);
-    aiMascot.setPosition(700, 520);
-    aiMascot.setFillColor(sf::Color(0, 191, 255));
-
-    bool aiActive = false;
-
-    while (window.isOpen()) {
+    void processEvents() {
         sf::Event event;
         while (window.pollEvent(event)) {
             if (event.type == sf::Event::Closed)
@@ -103,10 +105,15 @@ int main() {
                     else if (eraser.getGlobalBounds().contains(mousePos)) {
                         brushColor = sf::Color::Transparent;
                     }
-                    else if (aiMascot.getGlobalBounds().contains(mousePos)) {
-                        aiActive = !aiActive;
-                        if (aiActive) parkGround.setFillColor(sf::Color(255, 223, 0));
-                        else parkGround.setFillColor(sf::Color(34, 139, 34));
+                    else if (aiMascot.getBounds().contains(mousePos)) {
+                        aiMascot.toggle();
+                        if (aiMascot.isActive()) {
+                            parkGround.setFillColor(sf::Color(255, 223, 0));
+                            aiMascot.analyzeFrame(*frames[currentFrame]);
+                        }
+                        else {
+                            parkGround.setFillColor(sf::Color(34, 139, 34));
+                        }
                     }
                     else if (mousePos.y < 500) {
                         isDrawing = true;
@@ -172,7 +179,9 @@ int main() {
                 }
             }
         }
+    }
 
+    void update() {
         if (isPlaying) {
             if (playClock.getElapsedTime().asSeconds() >= timePerFrame) {
                 currentFrame++;
@@ -182,7 +191,9 @@ int main() {
                 playClock.restart();
             }
         }
+    }
 
+    void render() {
         window.clear(sf::Color::White);
 
         if (!isPlaying && currentFrame > 0) {
@@ -199,10 +210,44 @@ int main() {
         window.draw(blueStall);
         window.draw(greenStall);
         window.draw(eraser);
-        window.draw(aiMascot);
+
+        aiMascot.draw(window);
+
+        if (!isPlaying) {
+            sf::CircleShape brushPreview(brushSize / 2.f);
+            brushPreview.setFillColor(brushColor == sf::Color::Transparent ? sf::Color::White : brushColor);
+            brushPreview.setOutlineThickness(1);
+            brushPreview.setOutlineColor(sf::Color::Black);
+            brushPreview.setPosition(20, 520);
+            window.draw(brushPreview);
+        }
 
         window.display();
     }
 
+public:
+    WisdomPark()
+        : window(sf::VideoMode(800, 600), "Wisdom Park - OOP Version"),
+        currentFrame(0), isDrawing(false), brushSize(5.0f),
+        brushColor(sf::Color::Black), isPlaying(false),
+        timePerFrame(1.0f / 12.0f)
+    {
+        window.setFramerateLimit(60);
+        setupUI();
+        addNewFrame();
+    }
+
+    void run() {
+        while (window.isOpen()) {
+            processEvents();
+            update();
+            render();
+        }
+    }
+};
+
+int main() {
+    WisdomPark app;
+    app.run();
     return 0;
 }
