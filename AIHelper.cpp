@@ -4,8 +4,8 @@
 #include <iomanip>
 
 AIHelper::AIHelper() : active(false) {
-    mascot.setRadius(30);
-    mascot.setPosition(700, 520);
+    mascot.setRadius(40);
+    mascot.setPosition(1800, 950);
     mascot.setFillColor(sf::Color(0, 191, 255));
     mascot.setOutlineThickness(2);
     mascot.setOutlineColor(sf::Color::Transparent);
@@ -51,7 +51,7 @@ std::string AIHelper::determineMood(int r, int b, int g, int blk, int total) con
 void AIHelper::analyzeFrame(const sf::RenderTexture& frame) {
     sf::Image img = frame.getTexture().copyToImage();
     int width = img.getSize().x;
-    int height = 500;
+    int height = 930;
 
     int totalArea = width * height;
     int totalDrawn = 0;

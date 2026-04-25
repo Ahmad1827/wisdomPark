@@ -7,6 +7,8 @@
 class WisdomPark {
 private:
     sf::RenderWindow window;
+    sf::Texture bgTexture;
+    sf::Sprite bgSprite;
     std::vector<std::unique_ptr<sf::RenderTexture>> frames;
     int currentFrame;
 
@@ -24,38 +26,63 @@ private:
     sf::RectangleShape blueStall;
     sf::RectangleShape greenStall;
     sf::RectangleShape eraser;
+    sf::RectangleShape resetBtn;
 
     AIHelper aiMascot;
 
     void addNewFrame() {
         auto tex = std::make_unique<sf::RenderTexture>();
-        tex->create(800, 600);
+        tex->create(1920, 1080);
         tex->clear(sf::Color::Transparent);
         frames.push_back(std::move(tex));
     }
 
-    void setupUI() {
-        parkGround.setSize(sf::Vector2f(800, 100));
-        parkGround.setPosition(0, 500);
-        parkGround.setFillColor(sf::Color(34, 139, 34));
+    void resetAnimation() {
+        frames.clear();
+        currentFrame = 0;
+        addNewFrame();
+    }
 
-        redStall.setSize(sf::Vector2f(40, 40));
-        redStall.setPosition(20, 530);
+    void setupUI() {
+        if (bgTexture.loadFromFile("landofwisdompark.png")) {
+            bgSprite.setTexture(bgTexture);
+            bgSprite.setScale(
+                1920.0f / bgSprite.getLocalBounds().width,
+                1080.0f / bgSprite.getLocalBounds().height
+            );
+        }
+
+        parkGround.setSize(sf::Vector2f(1920, 150));
+        parkGround.setPosition(0, 930);
+        parkGround.setFillColor(sf::Color(34, 139, 34, 180));
+
+        float startX = 50.0f;
+        float spacing = 80.0f;
+        float uiY = 960.0f;
+
+        redStall.setSize(sf::Vector2f(60, 60));
+        redStall.setPosition(startX, uiY);
         redStall.setFillColor(sf::Color::Red);
 
-        blueStall.setSize(sf::Vector2f(40, 40));
-        blueStall.setPosition(70, 530);
+        blueStall.setSize(sf::Vector2f(60, 60));
+        blueStall.setPosition(startX + spacing, uiY);
         blueStall.setFillColor(sf::Color::Blue);
 
-        greenStall.setSize(sf::Vector2f(40, 40));
-        greenStall.setPosition(120, 530);
+        greenStall.setSize(sf::Vector2f(60, 60));
+        greenStall.setPosition(startX + (spacing * 2), uiY);
         greenStall.setFillColor(sf::Color::Green);
 
-        eraser.setSize(sf::Vector2f(40, 40));
-        eraser.setPosition(170, 530);
+        eraser.setSize(sf::Vector2f(60, 60));
+        eraser.setPosition(startX + (spacing * 3), uiY);
         eraser.setFillColor(sf::Color::White);
         eraser.setOutlineThickness(2);
         eraser.setOutlineColor(sf::Color::Black);
+
+        resetBtn.setSize(sf::Vector2f(60, 60));
+        resetBtn.setPosition(1650, uiY);
+        resetBtn.setFillColor(sf::Color::Black);
+        resetBtn.setOutlineThickness(2);
+        resetBtn.setOutlineColor(sf::Color::Red);
     }
 
     void processEvents() {
@@ -76,7 +103,7 @@ private:
                     if (currentFrame > 0) currentFrame--;
                 }
 
-                if (event.key.code == sf::Keyboard::Space) {
+                if (event.key.code == sf::Keyboard::Space && !isPlaying) {
                     isPlaying = true;
                     currentFrame = 0;
                     playClock.restart();
@@ -86,6 +113,7 @@ private:
             if (event.type == sf::Event::KeyReleased) {
                 if (event.key.code == sf::Keyboard::Space) {
                     isPlaying = false;
+                    currentFrame = frames.size() - 1;
                 }
             }
 
@@ -105,17 +133,20 @@ private:
                     else if (eraser.getGlobalBounds().contains(mousePos)) {
                         brushColor = sf::Color::Transparent;
                     }
+                    else if (resetBtn.getGlobalBounds().contains(mousePos)) {
+                        resetAnimation();
+                    }
                     else if (aiMascot.getBounds().contains(mousePos)) {
                         aiMascot.toggle();
                         if (aiMascot.isActive()) {
-                            parkGround.setFillColor(sf::Color(255, 223, 0));
+                            parkGround.setFillColor(sf::Color(255, 223, 0, 180));
                             aiMascot.analyzeFrame(*frames[currentFrame]);
                         }
                         else {
-                            parkGround.setFillColor(sf::Color(34, 139, 34));
+                            parkGround.setFillColor(sf::Color(34, 139, 34, 180));
                         }
                     }
-                    else if (mousePos.y < 500) {
+                    else if (mousePos.y < 930) {
                         isDrawing = true;
                         lastPos = mousePos;
 
@@ -138,7 +169,7 @@ private:
                 if (event.type == sf::Event::MouseMoved && isDrawing) {
                     sf::Vector2f currentPos(event.mouseMove.x, event.mouseMove.y);
 
-                    if (currentPos.y >= 500) {
+                    if (currentPos.y >= 930) {
                         isDrawing = false;
                         continue;
                     }
@@ -196,6 +227,10 @@ private:
     void render() {
         window.clear(sf::Color::White);
 
+        if (bgTexture.getSize().x > 0) {
+            window.draw(bgSprite);
+        }
+
         if (!isPlaying && currentFrame > 0) {
             sf::Sprite onionSkin(frames[currentFrame - 1]->getTexture());
             onionSkin.setColor(sf::Color(255, 255, 255, 60));
@@ -210,6 +245,7 @@ private:
         window.draw(blueStall);
         window.draw(greenStall);
         window.draw(eraser);
+        window.draw(resetBtn);
 
         aiMascot.draw(window);
 
@@ -218,7 +254,7 @@ private:
             brushPreview.setFillColor(brushColor == sf::Color::Transparent ? sf::Color::White : brushColor);
             brushPreview.setOutlineThickness(1);
             brushPreview.setOutlineColor(sf::Color::Black);
-            brushPreview.setPosition(20, 520);
+            brushPreview.setPosition(50, 940);
             window.draw(brushPreview);
         }
 
@@ -227,7 +263,7 @@ private:
 
 public:
     WisdomPark()
-        : window(sf::VideoMode(800, 600), "Wisdom Park - OOP Version"),
+        : window(sf::VideoMode(1920, 1080), "Wisdom Park - HD Edition"),
         currentFrame(0), isDrawing(false), brushSize(5.0f),
         brushColor(sf::Color::Black), isPlaying(false),
         timePerFrame(1.0f / 12.0f)
