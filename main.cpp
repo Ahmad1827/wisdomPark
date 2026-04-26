@@ -14,6 +14,7 @@ private:
 
     bool isDrawing;
     sf::Vector2f lastPos;
+    sf::Vector2f currentMousePos;
     float brushSize;
     sf::Color brushColor;
 
@@ -28,6 +29,7 @@ private:
     sf::FloatRect paletteBrush;
 
     AIHelper aiMascot;
+    std::vector<sf::Image> undoHistory;
 
     void addNewFrame() {
         auto tex = std::make_unique<sf::RenderTexture>();
@@ -39,6 +41,7 @@ private:
     void resetAnimation() {
         frames.clear();
         currentFrame = 0;
+        undoHistory.clear();
         addNewFrame();
     }
 
@@ -87,12 +90,35 @@ private:
 
             if (event.type == sf::Event::KeyPressed) {
                 if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::B) brushColor = sf::Color::Black;
-                if (event.key.code == sf::Keyboard::C) frames[currentFrame]->clear(sf::Color::Transparent);
+
+                if (event.key.code == sf::Keyboard::C) {
+                    undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
+                    frames[currentFrame]->clear(sf::Color::Transparent);
+                }
+
+                if (event.key.code == sf::Keyboard::S) {
+                    frames[currentFrame]->getTexture().copyToImage().saveToFile("export.png");
+                }
+
+                if (event.key.code == sf::Keyboard::R) {
+                    resetAnimation();
+                }
+
+                if (event.key.code == sf::Keyboard::Z && !undoHistory.empty()) {
+                    sf::Texture tex;
+                    tex.loadFromImage(undoHistory.back());
+                    sf::Sprite spr(tex);
+                    frames[currentFrame]->clear(sf::Color::Transparent);
+                    frames[currentFrame]->draw(spr);
+                    frames[currentFrame]->display();
+                    undoHistory.pop_back();
+                }
 
                 if (event.key.code == sf::Keyboard::Right && !isPlaying) {
                     currentFrame++;
                     if (currentFrame >= frames.size()) addNewFrame();
                 }
+
                 if (event.key.code == sf::Keyboard::Left && !isPlaying) {
                     if (currentFrame > 0) currentFrame--;
                 }
@@ -124,6 +150,7 @@ private:
                         if (aiMascot.isActive()) aiMascot.analyzeFrame(*frames[currentFrame]);
                     }
                     else if (drawArea.contains(mousePos)) {
+                        undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
                         isDrawing = true;
                         lastPos = mousePos;
 
@@ -143,39 +170,42 @@ private:
                     isDrawing = false;
                 }
 
-                if (event.type == sf::Event::MouseMoved && isDrawing) {
-                    sf::Vector2f currentPos(event.mouseMove.x, event.mouseMove.y);
+                if (event.type == sf::Event::MouseMoved) {
+                    currentMousePos = sf::Vector2f(event.mouseMove.x, event.mouseMove.y);
+                    window.setMouseCursorVisible(!drawArea.contains(currentMousePos));
 
-                    if (!drawArea.contains(currentPos)) {
-                        isDrawing = false;
-                        continue;
+                    if (isDrawing) {
+                        if (!drawArea.contains(currentMousePos)) {
+                            isDrawing = false;
+                            continue;
+                        }
+
+                        sf::Vector2f d = currentMousePos - lastPos;
+                        float length = std::sqrt(d.x * d.x + d.y * d.y);
+
+                        sf::RectangleShape line(sf::Vector2f(length, brushSize));
+                        line.setOrigin(0, brushSize / 2.f);
+                        line.setPosition(lastPos);
+                        line.setRotation(std::atan2(d.y, d.x) * 180.f / 3.14159265f);
+                        line.setFillColor(brushColor);
+
+                        sf::CircleShape circle(brushSize / 2.f);
+                        circle.setOrigin(brushSize / 2.f, brushSize / 2.f);
+                        circle.setPosition(currentMousePos);
+                        circle.setFillColor(brushColor);
+
+                        if (brushColor == sf::Color::Transparent) {
+                            frames[currentFrame]->draw(line, sf::RenderStates(sf::BlendNone));
+                            frames[currentFrame]->draw(circle, sf::RenderStates(sf::BlendNone));
+                        }
+                        else {
+                            frames[currentFrame]->draw(line);
+                            frames[currentFrame]->draw(circle);
+                        }
+
+                        frames[currentFrame]->display();
+                        lastPos = currentMousePos;
                     }
-
-                    sf::Vector2f d = currentPos - lastPos;
-                    float length = std::sqrt(d.x * d.x + d.y * d.y);
-
-                    sf::RectangleShape line(sf::Vector2f(length, brushSize));
-                    line.setOrigin(0, brushSize / 2.f);
-                    line.setPosition(lastPos);
-                    line.setRotation(std::atan2(d.y, d.x) * 180.f / 3.14159265f);
-                    line.setFillColor(brushColor);
-
-                    sf::CircleShape circle(brushSize / 2.f);
-                    circle.setOrigin(brushSize / 2.f, brushSize / 2.f);
-                    circle.setPosition(currentPos);
-                    circle.setFillColor(brushColor);
-
-                    if (brushColor == sf::Color::Transparent) {
-                        frames[currentFrame]->draw(line, sf::RenderStates(sf::BlendNone));
-                        frames[currentFrame]->draw(circle, sf::RenderStates(sf::BlendNone));
-                    }
-                    else {
-                        frames[currentFrame]->draw(line);
-                        frames[currentFrame]->draw(circle);
-                    }
-
-                    frames[currentFrame]->display();
-                    lastPos = currentPos;
                 }
             }
 
@@ -224,7 +254,14 @@ private:
             brushPreview.setFillColor(brushColor == sf::Color::Transparent ? sf::Color::White : brushColor);
             brushPreview.setOutlineThickness(1);
             brushPreview.setOutlineColor(sf::Color::Black);
-            brushPreview.setPosition(50, 940);
+
+            if (drawArea.contains(currentMousePos)) {
+                brushPreview.setPosition(currentMousePos);
+            }
+            else {
+                brushPreview.setPosition(50, 940);
+            }
+
             window.draw(brushPreview);
         }
 
