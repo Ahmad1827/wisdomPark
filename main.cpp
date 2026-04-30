@@ -3,6 +3,9 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <iostream>
+#include <filesystem>
+#include <fstream>
 #include "AIHelper.h"
 
 enum class AppState {
@@ -126,6 +129,14 @@ private:
                     if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::B) brushColor = sf::Color::Black;
                     if (event.key.code == sf::Keyboard::T) {
                         saveToDataset();
+                        std::cout << "Working Directory: " << std::filesystem::current_path() << "\n";
+                        aiMascot.trainOnDataset("dataset.txt");
+                    }
+                    if (event.key.code == sf::Keyboard::U) {
+                        sliceSpriteSheet("C:\\Path\\To\\Your\\spritesheet.png", 16, 16, "C:\\Path\\To\\Your\\SlicedItemsFolder");
+                    }
+                    if (event.key.code == sf::Keyboard::Backspace) {
+                        removeLastFromDataset();
                         aiMascot.trainOnDataset("dataset.txt");
                     }
                     if (event.key.code == sf::Keyboard::C) {
@@ -143,7 +154,10 @@ private:
                             frames[i]->getTexture().copyToImage().saveToFile("frame_" + std::to_string(i) + ".png");
                         }
                     }
-
+                    if (event.key.code == sf::Keyboard::I) {
+                        massIngestImages("C:\\Path\\To\\Your\\Downloaded\\Images");
+                        aiMascot.trainOnDataset("dataset.txt");
+                    }
                     if (event.key.code == sf::Keyboard::R) {
                         resetAnimation();
                     }
@@ -287,7 +301,79 @@ private:
             }
         }
     }
+    void sliceSpriteSheet(const std::string& filePath, int tileWidth, int tileHeight, const std::string& outputFolder) {
+        sf::Image sheet;
+        if (!sheet.loadFromFile(filePath)) return;
 
+        std::filesystem::create_directories(outputFolder);
+
+        int cols = sheet.getSize().x / tileWidth;
+        int rows = sheet.getSize().y / tileHeight;
+        int count = 0;
+
+        for (int y = 0; y < rows; ++y) {
+            for (int x = 0; x < cols; ++x) {
+                sf::Image tile;
+                tile.create(tileWidth, tileHeight, sf::Color::Transparent);
+                tile.copy(sheet, 0, 0, sf::IntRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight), true);
+
+                bool isEmpty = true;
+                for (unsigned int ty = 0; ty < tile.getSize().y; ++ty) {
+                    for (unsigned int tx = 0; tx < tile.getSize().x; ++tx) {
+                        if (tile.getPixel(tx, ty).a > 20) {
+                            isEmpty = false;
+                            break;
+                        }
+                    }
+                    if (!isEmpty) break;
+                }
+
+                if (!isEmpty) {
+                    tile.saveToFile(outputFolder + "/sliced_" + std::to_string(count) + ".png");
+                    count++;
+                }
+            }
+        }
+        std::cout << "Sliced " << count << " individual items into " << outputFolder << "\n";
+    }
+    void massIngestImages(const std::string& folderPath) {
+        std::ofstream file("dataset.txt", std::ios::app);
+        if (!file.is_open()) return;
+
+        int processedCount = 0;
+
+        for (const auto& entry : std::filesystem::directory_iterator(folderPath)) {
+            if (entry.path().extension() == ".png" || entry.path().extension() == ".jpg") {
+                sf::Image img;
+                if (img.loadFromFile(entry.path().string())) {
+                    unsigned int width = img.getSize().x;
+                    unsigned int height = img.getSize().y;
+
+                    for (int y = 0; y < 48; ++y) {
+                        std::string row = "";
+                        for (int x = 0; x < 48; ++x) {
+                            unsigned int sampleX = (x * width) / 48;
+                            unsigned int sampleY = (y * height) / 48;
+
+                            sf::Color c = img.getPixel(sampleX, sampleY);
+
+                            if (c.a > 20 && (c.r < 250 || c.g < 250 || c.b < 250)) {
+                                row += "X";
+                            }
+                            else {
+                                row += ".";
+                            }
+                        }
+                        file << row << "\n";
+                    }
+                    file << "\n";
+                    processedCount++;
+                }
+            }
+        }
+        file.close();
+        std::cout << "Mass Ingestion Complete: Added " << processedCount << " images to dataset.\n";
+    }
     void update() {
         if (currentState == AppState::Painting) {
             aiMascot.update(*frames[currentFrame]);
@@ -367,6 +453,52 @@ private:
         }
         file << "\n";
         file.close();
+    }
+    void removeLastFromDataset() {
+        std::ifstream inFile("dataset.txt");
+        if (!inFile.is_open()) return;
+
+        std::vector<std::string> allLines;
+        std::string line;
+        while (std::getline(inFile, line)) {
+            allLines.push_back(line);
+        }
+        inFile.close();
+
+        std::vector<std::vector<std::string>> templates;
+        std::vector<std::string> currentBlock;
+        for (const auto& l : allLines) {
+            if (l.empty() || l.find_first_not_of("\r\n\t ") == std::string::npos) {
+                if (currentBlock.size() == 48) {
+                    templates.push_back(currentBlock);
+                }
+                currentBlock.clear();
+            }
+            else {
+                currentBlock.push_back(l);
+            }
+        }
+        if (currentBlock.size() == 48) {
+            templates.push_back(currentBlock);
+        }
+
+        if (templates.empty()) {
+            std::cout << "Dataset is already empty!\n";
+            return;
+        }
+
+        templates.pop_back();
+
+        std::ofstream outFile("dataset.txt", std::ios::trunc);
+        for (const auto& tmpl : templates) {
+            for (const auto& r : tmpl) {
+                outFile << r << "\n";
+            }
+            outFile << "\n";
+        }
+        outFile.close();
+
+        std::cout << "Removed last template. Remaining: " << templates.size() << "\n";
     }
 public:
     WisdomPark()

@@ -10,7 +10,6 @@ AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), 
     mascot.setOutlineThickness(2);
     mascot.setOutlineColor(sf::Color::Transparent);
     grid.resize(width * height, 0);
-    probabilityMap.resize(width * height, 0.0f);
 }
 
 void AIHelper::toggle() {
@@ -31,36 +30,42 @@ void AIHelper::draw(sf::RenderWindow& window) { window.draw(mascot); }
 void AIHelper::clearGrid() { std::fill(grid.begin(), grid.end(), 0); }
 
 void AIHelper::trainOnDataset(const std::string& filename) {
-    std::fill(probabilityMap.begin(), probabilityMap.end(), 0.0f);
+    datasetTemplates.clear();
     std::ifstream file(filename);
 
     if (!file.is_open()) {
+        std::cout << "FAILED: Could not find " << filename << "\n";
         isTrained = false;
         return;
     }
 
+    std::vector<std::string> currentTemplate;
     std::string line;
-    int lineCount = 0;
-    int itemsLoaded = 0;
 
     while (std::getline(file, line)) {
-        if (line.empty()) continue;
-        int y = lineCount % height;
-        for (int x = 0; x < width && x < (int)line.length(); ++x) {
-            if (line[x] == 'X' || line[x] == 'M') {
-                probabilityMap[y * width + x] += 1.0f;
+        if (line.empty() || line.find_first_not_of("\r\n\t ") == std::string::npos) {
+            if (!currentTemplate.empty()) {
+                if (currentTemplate.size() == height) {
+                    datasetTemplates.push_back(currentTemplate);
+                }
+                currentTemplate.clear();
             }
+            continue;
         }
-        lineCount++;
-        if (lineCount % height == 0) itemsLoaded++;
+        currentTemplate.push_back(line);
     }
 
-    if (itemsLoaded > 0) {
-        for (float& prob : probabilityMap) prob /= static_cast<float>(itemsLoaded);
+    if (!currentTemplate.empty() && currentTemplate.size() == height) {
+        datasetTemplates.push_back(currentTemplate);
+    }
+
+    if (!datasetTemplates.empty()) {
         isTrained = true;
+        std::cout << "SUCCESS: Loaded " << datasetTemplates.size() << " separate templates from " << filename << "\n";
     }
     else {
         isTrained = false;
+        std::cout << "FAILED: File found, but no valid templates inside.\n";
     }
 }
 
@@ -174,21 +179,48 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
     std::random_device rd;
     std::mt19937 rng(rd());
 
-    std::uniform_int_distribution<int> colorDist(50, 200);
-    int r = colorDist(rng), g = colorDist(rng), b = colorDist(rng);
-    baseColor = sf::Color(r, g, b);
-    lightColor = sf::Color(std::min(r + 50, 255), std::min(g + 50, 255), std::min(b + 50, 255));
-    darkColor = sf::Color(std::max(r - 50, 0), std::max(g - 50, 0), std::max(b - 50, 0));
+    std::vector<std::vector<sf::Color>> thematicPalettes = {
+        {sf::Color(77, 51, 25), sf::Color(115, 77, 38), sf::Color(38, 26, 13)},
+        {sf::Color(140, 146, 153), sf::Color(190, 196, 204), sf::Color(90, 95, 102)},
+        {sf::Color(34, 139, 34), sf::Color(50, 205, 50), sf::Color(0, 100, 0)},
+        {sf::Color(178, 34, 34), sf::Color(220, 20, 60), sf::Color(139, 0, 0)},
+        {sf::Color(65, 105, 225), sf::Color(100, 149, 237), sf::Color(0, 0, 139)}
+    };
+
+    std::uniform_int_distribution<int> paletteDist(0, thematicPalettes.size() - 1);
+    int selectedPalette = paletteDist(rng);
+
+    baseColor = thematicPalettes[selectedPalette][0];
+    lightColor = thematicPalettes[selectedPalette][1];
+    darkColor = thematicPalettes[selectedPalette][2];
 
     clearGrid();
 
     if (isTrained) {
-        // USE DATASET LOGIC
+        std::uniform_int_distribution<int> templateDist(0, datasetTemplates.size() - 1);
+        const auto& selectedTemplate = datasetTemplates[templateDist(rng)];
+
         std::uniform_real_distribution<float> prob(0.0f, 1.0f);
+
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width / 2; ++x) {
-                float likelihood = probabilityMap[y * width + x];
-                if (likelihood > 0.0f && prob(rng) <= likelihood) {
+                char cell = selectedTemplate[y][x];
+                bool shouldDraw = false;
+
+                if (cell == 'X' || cell == 'M') {
+                    if (prob(rng) < 0.92f) shouldDraw = true;
+                }
+                else {
+                    int neighbors = 0;
+                    if (x > 0 && selectedTemplate[y][x - 1] == 'X') neighbors++;
+                    if (x < width - 1 && selectedTemplate[y][x + 1] == 'X') neighbors++;
+                    if (y > 0 && selectedTemplate[y - 1][x] == 'X') neighbors++;
+                    if (y < height - 1 && selectedTemplate[y + 1][x] == 'X') neighbors++;
+
+                    if (neighbors > 0 && prob(rng) < 0.12f) shouldDraw = true;
+                }
+
+                if (shouldDraw) {
                     grid[y * width + x] = 1;
                     grid[y * width + (width - 1 - x)] = 1;
                 }
@@ -196,13 +228,13 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
         }
     }
     else {
-        // FALLBACK TO PROCEDURAL BLUEPRINT
         std::vector<std::string> blueprint = generateDynamicBlueprint(rng);
         generateFromTemplate(rng, blueprint);
     }
 
     applyShading();
     applyOutline();
+
     drawOrder.clear();
     drawOrder.resize(width * height);
     for (int i = 0; i < width * height; ++i) drawOrder[i] = i;

@@ -10,12 +10,13 @@ private:
     sf::CircleShape mascot;
     bool active;
     bool isGenerating;
+    bool isTrained;
 
     int width = 48;
     int height = 48;
     std::vector<int> grid;
     std::vector<int> drawOrder;
-    std::vector<float> probabilityMap;
+    std::vector<std::vector<std::string>> datasetTemplates;
 
     int currentDrawIndex;
     sf::FloatRect currentBounds;
@@ -24,6 +25,8 @@ private:
     sf::Color darkColor;
 
     void clearGrid();
+    std::vector<std::string> generateDynamicBlueprint(std::mt19937& rng);
+    void generateFromTemplate(std::mt19937& rng, const std::vector<std::string>& blueprint);
     void applyShading();
     void applyOutline();
 
@@ -37,7 +40,4 @@ public:
     void trainOnDataset(const std::string& filename);
     void startGeneratingComplexArt(sf::FloatRect bounds);
     void update(sf::RenderTexture& canvas);
-    bool isTrained;
-    std::vector<std::string> generateDynamicBlueprint(std::mt19937& rng);
-    void generateFromTemplate(std::mt19937& rng, const std::vector<std::string>& blueprint);
 };
