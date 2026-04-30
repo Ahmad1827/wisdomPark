@@ -200,40 +200,23 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
         std::uniform_int_distribution<int> templateDist(0, datasetTemplates.size() - 1);
         const auto& selectedTemplate = datasetTemplates[templateDist(rng)];
 
-        std::uniform_real_distribution<float> prob(0.0f, 1.0f);
-
         for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width / 2; ++x) {
+            for (int x = 0; x < width; ++x) {
                 char cell = selectedTemplate[y][x];
-                bool shouldDraw = false;
-
-                if (cell == 'X' || cell == 'M') {
-                    if (prob(rng) < 0.92f) shouldDraw = true;
-                }
-                else {
-                    int neighbors = 0;
-                    if (x > 0 && selectedTemplate[y][x - 1] == 'X') neighbors++;
-                    if (x < width - 1 && selectedTemplate[y][x + 1] == 'X') neighbors++;
-                    if (y > 0 && selectedTemplate[y - 1][x] == 'X') neighbors++;
-                    if (y < height - 1 && selectedTemplate[y + 1][x] == 'X') neighbors++;
-
-                    if (neighbors > 0 && prob(rng) < 0.12f) shouldDraw = true;
-                }
-
-                if (shouldDraw) {
-                    grid[y * width + x] = 1;
-                    grid[y * width + (width - 1 - x)] = 1;
-                }
+                if (cell == 'H') grid[y * width + x] = 2;
+                else if (cell == 'X') grid[y * width + x] = 1;
+                else if (cell == 'S') grid[y * width + x] = 3;
+                else if (cell == 'O') grid[y * width + x] = 5;
             }
         }
+        applyOutline();
     }
     else {
         std::vector<std::string> blueprint = generateDynamicBlueprint(rng);
         generateFromTemplate(rng, blueprint);
+        applyShading();
+        applyOutline();
     }
-
-    applyShading();
-    applyOutline();
 
     drawOrder.clear();
     drawOrder.resize(width * height);
@@ -256,13 +239,17 @@ void AIHelper::update(sf::RenderTexture& canvas) {
         }
         int actualIndex = drawOrder[currentDrawIndex];
         int cell = grid[actualIndex];
+
         if (cell > 0) {
             sf::RectangleShape pixel(sf::Vector2f(pixelSize, pixelSize));
             pixel.setPosition(startX + (actualIndex % width * pixelSize), startY + (actualIndex / width * pixelSize));
+
             if (cell == 1) pixel.setFillColor(baseColor);
             else if (cell == 2) pixel.setFillColor(lightColor);
             else if (cell == 3) pixel.setFillColor(darkColor);
             else if (cell == 4) pixel.setFillColor(sf::Color(30, 30, 30));
+            else if (cell == 5) pixel.setFillColor(sf::Color(30, 30, 30));
+
             canvas.draw(pixel);
         }
         currentDrawIndex++;

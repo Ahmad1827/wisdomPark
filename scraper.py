@@ -14,11 +14,20 @@ with open("dataset.txt", "w") as f:
                     row = ""
                     for x in range(48):
                         r, g, b, a = img.getpixel((x, y))
-                        if a > 20 and (r < 250 or g < 250 or b < 250):
-                            row += "X"
+                        if a > 20:
+                            luminance = (0.299 * r + 0.587 * g + 0.114 * b)
+                            if luminance < 40:
+                                row += "O"
+                            elif luminance < 100:
+                                row += "S"
+                            elif luminance < 180:
+                                row += "X"
+                            else:
+                                row += "H"
                         else:
                             row += "."
                     f.write(row + "\n")
                 f.write("\n")
+                print(f"Added Pokemon: {i}")
         except:
             pass
