@@ -14,6 +14,14 @@ private:
 
     int width;
     int height;
+    struct PlacedItem {
+        int datasetIndex;
+        sf::FloatRect bounds;
+    };
+
+    std::vector<PlacedItem> history;
+    float currentX;
+    float currentY;
     std::vector<int> grid;
     std::vector<int> drawOrder;
     std::vector<std::vector<std::string>> datasetTemplates;

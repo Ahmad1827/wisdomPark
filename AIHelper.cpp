@@ -163,6 +163,8 @@ void AIHelper::applyOutline() {
 }
 
 void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
+    if (isGenerating) return;
+
     isGenerating = true;
     currentDrawIndex = 0;
     currentBounds = bounds;
@@ -185,11 +187,94 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
     darkColor = thematicPalettes[selectedPalette][2];
 
     if (isTrained) {
-        std::uniform_int_distribution<int> templateDist(0, datasetTemplates.size() - 1);
-        const auto& selectedTemplate = datasetTemplates[templateDist(rng)];
+        int nextIndex = 0;
+        float targetX = bounds.left + bounds.width / 2.0f;
+        float targetY = bounds.top + bounds.height / 2.0f;
 
+        if (history.empty()) {
+            std::uniform_int_distribution<int> dist(0, datasetTemplates.size() - 1);
+            nextIndex = dist(rng);
+        }
+        else {
+            std::uniform_real_distribution<float> xDist(bounds.left, bounds.left + bounds.width);
+            std::uniform_real_distribution<float> yDist(bounds.top, bounds.top + bounds.height);
+            targetX = xDist(rng);
+            targetY = yDist(rng);
+
+            float minDist = 999999.0f;
+            int neighborIndex = 0;
+
+            for (const auto& item : history) {
+                float dx = targetX - (item.bounds.left + item.bounds.width / 2.0f);
+                float dy = targetY - (item.bounds.top + item.bounds.height / 2.0f);
+                float dist = dx * dx + dy * dy;
+                if (dist < minDist) {
+                    minDist = dist;
+                    neighborIndex = item.datasetIndex;
+                }
+            }
+
+            float neighborArea = datasetTemplates[neighborIndex].size() * datasetTemplates[neighborIndex][0].size();
+
+            int bestMatch = 0;
+            float bestDiff = 999999.0f;
+            std::uniform_int_distribution<int> dist(0, datasetTemplates.size() - 1);
+
+            for (int i = 0; i < 30; ++i) {
+                int candidate = dist(rng);
+                if (candidate == neighborIndex) continue;
+
+                float candidateArea = datasetTemplates[candidate].size() * datasetTemplates[candidate][0].size();
+                float diff = std::abs(candidateArea - neighborArea);
+
+                std::uniform_real_distribution<float> noise(0.0f, neighborArea * 0.2f);
+                diff += noise(rng);
+
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    bestMatch = candidate;
+                }
+            }
+            nextIndex = bestMatch;
+        }
+
+        const auto& selectedTemplate = datasetTemplates[nextIndex];
         height = selectedTemplate.size();
         width = selectedTemplate[0].size();
+
+        float pixelSize = std::min(currentBounds.width / width, currentBounds.height / height);
+        if (pixelSize > 15.0f) pixelSize = 15.0f;
+
+        float itemWidth = width * pixelSize;
+        float itemHeight = height * pixelSize;
+
+        bool validSpot = false;
+        int attempts = 0;
+
+        while (!validSpot && attempts < 500) {
+            std::normal_distribution<float> driftX(targetX, bounds.width / 4.0f);
+            std::normal_distribution<float> driftY(targetY, bounds.height / 4.0f);
+
+            currentX = driftX(rng);
+            currentY = driftY(rng);
+
+            currentX = std::clamp(currentX, bounds.left, bounds.left + bounds.width - itemWidth);
+            currentY = std::clamp(currentY, bounds.top, bounds.top + bounds.height - itemHeight);
+
+            validSpot = true;
+            sf::FloatRect newRect(currentX - 5, currentY - 5, itemWidth + 10, itemHeight + 10);
+
+            for (const auto& pastItem : history) {
+                if (newRect.intersects(pastItem.bounds)) {
+                    validSpot = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
+
+        PlacedItem newObj = { nextIndex, sf::FloatRect(currentX, currentY, itemWidth, itemHeight) };
+        history.push_back(newObj);
 
         grid.clear();
         grid.resize(width * height, 0);
@@ -223,7 +308,6 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
     for (int i = 0; i < width * height; ++i) drawOrder[i] = i;
     std::shuffle(drawOrder.begin(), drawOrder.end(), rng);
 }
-
 void AIHelper::update(sf::RenderTexture& canvas) {
     if (!isGenerating) return;
 
@@ -232,9 +316,6 @@ void AIHelper::update(sf::RenderTexture& canvas) {
 
     int pixelsPerFrame = (width * height) / 40;
     if (pixelsPerFrame < 10) pixelsPerFrame = 10;
-
-    float startX = currentBounds.left + (currentBounds.width - (width * pixelSize)) / 2.0f;
-    float startY = currentBounds.top + (currentBounds.height - (height * pixelSize)) / 2.0f;
 
     for (int i = 0; i < pixelsPerFrame; ++i) {
         if (currentDrawIndex >= width * height) {
@@ -247,7 +328,7 @@ void AIHelper::update(sf::RenderTexture& canvas) {
 
         if (cell > 0) {
             sf::RectangleShape pixel(sf::Vector2f(pixelSize, pixelSize));
-            pixel.setPosition(startX + (actualIndex % width * pixelSize), startY + (actualIndex / width * pixelSize));
+            pixel.setPosition(currentX + (actualIndex % width * pixelSize), currentY + (actualIndex / width * pixelSize));
 
             if (cell == 1) pixel.setFillColor(baseColor);
             else if (cell == 2) pixel.setFillColor(lightColor);
