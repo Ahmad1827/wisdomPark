@@ -12,8 +12,8 @@ private:
     bool isGenerating;
     bool isTrained;
 
-    int width = 48;
-    int height = 48;
+    int width;
+    int height;
     std::vector<int> grid;
     std::vector<int> drawOrder;
     std::vector<std::vector<std::string>> datasetTemplates;

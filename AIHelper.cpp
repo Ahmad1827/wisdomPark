@@ -34,7 +34,6 @@ void AIHelper::trainOnDataset(const std::string& filename) {
     std::ifstream file(filename);
 
     if (!file.is_open()) {
-        std::cout << "FAILED: Could not find " << filename << "\n";
         isTrained = false;
         return;
     }
@@ -45,9 +44,7 @@ void AIHelper::trainOnDataset(const std::string& filename) {
     while (std::getline(file, line)) {
         if (line.empty() || line.find_first_not_of("\r\n\t ") == std::string::npos) {
             if (!currentTemplate.empty()) {
-                if (currentTemplate.size() == height) {
-                    datasetTemplates.push_back(currentTemplate);
-                }
+                datasetTemplates.push_back(currentTemplate);
                 currentTemplate.clear();
             }
             continue;
@@ -55,18 +52,11 @@ void AIHelper::trainOnDataset(const std::string& filename) {
         currentTemplate.push_back(line);
     }
 
-    if (!currentTemplate.empty() && currentTemplate.size() == height) {
+    if (!currentTemplate.empty()) {
         datasetTemplates.push_back(currentTemplate);
     }
 
-    if (!datasetTemplates.empty()) {
-        isTrained = true;
-        std::cout << "SUCCESS: Loaded " << datasetTemplates.size() << " separate templates from " << filename << "\n";
-    }
-    else {
-        isTrained = false;
-        std::cout << "FAILED: File found, but no valid templates inside.\n";
-    }
+    isTrained = !datasetTemplates.empty();
 }
 
 std::vector<std::string> AIHelper::generateDynamicBlueprint(std::mt19937& rng) {
@@ -194,16 +184,21 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
     lightColor = thematicPalettes[selectedPalette][1];
     darkColor = thematicPalettes[selectedPalette][2];
 
-    clearGrid();
-
     if (isTrained) {
         std::uniform_int_distribution<int> templateDist(0, datasetTemplates.size() - 1);
         const auto& selectedTemplate = datasetTemplates[templateDist(rng)];
 
+        height = selectedTemplate.size();
+        width = selectedTemplate[0].size();
+
+        grid.clear();
+        grid.resize(width * height, 0);
+
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
                 char cell = selectedTemplate[y][x];
-                if (cell == 'H') grid[y * width + x] = 2;
+                if (cell == 'W') grid[y * width + x] = 6;
+                else if (cell == 'H') grid[y * width + x] = 2;
                 else if (cell == 'X') grid[y * width + x] = 1;
                 else if (cell == 'S') grid[y * width + x] = 3;
                 else if (cell == 'O') grid[y * width + x] = 5;
@@ -212,6 +207,11 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
         applyOutline();
     }
     else {
+        width = 48;
+        height = 48;
+        grid.clear();
+        grid.resize(width * height, 0);
+
         std::vector<std::string> blueprint = generateDynamicBlueprint(rng);
         generateFromTemplate(rng, blueprint);
         applyShading();
@@ -226,8 +226,13 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
 
 void AIHelper::update(sf::RenderTexture& canvas) {
     if (!isGenerating) return;
-    int pixelsPerFrame = 40;
-    float pixelSize = 10.0f;
+
+    float pixelSize = std::min(currentBounds.width / width, currentBounds.height / height);
+    if (pixelSize > 15.0f) pixelSize = 15.0f;
+
+    int pixelsPerFrame = (width * height) / 40;
+    if (pixelsPerFrame < 10) pixelsPerFrame = 10;
+
     float startX = currentBounds.left + (currentBounds.width - (width * pixelSize)) / 2.0f;
     float startY = currentBounds.top + (currentBounds.height - (height * pixelSize)) / 2.0f;
 
@@ -249,6 +254,7 @@ void AIHelper::update(sf::RenderTexture& canvas) {
             else if (cell == 3) pixel.setFillColor(darkColor);
             else if (cell == 4) pixel.setFillColor(sf::Color(30, 30, 30));
             else if (cell == 5) pixel.setFillColor(sf::Color(30, 30, 30));
+            else if (cell == 6) pixel.setFillColor(sf::Color(245, 245, 245));
 
             canvas.draw(pixel);
         }
