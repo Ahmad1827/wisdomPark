@@ -14,17 +14,28 @@ private:
 
     int width;
     int height;
+    float currentX;
+    float currentY;
+
+    struct Template {
+        std::string name;
+        std::string category;
+        float scale;
+        int width;
+        int height;
+        std::vector<std::string> pixels;
+    };
+
     struct PlacedItem {
         int datasetIndex;
+        std::string category;
         sf::FloatRect bounds;
     };
 
     std::vector<PlacedItem> history;
-    float currentX;
-    float currentY;
+    std::vector<Template> datasetTemplates;
     std::vector<int> grid;
     std::vector<int> drawOrder;
-    std::vector<std::vector<std::string>> datasetTemplates;
 
     int currentDrawIndex;
     sf::FloatRect currentBounds;
@@ -46,6 +57,6 @@ public:
     void draw(sf::RenderWindow& window);
 
     void trainOnDataset(const std::string& filename);
-    void startGeneratingComplexArt(sf::FloatRect bounds);
+    std::string startGeneratingComplexArt(sf::FloatRect bounds);
     void update(sf::RenderTexture& canvas);
 };

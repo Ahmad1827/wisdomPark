@@ -45,6 +45,12 @@ private:
     sf::RectangleShape startButton;
     sf::ConvexShape playIcon;
 
+    sf::Font mainFont;
+    sf::Text errorText;
+    sf::Clock errorClock;
+    bool showingError;
+    float errorAlpha; // NEW: Controls the fade
+
     void addNewFrame() {
         auto tex = std::make_unique<sf::RenderTexture>();
         tex->create(1920, 1080);
@@ -109,6 +115,15 @@ private:
         playIcon.setPoint(2, sf::Vector2f(50.f, 30.f));
         playIcon.setFillColor(sf::Color::White);
         playIcon.setPosition(1920.f / 2.f - 15.f, 1080.f / 2.f - 30.f);
+
+        mainFont.loadFromFile("assets/font.otf");
+        errorText.setFont(mainFont);
+        errorText.setCharacterSize(60);
+        errorText.setFillColor(sf::Color::Red);
+        errorText.setOutlineColor(sf::Color::White);
+        errorText.setOutlineThickness(4.f);
+        showingError = false;
+        errorAlpha = 255.0f;
     }
 
     void processEvents() {
@@ -127,28 +142,18 @@ private:
             else if (currentState == AppState::Painting) {
                 if (event.type == sf::Event::KeyPressed) {
                     if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::B) brushColor = sf::Color::Black;
-                    if (event.key.code == sf::Keyboard::T) {
-                        saveToDataset();
-                        std::cout << "Working Directory: " << std::filesystem::current_path() << "\n";
-                        aiMascot.trainOnDataset("dataset.txt");
-                    }
-                    if (event.key.code == sf::Keyboard::U) {
-                        sliceSpriteSheet("C:\\Path\\To\\Your\\spritesheet.png", 16, 16, "C:\\Path\\To\\Your\\SlicedItemsFolder");
-                    }
+                    if (event.key.code == sf::Keyboard::T) saveToDataset();
+                    if (event.key.code == sf::Keyboard::U) sliceSpriteSheet("C:\\Path\\To\\Your\\spritesheet.png", 16, 16, "C:\\Path\\To\\Your\\SlicedItemsFolder");
                     if (event.key.code == sf::Keyboard::Backspace) {
                         removeLastFromDataset();
-                        aiMascot.trainOnDataset("dataset.txt");
+                        aiMascot.trainOnDataset("dataset.json");
                     }
                     if (event.key.code == sf::Keyboard::C) {
                         undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
                         redoHistory.clear();
                         frames[currentFrame]->clear(sf::Color::Transparent);
                     }
-
-                    if (event.key.code == sf::Keyboard::S) {
-                        frames[currentFrame]->getTexture().copyToImage().saveToFile("export.png");
-                    }
-
+                    if (event.key.code == sf::Keyboard::S) frames[currentFrame]->getTexture().copyToImage().saveToFile("export.png");
                     if (event.key.code == sf::Keyboard::E) {
                         for (size_t i = 0; i < frames.size(); ++i) {
                             frames[i]->getTexture().copyToImage().saveToFile("frame_" + std::to_string(i) + ".png");
@@ -156,12 +161,9 @@ private:
                     }
                     if (event.key.code == sf::Keyboard::I) {
                         massIngestImages("C:\\Path\\To\\Your\\Downloaded\\Images");
-                        aiMascot.trainOnDataset("dataset.txt");
+                        aiMascot.trainOnDataset("dataset.json");
                     }
-                    if (event.key.code == sf::Keyboard::R) {
-                        resetAnimation();
-                    }
-
+                    if (event.key.code == sf::Keyboard::R) resetAnimation();
                     if (event.key.code == sf::Keyboard::Z && !undoHistory.empty()) {
                         redoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
                         sf::Texture tex;
@@ -172,7 +174,6 @@ private:
                         frames[currentFrame]->display();
                         undoHistory.pop_back();
                     }
-
                     if (event.key.code == sf::Keyboard::Y && !redoHistory.empty()) {
                         undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
                         sf::Texture tex;
@@ -183,16 +184,13 @@ private:
                         frames[currentFrame]->display();
                         redoHistory.pop_back();
                     }
-
                     if (event.key.code == sf::Keyboard::Right && !isPlaying) {
                         currentFrame++;
                         if (currentFrame >= frames.size()) addNewFrame();
                     }
-
                     if (event.key.code == sf::Keyboard::Left && !isPlaying) {
                         if (currentFrame > 0) currentFrame--;
                     }
-
                     if (event.key.code == sf::Keyboard::Space && !isPlaying) {
                         isPlaying = true;
                         currentFrame = 0;
@@ -221,12 +219,27 @@ private:
                             else if (paletteFerris.contains(mousePos)) brushColor = sf::Color(0, 191, 255);
                             else if (paletteEraser.contains(mousePos)) brushColor = sf::Color::Transparent;
                             else if (paletteBrush.contains(mousePos)) brushColor = sf::Color::Black;
-                            else if (aiMascot.getBounds().contains(mousePos)) {
+
+                            // NEW: Block clicking the mascot if an error is currently fading
+                            else if (aiMascot.getBounds().contains(mousePos) && !showingError) {
                                 aiMascot.toggle();
                                 if (aiMascot.isActive()) {
                                     undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
                                     redoHistory.clear();
-                                    aiMascot.startGeneratingComplexArt(drawArea);
+
+                                    std::string errorMsg = aiMascot.startGeneratingComplexArt(drawArea);
+                                    if (!errorMsg.empty()) {
+                                        errorText.setString(errorMsg);
+                                        sf::FloatRect textRect = errorText.getLocalBounds();
+                                        errorText.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
+                                        errorText.setPosition(1920.0f / 2.0f, 150.0f);
+                                        showingError = true;
+                                        errorAlpha = 255.0f; // Reset Alpha
+                                        errorClock.restart();
+
+                                        undoHistory.pop_back();
+                                        aiMascot.toggle();
+                                    }
                                 }
                             }
                             else if (drawArea.contains(mousePos)) {
@@ -301,22 +314,19 @@ private:
             }
         }
     }
+
     void sliceSpriteSheet(const std::string& filePath, int tileWidth, int tileHeight, const std::string& outputFolder) {
         sf::Image sheet;
         if (!sheet.loadFromFile(filePath)) return;
-
         std::filesystem::create_directories(outputFolder);
-
         int cols = sheet.getSize().x / tileWidth;
         int rows = sheet.getSize().y / tileHeight;
         int count = 0;
-
         for (int y = 0; y < rows; ++y) {
             for (int x = 0; x < cols; ++x) {
                 sf::Image tile;
                 tile.create(tileWidth, tileHeight, sf::Color::Transparent);
                 tile.copy(sheet, 0, 0, sf::IntRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight), true);
-
                 bool isEmpty = true;
                 for (unsigned int ty = 0; ty < tile.getSize().y; ++ty) {
                     for (unsigned int tx = 0; tx < tile.getSize().x; ++tx) {
@@ -327,36 +337,30 @@ private:
                     }
                     if (!isEmpty) break;
                 }
-
                 if (!isEmpty) {
                     tile.saveToFile(outputFolder + "/sliced_" + std::to_string(count) + ".png");
                     count++;
                 }
             }
         }
-        std::cout << "Sliced " << count << " individual items into " << outputFolder << "\n";
     }
+
     void massIngestImages(const std::string& folderPath) {
-        std::ofstream file("dataset.txt", std::ios::app);
+        std::ofstream file("dataset.json", std::ios::app);
         if (!file.is_open()) return;
-
         int processedCount = 0;
-
         for (const auto& entry : std::filesystem::directory_iterator(folderPath)) {
             if (entry.path().extension() == ".png" || entry.path().extension() == ".jpg") {
                 sf::Image img;
                 if (img.loadFromFile(entry.path().string())) {
                     unsigned int width = img.getSize().x;
                     unsigned int height = img.getSize().y;
-
                     for (int y = 0; y < 48; ++y) {
                         std::string row = "";
                         for (int x = 0; x < 48; ++x) {
                             unsigned int sampleX = (x * width) / 48;
                             unsigned int sampleY = (y * height) / 48;
-
                             sf::Color c = img.getPixel(sampleX, sampleY);
-
                             if (c.a > 20 && (c.r < 250 || c.g < 250 || c.b < 250)) {
                                 row += "X";
                             }
@@ -372,8 +376,8 @@ private:
             }
         }
         file.close();
-        std::cout << "Mass Ingestion Complete: Added " << processedCount << " images to dataset.\n";
     }
+
     void update() {
         if (currentState == AppState::Painting) {
             aiMascot.update(*frames[currentFrame]);
@@ -387,12 +391,34 @@ private:
                     playClock.restart();
                 }
             }
+
+            // NEW: Handle Error Fading Logic
+            if (showingError) {
+                float timePassed = errorClock.getElapsedTime().asSeconds();
+                if (timePassed > 1.5f) { // Fast 1.5 second max duration
+                    showingError = false;
+                }
+                else {
+                    // Start fading out after 0.5 seconds
+                    if (timePassed > 0.5f) {
+                        errorAlpha -= 255.0f * (1.0f / 60.0f); // Fast fade
+                        if (errorAlpha < 0) errorAlpha = 0;
+                    }
+
+                    sf::Color fillColor = errorText.getFillColor();
+                    sf::Color outlineColor = errorText.getOutlineColor();
+                    fillColor.a = static_cast<sf::Uint8>(errorAlpha);
+                    outlineColor.a = static_cast<sf::Uint8>(errorAlpha);
+
+                    errorText.setFillColor(fillColor);
+                    errorText.setOutlineColor(outlineColor);
+                }
+            }
         }
     }
 
     void render() {
         window.clear(sf::Color::White);
-
         window.draw(bgSprite);
 
         if (currentState == AppState::Menu) {
@@ -410,7 +436,6 @@ private:
 
             sf::Sprite currentSprite(frames[currentFrame]->getTexture());
             window.draw(currentSprite);
-
             window.draw(deskSprite);
             aiMascot.draw(window);
 
@@ -426,45 +451,98 @@ private:
                 else {
                     brushPreview.setPosition(50, 940);
                 }
-
                 window.draw(brushPreview);
+            }
+
+            // NEW: Draw fading error
+            if (showingError) {
+                window.draw(errorText);
             }
         }
 
         window.display();
     }
+
     void saveToDataset() {
         sf::Image img = frames[currentFrame]->getTexture().copyToImage();
-        std::ofstream file("dataset.txt", std::ios::app);
-
-        for (int y = 0; y < 48; ++y) {
+        std::ifstream inFile("dataset.json");
+        std::string content((std::istreambuf_iterator<char>(inFile)), std::istreambuf_iterator<char>());
+        inFile.close();
+        size_t lastBracket = content.find_last_of(']');
+        if (lastBracket != std::string::npos) {
+            content.erase(lastBracket);
+        }
+        else {
+            content = "[\n";
+        }
+        std::vector<std::string> newPixels;
+        int res = 48;
+        for (int y = 0; y < res; ++y) {
             std::string row = "";
-            for (int x = 0; x < 48; ++x) {
-                int px = static_cast<int>(drawArea.left + (x * (drawArea.width / 48.f)));
-                int py = static_cast<int>(drawArea.top + (y * (drawArea.height / 48.f)));
-
-                if (px < 1920 && py < 1080) {
+            for (int x = 0; x < res; ++x) {
+                int px = static_cast<int>(drawArea.left + (x * (drawArea.width / (float)res)));
+                int py = static_cast<int>(drawArea.top + (y * (drawArea.height / (float)res)));
+                if (px >= 0 && px < 1920 && py >= 0 && py < 1080) {
                     sf::Color c = img.getPixel(px, py);
-                    if (c.a > 0 && (c.r < 250 || c.g < 250 || c.b < 250)) row += "X";
-                    else row += ".";
+                    if (c.a > 20) {
+                        float lum = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b);
+                        if (lum < 40) row += "O";
+                        else if (lum < 90) row += "S";
+                        else if (lum < 160) row += "X";
+                        else if (lum < 220) row += "H";
+                        else row += "W";
+                    }
+                    else {
+                        row += ".";
+                    }
+                }
+                else {
+                    row += ".";
                 }
             }
-            file << row << "\n";
+            newPixels.push_back(row);
         }
-        file << "\n";
-        file.close();
+        bool isBlank = true;
+        for (const auto& r : newPixels) {
+            if (r.find_first_not_of('.') != std::string::npos) {
+                isBlank = false;
+                break;
+            }
+        }
+        if (isBlank) return;
+        std::ofstream outFile("dataset.json");
+        outFile << content;
+        if (content.find("}") != std::string::npos) {
+            outFile << ",\n";
+        }
+        int randomID = rand() % 99999;
+        outFile << "  {\n";
+        outFile << "    \"name\": \"CustomArt_" << randomID << "\",\n";
+        outFile << "    \"category\": \"custom\",\n";
+        outFile << "    \"scale\": 1.0,\n";
+        outFile << "    \"width\": " << res << ",\n";
+        outFile << "    \"height\": " << res << ",\n";
+        outFile << "    \"pixels\": [\n";
+        for (size_t i = 0; i < newPixels.size(); ++i) {
+            outFile << "      \"" << newPixels[i] << "\"";
+            if (i < newPixels.size() - 1) outFile << ",";
+            outFile << "\n";
+        }
+        outFile << "    ]\n";
+        outFile << "  }\n";
+        outFile << "]\n";
+        outFile.close();
     }
-    void removeLastFromDataset() {
-        std::ifstream inFile("dataset.txt");
-        if (!inFile.is_open()) return;
 
+    void removeLastFromDataset() {
+        std::ifstream inFile("dataset.json");
+        if (!inFile.is_open()) return;
         std::vector<std::string> allLines;
         std::string line;
         while (std::getline(inFile, line)) {
             allLines.push_back(line);
         }
         inFile.close();
-
         std::vector<std::vector<std::string>> templates;
         std::vector<std::string> currentBlock;
         for (const auto& l : allLines) {
@@ -481,15 +559,9 @@ private:
         if (currentBlock.size() == 48) {
             templates.push_back(currentBlock);
         }
-
-        if (templates.empty()) {
-            std::cout << "Dataset is already empty!\n";
-            return;
-        }
-
+        if (templates.empty()) return;
         templates.pop_back();
-
-        std::ofstream outFile("dataset.txt", std::ios::trunc);
+        std::ofstream outFile("dataset.json", std::ios::trunc);
         for (const auto& tmpl : templates) {
             for (const auto& r : tmpl) {
                 outFile << r << "\n";
@@ -497,9 +569,8 @@ private:
             outFile << "\n";
         }
         outFile.close();
-
-        std::cout << "Removed last template. Remaining: " << templates.size() << "\n";
     }
+
 public:
     WisdomPark()
         : window(sf::VideoMode(1920, 1080), "Wisdom Park"),
@@ -511,7 +582,7 @@ public:
         window.setFramerateLimit(60);
         setupUI();
         addNewFrame();
-        aiMascot.trainOnDataset("dataset.txt");
+        aiMascot.trainOnDataset("dataset.json");
     }
 
     void run() {

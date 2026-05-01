@@ -32,30 +32,56 @@ void AIHelper::clearGrid() { std::fill(grid.begin(), grid.end(), 0); }
 void AIHelper::trainOnDataset(const std::string& filename) {
     datasetTemplates.clear();
     std::ifstream file(filename);
-
     if (!file.is_open()) {
         isTrained = false;
         return;
     }
 
-    std::vector<std::string> currentTemplate;
+    Template currentTemplate;
     std::string line;
+    bool inPixels = false;
 
     while (std::getline(file, line)) {
-        if (line.empty() || line.find_first_not_of("\r\n\t ") == std::string::npos) {
-            if (!currentTemplate.empty()) {
-                datasetTemplates.push_back(currentTemplate);
-                currentTemplate.clear();
-            }
-            continue;
+        if (line.find("\"name\":") != std::string::npos) {
+            size_t start = line.find_first_of(':') + 3;
+            size_t end = line.find_last_of('"');
+            currentTemplate.name = line.substr(start, end - start);
         }
-        currentTemplate.push_back(line);
+        else if (line.find("\"category\":") != std::string::npos) {
+            size_t start = line.find_first_of(':') + 3;
+            size_t end = line.find_last_of('"');
+            currentTemplate.category = line.substr(start, end - start);
+        }
+        else if (line.find("\"scale\":") != std::string::npos) {
+            size_t start = line.find_first_of(':') + 1;
+            currentTemplate.scale = std::stof(line.substr(start));
+        }
+        else if (line.find("\"width\":") != std::string::npos) {
+            size_t start = line.find_first_of(':') + 1;
+            currentTemplate.width = std::stoi(line.substr(start));
+        }
+        else if (line.find("\"height\":") != std::string::npos) {
+            size_t start = line.find_first_of(':') + 1;
+            currentTemplate.height = std::stoi(line.substr(start));
+        }
+        else if (line.find("\"pixels\": [") != std::string::npos) {
+            inPixels = true;
+            currentTemplate.pixels.clear();
+        }
+        else if (inPixels) {
+            if (line.find("]") != std::string::npos) {
+                inPixels = false;
+                datasetTemplates.push_back(currentTemplate);
+            }
+            else {
+                size_t start = line.find_first_of('"') + 1;
+                size_t end = line.find_last_of('"');
+                if (start != std::string::npos && end != std::string::npos && end > start) {
+                    currentTemplate.pixels.push_back(line.substr(start, end - start));
+                }
+            }
+        }
     }
-
-    if (!currentTemplate.empty()) {
-        datasetTemplates.push_back(currentTemplate);
-    }
-
     isTrained = !datasetTemplates.empty();
 }
 
@@ -65,7 +91,7 @@ std::vector<std::string> AIHelper::generateDynamicBlueprint(std::mt19937& rng) {
     int center = (width / 2) - 1;
     int objectType = std::uniform_int_distribution<int>(0, 2)(rng);
 
-    if (objectType == 0) { // Sword
+    if (objectType == 0) {
         int bladeLen = std::uniform_int_distribution<int>(15, 28)(rng);
         int bladeW = std::uniform_int_distribution<int>(1, 4)(rng);
         int guardW = std::uniform_int_distribution<int>(4, 10)(rng);
@@ -85,7 +111,7 @@ std::vector<std::string> AIHelper::generateDynamicBlueprint(std::mt19937& rng) {
             blueprint[y][center] = 'X'; blueprint[y][center - 1] = 'X';
         }
     }
-    else if (objectType == 1) { // Tree
+    else if (objectType == 1) {
         int trunkH = std::uniform_int_distribution<int>(10, 20)(rng);
         int trunkW = std::uniform_int_distribution<int>(1, 3)(rng);
         int startY = height - 4 - trunkH;
@@ -103,7 +129,7 @@ std::vector<std::string> AIHelper::generateDynamicBlueprint(std::mt19937& rng) {
             }
         }
     }
-    else { // Potion
+    else {
         int baseW = std::uniform_int_distribution<int>(6, 12)(rng);
         int baseH = std::uniform_int_distribution<int>(8, 16)(rng);
         int neckW = std::uniform_int_distribution<int>(2, 5)(rng);
@@ -162,8 +188,8 @@ void AIHelper::applyOutline() {
     grid = tempGrid;
 }
 
-void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
-    if (isGenerating) return;
+std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
+    if (isGenerating) return "";
 
     isGenerating = true;
     currentDrawIndex = 0;
@@ -187,93 +213,77 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
     darkColor = thematicPalettes[selectedPalette][2];
 
     if (isTrained) {
-        int nextIndex = 0;
-        float targetX = bounds.left + bounds.width / 2.0f;
-        float targetY = bounds.top + bounds.height / 2.0f;
-
-        if (history.empty()) {
-            std::uniform_int_distribution<int> dist(0, datasetTemplates.size() - 1);
-            nextIndex = dist(rng);
-        }
-        else {
-            std::uniform_real_distribution<float> xDist(bounds.left, bounds.left + bounds.width);
-            std::uniform_real_distribution<float> yDist(bounds.top, bounds.top + bounds.height);
-            targetX = xDist(rng);
-            targetY = yDist(rng);
-
-            float minDist = 999999.0f;
-            int neighborIndex = 0;
-
-            for (const auto& item : history) {
-                float dx = targetX - (item.bounds.left + item.bounds.width / 2.0f);
-                float dy = targetY - (item.bounds.top + item.bounds.height / 2.0f);
-                float dist = dx * dx + dy * dy;
-                if (dist < minDist) {
-                    minDist = dist;
-                    neighborIndex = item.datasetIndex;
-                }
-            }
-
-            float neighborArea = datasetTemplates[neighborIndex].size() * datasetTemplates[neighborIndex][0].size();
-
-            int bestMatch = 0;
-            float bestDiff = 999999.0f;
-            std::uniform_int_distribution<int> dist(0, datasetTemplates.size() - 1);
-
-            for (int i = 0; i < 30; ++i) {
-                int candidate = dist(rng);
-                if (candidate == neighborIndex) continue;
-
-                float candidateArea = datasetTemplates[candidate].size() * datasetTemplates[candidate][0].size();
-                float diff = std::abs(candidateArea - neighborArea);
-
-                std::uniform_real_distribution<float> noise(0.0f, neighborArea * 0.2f);
-                diff += noise(rng);
-
-                if (diff < bestDiff) {
-                    bestDiff = diff;
-                    bestMatch = candidate;
-                }
-            }
-            nextIndex = bestMatch;
-        }
+        std::uniform_int_distribution<int> dist(0, datasetTemplates.size() - 1);
+        int nextIndex = dist(rng);
 
         const auto& selectedTemplate = datasetTemplates[nextIndex];
-        height = selectedTemplate.size();
-        width = selectedTemplate[0].size();
+        height = selectedTemplate.height;
+        width = selectedTemplate.width;
 
-        float pixelSize = std::min(currentBounds.width / width, currentBounds.height / height);
-        if (pixelSize > 15.0f) pixelSize = 15.0f;
+        float GLOBAL_PIXEL_SIZE = 6.0f;
+        float pixelSize = GLOBAL_PIXEL_SIZE * selectedTemplate.scale;
 
         float itemWidth = width * pixelSize;
         float itemHeight = height * pixelSize;
 
+        bool isClutter = (selectedTemplate.category == "healing" || selectedTemplate.category == "status-cures" || selectedTemplate.category == "vitamins" || selectedTemplate.category == "clutter");
         bool validSpot = false;
-        int attempts = 0;
 
-        while (!validSpot && attempts < 500) {
-            std::normal_distribution<float> driftX(targetX, bounds.width / 4.0f);
-            std::normal_distribution<float> driftY(targetY, bounds.height / 4.0f);
-
-            currentX = driftX(rng);
-            currentY = driftY(rng);
-
-            currentX = std::clamp(currentX, bounds.left, bounds.left + bounds.width - itemWidth);
-            currentY = std::clamp(currentY, bounds.top, bounds.top + bounds.height - itemHeight);
-
+        if (history.empty()) {
+            currentX = bounds.left + (bounds.width - itemWidth) / 2.0f;
+            currentY = bounds.top + (bounds.height - itemHeight) / 2.0f;
             validSpot = true;
-            sf::FloatRect newRect(currentX - 5, currentY - 5, itemWidth + 10, itemHeight + 10);
-
-            for (const auto& pastItem : history) {
-                if (newRect.intersects(pastItem.bounds)) {
-                    validSpot = false;
-                    break;
-                }
-            }
-            attempts++;
         }
 
-        PlacedItem newObj = { nextIndex, sf::FloatRect(currentX, currentY, itemWidth, itemHeight) };
+        if (isClutter && !validSpot) {
+            std::vector<int> structures;
+            for (size_t i = 0; i < history.size(); ++i) {
+                if (history[i].category != "healing" && history[i].category != "status-cures" && history[i].category != "vitamins" && history[i].category != "clutter") {
+                    structures.push_back(i);
+                }
+            }
+            if (!structures.empty()) {
+                std::uniform_int_distribution<int> sDist(0, structures.size() - 1);
+                int targetStruct = structures[sDist(rng)];
+                sf::FloatRect sBounds = history[targetStruct].bounds;
+
+                std::uniform_real_distribution<float> xDist(sBounds.left, sBounds.left + sBounds.width - itemWidth);
+                std::uniform_real_distribution<float> yDist(sBounds.top, sBounds.top + sBounds.height - itemHeight);
+
+                currentX = std::clamp(xDist(rng), bounds.left, bounds.left + bounds.width - itemWidth);
+                currentY = std::clamp(yDist(rng), bounds.top, bounds.top + bounds.height - itemHeight);
+                validSpot = true;
+            }
+        }
+
+        if (!validSpot) {
+            int attempts = 0;
+            while (!validSpot && attempts < 500) {
+                std::uniform_real_distribution<float> xDist(bounds.left, bounds.left + bounds.width - itemWidth);
+                std::uniform_real_distribution<float> yDist(bounds.top, bounds.top + bounds.height - itemHeight);
+
+                currentX = xDist(rng);
+                currentY = yDist(rng);
+
+                validSpot = true;
+                sf::FloatRect newRect(currentX - 5, currentY - 5, itemWidth + 10, itemHeight + 10);
+
+                for (const auto& pastItem : history) {
+                    if (newRect.intersects(pastItem.bounds)) {
+                        validSpot = false;
+                        break;
+                    }
+                }
+                attempts++;
+            }
+        }
+
+        if (!validSpot) {
+            isGenerating = false;
+            return "ERROR: Canvas is too crowded!";
+        }
+
+        PlacedItem newObj = { nextIndex, selectedTemplate.category, sf::FloatRect(currentX, currentY, itemWidth, itemHeight) };
         history.push_back(newObj);
 
         grid.clear();
@@ -281,7 +291,7 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
 
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
-                char cell = selectedTemplate[y][x];
+                char cell = selectedTemplate.pixels[y][x];
                 if (cell == 'W') grid[y * width + x] = 6;
                 else if (cell == 'H') grid[y * width + x] = 2;
                 else if (cell == 'X') grid[y * width + x] = 1;
@@ -301,18 +311,33 @@ void AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
         generateFromTemplate(rng, blueprint);
         applyShading();
         applyOutline();
+
+        float GLOBAL_PIXEL_SIZE = 6.0f;
+        float itemWidth = width * GLOBAL_PIXEL_SIZE;
+        float itemHeight = height * GLOBAL_PIXEL_SIZE;
+
+        currentX = bounds.left + (bounds.width - itemWidth) / 2.0f;
+        currentY = bounds.top + (bounds.height - itemHeight) / 2.0f;
     }
 
     drawOrder.clear();
     drawOrder.resize(width * height);
     for (int i = 0; i < width * height; ++i) drawOrder[i] = i;
     std::shuffle(drawOrder.begin(), drawOrder.end(), rng);
+
+    return "";
 }
+
 void AIHelper::update(sf::RenderTexture& canvas) {
     if (!isGenerating) return;
 
-    float pixelSize = std::min(currentBounds.width / width, currentBounds.height / height);
-    if (pixelSize > 15.0f) pixelSize = 15.0f;
+    float GLOBAL_PIXEL_SIZE = 6.0f;
+    float pixelSize = GLOBAL_PIXEL_SIZE;
+
+    if (isTrained && !history.empty()) {
+        int currentIndex = history.back().datasetIndex;
+        pixelSize = GLOBAL_PIXEL_SIZE * datasetTemplates[currentIndex].scale;
+    }
 
     int pixelsPerFrame = (width * height) / 40;
     if (pixelsPerFrame < 10) pixelsPerFrame = 10;
