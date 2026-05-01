@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <map>
 
 class AIHelper {
 private:
@@ -33,6 +34,9 @@ private:
     };
 
     std::vector<PlacedItem> history;
+    std::map<int, std::vector<PlacedItem>> frameMemory;
+    int currentMemoryFrame;
+
     std::vector<Template> datasetTemplates;
     std::vector<int> grid;
     std::vector<int> drawOrder;
@@ -59,4 +63,7 @@ public:
     void trainOnDataset(const std::string& filename);
     std::string startGeneratingComplexArt(sf::FloatRect bounds);
     void update(sf::RenderTexture& canvas);
+
+    void setFrame(int frameIndex);
+    void clearAllMemory();
 };

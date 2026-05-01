@@ -3,13 +3,14 @@
 #include <cmath>
 #include <iostream>
 
-AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false) {
+AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false), currentMemoryFrame(0) {
     mascot.setRadius(40);
     mascot.setPosition(1800, 950);
     mascot.setFillColor(sf::Color(0, 191, 255));
     mascot.setOutlineThickness(2);
     mascot.setOutlineColor(sf::Color::Transparent);
     grid.resize(width * height, 0);
+
 }
 
 void AIHelper::toggle() {
@@ -367,4 +368,17 @@ void AIHelper::update(sf::RenderTexture& canvas) {
         currentDrawIndex++;
     }
     canvas.display();
+}
+
+
+void AIHelper::setFrame(int frameIndex) {
+    frameMemory[currentMemoryFrame] = history;
+    currentMemoryFrame = frameIndex;
+    history = frameMemory[currentMemoryFrame];
+}
+
+void AIHelper::clearAllMemory() {
+    history.clear();
+    frameMemory.clear();
+    currentMemoryFrame = 0;
 }

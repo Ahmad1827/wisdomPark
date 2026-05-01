@@ -63,6 +63,7 @@ private:
         currentFrame = 0;
         undoHistory.clear();
         redoHistory.clear();
+        aiMascot.clearAllMemory();
         addNewFrame();
     }
 
@@ -152,6 +153,16 @@ private:
                         undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
                         redoHistory.clear();
                         frames[currentFrame]->clear(sf::Color::Transparent);
+                    }
+                    if (event.key.code == sf::Keyboard::Right && !isPlaying) {
+                        currentFrame++;
+                        if (currentFrame >= frames.size()) addNewFrame();
+                        aiMascot.setFrame(currentFrame);
+                    }
+
+                    if (event.key.code == sf::Keyboard::Left && !isPlaying) {
+                        if (currentFrame > 0) currentFrame--;
+                        aiMascot.setFrame(currentFrame);
                     }
                     if (event.key.code == sf::Keyboard::S) frames[currentFrame]->getTexture().copyToImage().saveToFile("export.png");
                     if (event.key.code == sf::Keyboard::E) {
