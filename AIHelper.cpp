@@ -206,8 +206,7 @@ void AIHelper::applyOutline() {
     }
     grid = tempGrid;
 }
-
-std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
+std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas) {
     if (isGenerating) return "";
 
     isGenerating = true;
@@ -216,20 +215,44 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
     std::random_device rd;
     std::mt19937 rng(rd());
 
-    std::vector<std::vector<sf::Color>> thematicPalettes = {
-        {sf::Color(77, 51, 25), sf::Color(115, 77, 38), sf::Color(38, 26, 13)},
-        {sf::Color(140, 146, 153), sf::Color(190, 196, 204), sf::Color(90, 95, 102)},
-        {sf::Color(34, 139, 34), sf::Color(50, 205, 50), sf::Color(0, 100, 0)},
-        {sf::Color(178, 34, 34), sf::Color(220, 20, 60), sf::Color(139, 0, 0)},
-        {sf::Color(65, 105, 225), sf::Color(100, 149, 237), sf::Color(0, 0, 139)}
-    };
+    long long rSum = 0, gSum = 0, bSum = 0;
+    int validPixels = 0;
 
-    std::uniform_int_distribution<int> paletteDist(0, thematicPalettes.size() - 1);
-    int selectedPalette = paletteDist(rng);
+    for (unsigned int y = 0; y < currentCanvas.getSize().y; y += 10) {
+        for (unsigned int x = 0; x < currentCanvas.getSize().x; x += 10) {
+            sf::Color c = currentCanvas.getPixel(x, y);
+            if (c.a > 20 && !(c.r > 240 && c.g > 240 && c.b > 240)) {
+                rSum += c.r;
+                gSum += c.g;
+                bSum += c.b;
+                validPixels++;
+            }
+        }
+    }
 
-    baseColor = thematicPalettes[selectedPalette][0];
-    lightColor = thematicPalettes[selectedPalette][1];
-    darkColor = thematicPalettes[selectedPalette][2];
+    if (validPixels > 50) {
+        int avgR = rSum / validPixels;
+        int avgG = gSum / validPixels;
+        int avgB = bSum / validPixels;
+
+        baseColor = sf::Color(avgR, avgG, avgB);
+        lightColor = sf::Color(std::min(255, avgR + 50), std::min(255, avgG + 50), std::min(255, avgB + 50));
+        darkColor = sf::Color(std::max(0, avgR - 50), std::max(0, avgG - 50), std::max(0, avgB - 50));
+    }
+    else {
+        std::vector<std::vector<sf::Color>> thematicPalettes = {
+            {sf::Color(77, 51, 25), sf::Color(115, 77, 38), sf::Color(38, 26, 13)},
+            {sf::Color(140, 146, 153), sf::Color(190, 196, 204), sf::Color(90, 95, 102)},
+            {sf::Color(34, 139, 34), sf::Color(50, 205, 50), sf::Color(0, 100, 0)},
+            {sf::Color(178, 34, 34), sf::Color(220, 20, 60), sf::Color(139, 0, 0)},
+            {sf::Color(65, 105, 225), sf::Color(100, 149, 237), sf::Color(0, 0, 139)}
+        };
+        std::uniform_int_distribution<int> paletteDist(0, thematicPalettes.size() - 1);
+        int selectedPalette = paletteDist(rng);
+        baseColor = thematicPalettes[selectedPalette][0];
+        lightColor = thematicPalettes[selectedPalette][1];
+        darkColor = thematicPalettes[selectedPalette][2];
+    }
 
     if (isTrained) {
         std::vector<int> templateIndices(datasetTemplates.size());
@@ -267,6 +290,15 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
 
             bool isClutter = (testTemplate.category == "healing" || testTemplate.category == "status-cures" || testTemplate.category == "vitamins" || testTemplate.category == "clutter");
 
+            std::vector<int> structures;
+            if (isClutter) {
+                for (size_t i = 0; i < history.size(); ++i) {
+                    if (history[i].category != "healing" && history[i].category != "status-cures" && history[i].category != "vitamins" && history[i].category != "clutter") {
+                        structures.push_back(i);
+                    }
+                }
+            }
+
             if (history.empty()) {
                 currentX = bounds.left + (bounds.width - itemWidth) / 2.0f;
                 currentY = bounds.top + (bounds.height - itemHeight) / 2.0f;
@@ -282,29 +314,20 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
                 float testX = 0;
                 float testY = 0;
 
-                if (isClutter) {
-                    std::vector<int> structures;
-                    for (size_t i = 0; i < history.size(); ++i) {
-                        if (history[i].category != "healing" && history[i].category != "status-cures" && history[i].category != "vitamins" && history[i].category != "clutter") {
-                            structures.push_back(i);
-                        }
-                    }
-                    if (!structures.empty()) {
-                        std::uniform_int_distribution<int> sDist(0, structures.size() - 1);
-                        sf::FloatRect sBounds = history[structures[sDist(rng)]].bounds;
+                if (isClutter && !structures.empty()) {
+                    std::uniform_int_distribution<int> sDist(0, structures.size() - 1);
+                    sf::FloatRect sBounds = history[structures[sDist(rng)]].bounds;
 
-                        std::uniform_real_distribution<float> xDist(sBounds.left, sBounds.left + sBounds.width - itemWidth);
-                        std::uniform_real_distribution<float> yDist(sBounds.top, sBounds.top + sBounds.height - itemHeight);
+                    float stackW = std::max(1.0f, sBounds.width * 0.6f);
+                    float stackH = std::max(1.0f, sBounds.height * 0.6f);
+                    float safeLeft = sBounds.left + (sBounds.width - stackW) / 2.0f;
+                    float safeTop = sBounds.top + (sBounds.height - stackH) / 2.0f;
 
-                        testX = std::clamp(xDist(rng), bounds.left, bounds.left + bounds.width - itemWidth);
-                        testY = std::clamp(yDist(rng), bounds.top, bounds.top + bounds.height - itemHeight);
-                    }
-                    else {
-                        std::uniform_real_distribution<float> xDist(bounds.left, bounds.left + bounds.width - itemWidth);
-                        std::uniform_real_distribution<float> yDist(bounds.top, bounds.top + bounds.height - itemHeight);
-                        testX = xDist(rng);
-                        testY = yDist(rng);
-                    }
+                    std::uniform_real_distribution<float> xDist(safeLeft, safeLeft + stackW);
+                    std::uniform_real_distribution<float> yDist(safeTop, safeTop + stackH);
+
+                    testX = std::clamp(xDist(rng), bounds.left, bounds.left + bounds.width - itemWidth);
+                    testY = std::clamp(yDist(rng), bounds.top, bounds.top + bounds.height - itemHeight);
                 }
                 else {
                     std::uniform_real_distribution<float> xDist(bounds.left, bounds.left + bounds.width - itemWidth);
@@ -315,8 +338,15 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
 
                 sf::FloatRect newRect(testX - 5, testY - 5, itemWidth + 10, itemHeight + 10);
                 bool intersects = false;
+
                 for (const auto& pastItem : history) {
                     if (newRect.intersects(pastItem.bounds)) {
+                        bool pastIsStructure = (pastItem.category != "healing" && pastItem.category != "status-cures" && pastItem.category != "vitamins" && pastItem.category != "clutter");
+
+                        if (isClutter && pastIsStructure) {
+                            continue;
+                        }
+
                         intersects = true;
                         break;
                     }

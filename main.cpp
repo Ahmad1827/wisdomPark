@@ -260,7 +260,8 @@ private:
                                         undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
                                         redoHistory.clear();
 
-                                        std::string errorMsg = aiMascot.startGeneratingComplexArt(drawArea);
+                                        sf::Image currentImg = frames[currentFrame]->getTexture().copyToImage();
+                                        std::string errorMsg = aiMascot.startGeneratingComplexArt(drawArea, currentImg);
                                         if (!errorMsg.empty()) {
                                             showMessage(errorMsg, sf::Color::Red);
                                             undoHistory.pop_back();

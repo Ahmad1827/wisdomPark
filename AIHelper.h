@@ -63,7 +63,7 @@ public:
     void draw(sf::RenderWindow& window);
 
     void trainOnDataset(const std::string& filename);
-    std::string startGeneratingComplexArt(sf::FloatRect bounds);
+    std::string startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas);
     void update(sf::RenderTexture& canvas);
 
     void setFrame(int frameIndex);
