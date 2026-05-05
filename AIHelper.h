@@ -49,11 +49,21 @@ private:
 
     std::string currentTheme;
 
+    std::vector<int> terrainGrid;
+    int terrainWidth;
+    int terrainHeight;
+    float terrainX;
+    float terrainY;
+    float terrainPixelSize;
+    sf::Color terrainColor;
+    int currentTerrainDrawIndex;
+
     void clearGrid();
     std::vector<std::string> generateDynamicBlueprint(std::mt19937& rng);
     void generateFromTemplate(std::mt19937& rng, const std::vector<std::string>& blueprint);
     void applyShading();
     void applyOutline();
+    void generateTerrainPatch(std::mt19937& rng, sf::FloatRect itemBounds);
 
 public:
     AIHelper();

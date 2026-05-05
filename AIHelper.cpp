@@ -3,7 +3,7 @@
 #include <cmath>
 #include <iostream>
 
-AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false), currentMemoryFrame(0), currentTheme("all") {
+AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false), currentMemoryFrame(0), currentTheme("all"), currentTerrainDrawIndex(0) {
     mascot.setRadius(40);
     mascot.setPosition(1800, 950);
     mascot.setFillColor(sf::Color(0, 191, 255));
@@ -206,11 +206,59 @@ void AIHelper::applyOutline() {
     }
     grid = tempGrid;
 }
+
+void AIHelper::generateTerrainPatch(std::mt19937& rng, sf::FloatRect itemBounds) {
+    terrainWidth = 36;
+    terrainHeight = 24;
+    terrainPixelSize = 10.0f;
+    terrainGrid.assign(terrainWidth * terrainHeight, 0);
+
+    std::uniform_real_distribution<float> prob(0.0f, 1.0f);
+    for (int i = 0; i < terrainWidth * terrainHeight; ++i) {
+        if (prob(rng) > 0.40f) terrainGrid[i] = 1;
+    }
+
+    for (int pass = 0; pass < 3; ++pass) {
+        std::vector<int> newGrid = terrainGrid;
+        for (int y = 0; y < terrainHeight; ++y) {
+            for (int x = 0; x < terrainWidth; ++x) {
+                int neighbors = 0;
+                for (int dy = -1; dy <= 1; ++dy) {
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        if (dx == 0 && dy == 0) continue;
+                        int nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < terrainWidth && ny >= 0 && ny < terrainHeight) {
+                            neighbors += terrainGrid[ny * terrainWidth + nx];
+                        }
+                    }
+                }
+                if (neighbors > 4) newGrid[y * terrainWidth + x] = 1;
+                else if (neighbors < 4) newGrid[y * terrainWidth + x] = 0;
+            }
+        }
+        terrainGrid = newGrid;
+    }
+
+    std::vector<sf::Color> biomes = {
+        sf::Color(107, 142, 35, 200),
+        sf::Color(139, 69, 19, 200),
+        sf::Color(70, 130, 180, 200),
+        sf::Color(210, 180, 140, 200)
+    };
+    std::uniform_int_distribution<int> colorDist(0, biomes.size() - 1);
+    terrainColor = biomes[colorDist(rng)];
+
+    terrainX = itemBounds.left + (itemBounds.width / 2.0f) - ((terrainWidth * terrainPixelSize) / 2.0f);
+    terrainY = itemBounds.top + itemBounds.height - ((terrainHeight * terrainPixelSize) * 0.75f);
+}
+
 std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas) {
     if (isGenerating) return "";
 
     isGenerating = true;
     currentDrawIndex = 0;
+    currentTerrainDrawIndex = 0;
+    terrainGrid.clear();
     currentBounds = bounds;
     std::random_device rd;
     std::mt19937 rng(rd());
@@ -376,8 +424,14 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
         height = selectedTemplate.height;
         width = selectedTemplate.width;
 
-        PlacedItem newObj = { chosenIndex, selectedTemplate.category, sf::FloatRect(currentX, currentY, finalItemWidth, finalItemHeight) };
+        sf::FloatRect finalBounds(currentX, currentY, finalItemWidth, finalItemHeight);
+        PlacedItem newObj = { chosenIndex, selectedTemplate.category, finalBounds };
         history.push_back(newObj);
+
+        bool isClutter = (selectedTemplate.category == "healing" || selectedTemplate.category == "status-cures" || selectedTemplate.category == "vitamins" || selectedTemplate.category == "clutter");
+        if (!isClutter) {
+            generateTerrainPatch(rng, finalBounds);
+        }
 
         grid.clear();
         grid.resize(width * height, 0);
@@ -411,6 +465,9 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
 
         currentX = bounds.left + (bounds.width - itemWidth) / 2.0f;
         currentY = bounds.top + (bounds.height - itemHeight) / 2.0f;
+
+        sf::FloatRect finalBounds(currentX, currentY, itemWidth, itemHeight);
+        generateTerrainPatch(rng, finalBounds);
     }
 
     drawOrder.clear();
@@ -423,6 +480,31 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
 
 void AIHelper::update(sf::RenderTexture& canvas) {
     if (!isGenerating) return;
+
+    if (currentTerrainDrawIndex < terrainGrid.size()) {
+        int pixelsPerFrame = (terrainWidth * terrainHeight) / 10;
+        if (pixelsPerFrame < 5) pixelsPerFrame = 5;
+
+        for (int i = 0; i < pixelsPerFrame; ++i) {
+            if (currentTerrainDrawIndex >= terrainGrid.size()) break;
+
+            if (terrainGrid[currentTerrainDrawIndex] == 1) {
+                int x = currentTerrainDrawIndex % terrainWidth;
+                int y = currentTerrainDrawIndex / terrainWidth;
+
+                sf::RectangleShape pixel(sf::Vector2f(terrainPixelSize, terrainPixelSize));
+                pixel.setPosition(terrainX + (x * terrainPixelSize), terrainY + (y * terrainPixelSize));
+                pixel.setFillColor(terrainColor);
+                canvas.draw(pixel);
+            }
+            currentTerrainDrawIndex++;
+        }
+
+        if (currentTerrainDrawIndex < terrainGrid.size()) {
+            canvas.display();
+            return;
+        }
+    }
 
     float GLOBAL_PIXEL_SIZE = 6.0f;
     float pixelSize = GLOBAL_PIXEL_SIZE;
