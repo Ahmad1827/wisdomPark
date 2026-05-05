@@ -47,6 +47,8 @@ private:
     sf::Color lightColor;
     sf::Color darkColor;
 
+    std::string currentTheme;
+
     void clearGrid();
     std::vector<std::string> generateDynamicBlueprint(std::mt19937& rng);
     void generateFromTemplate(std::mt19937& rng, const std::vector<std::string>& blueprint);
@@ -66,4 +68,7 @@ public:
 
     void setFrame(int frameIndex);
     void clearAllMemory();
+
+    void setTheme(const std::string& theme);
+    std::string getTheme() const;
 };

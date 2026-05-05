@@ -3,14 +3,13 @@
 #include <cmath>
 #include <iostream>
 
-AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false), currentMemoryFrame(0) {
+AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false), currentMemoryFrame(0), currentTheme("all") {
     mascot.setRadius(40);
     mascot.setPosition(1800, 950);
     mascot.setFillColor(sf::Color(0, 191, 255));
     mascot.setOutlineThickness(2);
     mascot.setOutlineColor(sf::Color::Transparent);
     grid.resize(width * height, 0);
-
 }
 
 void AIHelper::toggle() {
@@ -29,6 +28,25 @@ bool AIHelper::isActive() const { return active; }
 sf::FloatRect AIHelper::getBounds() const { return mascot.getGlobalBounds(); }
 void AIHelper::draw(sf::RenderWindow& window) { window.draw(mascot); }
 void AIHelper::clearGrid() { std::fill(grid.begin(), grid.end(), 0); }
+
+void AIHelper::setTheme(const std::string& theme) { currentTheme = theme; }
+std::string AIHelper::getTheme() const { return currentTheme; }
+
+void AIHelper::setFrame(int frameIndex) {
+    if (isGenerating) {
+        isGenerating = false;
+        if (active) toggle();
+    }
+    frameMemory[currentMemoryFrame] = history;
+    currentMemoryFrame = frameIndex;
+    history = frameMemory[currentMemoryFrame];
+}
+
+void AIHelper::clearAllMemory() {
+    history.clear();
+    frameMemory.clear();
+    currentMemoryFrame = 0;
+}
 
 void AIHelper::trainOnDataset(const std::string& filename) {
     datasetTemplates.clear();
@@ -227,6 +245,18 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
 
         for (int idx : templateIndices) {
             const auto& testTemplate = datasetTemplates[idx];
+
+            if (currentTheme != "all") {
+                if (currentTheme == "clutter") {
+                    if (testTemplate.category != "clutter" && testTemplate.category != "healing" && testTemplate.category != "status-cures" && testTemplate.category != "vitamins") {
+                        continue;
+                    }
+                }
+                else if (testTemplate.category != currentTheme) {
+                    continue;
+                }
+            }
+
             float pixelSize = 6.0f * testTemplate.scale;
             float itemWidth = testTemplate.width * pixelSize;
             float itemHeight = testTemplate.height * pixelSize;
@@ -309,7 +339,7 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
 
         if (!validSpot) {
             isGenerating = false;
-            return "ERROR: Canvas is too crowded!";
+            return "ERROR: Canvas is too crowded or no items match theme!";
         }
 
         const auto& selectedTemplate = datasetTemplates[chosenIndex];
@@ -400,21 +430,4 @@ void AIHelper::update(sf::RenderTexture& canvas) {
         currentDrawIndex++;
     }
     canvas.display();
-}
-
-
-void AIHelper::setFrame(int frameIndex) {
-    if (isGenerating) {
-        isGenerating = false;
-        if (active) toggle();
-    }
-    frameMemory[currentMemoryFrame] = history;
-    currentMemoryFrame = frameIndex;
-    history = frameMemory[currentMemoryFrame];
-}
-
-void AIHelper::clearAllMemory() {
-    history.clear();
-    frameMemory.clear();
-    currentMemoryFrame = 0;
 }

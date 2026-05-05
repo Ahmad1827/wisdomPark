@@ -46,10 +46,21 @@ private:
     sf::ConvexShape playIcon;
 
     sf::Font mainFont;
-    sf::Text errorText;
-    sf::Clock errorClock;
-    bool showingError;
-    float errorAlpha;
+    sf::Text uiText;
+    sf::Clock textClock;
+    bool showingText;
+    float textAlpha;
+
+    void showMessage(const std::string& msg, sf::Color color) {
+        uiText.setString(msg);
+        uiText.setFillColor(color);
+        sf::FloatRect textRect = uiText.getLocalBounds();
+        uiText.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
+        uiText.setPosition(1920.0f / 2.0f, 150.0f);
+        showingText = true;
+        textAlpha = 255.0f;
+        textClock.restart();
+    }
 
     void addNewFrame() {
         auto tex = std::make_unique<sf::RenderTexture>();
@@ -119,13 +130,12 @@ private:
         playIcon.setPosition(1920.f / 2.f - 15.f, 1080.f / 2.f - 30.f);
 
         mainFont.loadFromFile("assets/font.otf");
-        errorText.setFont(mainFont);
-        errorText.setCharacterSize(60);
-        errorText.setFillColor(sf::Color::Red);
-        errorText.setOutlineColor(sf::Color::White);
-        errorText.setOutlineThickness(4.f);
-        showingError = false;
-        errorAlpha = 255.0f;
+        uiText.setFont(mainFont);
+        uiText.setCharacterSize(60);
+        uiText.setOutlineColor(sf::Color::White);
+        uiText.setOutlineThickness(4.f);
+        showingText = false;
+        textAlpha = 255.0f;
     }
 
     void processEvents() {
@@ -135,7 +145,7 @@ private:
 
             if (currentState == AppState::Menu) {
                 if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                    sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
+                    sf::Vector2f mousePos(static_cast<float>(event.mouseButton.x), static_cast<float>(event.mouseButton.y));
                     if (startButton.getGlobalBounds().contains(mousePos)) {
                         currentState = AppState::Painting;
                     }
@@ -144,8 +154,26 @@ private:
             else if (currentState == AppState::Painting) {
                 if (event.type == sf::Event::KeyPressed) {
                     if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::B) brushColor = sf::Color::Black;
+
+                    if (event.key.code == sf::Keyboard::Num2) {
+                        aiMascot.setTheme("structure");
+                        showMessage("Mode: Structure Only", sf::Color(0, 191, 255));
+                    }
+                    if (event.key.code == sf::Keyboard::Num3) {
+                        aiMascot.setTheme("clutter");
+                        showMessage("Mode: Clutter Only", sf::Color(0, 191, 255));
+                    }
+                    if (event.key.code == sf::Keyboard::Num4) {
+                        aiMascot.setTheme("all");
+                        showMessage("Mode: All Items", sf::Color(0, 191, 255));
+                    }
+                    if (event.key.code == sf::Keyboard::Num5) {
+                        aiMascot.setTheme("custom");
+                        showMessage("Mode: Custom Art Only", sf::Color(0, 191, 255));
+                    }
+
                     if (event.key.code == sf::Keyboard::T) saveToDataset();
-                    if (event.key.code == sf::Keyboard::U) sliceSpriteSheet("C:\\Path\\To\\Your\\spritesheet.png", 16, 16, "C:\\Path\\To\\Your\\SlicedItemsFolder");
+                    if (event.key.code == sf::Keyboard::U) sliceSpriteSheet("assets/spritesheet.png", 16, 16, "assets/sliced");
                     if (event.key.code == sf::Keyboard::Backspace) {
                         removeLastFromDataset();
                         aiMascot.trainOnDataset("dataset.json");
@@ -165,6 +193,7 @@ private:
                         if (currentFrame > 0) currentFrame--;
                         aiMascot.setFrame(currentFrame);
                     }
+                    if (event.key.code == sf::Keyboard::R) resetAnimation();
                     if (event.key.code == sf::Keyboard::S) frames[currentFrame]->getTexture().copyToImage().saveToFile("export.png");
                     if (event.key.code == sf::Keyboard::E) {
                         for (size_t i = 0; i < frames.size(); ++i) {
@@ -175,7 +204,6 @@ private:
                         massIngestImages("C:\\Path\\To\\Your\\Downloaded\\Images");
                         aiMascot.trainOnDataset("dataset.json");
                     }
-                    if (event.key.code == sf::Keyboard::R) resetAnimation();
                     if (event.key.code == sf::Keyboard::Z && !undoHistory.empty()) {
                         redoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
                         sf::Texture tex;
@@ -212,11 +240,11 @@ private:
 
                 if (!isPlaying) {
                     if (event.type == sf::Event::MouseButtonPressed) {
-                        sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
+                        sf::Vector2f mousePos(static_cast<float>(event.mouseButton.x), static_cast<float>(event.mouseButton.y));
 
                         if (event.mouseButton.button == sf::Mouse::Middle && drawArea.contains(mousePos)) {
                             sf::Image currentImg = frames[currentFrame]->getTexture().copyToImage();
-                            brushColor = currentImg.getPixel(mousePos.x, mousePos.y);
+                            brushColor = currentImg.getPixel(static_cast<unsigned int>(mousePos.x), static_cast<unsigned int>(mousePos.y));
                             if (brushColor == sf::Color::Transparent) brushColor = sf::Color::White;
                         }
                         else if (event.mouseButton.button == sf::Mouse::Left) {
@@ -225,24 +253,19 @@ private:
                             else if (paletteEraser.contains(mousePos)) brushColor = sf::Color::Transparent;
                             else if (paletteBrush.contains(mousePos)) brushColor = sf::Color::Black;
 
-                            else if (aiMascot.getBounds().contains(mousePos) && !showingError) {
-                                aiMascot.toggle();
-                                if (aiMascot.isActive()) {
-                                    undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
-                                    redoHistory.clear();
+                            else if (aiMascot.getBounds().contains(mousePos)) {
+                                if (!showingText || uiText.getFillColor() != sf::Color::Red) {
+                                    aiMascot.toggle();
+                                    if (aiMascot.isActive()) {
+                                        undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
+                                        redoHistory.clear();
 
-                                    std::string errorMsg = aiMascot.startGeneratingComplexArt(drawArea);
-                                    if (!errorMsg.empty()) {
-                                        errorText.setString(errorMsg);
-                                        sf::FloatRect textRect = errorText.getLocalBounds();
-                                        errorText.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
-                                        errorText.setPosition(1920.0f / 2.0f, 150.0f);
-                                        showingError = true;
-                                        errorAlpha = 255.0f;
-                                        errorClock.restart();
-
-                                        undoHistory.pop_back();
-                                        aiMascot.toggle();
+                                        std::string errorMsg = aiMascot.startGeneratingComplexArt(drawArea);
+                                        if (!errorMsg.empty()) {
+                                            showMessage(errorMsg, sf::Color::Red);
+                                            undoHistory.pop_back();
+                                            aiMascot.toggle();
+                                        }
                                     }
                                 }
                             }
@@ -270,7 +293,7 @@ private:
                     }
 
                     if (event.type == sf::Event::MouseMoved) {
-                        currentMousePos = sf::Vector2f(event.mouseMove.x, event.mouseMove.y);
+                        currentMousePos = sf::Vector2f(static_cast<float>(event.mouseMove.x), static_cast<float>(event.mouseMove.y));
                         window.setMouseCursorVisible(!drawArea.contains(currentMousePos));
 
                         if (isDrawing) {
@@ -396,24 +419,24 @@ private:
                 }
             }
 
-            if (showingError) {
-                float timePassed = errorClock.getElapsedTime().asSeconds();
+            if (showingText) {
+                float timePassed = textClock.getElapsedTime().asSeconds();
                 if (timePassed > 1.5f) {
-                    showingError = false;
+                    showingText = false;
                 }
                 else {
                     if (timePassed > 0.5f) {
-                        errorAlpha -= 255.0f * (1.0f / 60.0f);
-                        if (errorAlpha < 0) errorAlpha = 0;
+                        textAlpha -= 255.0f * (1.0f / 60.0f);
+                        if (textAlpha < 0) textAlpha = 0;
                     }
 
-                    sf::Color fillColor = errorText.getFillColor();
-                    sf::Color outlineColor = errorText.getOutlineColor();
-                    fillColor.a = static_cast<sf::Uint8>(errorAlpha);
-                    outlineColor.a = static_cast<sf::Uint8>(errorAlpha);
+                    sf::Color fillColor = uiText.getFillColor();
+                    sf::Color outlineColor = uiText.getOutlineColor();
+                    fillColor.a = static_cast<sf::Uint8>(textAlpha);
+                    outlineColor.a = static_cast<sf::Uint8>(textAlpha);
 
-                    errorText.setFillColor(fillColor);
-                    errorText.setOutlineColor(outlineColor);
+                    uiText.setFillColor(fillColor);
+                    uiText.setOutlineColor(outlineColor);
                 }
             }
         }
@@ -429,12 +452,12 @@ private:
         }
         else if (currentState == AppState::Painting) {
             window.draw(canvasSprite);
+
             if (!isPlaying && currentFrame > 0) {
                 sf::Sprite onionSkin(frames[currentFrame - 1]->getTexture());
                 onionSkin.setColor(sf::Color(255, 255, 255, 85));
                 window.draw(onionSkin, sf::BlendAlpha);
             }
-            
 
             sf::Sprite currentSprite(frames[currentFrame]->getTexture());
             window.draw(currentSprite);
@@ -456,8 +479,8 @@ private:
                 window.draw(brushPreview);
             }
 
-            if (showingError) {
-                window.draw(errorText);
+            if (showingText) {
+                window.draw(uiText);
             }
         }
 
