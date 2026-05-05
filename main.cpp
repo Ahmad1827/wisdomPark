@@ -49,12 +49,13 @@ private:
     sf::Text errorText;
     sf::Clock errorClock;
     bool showingError;
-    float errorAlpha; // NEW: Controls the fade
+    float errorAlpha;
 
     void addNewFrame() {
         auto tex = std::make_unique<sf::RenderTexture>();
         tex->create(1920, 1080);
         tex->clear(sf::Color::Transparent);
+        tex->display();
         frames.push_back(std::move(tex));
     }
 
@@ -153,13 +154,13 @@ private:
                         undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
                         redoHistory.clear();
                         frames[currentFrame]->clear(sf::Color::Transparent);
+                        frames[currentFrame]->display();
                     }
                     if (event.key.code == sf::Keyboard::Right && !isPlaying) {
                         currentFrame++;
                         if (currentFrame >= frames.size()) addNewFrame();
                         aiMascot.setFrame(currentFrame);
                     }
-
                     if (event.key.code == sf::Keyboard::Left && !isPlaying) {
                         if (currentFrame > 0) currentFrame--;
                         aiMascot.setFrame(currentFrame);
@@ -195,13 +196,6 @@ private:
                         frames[currentFrame]->display();
                         redoHistory.pop_back();
                     }
-                    if (event.key.code == sf::Keyboard::Right && !isPlaying) {
-                        currentFrame++;
-                        if (currentFrame >= frames.size()) addNewFrame();
-                    }
-                    if (event.key.code == sf::Keyboard::Left && !isPlaying) {
-                        if (currentFrame > 0) currentFrame--;
-                    }
                     if (event.key.code == sf::Keyboard::Space && !isPlaying) {
                         isPlaying = true;
                         currentFrame = 0;
@@ -231,7 +225,6 @@ private:
                             else if (paletteEraser.contains(mousePos)) brushColor = sf::Color::Transparent;
                             else if (paletteBrush.contains(mousePos)) brushColor = sf::Color::Black;
 
-                            // NEW: Block clicking the mascot if an error is currently fading
                             else if (aiMascot.getBounds().contains(mousePos) && !showingError) {
                                 aiMascot.toggle();
                                 if (aiMascot.isActive()) {
@@ -245,7 +238,7 @@ private:
                                         errorText.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
                                         errorText.setPosition(1920.0f / 2.0f, 150.0f);
                                         showingError = true;
-                                        errorAlpha = 255.0f; // Reset Alpha
+                                        errorAlpha = 255.0f;
                                         errorClock.restart();
 
                                         undoHistory.pop_back();
@@ -403,16 +396,14 @@ private:
                 }
             }
 
-            // NEW: Handle Error Fading Logic
             if (showingError) {
                 float timePassed = errorClock.getElapsedTime().asSeconds();
-                if (timePassed > 1.5f) { // Fast 1.5 second max duration
+                if (timePassed > 1.5f) {
                     showingError = false;
                 }
                 else {
-                    // Start fading out after 0.5 seconds
                     if (timePassed > 0.5f) {
-                        errorAlpha -= 255.0f * (1.0f / 60.0f); // Fast fade
+                        errorAlpha -= 255.0f * (1.0f / 60.0f);
                         if (errorAlpha < 0) errorAlpha = 0;
                     }
 
@@ -438,12 +429,12 @@ private:
         }
         else if (currentState == AppState::Painting) {
             window.draw(canvasSprite);
-
             if (!isPlaying && currentFrame > 0) {
                 sf::Sprite onionSkin(frames[currentFrame - 1]->getTexture());
-                onionSkin.setColor(sf::Color(255, 255, 255, 60));
-                window.draw(onionSkin);
+                onionSkin.setColor(sf::Color(255, 255, 255, 85));
+                window.draw(onionSkin, sf::BlendAlpha);
             }
+            
 
             sf::Sprite currentSprite(frames[currentFrame]->getTexture());
             window.draw(currentSprite);
@@ -465,7 +456,6 @@ private:
                 window.draw(brushPreview);
             }
 
-            // NEW: Draw fading error
             if (showingError) {
                 window.draw(errorText);
             }
@@ -591,6 +581,7 @@ public:
         currentState(AppState::Menu)
     {
         window.setFramerateLimit(60);
+        window.setKeyRepeatEnabled(false);
         setupUI();
         addNewFrame();
         aiMascot.trainOnDataset("dataset.json");

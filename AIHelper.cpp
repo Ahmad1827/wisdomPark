@@ -214,69 +214,97 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
     darkColor = thematicPalettes[selectedPalette][2];
 
     if (isTrained) {
-        std::uniform_int_distribution<int> dist(0, datasetTemplates.size() - 1);
-        int nextIndex = dist(rng);
+        std::vector<int> templateIndices(datasetTemplates.size());
+        for (size_t i = 0; i < datasetTemplates.size(); ++i) {
+            templateIndices[i] = i;
+        }
+        std::shuffle(templateIndices.begin(), templateIndices.end(), rng);
 
-        const auto& selectedTemplate = datasetTemplates[nextIndex];
-        height = selectedTemplate.height;
-        width = selectedTemplate.width;
-
-        float GLOBAL_PIXEL_SIZE = 6.0f;
-        float pixelSize = GLOBAL_PIXEL_SIZE * selectedTemplate.scale;
-
-        float itemWidth = width * pixelSize;
-        float itemHeight = height * pixelSize;
-
-        bool isClutter = (selectedTemplate.category == "healing" || selectedTemplate.category == "status-cures" || selectedTemplate.category == "vitamins" || selectedTemplate.category == "clutter");
         bool validSpot = false;
+        int chosenIndex = -1;
+        float finalItemWidth = 0;
+        float finalItemHeight = 0;
 
-        if (history.empty()) {
-            currentX = bounds.left + (bounds.width - itemWidth) / 2.0f;
-            currentY = bounds.top + (bounds.height - itemHeight) / 2.0f;
-            validSpot = true;
-        }
+        for (int idx : templateIndices) {
+            const auto& testTemplate = datasetTemplates[idx];
+            float pixelSize = 6.0f * testTemplate.scale;
+            float itemWidth = testTemplate.width * pixelSize;
+            float itemHeight = testTemplate.height * pixelSize;
 
-        if (isClutter && !validSpot) {
-            std::vector<int> structures;
-            for (size_t i = 0; i < history.size(); ++i) {
-                if (history[i].category != "healing" && history[i].category != "status-cures" && history[i].category != "vitamins" && history[i].category != "clutter") {
-                    structures.push_back(i);
-                }
+            if (itemWidth > bounds.width || itemHeight > bounds.height) {
+                continue;
             }
-            if (!structures.empty()) {
-                std::uniform_int_distribution<int> sDist(0, structures.size() - 1);
-                int targetStruct = structures[sDist(rng)];
-                sf::FloatRect sBounds = history[targetStruct].bounds;
 
-                std::uniform_real_distribution<float> xDist(sBounds.left, sBounds.left + sBounds.width - itemWidth);
-                std::uniform_real_distribution<float> yDist(sBounds.top, sBounds.top + sBounds.height - itemHeight);
+            bool isClutter = (testTemplate.category == "healing" || testTemplate.category == "status-cures" || testTemplate.category == "vitamins" || testTemplate.category == "clutter");
 
-                currentX = std::clamp(xDist(rng), bounds.left, bounds.left + bounds.width - itemWidth);
-                currentY = std::clamp(yDist(rng), bounds.top, bounds.top + bounds.height - itemHeight);
+            if (history.empty()) {
+                currentX = bounds.left + (bounds.width - itemWidth) / 2.0f;
+                currentY = bounds.top + (bounds.height - itemHeight) / 2.0f;
                 validSpot = true;
+                chosenIndex = idx;
+                finalItemWidth = itemWidth;
+                finalItemHeight = itemHeight;
+                break;
             }
-        }
 
-        if (!validSpot) {
             int attempts = 0;
-            while (!validSpot && attempts < 500) {
-                std::uniform_real_distribution<float> xDist(bounds.left, bounds.left + bounds.width - itemWidth);
-                std::uniform_real_distribution<float> yDist(bounds.top, bounds.top + bounds.height - itemHeight);
+            while (attempts < 300) {
+                float testX = 0;
+                float testY = 0;
 
-                currentX = xDist(rng);
-                currentY = yDist(rng);
+                if (isClutter) {
+                    std::vector<int> structures;
+                    for (size_t i = 0; i < history.size(); ++i) {
+                        if (history[i].category != "healing" && history[i].category != "status-cures" && history[i].category != "vitamins" && history[i].category != "clutter") {
+                            structures.push_back(i);
+                        }
+                    }
+                    if (!structures.empty()) {
+                        std::uniform_int_distribution<int> sDist(0, structures.size() - 1);
+                        sf::FloatRect sBounds = history[structures[sDist(rng)]].bounds;
 
-                validSpot = true;
-                sf::FloatRect newRect(currentX - 5, currentY - 5, itemWidth + 10, itemHeight + 10);
+                        std::uniform_real_distribution<float> xDist(sBounds.left, sBounds.left + sBounds.width - itemWidth);
+                        std::uniform_real_distribution<float> yDist(sBounds.top, sBounds.top + sBounds.height - itemHeight);
 
+                        testX = std::clamp(xDist(rng), bounds.left, bounds.left + bounds.width - itemWidth);
+                        testY = std::clamp(yDist(rng), bounds.top, bounds.top + bounds.height - itemHeight);
+                    }
+                    else {
+                        std::uniform_real_distribution<float> xDist(bounds.left, bounds.left + bounds.width - itemWidth);
+                        std::uniform_real_distribution<float> yDist(bounds.top, bounds.top + bounds.height - itemHeight);
+                        testX = xDist(rng);
+                        testY = yDist(rng);
+                    }
+                }
+                else {
+                    std::uniform_real_distribution<float> xDist(bounds.left, bounds.left + bounds.width - itemWidth);
+                    std::uniform_real_distribution<float> yDist(bounds.top, bounds.top + bounds.height - itemHeight);
+                    testX = xDist(rng);
+                    testY = yDist(rng);
+                }
+
+                sf::FloatRect newRect(testX - 5, testY - 5, itemWidth + 10, itemHeight + 10);
+                bool intersects = false;
                 for (const auto& pastItem : history) {
                     if (newRect.intersects(pastItem.bounds)) {
-                        validSpot = false;
+                        intersects = true;
                         break;
                     }
                 }
+
+                if (!intersects) {
+                    validSpot = true;
+                    currentX = testX;
+                    currentY = testY;
+                    chosenIndex = idx;
+                    finalItemWidth = itemWidth;
+                    finalItemHeight = itemHeight;
+                    break;
+                }
                 attempts++;
             }
+
+            if (validSpot) break;
         }
 
         if (!validSpot) {
@@ -284,7 +312,11 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds) {
             return "ERROR: Canvas is too crowded!";
         }
 
-        PlacedItem newObj = { nextIndex, selectedTemplate.category, sf::FloatRect(currentX, currentY, itemWidth, itemHeight) };
+        const auto& selectedTemplate = datasetTemplates[chosenIndex];
+        height = selectedTemplate.height;
+        width = selectedTemplate.width;
+
+        PlacedItem newObj = { chosenIndex, selectedTemplate.category, sf::FloatRect(currentX, currentY, finalItemWidth, finalItemHeight) };
         history.push_back(newObj);
 
         grid.clear();
@@ -372,6 +404,10 @@ void AIHelper::update(sf::RenderTexture& canvas) {
 
 
 void AIHelper::setFrame(int frameIndex) {
+    if (isGenerating) {
+        isGenerating = false;
+        if (active) toggle();
+    }
     frameMemory[currentMemoryFrame] = history;
     currentMemoryFrame = frameIndex;
     history = frameMemory[currentMemoryFrame];
