@@ -8,6 +8,13 @@
 #include <queue>
 
 class AIHelper {
+public:
+    struct PlacedItem {
+        int datasetIndex;
+        std::string category;
+        sf::FloatRect bounds;
+    };
+
 private:
     sf::CircleShape mascot;
     bool active;
@@ -26,12 +33,6 @@ private:
         int width;
         int height;
         std::vector<std::string> pixels;
-    };
-
-    struct PlacedItem {
-        int datasetIndex;
-        std::string category;
-        sf::FloatRect bounds;
     };
 
     std::vector<PlacedItem> history;
@@ -96,4 +97,6 @@ public:
     void stampOnCanvas(sf::RenderTexture& canvas, float drawX, float drawY);
 
     void generatePath(sf::RenderTexture& canvas, sf::Vector2f start, sf::Vector2f end, sf::FloatRect bounds);
+
+    const std::vector<PlacedItem>& getHistory() const { return history; }
 };

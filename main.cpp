@@ -52,13 +52,16 @@ private:
     float textAlpha;
 
     bool isAnimateMode;
-    bool awaitingAnimStart;
-    bool awaitingAnimEnd;
-    sf::Vector2f animStartPos;
     bool isPathMode;
     bool awaitingPathStart;
     bool awaitingPathEnd;
     sf::Vector2f pathStartPos;
+
+    bool awaitingAnimStart;
+    bool awaitingAnimEnd;
+    sf::Vector2f animStartPos;
+
+    bool isLightingMode;
 
     void showMessage(const std::string& msg, sf::Color color) {
         uiText.setString(msg);
@@ -187,11 +190,15 @@ private:
                     if (event.key.code == sf::Keyboard::Num6 || event.key.code == sf::Keyboard::Numpad6) {
                         isAnimateMode = true; isPathMode = false; awaitingAnimStart = false; awaitingAnimEnd = false; awaitingPathStart = false; awaitingPathEnd = false;
                         aiMascot.setTheme("all");
-                        showMessage("Mode: Auto-Animate (Click Mascot to Start)", sf::Color(0, 191, 255));
+                        showMessage("Mode: Auto-Animate (Click Mascot)", sf::Color(0, 191, 255));
                     }
                     if (event.key.code == sf::Keyboard::Num7 || event.key.code == sf::Keyboard::Numpad7) {
                         isAnimateMode = false; isPathMode = true; awaitingAnimStart = false; awaitingAnimEnd = false; awaitingPathStart = false; awaitingPathEnd = false;
-                        showMessage("Mode: Path-Finder (Click Mascot to Start)", sf::Color(0, 191, 255));
+                        showMessage("Mode: Path-Finder (Click Mascot)", sf::Color(0, 191, 255));
+                    }
+                    if (event.key.code == sf::Keyboard::Num8 || event.key.code == sf::Keyboard::Numpad8) {
+                        isLightingMode = !isLightingMode;
+                        showMessage(isLightingMode ? "Mode: Dynamic Light ON" : "Mode: Dynamic Light OFF", sf::Color(255, 215, 0));
                     }
 
                     if (event.key.code == sf::Keyboard::T) saveToDataset();
@@ -389,7 +396,7 @@ private:
                         currentMousePos = sf::Vector2f(static_cast<float>(event.mouseMove.x), static_cast<float>(event.mouseMove.y));
                         window.setMouseCursorVisible(!drawArea.contains(currentMousePos));
 
-                        if (isDrawing && !awaitingAnimStart && !awaitingAnimEnd) {
+                        if (isDrawing && !awaitingAnimStart && !awaitingAnimEnd && !awaitingPathStart && !awaitingPathEnd) {
                             if (!drawArea.contains(currentMousePos)) {
                                 isDrawing = false;
                                 continue;
@@ -552,6 +559,39 @@ private:
                 window.draw(onionSkin, sf::BlendAlpha);
             }
 
+            if (isLightingMode) {
+                sf::Vector2f sunPos = currentMousePos;
+                const auto& items = aiMascot.getHistory();
+
+                for (const auto& item : items) {
+                    bool isClutter = (item.category == "healing" || item.category == "status-cures" || item.category == "vitamins" || item.category == "clutter");
+                    float shadowLen = isClutter ? 30.0f : 150.0f;
+
+                    sf::Vector2f baseCenter(item.bounds.left + item.bounds.width / 2.0f, item.bounds.top + item.bounds.height);
+                    sf::Vector2f dir = baseCenter - sunPos;
+                    float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+                    if (dist > 0) { dir.x /= dist; dir.y /= dist; }
+
+                    sf::ConvexShape shadow;
+                    shadow.setPointCount(4);
+                    shadow.setPoint(0, sf::Vector2f(item.bounds.left, item.bounds.top + item.bounds.height));
+                    shadow.setPoint(1, sf::Vector2f(item.bounds.left + item.bounds.width, item.bounds.top + item.bounds.height));
+                    shadow.setPoint(2, sf::Vector2f(item.bounds.left + item.bounds.width + dir.x * shadowLen, item.bounds.top + item.bounds.height + dir.y * shadowLen));
+                    shadow.setPoint(3, sf::Vector2f(item.bounds.left + dir.x * shadowLen, item.bounds.top + item.bounds.height + dir.y * shadowLen));
+
+                    shadow.setFillColor(sf::Color(0, 0, 0, 100));
+                    window.draw(shadow);
+                }
+
+                sf::CircleShape sunShape(15);
+                sunShape.setOrigin(15, 15);
+                sunShape.setPosition(sunPos);
+                sunShape.setFillColor(sf::Color(255, 255, 200, 200));
+                sunShape.setOutlineThickness(2);
+                sunShape.setOutlineColor(sf::Color::Yellow);
+                window.draw(sunShape);
+            }
+
             sf::Sprite currentSprite(frames[currentFrame]->getTexture());
             window.draw(currentSprite);
             window.draw(deskSprite);
@@ -696,7 +736,8 @@ public:
         timePerFrame(1.0f / 12.0f),
         currentState(AppState::Menu),
         isAnimateMode(false), awaitingAnimStart(false), awaitingAnimEnd(false),
-        isPathMode(false), awaitingPathStart(false), awaitingPathEnd(false)
+        isPathMode(false), awaitingPathStart(false), awaitingPathEnd(false),
+        isLightingMode(false)
     {
         window.setFramerateLimit(60);
         window.setKeyRepeatEnabled(false);
