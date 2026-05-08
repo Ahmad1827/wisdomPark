@@ -350,11 +350,6 @@ private:
                                     else {
                                         aiMascot.cancelSlowDraw();
 
-                                        int animFrames = 15;
-                                        while (frames.size() <= currentFrame + animFrames) {
-                                            addNewFrame();
-                                        }
-
                                         float aiW = aiMascot.getArtWidth();
                                         float aiH = aiMascot.getArtHeight();
 
@@ -363,34 +358,62 @@ private:
                                         float endX = animEndPos.x - (aiW / 2.0f);
                                         float endY = animEndPos.y - (aiH / 2.0f);
 
-                                        float dx = (endX - startX) / animFrames;
-                                        float dy = (endY - startY) / animFrames;
-                                        float jumpHeight = std::min(200.0f, std::abs(endX - startX) * 0.4f);
+                                        float totalDist = std::sqrt((endX - startX) * (endX - startX) + (endY - startY) * (endY - startY));
+                                        int baseFrames = (int)(totalDist / 40.0f); 
+                                        int animFrames = baseFrames < 8 ? 8 : (baseFrames > 20 ? 20 : baseFrames); 
+                                        int totalSimFrames = animFrames + 15;
 
-                                        for (int i = 0; i < animFrames; ++i) {
-                                            float progress = i / (float)(animFrames - 1);
-                                            float arcY = std::sin(progress * 3.14159265f) * jumpHeight;
+                                        while (frames.size() <= currentFrame + totalSimFrames) {
+                                            addNewFrame();
+                                        }
 
-                                            float currentX = startX + (dx * i);
-                                            float currentY = startY + (dy * i) - arcY;
+                                        float dx = (endX - startX) / (animFrames - 1);
+                                        float dy = (endY - startY) / (animFrames - 1);
+                                        float jumpHeight = (totalDist * 0.35f < 250.0f) ? totalDist * 0.35f : 250.0f;
 
-                                            aiMascot.stampOnCanvas(*frames[currentFrame + i], currentX, currentY);
+                                        struct Dust { float x, y, vx, vy; int life, maxLife; };
+                                        std::vector<Dust> particles;
 
-                                            if (i == 0 || i == animFrames - 1) {
-                                                for (int p = 0; p < 15; ++p) {
-                                                    sf::RectangleShape dust(sf::Vector2f(6.0f, 6.0f));
-                                                    dust.setFillColor(sf::Color(150, 150, 150, 180));
-                                                    float pX = currentX + (aiW / 2.0f) + ((rand() % 100 - 50) * 0.5f);
-                                                    float pY = currentY + aiH + ((rand() % 20 - 10) * 0.5f);
-                                                    dust.setPosition(pX, pY);
-                                                    frames[currentFrame + i]->draw(dust);
+                                        for (int i = 0; i < totalSimFrames; ++i) {
+                                            if (i < animFrames) {
+                                                float progress = i / (float)(animFrames - 1);
+                                                float arcY = std::sin(progress * 3.14159265f) * jumpHeight;
+
+                                                float currentX = startX + (dx * i);
+                                                float currentY = startY + (dy * i) - arcY;
+
+                                                aiMascot.stampOnCanvas(*frames[currentFrame + i], currentX, currentY);
+
+                                                if (i == 0 || i == animFrames - 1) {
+                                                    for (int p = 0; p < 30; ++p) {
+                                                        float vx = ((std::rand() % 100) - 50) * 0.15f;
+                                                        float vy = ((std::rand() % 100) - 100) * 0.15f;
+                                                        int life = 10 + (std::rand() % 10);
+                                                        particles.push_back({ currentX + (aiW / 2.0f), currentY + aiH, vx, vy, life, life });
+                                                    }
+                                                }
+                                            }
+
+                                            for (auto& p : particles) {
+                                                if (p.life > 0) {
+                                                    sf::RectangleShape dustShape(sf::Vector2f(6.0f, 6.0f));
+                                                    int alpha = (int)(200.0f * ((float)p.life / p.maxLife));
+                                                    dustShape.setFillColor(sf::Color(150, 140, 130, alpha));
+                                                    dustShape.setPosition(p.x, p.y);
+                                                    frames[currentFrame + i]->draw(dustShape);
+
+                                                    p.x += p.vx;
+                                                    p.y += p.vy;
+                                                    p.vx *= 0.95f;
+                                                    p.vy += 0.4f;
+                                                    p.life--;
                                                 }
                                             }
 
                                             frames[currentFrame + i]->display();
                                         }
 
-                                        showMessage("Physics Animation Generated!", sf::Color::Green);
+                                        showMessage("Advanced Physics Animation Generated!", sf::Color::Green);
                                     }
                                 }
                                 else {
