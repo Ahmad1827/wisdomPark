@@ -97,6 +97,91 @@ void AIHelper::stampOnCanvas(sf::RenderTexture& canvas, float drawX, float drawY
     }
 }
 
+void AIHelper::generatePath(sf::RenderTexture& canvas, sf::Vector2f start, sf::Vector2f end, sf::FloatRect bounds) {
+    int nodeSize = 20;
+    int gW = static_cast<int>(bounds.width / nodeSize);
+    int gH = static_cast<int>(bounds.height / nodeSize);
+
+    auto toGrid = [&](sf::Vector2f p) {
+        return sf::Vector2i(
+            std::clamp(static_cast<int>((p.x - bounds.left) / nodeSize), 0, gW - 1),
+            std::clamp(static_cast<int>((p.y - bounds.top) / nodeSize), 0, gH - 1)
+        );
+        };
+
+    sf::Vector2i startG = toGrid(start);
+    sf::Vector2i endG = toGrid(end);
+
+    std::vector<float> costs(gW * gH, 1.0f);
+    for (const auto& item : history) {
+        int minX = std::max(0, static_cast<int>((item.bounds.left - bounds.left) / nodeSize));
+        int maxX = std::min(gW - 1, static_cast<int>((item.bounds.left + item.bounds.width - bounds.left) / nodeSize));
+        int minY = std::max(0, static_cast<int>((item.bounds.top - bounds.top) / nodeSize));
+        int maxY = std::min(gH - 1, static_cast<int>((item.bounds.top + item.bounds.height - bounds.top) / nodeSize));
+
+        for (int y = minY; y <= maxY; ++y) {
+            for (int x = minX; x <= maxX; ++x) {
+                costs[y * gW + x] = 50.0f;
+            }
+        }
+    }
+
+    auto compare = [](Node* a, Node* b) { return a->f() > b->f(); };
+    std::priority_queue<Node*, std::vector<Node*>, decltype(compare)> openSet(compare);
+
+    std::vector<Node*> allNodes;
+    Node* startNode = new Node{ startG.x, startG.y, 0, 0, nullptr };
+    allNodes.push_back(startNode);
+    openSet.push(startNode);
+
+    std::map<int, float> closedSet;
+    Node* goalNode = nullptr;
+
+    while (!openSet.empty()) {
+        Node* current = openSet.top();
+        openSet.pop();
+
+        if (current->x == endG.x && current->y == endG.y) {
+            goalNode = current;
+            break;
+        }
+
+        int id = current->y * gW + current->x;
+        if (closedSet.count(id) && closedSet[id] <= current->g) continue;
+        closedSet[id] = current->g;
+
+        int dx[] = { 0, 0, 1, -1 };
+        int dy[] = { 1, -1, 0, 0 };
+
+        for (int i = 0; i < 4; ++i) {
+            int nx = current->x + dx[i], ny = current->y + dy[i];
+            if (nx >= 0 && nx < gW && ny >= 0 && ny < gH) {
+                float moveCost = costs[ny * gW + nx];
+                float newG = current->g + moveCost;
+                float h = std::abs(nx - endG.x) + std::abs(ny - endG.y);
+                Node* neighbor = new Node{ nx, ny, newG, h, current };
+                allNodes.push_back(neighbor);
+                openSet.push(neighbor);
+            }
+        }
+    }
+
+    if (goalNode) {
+        Node* curr = goalNode;
+        while (curr) {
+            sf::CircleShape pathNode(nodeSize * 0.6f);
+            pathNode.setOrigin(nodeSize * 0.3f, nodeSize * 0.3f);
+            pathNode.setPosition(bounds.left + (curr->x * nodeSize) + nodeSize / 2, bounds.top + (curr->y * nodeSize) + nodeSize / 2);
+            pathNode.setFillColor(sf::Color(139, 69, 19, 180));
+            canvas.draw(pathNode);
+            curr = curr->parent;
+        }
+    }
+
+    for (auto n : allNodes) delete n;
+    canvas.display();
+}
+
 void AIHelper::trainOnDataset(const std::string& filename) {
     datasetTemplates.clear();
     std::ifstream file(filename);

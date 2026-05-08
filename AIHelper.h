@@ -5,6 +5,7 @@
 #include <string>
 #include <fstream>
 #include <map>
+#include <queue>
 
 class AIHelper {
 private:
@@ -58,6 +59,13 @@ private:
     sf::Color terrainColor;
     int currentTerrainDrawIndex;
 
+    struct Node {
+        int x, y;
+        float g, h;
+        Node* parent;
+        float f() const { return g + h; }
+    };
+
     void clearGrid();
     std::vector<std::string> generateDynamicBlueprint(std::mt19937& rng);
     void generateFromTemplate(std::mt19937& rng, const std::vector<std::string>& blueprint);
@@ -86,4 +94,6 @@ public:
     float getArtWidth() const;
     float getArtHeight() const;
     void stampOnCanvas(sf::RenderTexture& canvas, float drawX, float drawY);
+
+    void generatePath(sf::RenderTexture& canvas, sf::Vector2f start, sf::Vector2f end, sf::FloatRect bounds);
 };

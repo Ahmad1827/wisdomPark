@@ -55,6 +55,10 @@ private:
     bool awaitingAnimStart;
     bool awaitingAnimEnd;
     sf::Vector2f animStartPos;
+    bool isPathMode;
+    bool awaitingPathStart;
+    bool awaitingPathEnd;
+    sf::Vector2f pathStartPos;
 
     void showMessage(const std::string& msg, sf::Color color) {
         uiText.setString(msg);
@@ -161,29 +165,33 @@ private:
                     if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::B) brushColor = sf::Color::Black;
 
                     if (event.key.code == sf::Keyboard::Num2 || event.key.code == sf::Keyboard::Numpad2) {
-                        isAnimateMode = false; awaitingAnimStart = false; awaitingAnimEnd = false;
+                        isAnimateMode = false; isPathMode = false; awaitingAnimStart = false; awaitingAnimEnd = false; awaitingPathStart = false; awaitingPathEnd = false;
                         aiMascot.setTheme("structure");
                         showMessage("Mode: Structure Only", sf::Color(0, 191, 255));
                     }
                     if (event.key.code == sf::Keyboard::Num3 || event.key.code == sf::Keyboard::Numpad3) {
-                        isAnimateMode = false; awaitingAnimStart = false; awaitingAnimEnd = false;
+                        isAnimateMode = false; isPathMode = false; awaitingAnimStart = false; awaitingAnimEnd = false; awaitingPathStart = false; awaitingPathEnd = false;
                         aiMascot.setTheme("clutter");
                         showMessage("Mode: Clutter Only", sf::Color(0, 191, 255));
                     }
                     if (event.key.code == sf::Keyboard::Num4 || event.key.code == sf::Keyboard::Numpad4) {
-                        isAnimateMode = false; awaitingAnimStart = false; awaitingAnimEnd = false;
+                        isAnimateMode = false; isPathMode = false; awaitingAnimStart = false; awaitingAnimEnd = false; awaitingPathStart = false; awaitingPathEnd = false;
                         aiMascot.setTheme("all");
                         showMessage("Mode: All Items", sf::Color(0, 191, 255));
                     }
                     if (event.key.code == sf::Keyboard::Num5 || event.key.code == sf::Keyboard::Numpad5) {
-                        isAnimateMode = false; awaitingAnimStart = false; awaitingAnimEnd = false;
+                        isAnimateMode = false; isPathMode = false; awaitingAnimStart = false; awaitingAnimEnd = false; awaitingPathStart = false; awaitingPathEnd = false;
                         aiMascot.setTheme("custom");
                         showMessage("Mode: Custom Art Only", sf::Color(0, 191, 255));
                     }
                     if (event.key.code == sf::Keyboard::Num6 || event.key.code == sf::Keyboard::Numpad6) {
-                        isAnimateMode = true; awaitingAnimStart = false; awaitingAnimEnd = false;
+                        isAnimateMode = true; isPathMode = false; awaitingAnimStart = false; awaitingAnimEnd = false; awaitingPathStart = false; awaitingPathEnd = false;
                         aiMascot.setTheme("all");
                         showMessage("Mode: Auto-Animate (Click Mascot to Start)", sf::Color(0, 191, 255));
+                    }
+                    if (event.key.code == sf::Keyboard::Num7 || event.key.code == sf::Keyboard::Numpad7) {
+                        isAnimateMode = false; isPathMode = true; awaitingAnimStart = false; awaitingAnimEnd = false; awaitingPathStart = false; awaitingPathEnd = false;
+                        showMessage("Mode: Path-Finder (Click Mascot to Start)", sf::Color(0, 191, 255));
                     }
 
                     if (event.key.code == sf::Keyboard::T) saveToDataset();
@@ -269,7 +277,12 @@ private:
 
                             else if (aiMascot.getBounds().contains(mousePos)) {
                                 if (!showingText || uiText.getFillColor() != sf::Color::Red) {
-                                    if (isAnimateMode) {
+                                    if (isPathMode) {
+                                        awaitingPathStart = true;
+                                        awaitingPathEnd = false;
+                                        showMessage("Click Canvas for Structure A", sf::Color(255, 215, 0));
+                                    }
+                                    else if (isAnimateMode) {
                                         awaitingAnimStart = true;
                                         awaitingAnimEnd = false;
                                         showMessage("Click Canvas for Start Position", sf::Color(255, 215, 0));
@@ -292,7 +305,20 @@ private:
                                 }
                             }
                             else if (drawArea.contains(mousePos)) {
-                                if (awaitingAnimStart) {
+                                if (isPathMode) {
+                                    if (awaitingPathStart) {
+                                        pathStartPos = mousePos;
+                                        awaitingPathStart = false;
+                                        awaitingPathEnd = true;
+                                        showMessage("Click Canvas for Structure B", sf::Color(255, 215, 0));
+                                    }
+                                    else if (awaitingPathEnd) {
+                                        aiMascot.generatePath(*frames[currentFrame], pathStartPos, mousePos, drawArea);
+                                        awaitingPathEnd = false;
+                                        showMessage("Path Connected!", sf::Color::Green);
+                                    }
+                                }
+                                else if (awaitingAnimStart) {
                                     animStartPos = mousePos;
                                     awaitingAnimStart = false;
                                     awaitingAnimEnd = true;
@@ -669,7 +695,8 @@ public:
         brushColor(sf::Color::Black), isPlaying(false),
         timePerFrame(1.0f / 12.0f),
         currentState(AppState::Menu),
-        isAnimateMode(false), awaitingAnimStart(false), awaitingAnimEnd(false)
+        isAnimateMode(false), awaitingAnimStart(false), awaitingAnimEnd(false),
+        isPathMode(false), awaitingPathStart(false), awaitingPathEnd(false)
     {
         window.setFramerateLimit(60);
         window.setKeyRepeatEnabled(false);
