@@ -51,6 +51,11 @@ private:
     bool showingText;
     float textAlpha;
 
+    bool isAnimateMode;
+    bool awaitingAnimStart;
+    bool awaitingAnimEnd;
+    sf::Vector2f animStartPos;
+
     void showMessage(const std::string& msg, sf::Color color) {
         uiText.setString(msg);
         uiText.setFillColor(color);
@@ -155,21 +160,30 @@ private:
                 if (event.type == sf::Event::KeyPressed) {
                     if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::B) brushColor = sf::Color::Black;
 
-                    if (event.key.code == sf::Keyboard::Num2) {
+                    if (event.key.code == sf::Keyboard::Num2 || event.key.code == sf::Keyboard::Numpad2) {
+                        isAnimateMode = false; awaitingAnimStart = false; awaitingAnimEnd = false;
                         aiMascot.setTheme("structure");
                         showMessage("Mode: Structure Only", sf::Color(0, 191, 255));
                     }
-                    if (event.key.code == sf::Keyboard::Num3) {
+                    if (event.key.code == sf::Keyboard::Num3 || event.key.code == sf::Keyboard::Numpad3) {
+                        isAnimateMode = false; awaitingAnimStart = false; awaitingAnimEnd = false;
                         aiMascot.setTheme("clutter");
                         showMessage("Mode: Clutter Only", sf::Color(0, 191, 255));
                     }
-                    if (event.key.code == sf::Keyboard::Num4) {
+                    if (event.key.code == sf::Keyboard::Num4 || event.key.code == sf::Keyboard::Numpad4) {
+                        isAnimateMode = false; awaitingAnimStart = false; awaitingAnimEnd = false;
                         aiMascot.setTheme("all");
                         showMessage("Mode: All Items", sf::Color(0, 191, 255));
                     }
-                    if (event.key.code == sf::Keyboard::Num5) {
+                    if (event.key.code == sf::Keyboard::Num5 || event.key.code == sf::Keyboard::Numpad5) {
+                        isAnimateMode = false; awaitingAnimStart = false; awaitingAnimEnd = false;
                         aiMascot.setTheme("custom");
                         showMessage("Mode: Custom Art Only", sf::Color(0, 191, 255));
+                    }
+                    if (event.key.code == sf::Keyboard::Num6 || event.key.code == sf::Keyboard::Numpad6) {
+                        isAnimateMode = true; awaitingAnimStart = false; awaitingAnimEnd = false;
+                        aiMascot.setTheme("all");
+                        showMessage("Mode: Auto-Animate (Click Mascot to Start)", sf::Color(0, 191, 255));
                     }
 
                     if (event.key.code == sf::Keyboard::T) saveToDataset();
@@ -255,36 +269,88 @@ private:
 
                             else if (aiMascot.getBounds().contains(mousePos)) {
                                 if (!showingText || uiText.getFillColor() != sf::Color::Red) {
-                                    aiMascot.toggle();
-                                    if (aiMascot.isActive()) {
-                                        undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
-                                        redoHistory.clear();
+                                    if (isAnimateMode) {
+                                        awaitingAnimStart = true;
+                                        awaitingAnimEnd = false;
+                                        showMessage("Click Canvas for Start Position", sf::Color(255, 215, 0));
+                                    }
+                                    else {
+                                        aiMascot.toggle();
+                                        if (aiMascot.isActive()) {
+                                            undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
+                                            redoHistory.clear();
 
-                                        sf::Image currentImg = frames[currentFrame]->getTexture().copyToImage();
-                                        std::string errorMsg = aiMascot.startGeneratingComplexArt(drawArea, currentImg);
-                                        if (!errorMsg.empty()) {
-                                            showMessage(errorMsg, sf::Color::Red);
-                                            undoHistory.pop_back();
-                                            aiMascot.toggle();
+                                            sf::Image currentImg = frames[currentFrame]->getTexture().copyToImage();
+                                            std::string errorMsg = aiMascot.startGeneratingComplexArt(drawArea, currentImg, false);
+                                            if (!errorMsg.empty()) {
+                                                showMessage(errorMsg, sf::Color::Red);
+                                                undoHistory.pop_back();
+                                                aiMascot.toggle();
+                                            }
                                         }
                                     }
                                 }
                             }
                             else if (drawArea.contains(mousePos)) {
-                                undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
-                                redoHistory.clear();
-                                isDrawing = true;
-                                lastPos = mousePos;
+                                if (awaitingAnimStart) {
+                                    animStartPos = mousePos;
+                                    awaitingAnimStart = false;
+                                    awaitingAnimEnd = true;
+                                    showMessage("Click Canvas for End Position", sf::Color(255, 215, 0));
+                                }
+                                else if (awaitingAnimEnd) {
+                                    sf::Vector2f animEndPos = mousePos;
+                                    awaitingAnimEnd = false;
 
-                                sf::CircleShape dot(brushSize / 2.f);
-                                dot.setOrigin(brushSize / 2.f, brushSize / 2.f);
-                                dot.setPosition(lastPos);
-                                dot.setFillColor(brushColor);
-                                if (brushColor == sf::Color::Transparent)
-                                    frames[currentFrame]->draw(dot, sf::RenderStates(sf::BlendNone));
-                                else
-                                    frames[currentFrame]->draw(dot);
-                                frames[currentFrame]->display();
+                                    sf::Image currentImg = frames[currentFrame]->getTexture().copyToImage();
+                                    std::string errorMsg = aiMascot.startGeneratingComplexArt(drawArea, currentImg, true);
+
+                                    if (!errorMsg.empty()) {
+                                        showMessage(errorMsg, sf::Color::Red);
+                                    }
+                                    else {
+                                        aiMascot.cancelSlowDraw();
+
+                                        int animFrames = 15;
+                                        while (frames.size() <= currentFrame + animFrames) {
+                                            addNewFrame();
+                                        }
+
+                                        float aiW = aiMascot.getArtWidth();
+                                        float aiH = aiMascot.getArtHeight();
+
+                                        float startX = animStartPos.x - (aiW / 2.0f);
+                                        float startY = animStartPos.y - (aiH / 2.0f);
+                                        float endX = animEndPos.x - (aiW / 2.0f);
+                                        float endY = animEndPos.y - (aiH / 2.0f);
+
+                                        float dx = (endX - startX) / animFrames;
+                                        float dy = (endY - startY) / animFrames;
+
+                                        for (int i = 0; i < animFrames; ++i) {
+                                            aiMascot.stampOnCanvas(*frames[currentFrame + i], startX + (dx * i), startY + (dy * i));
+                                            frames[currentFrame + i]->display();
+                                        }
+
+                                        showMessage("Animation Generated!", sf::Color::Green);
+                                    }
+                                }
+                                else {
+                                    undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
+                                    redoHistory.clear();
+                                    isDrawing = true;
+                                    lastPos = mousePos;
+
+                                    sf::CircleShape dot(brushSize / 2.f);
+                                    dot.setOrigin(brushSize / 2.f, brushSize / 2.f);
+                                    dot.setPosition(lastPos);
+                                    dot.setFillColor(brushColor);
+                                    if (brushColor == sf::Color::Transparent)
+                                        frames[currentFrame]->draw(dot, sf::RenderStates(sf::BlendNone));
+                                    else
+                                        frames[currentFrame]->draw(dot);
+                                    frames[currentFrame]->display();
+                                }
                             }
                         }
                     }
@@ -297,7 +363,7 @@ private:
                         currentMousePos = sf::Vector2f(static_cast<float>(event.mouseMove.x), static_cast<float>(event.mouseMove.y));
                         window.setMouseCursorVisible(!drawArea.contains(currentMousePos));
 
-                        if (isDrawing) {
+                        if (isDrawing && !awaitingAnimStart && !awaitingAnimEnd) {
                             if (!drawArea.contains(currentMousePos)) {
                                 isDrawing = false;
                                 continue;
@@ -602,7 +668,8 @@ public:
         currentFrame(0), isDrawing(false), brushSize(5.0f),
         brushColor(sf::Color::Black), isPlaying(false),
         timePerFrame(1.0f / 12.0f),
-        currentState(AppState::Menu)
+        currentState(AppState::Menu),
+        isAnimateMode(false), awaitingAnimStart(false), awaitingAnimEnd(false)
     {
         window.setFramerateLimit(60);
         window.setKeyRepeatEnabled(false);

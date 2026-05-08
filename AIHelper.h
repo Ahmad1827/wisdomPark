@@ -73,7 +73,7 @@ public:
     void draw(sf::RenderWindow& window);
 
     void trainOnDataset(const std::string& filename);
-    std::string startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas);
+    std::string startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas, bool isAnimation = false);
     void update(sf::RenderTexture& canvas);
 
     void setFrame(int frameIndex);
@@ -81,4 +81,9 @@ public:
 
     void setTheme(const std::string& theme);
     std::string getTheme() const;
+
+    void cancelSlowDraw();
+    float getArtWidth() const;
+    float getArtHeight() const;
+    void stampOnCanvas(sf::RenderTexture& canvas, float drawX, float drawY);
 };

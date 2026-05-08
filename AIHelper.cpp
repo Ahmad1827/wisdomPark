@@ -48,6 +48,55 @@ void AIHelper::clearAllMemory() {
     currentMemoryFrame = 0;
 }
 
+void AIHelper::cancelSlowDraw() {
+    isGenerating = false;
+}
+
+float AIHelper::getArtWidth() const {
+    float GLOBAL_PIXEL_SIZE = 6.0f;
+    if (isTrained && !history.empty()) {
+        return width * (GLOBAL_PIXEL_SIZE * datasetTemplates[history.back().datasetIndex].scale);
+    }
+    return width * GLOBAL_PIXEL_SIZE;
+}
+
+float AIHelper::getArtHeight() const {
+    float GLOBAL_PIXEL_SIZE = 6.0f;
+    if (isTrained && !history.empty()) {
+        return height * (GLOBAL_PIXEL_SIZE * datasetTemplates[history.back().datasetIndex].scale);
+    }
+    return height * GLOBAL_PIXEL_SIZE;
+}
+
+void AIHelper::stampOnCanvas(sf::RenderTexture& canvas, float drawX, float drawY) {
+    float GLOBAL_PIXEL_SIZE = 6.0f;
+    float pixelSize = GLOBAL_PIXEL_SIZE;
+
+    if (isTrained && !history.empty()) {
+        int currentIndex = history.back().datasetIndex;
+        pixelSize = GLOBAL_PIXEL_SIZE * datasetTemplates[currentIndex].scale;
+    }
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            int cell = grid[y * width + x];
+            if (cell > 0) {
+                sf::RectangleShape pixel(sf::Vector2f(pixelSize, pixelSize));
+                pixel.setPosition(drawX + (x * pixelSize), drawY + (y * pixelSize));
+
+                if (cell == 1) pixel.setFillColor(baseColor);
+                else if (cell == 2) pixel.setFillColor(lightColor);
+                else if (cell == 3) pixel.setFillColor(darkColor);
+                else if (cell == 4) pixel.setFillColor(sf::Color(30, 30, 30));
+                else if (cell == 5) pixel.setFillColor(sf::Color(30, 30, 30));
+                else if (cell == 6) pixel.setFillColor(sf::Color(245, 245, 245));
+
+                canvas.draw(pixel);
+            }
+        }
+    }
+}
+
 void AIHelper::trainOnDataset(const std::string& filename) {
     datasetTemplates.clear();
     std::ifstream file(filename);
@@ -252,7 +301,7 @@ void AIHelper::generateTerrainPatch(std::mt19937& rng, sf::FloatRect itemBounds)
     terrainY = itemBounds.top + itemBounds.height - ((terrainHeight * terrainPixelSize) * 0.75f);
 }
 
-std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas) {
+std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas, bool isAnimation) {
     if (isGenerating) return "";
 
     isGenerating = true;
@@ -334,6 +383,14 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
 
             if (itemWidth > bounds.width || itemHeight > bounds.height) {
                 continue;
+            }
+
+            if (isAnimation) {
+                validSpot = true;
+                chosenIndex = idx;
+                finalItemWidth = itemWidth;
+                finalItemHeight = itemHeight;
+                break;
             }
 
             bool isClutter = (testTemplate.category == "healing" || testTemplate.category == "status-cures" || testTemplate.category == "vitamins" || testTemplate.category == "clutter");
@@ -429,7 +486,7 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
         history.push_back(newObj);
 
         bool isClutter = (selectedTemplate.category == "healing" || selectedTemplate.category == "status-cures" || selectedTemplate.category == "vitamins" || selectedTemplate.category == "clutter");
-        if (!isClutter) {
+        if (!isClutter && !isAnimation) {
             generateTerrainPatch(rng, finalBounds);
         }
 
@@ -466,8 +523,10 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
         currentX = bounds.left + (bounds.width - itemWidth) / 2.0f;
         currentY = bounds.top + (bounds.height - itemHeight) / 2.0f;
 
-        sf::FloatRect finalBounds(currentX, currentY, itemWidth, itemHeight);
-        generateTerrainPatch(rng, finalBounds);
+        if (!isAnimation) {
+            sf::FloatRect finalBounds(currentX, currentY, itemWidth, itemHeight);
+            generateTerrainPatch(rng, finalBounds);
+        }
     }
 
     drawOrder.clear();
