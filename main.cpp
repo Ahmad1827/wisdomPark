@@ -200,6 +200,11 @@ private:
                         isLightingMode = !isLightingMode;
                         showMessage(isLightingMode ? "Mode: Dynamic Light ON" : "Mode: Dynamic Light OFF", sf::Color(255, 215, 0));
                     }
+                    if (event.key.code == sf::Keyboard::Num9 || event.key.code == sf::Keyboard::Numpad9) {
+                        isAnimateMode = false; isPathMode = false; awaitingAnimStart = false; awaitingAnimEnd = false; awaitingPathStart = false; awaitingPathEnd = false;
+                        aiMascot.setTheme("wfc");
+                        showMessage("Mode: Procedural Generation (WFC)", sf::Color(0, 191, 255));
+                    }
 
                     if (event.key.code == sf::Keyboard::T) saveToDataset();
                     if (event.key.code == sf::Keyboard::U) sliceSpriteSheet("assets/spritesheet.png", 16, 16, "assets/sliced");
@@ -212,6 +217,7 @@ private:
                         redoHistory.clear();
                         frames[currentFrame]->clear(sf::Color::Transparent);
                         frames[currentFrame]->display();
+                        aiMascot.clearCurrentFrame();
                     }
                     if (event.key.code == sf::Keyboard::Right && !isPlaying) {
                         currentFrame++;
@@ -359,13 +365,32 @@ private:
 
                                         float dx = (endX - startX) / animFrames;
                                         float dy = (endY - startY) / animFrames;
+                                        float jumpHeight = std::min(200.0f, std::abs(endX - startX) * 0.4f);
 
                                         for (int i = 0; i < animFrames; ++i) {
-                                            aiMascot.stampOnCanvas(*frames[currentFrame + i], startX + (dx * i), startY + (dy * i));
+                                            float progress = i / (float)(animFrames - 1);
+                                            float arcY = std::sin(progress * 3.14159265f) * jumpHeight;
+
+                                            float currentX = startX + (dx * i);
+                                            float currentY = startY + (dy * i) - arcY;
+
+                                            aiMascot.stampOnCanvas(*frames[currentFrame + i], currentX, currentY);
+
+                                            if (i == 0 || i == animFrames - 1) {
+                                                for (int p = 0; p < 15; ++p) {
+                                                    sf::RectangleShape dust(sf::Vector2f(6.0f, 6.0f));
+                                                    dust.setFillColor(sf::Color(150, 150, 150, 180));
+                                                    float pX = currentX + (aiW / 2.0f) + ((rand() % 100 - 50) * 0.5f);
+                                                    float pY = currentY + aiH + ((rand() % 20 - 10) * 0.5f);
+                                                    dust.setPosition(pX, pY);
+                                                    frames[currentFrame + i]->draw(dust);
+                                                }
+                                            }
+
                                             frames[currentFrame + i]->display();
                                         }
 
-                                        showMessage("Animation Generated!", sf::Color::Green);
+                                        showMessage("Physics Animation Generated!", sf::Color::Green);
                                     }
                                 }
                                 else {

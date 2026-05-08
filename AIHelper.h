@@ -69,6 +69,7 @@ private:
 
     void clearGrid();
     std::vector<std::string> generateDynamicBlueprint(std::mt19937& rng);
+    std::vector<std::string> generateWFCBuilding(std::mt19937& rng);
     void generateFromTemplate(std::mt19937& rng, const std::vector<std::string>& blueprint);
     void applyShading();
     void applyOutline();
@@ -87,6 +88,7 @@ public:
 
     void setFrame(int frameIndex);
     void clearAllMemory();
+    void clearCurrentFrame();
 
     void setTheme(const std::string& theme);
     std::string getTheme() const;

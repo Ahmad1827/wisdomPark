@@ -32,6 +32,12 @@ void AIHelper::clearGrid() { std::fill(grid.begin(), grid.end(), 0); }
 void AIHelper::setTheme(const std::string& theme) { currentTheme = theme; }
 std::string AIHelper::getTheme() const { return currentTheme; }
 
+void AIHelper::clearCurrentFrame() {
+    history.clear();
+    frameMemory[currentMemoryFrame].clear();
+    terrainGrid.clear();
+}
+
 void AIHelper::setFrame(int frameIndex) {
     if (isGenerating) {
         isGenerating = false;
@@ -54,6 +60,9 @@ void AIHelper::cancelSlowDraw() {
 
 float AIHelper::getArtWidth() const {
     float GLOBAL_PIXEL_SIZE = 6.0f;
+    if (currentTheme == "wfc") {
+        return 48 * GLOBAL_PIXEL_SIZE;
+    }
     if (isTrained && !history.empty()) {
         return width * (GLOBAL_PIXEL_SIZE * datasetTemplates[history.back().datasetIndex].scale);
     }
@@ -62,6 +71,9 @@ float AIHelper::getArtWidth() const {
 
 float AIHelper::getArtHeight() const {
     float GLOBAL_PIXEL_SIZE = 6.0f;
+    if (currentTheme == "wfc") {
+        return 48 * GLOBAL_PIXEL_SIZE;
+    }
     if (isTrained && !history.empty()) {
         return height * (GLOBAL_PIXEL_SIZE * datasetTemplates[history.back().datasetIndex].scale);
     }
@@ -72,7 +84,7 @@ void AIHelper::stampOnCanvas(sf::RenderTexture& canvas, float drawX, float drawY
     float GLOBAL_PIXEL_SIZE = 6.0f;
     float pixelSize = GLOBAL_PIXEL_SIZE;
 
-    if (isTrained && !history.empty()) {
+    if (currentTheme != "wfc" && isTrained && !history.empty()) {
         int currentIndex = history.back().datasetIndex;
         pixelSize = GLOBAL_PIXEL_SIZE * datasetTemplates[currentIndex].scale;
     }
@@ -238,6 +250,62 @@ void AIHelper::trainOnDataset(const std::string& filename) {
     isTrained = !datasetTemplates.empty();
 }
 
+std::vector<std::string> AIHelper::generateWFCBuilding(std::mt19937& rng) {
+    int gw = 14, gh = 8;
+    std::vector<std::string> bp(gh * 8, std::string(gw * 8, '.'));
+    std::vector<std::vector<int>> wfc(gh, std::vector<int>(gw, 0));
+
+    int keepW = std::uniform_int_distribution<int>(4, 6)(rng);
+    int keepStartX = (gw - keepW) / 2;
+    int keepH = std::uniform_int_distribution<int>(5, 7)(rng);
+    int wallH = std::uniform_int_distribution<int>(2, 4)(rng);
+
+    for (int x = 0; x < gw; ++x) {
+        int h = 0;
+        if (x == 0 || x == gw - 1) h = wallH + 2;
+        else if (x >= keepStartX && x < keepStartX + keepW) {
+            h = keepH;
+            if (x == keepStartX || x == keepStartX + keepW - 1) h += 1;
+        }
+        else h = wallH;
+
+        for (int y = gh - 1; y >= gh - h; --y) {
+            if (y == gh - 1 && x == gw / 2) wfc[y][x] = 3;
+            else if (y == gh - h) wfc[y][x] = 5;
+            else wfc[y][x] = (std::uniform_int_distribution<int>(0, 100)(rng) > 80) ? 2 : 1;
+        }
+    }
+
+    for (int cy = 0; cy < gh; ++cy) {
+        for (int cx = 0; cx < gw; ++cx) {
+            int type = wfc[cy][cx];
+            if (type == 0) continue;
+            int py = cy * 8;
+            int px = cx * 8;
+            for (int i = 0; i < 8; ++i) {
+                for (int j = 0; j < 8; ++j) {
+                    char c = '.';
+                    if (type == 1) c = (std::uniform_int_distribution<int>(0, 10)(rng) > 8) ? 'S' : 'X';
+                    else if (type == 2) {
+                        if (i == 0 || i == 7 || j == 0 || j == 7 || i == 3 || j == 3) c = 'X';
+                        else c = 'W';
+                    }
+                    else if (type == 3) {
+                        if (i == 0 || j == 0 || j == 7) c = 'S';
+                        else c = 'O';
+                    }
+                    else if (type == 5) {
+                        if (j == 1 || j == 2 || j == 5 || j == 6) c = 'M';
+                        else if (i > 3) c = 'X';
+                    }
+                    bp[py + i][px + j] = c;
+                }
+            }
+        }
+    }
+    return bp;
+}
+
 std::vector<std::string> AIHelper::generateDynamicBlueprint(std::mt19937& rng) {
     std::string emptyRow(width, '.');
     std::vector<std::string> blueprint(height, emptyRow);
@@ -311,6 +379,9 @@ void AIHelper::generateFromTemplate(std::mt19937& rng, const std::vector<std::st
                     grid[y * width + x] = 1; grid[y * width + (width - 1 - x)] = 1;
                 }
             }
+            else if (cell == 'W') { grid[y * width + x] = 6; }
+            else if (cell == 'S') { grid[y * width + x] = 3; }
+            else if (cell == 'O') { grid[y * width + x] = 5; }
         }
     }
 }
@@ -436,7 +507,70 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
         darkColor = thematicPalettes[selectedPalette][2];
     }
 
-    if (isTrained) {
+    if (currentTheme == "wfc") {
+        width = 112;
+        height = 64;
+        grid.clear();
+        grid.resize(width * height, 0);
+
+        std::vector<std::string> blueprint = generateWFCBuilding(rng);
+        generateFromTemplate(rng, blueprint);
+        applyShading();
+        applyOutline();
+
+        float GLOBAL_PIXEL_SIZE = 6.0f;
+        float itemWidth = width * GLOBAL_PIXEL_SIZE;
+        float itemHeight = height * GLOBAL_PIXEL_SIZE;
+
+        bool validSpot = false;
+        int attempts = 0;
+
+        if (isAnimation) {
+            currentX = bounds.left + (bounds.width - itemWidth) / 2.0f;
+            currentY = bounds.top + (bounds.height - itemHeight) / 2.0f;
+            validSpot = true;
+        }
+        else {
+            while (attempts < 300) {
+                std::uniform_real_distribution<float> xDist(bounds.left, bounds.left + bounds.width - itemWidth);
+                std::uniform_real_distribution<float> yDist(bounds.top, bounds.top + bounds.height - itemHeight);
+                float testX = xDist(rng);
+                float testY = yDist(rng);
+
+                sf::FloatRect newRect(testX - 5, testY - 5, itemWidth + 10, itemHeight + 10);
+                bool intersects = false;
+
+                for (const auto& pastItem : history) {
+                    if (newRect.intersects(pastItem.bounds)) {
+                        intersects = true;
+                        break;
+                    }
+                }
+
+                if (!intersects) {
+                    validSpot = true;
+                    currentX = testX;
+                    currentY = testY;
+                    break;
+                }
+                attempts++;
+            }
+        }
+
+        if (!validSpot) {
+            isGenerating = false;
+            return "ERROR: Canvas is too crowded!";
+        }
+
+        sf::FloatRect finalBounds(currentX, currentY, itemWidth, itemHeight);
+        PlacedItem newObj = { -1, "structure", finalBounds };
+        history.push_back(newObj);
+
+        if (!isAnimation) {
+            generateTerrainPatch(rng, finalBounds);
+        }
+    }
+    else if (isTrained) {
         std::vector<int> templateIndices(datasetTemplates.size());
         for (size_t i = 0; i < datasetTemplates.size(); ++i) {
             templateIndices[i] = i;
@@ -653,7 +787,7 @@ void AIHelper::update(sf::RenderTexture& canvas) {
     float GLOBAL_PIXEL_SIZE = 6.0f;
     float pixelSize = GLOBAL_PIXEL_SIZE;
 
-    if (isTrained && !history.empty()) {
+    if (currentTheme != "wfc" && isTrained && !history.empty() && history.back().datasetIndex != -1) {
         int currentIndex = history.back().datasetIndex;
         pixelSize = GLOBAL_PIXEL_SIZE * datasetTemplates[currentIndex].scale;
     }
