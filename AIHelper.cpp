@@ -3,7 +3,7 @@
 #include <cmath>
 #include <iostream>
 
-AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false), currentMemoryFrame(0), currentTheme("all"), currentTerrainDrawIndex(0) {
+AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false), currentMemoryFrame(0), currentTheme("all"), currentTerrainDrawIndex(0), terrainEnabled(false) {
     mascot.setRadius(40);
     mascot.setPosition(1800, 950);
     mascot.setFillColor(sf::Color(0, 191, 255));
@@ -25,6 +25,8 @@ void AIHelper::toggle() {
 }
 
 bool AIHelper::isActive() const { return active; }
+void AIHelper::toggleTerrain() { terrainEnabled = !terrainEnabled; }
+bool AIHelper::isTerrainEnabled() const { return terrainEnabled; }
 sf::FloatRect AIHelper::getBounds() const { return mascot.getGlobalBounds(); }
 void AIHelper::draw(sf::RenderWindow& window) { window.draw(mascot); }
 void AIHelper::clearGrid() { std::fill(grid.begin(), grid.end(), 0); }
@@ -413,6 +415,7 @@ void AIHelper::applyOutline() {
 }
 
 void AIHelper::generateTerrainPatch(std::mt19937& rng, sf::FloatRect itemBounds) {
+    if (!terrainEnabled) return;
     terrainWidth = 36;
     terrainHeight = 24;
     terrainPixelSize = 10.0f;
@@ -577,6 +580,59 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
         }
         std::shuffle(templateIndices.begin(), templateIndices.end(), rng);
 
+        auto isMatch = [this](std::string query, std::string targetName, std::string targetCat) {
+            std::transform(query.begin(), query.end(), query.begin(), ::tolower);
+            std::transform(targetName.begin(), targetName.end(), targetName.begin(), ::tolower);
+            std::transform(targetCat.begin(), targetCat.end(), targetCat.begin(), ::tolower);
+
+            std::vector<std::string> searchTerms = { query };
+            for (const auto& pair : this->dynamicThesaurus) {
+                if (query.find(pair.first) != std::string::npos || pair.first.find(query) != std::string::npos) {
+                    for (const auto& syn : pair.second) searchTerms.push_back(syn);
+                }
+            }
+
+            auto levenshtein = [](const std::string& s1, const std::string& s2) {
+                int len1 = s1.size(), len2 = s2.size();
+                std::vector<std::vector<int>> d(len1 + 1, std::vector<int>(len2 + 1));
+                for (int i = 0; i <= len1; ++i) d[i][0] = i;
+                for (int j = 0; j <= len2; ++j) d[0][j] = j;
+                for (int i = 1; i <= len1; ++i) {
+                    for (int j = 1; j <= len2; ++j) {
+                        int cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
+                        d[i][j] = std::min({ d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost });
+                    }
+                }
+                return d[len1][len2];
+                };
+
+            std::vector<std::string> targetTokens = { targetName, targetCat };
+            std::string tempToken = "";
+            for (char c : targetName + "-" + targetCat) {
+                if (c == '-' || c == '_' || c == ' ') {
+                    if (!tempToken.empty()) { targetTokens.push_back(tempToken); tempToken = ""; }
+                }
+                else tempToken += c;
+            }
+            if (!tempToken.empty()) targetTokens.push_back(tempToken);
+
+            for (const std::string& term : searchTerms) {
+                std::string t_clean = "";
+                for (char c : term) if (c != ' ' && c != '-' && c != '_') t_clean += c;
+
+                for (const std::string& target : targetTokens) {
+                    std::string n_clean = "";
+                    for (char c : target) if (c != ' ' && c != '-' && c != '_') n_clean += c;
+
+                    if (n_clean.find(t_clean) != std::string::npos) return true;
+
+                    int allowedTypos = std::max(1, (int)t_clean.length() / 4);
+                    if (levenshtein(t_clean, n_clean) <= allowedTypos) return true;
+                }
+            }
+            return false;
+            };
+
         bool validSpot = false;
         int chosenIndex = -1;
         float finalItemWidth = 0;
@@ -591,7 +647,7 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
                         continue;
                     }
                 }
-                else if (testTemplate.category != currentTheme) {
+                else if (!isMatch(currentTheme, testTemplate.name, testTemplate.category)) {
                     continue;
                 }
             }
@@ -820,4 +876,24 @@ void AIHelper::update(sf::RenderTexture& canvas) {
         currentDrawIndex++;
     }
     canvas.display();
+}
+void AIHelper::loadThesaurus(const std::string& filename) {
+    dynamicThesaurus.clear();
+    std::ifstream file(filename);
+    std::string line;
+    while (std::getline(file, line)) {
+        size_t colonPos = line.find(':');
+        if (colonPos != std::string::npos) {
+            std::string key = line.substr(0, colonPos);
+            std::string vals = line.substr(colonPos + 1);
+            std::vector<std::string> syns;
+            size_t start = 0, comma = 0;
+            while ((comma = vals.find(',', start)) != std::string::npos) {
+                syns.push_back(vals.substr(start, comma - start));
+                start = comma + 1;
+            }
+            syns.push_back(vals.substr(start));
+            dynamicThesaurus[key] = syns;
+        }
+    }
 }

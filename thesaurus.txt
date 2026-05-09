@@ -1,0 +1,3 @@
+pokemon ball:standard-balls,pokeball
+medicine:healing,potion
+trash:clutter,junk

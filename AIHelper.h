@@ -20,6 +20,7 @@ private:
     bool active;
     bool isGenerating;
     bool isTrained;
+    bool terrainEnabled;
 
     int width;
     int height;
@@ -50,7 +51,7 @@ private:
     sf::Color darkColor;
 
     std::string currentTheme;
-
+    std::map<std::string, std::vector<std::string>> dynamicThesaurus;
     std::vector<int> terrainGrid;
     int terrainWidth;
     int terrainHeight;
@@ -79,10 +80,13 @@ public:
     AIHelper();
     void toggle();
     bool isActive() const;
+    void toggleTerrain();
+    bool isTerrainEnabled() const;
     sf::FloatRect getBounds() const;
     void draw(sf::RenderWindow& window);
 
     void trainOnDataset(const std::string& filename);
+    void loadThesaurus(const std::string& filename);
     std::string startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas, bool isAnimation = false);
     void update(sf::RenderTexture& canvas);
 

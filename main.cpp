@@ -62,6 +62,10 @@ private:
     sf::Vector2f animStartPos;
 
     bool isLightingMode;
+    bool isTypingPrompt;
+    std::string currentPrompt;
+    sf::RectangleShape promptBox;
+    sf::Text promptDisplay;
 
     void showMessage(const std::string& msg, sf::Color color) {
         uiText.setString(msg);
@@ -95,14 +99,16 @@ private:
         bgTexture.loadFromFile("assets/landofwisdompark.png");
         bgSprite.setTexture(bgTexture);
 
-        deskTexture.loadFromFile("assets/workbench.png");
+        deskTexture.loadFromFile("assets/workbench.png", sf::IntRect(114, 702, 1669, 379));
         deskSprite.setTexture(deskTexture);
-        float deskScaleX = 1920.0f / deskSprite.getLocalBounds().width;
-        float deskScaleY = 300.0f / deskSprite.getLocalBounds().height;
-        deskSprite.setScale(deskScaleX, deskScaleY);
-        float deskY = 1080.0f - 300.0f;
-        deskSprite.setPosition(0, deskY);
 
+        float deskX = 114.0f;
+        float deskY = 702.0f;
+        deskSprite.setPosition(deskX, deskY);
+        paletteEraser = sf::FloatRect(100, deskY + 40, 250, 200);
+        paletteBrush = sf::FloatRect(1500, deskY + 20, 300, 250);
+        paletteVignette = sf::FloatRect(650, deskY + 50, 90, 90);
+        paletteFerris = sf::FloatRect(800, deskY + 50, 90, 90);
         canvasTexture.loadFromFile("assets/canvas.png");
         canvasSprite.setTexture(canvasTexture);
         float canvasScale = 700.0f / canvasSprite.getLocalBounds().height;
@@ -148,12 +154,23 @@ private:
         uiText.setOutlineThickness(4.f);
         showingText = false;
         textAlpha = 255.0f;
+        promptBox.setSize(sf::Vector2f(800.f, 60.f));
+        promptBox.setPosition(1920.f / 2.f - 400.f, 1080.f - 100.f);
+        promptBox.setFillColor(sf::Color(30, 30, 30, 220));
+        promptBox.setOutlineColor(sf::Color(0, 191, 255));
+        promptBox.setOutlineThickness(3.f);
+
+        promptDisplay.setFont(mainFont);
+        promptDisplay.setCharacterSize(40);
+        promptDisplay.setFillColor(sf::Color::White);
+        promptDisplay.setPosition(1920.f / 2.f - 380.f, 1080.f - 95.f);
     }
 
     void processEvents() {
         sf::Event event;
         while (window.pollEvent(event)) {
             if (event.type == sf::Event::Closed) window.close();
+            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) window.close();
 
             if (currentState == AppState::Menu) {
                 if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
@@ -164,7 +181,29 @@ private:
                 }
             }
             else if (currentState == AppState::Painting) {
+                if (event.type == sf::Event::TextEntered && isTypingPrompt) {
+                    if (event.text.unicode == '\b') {
+                        if (!currentPrompt.empty()) currentPrompt.pop_back();
+                    }
+                    else if (event.text.unicode < 128 && event.text.unicode != '\r' && event.text.unicode != '\n') {
+                        currentPrompt += static_cast<char>(event.text.unicode);
+                    }
+                    promptDisplay.setString("> " + currentPrompt + "_");
+                }
                 if (event.type == sf::Event::KeyPressed) {
+                    if (event.key.code == sf::Keyboard::Enter) {
+                        isTypingPrompt = !isTypingPrompt;
+                        if (isTypingPrompt) {
+                            currentPrompt = "";
+                            promptDisplay.setString("> _");
+                            showMessage("Terminal: Type prompt and press Enter", sf::Color(0, 191, 255));
+                        }
+                        else {
+                            aiMascot.setTheme(currentPrompt);
+                            showMessage("Prompt set: " + currentPrompt, sf::Color::Green);
+                        }
+                    }
+                    if (isTypingPrompt) continue;
                     if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::B) brushColor = sf::Color::Black;
 
                     if (event.key.code == sf::Keyboard::Num2 || event.key.code == sf::Keyboard::Numpad2) {
@@ -204,6 +243,10 @@ private:
                         isAnimateMode = false; isPathMode = false; awaitingAnimStart = false; awaitingAnimEnd = false; awaitingPathStart = false; awaitingPathEnd = false;
                         aiMascot.setTheme("wfc");
                         showMessage("Mode: Procedural Generation (WFC)", sf::Color(0, 191, 255));
+                    }
+                    if (event.key.code == sf::Keyboard::Num0 || event.key.code == sf::Keyboard::Numpad0) {
+                        aiMascot.toggleTerrain();
+                        showMessage(aiMascot.isTerrainEnabled() ? "Terrain Generation: ON" : "Terrain Generation: OFF", sf::Color(255, 215, 0));
                     }
 
                     if (event.key.code == sf::Keyboard::T) saveToDataset();
@@ -663,6 +706,10 @@ private:
             if (showingText) {
                 window.draw(uiText);
             }
+            if (isTypingPrompt) {
+                window.draw(promptBox);
+                window.draw(promptDisplay);
+            }
         }
 
         window.display();
@@ -778,20 +825,21 @@ private:
 
 public:
     WisdomPark()
-        : window(sf::VideoMode(1920, 1080), "Wisdom Park"),
+        : window(sf::VideoMode(1920, 1080), "Wisdom Park", sf::Style::Fullscreen),
         currentFrame(0), isDrawing(false), brushSize(5.0f),
         brushColor(sf::Color::Black), isPlaying(false),
         timePerFrame(1.0f / 12.0f),
         currentState(AppState::Menu),
         isAnimateMode(false), awaitingAnimStart(false), awaitingAnimEnd(false),
         isPathMode(false), awaitingPathStart(false), awaitingPathEnd(false),
-        isLightingMode(false)
+        isLightingMode(false), isTypingPrompt(false)
     {
         window.setFramerateLimit(60);
         window.setKeyRepeatEnabled(false);
         setupUI();
         addNewFrame();
         aiMascot.trainOnDataset("dataset.json");
+        aiMascot.loadThesaurus("thesaurus.txt");
     }
 
     void run() {
