@@ -93,6 +93,7 @@ public:
     void setFrame(int frameIndex);
     void clearAllMemory();
     void clearCurrentFrame();
+    void forceFinish(sf::RenderTexture& canvas);
 
     void setTheme(const std::string& theme);
     std::string getTheme() const;

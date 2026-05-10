@@ -897,3 +897,8 @@ void AIHelper::loadThesaurus(const std::string& filename) {
         }
     }
 }
+void AIHelper::forceFinish(sf::RenderTexture& canvas) {
+    while (isGenerating) {
+        update(canvas);
+    }
+}
