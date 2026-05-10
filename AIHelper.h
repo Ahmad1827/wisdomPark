@@ -16,6 +16,7 @@ public:
     };
 
 private:
+    std::mt19937 rng;
     sf::CircleShape mascot;
     bool active;
     bool isGenerating;
@@ -52,6 +53,8 @@ private:
 
     std::string currentTheme;
     std::map<std::string, std::vector<std::string>> dynamicThesaurus;
+    std::vector<std::string> stopWords;
+    std::vector<std::string> fillWords;
     std::vector<int> terrainGrid;
     int terrainWidth;
     int terrainHeight;
@@ -84,7 +87,7 @@ public:
     bool isTerrainEnabled() const;
     sf::FloatRect getBounds() const;
     void draw(sf::RenderWindow& window);
-
+    void parseCommand(const std::string& input, int& outQuantity, bool& outIsFill, std::string& outTheme);
     void trainOnDataset(const std::string& filename);
     void loadThesaurus(const std::string& filename);
     std::string startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas, bool isAnimation = false);

@@ -200,35 +200,15 @@ private:
                             showMessage("Terminal: Type prompt and press Enter", sf::Color(0, 191, 255));
                         }
                         else {
-                            promptQuantity = 1;
-                            bool isFill = false;
-                            std::string parsedTheme = "";
-                            std::string tempWord;
-                            std::stringstream ss(currentPrompt);
-
-                            while (ss >> tempWord) {
-                                std::string lowerWord = tempWord;
-                                std::transform(lowerWord.begin(), lowerWord.end(), lowerWord.begin(), ::tolower);
-                                bool isNum = !tempWord.empty();
-                                for (char c : tempWord) if (!isdigit(c)) isNum = false;
-
-                                if (isNum) promptQuantity = std::stoi(tempWord);
-                                else if (lowerWord == "fill") isFill = true;
-                                else if (lowerWord != "spawn" && lowerWord != "drop" && lowerWord != "with" && lowerWord != "a" && lowerWord != "some") {
-                                    if (!parsedTheme.empty()) parsedTheme += " ";
-                                    parsedTheme += tempWord;
-                                }
-                            }
-
-                            if (isFill) promptQuantity = 999;
-                            if (parsedTheme.empty()) parsedTheme = currentPrompt;
+                            bool isFill;
+                            std::string parsedTheme;
+                            aiMascot.parseCommand(currentPrompt, promptQuantity, isFill, parsedTheme);
 
                             aiMascot.setTheme(parsedTheme);
                             std::string modeMsg = isFill ? "Mode: Fill Canvas with " + parsedTheme : "Prompt set: " + parsedTheme + " (x" + std::to_string(promptQuantity) + ")";
                             showMessage(modeMsg, sf::Color::Green);
                         }
                     }
-                    if (isTypingPrompt) continue;
                     if (isTypingPrompt) continue;
                     if (event.key.code == sf::Keyboard::Num1 || event.key.code == sf::Keyboard::B) brushColor = sf::Color::Black;
 
@@ -375,12 +355,15 @@ private:
                                             undoHistory.push_back(frames[currentFrame]->getTexture().copyToImage());
                                             redoHistory.clear();
 
+                                            sf::Image currentImg = frames[currentFrame]->getTexture().copyToImage();
+
+                                            int spawnedCount = 0;
                                             for (int i = 0; i < promptQuantity; ++i) {
                                                 sf::Image currentImg = frames[currentFrame]->getTexture().copyToImage();
                                                 std::string errorMsg = aiMascot.startGeneratingComplexArt(drawArea, currentImg, false);
 
                                                 if (!errorMsg.empty()) {
-                                                    if (i == 0) {
+                                                    if (spawnedCount == 0) {
                                                         showMessage(errorMsg, sf::Color::Red);
                                                         undoHistory.pop_back();
                                                         aiMascot.toggle();
@@ -388,12 +371,19 @@ private:
                                                     else if (promptQuantity == 999) {
                                                         showMessage("Canvas Filled!", sf::Color::Green);
                                                     }
+                                                    else {
+                                                        showMessage("Spawned " + std::to_string(spawnedCount) + " (Canvas Full!)", sf::Color::Yellow);
+                                                    }
                                                     break;
                                                 }
 
+                                                spawnedCount++;
                                                 if (promptQuantity > 1) {
                                                     aiMascot.forceFinish(*frames[currentFrame]);
                                                 }
+                                            }
+                                            if (spawnedCount == promptQuantity && promptQuantity > 1) {
+                                                showMessage("Spawned all " + std::to_string(spawnedCount) + " items!", sf::Color::Green);
                                             }
                                         }
                                     }

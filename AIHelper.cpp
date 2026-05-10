@@ -2,8 +2,9 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-
-AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false), currentMemoryFrame(0), currentTheme("all"), currentTerrainDrawIndex(0), terrainEnabled(false) {
+#include <sstream>
+#include <cctype>
+AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false), currentMemoryFrame(0), currentTheme("all"), currentTerrainDrawIndex(0), terrainEnabled(true), rng(std::random_device{}()) {
     mascot.setRadius(40);
     mascot.setPosition(1800, 950);
     mascot.setFillColor(sf::Color(0, 191, 255));
@@ -468,8 +469,6 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
     currentTerrainDrawIndex = 0;
     terrainGrid.clear();
     currentBounds = bounds;
-    std::random_device rd;
-    std::mt19937 rng(rd());
 
     long long rSum = 0, gSum = 0, bSum = 0;
     int validPixels = 0;
@@ -624,7 +623,8 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
                     std::string n_clean = "";
                     for (char c : target) if (c != ' ' && c != '-' && c != '_') n_clean += c;
 
-                    if (n_clean.find(t_clean) != std::string::npos) return true;
+                    if (t_clean.empty()) return false;
+                    if (n_clean == t_clean) return true;
 
                     int allowedTypos = std::max(1, (int)t_clean.length() / 4);
                     if (levenshtein(t_clean, n_clean) <= allowedTypos) return true;
@@ -879,6 +879,9 @@ void AIHelper::update(sf::RenderTexture& canvas) {
 }
 void AIHelper::loadThesaurus(const std::string& filename) {
     dynamicThesaurus.clear();
+    stopWords = { "spawn", "drop", "make", "create", "with", "a", "some", "the", "an", "of" };
+    fillWords = { "fill", "pack", "cover", "flood" };
+
     std::ifstream file(filename);
     std::string line;
     while (std::getline(file, line)) {
@@ -886,14 +889,17 @@ void AIHelper::loadThesaurus(const std::string& filename) {
         if (colonPos != std::string::npos) {
             std::string key = line.substr(0, colonPos);
             std::string vals = line.substr(colonPos + 1);
-            std::vector<std::string> syns;
+            std::vector<std::string> tokens;
             size_t start = 0, comma = 0;
             while ((comma = vals.find(',', start)) != std::string::npos) {
-                syns.push_back(vals.substr(start, comma - start));
+                tokens.push_back(vals.substr(start, comma - start));
                 start = comma + 1;
             }
-            syns.push_back(vals.substr(start));
-            dynamicThesaurus[key] = syns;
+            tokens.push_back(vals.substr(start));
+
+            if (key == "@stopwords") stopWords = tokens;
+            else if (key == "@fillwords") fillWords = tokens;
+            else dynamicThesaurus[key] = tokens;
         }
     }
 }
@@ -901,4 +907,35 @@ void AIHelper::forceFinish(sf::RenderTexture& canvas) {
     while (isGenerating) {
         update(canvas);
     }
+}
+void AIHelper::parseCommand(const std::string& input, int& outQuantity, bool& outIsFill, std::string& outTheme) {
+    outQuantity = 1;
+    outIsFill = false;
+    outTheme = "";
+
+    std::stringstream ss(input);
+    std::string tempWord;
+    while (ss >> tempWord) {
+        std::string lowerWord = tempWord;
+        std::transform(lowerWord.begin(), lowerWord.end(), lowerWord.begin(), ::tolower);
+
+        bool isNum = !tempWord.empty() && std::all_of(tempWord.begin(), tempWord.end(), ::isdigit);
+
+        if (isNum) {
+            outQuantity = std::stoi(tempWord);
+        }
+        else if (std::find(fillWords.begin(), fillWords.end(), lowerWord) != fillWords.end()) {
+            outIsFill = true;
+        }
+        else if (std::find(stopWords.begin(), stopWords.end(), lowerWord) == stopWords.end()) {
+            if (lowerWord.length() > 3 && lowerWord.back() == 's' && lowerWord[lowerWord.length() - 2] != 's') {
+                lowerWord.pop_back();
+            }
+            if (!outTheme.empty()) outTheme += " ";
+            outTheme += lowerWord;
+        }
+    }
+
+    if (outIsFill) outQuantity = 999;
+    if (outTheme.empty()) outTheme = input;
 }
