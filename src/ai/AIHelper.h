@@ -72,8 +72,9 @@ private:
     };
 
     void clearGrid();
-    std::vector<std::string> generateDynamicBlueprint(std::mt19937& rng);
+    std::vector<std::string> generateDynamicBlueprint(std::mt19937& rng, const std::string& theme);
     std::vector<std::string> generateWFCBuilding(std::mt19937& rng);
+    std::vector<std::string> generateFromLLM(const std::string& theme, const std::string& provider, const std::string& apiKey);
     void generateFromTemplate(std::mt19937& rng, const std::vector<std::string>& blueprint);
     void applyShading();
     void applyOutline();
@@ -90,7 +91,7 @@ public:
     void parseCommand(const std::string& input, int& outQuantity, bool& outIsFill, std::string& outTheme);
     void trainOnDataset(const std::string& filename);
     void loadThesaurus(const std::string& filename);
-    std::string startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas, bool isAnimation = false);
+    std::string startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas, const std::string& provider, const std::string& apiKey, bool isAnimation = false);
     void update(sf::RenderTexture& canvas);
 
     void setFrame(int frameIndex);

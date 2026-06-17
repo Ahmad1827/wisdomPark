@@ -1,9 +1,11 @@
 #include "AIHelper.h"
+#include "LocalPythonBridge.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <sstream>
 #include <cctype>
+
 AIHelper::AIHelper() : active(false), isGenerating(false), currentDrawIndex(0), isTrained(false), currentMemoryFrame(0), currentTheme("all"), currentTerrainDrawIndex(0), terrainEnabled(true), rng(std::random_device{}()) {
     mascot.setRadius(40);
     mascot.setPosition(1800, 950);
@@ -309,11 +311,19 @@ std::vector<std::string> AIHelper::generateWFCBuilding(std::mt19937& rng) {
     return bp;
 }
 
-std::vector<std::string> AIHelper::generateDynamicBlueprint(std::mt19937& rng) {
+std::vector<std::string> AIHelper::generateDynamicBlueprint(std::mt19937& rng, const std::string& theme) {
     std::string emptyRow(width, '.');
     std::vector<std::string> blueprint(height, emptyRow);
     int center = (width / 2) - 1;
-    int objectType = std::uniform_int_distribution<int>(0, 2)(rng);
+
+    std::string lowerTheme = theme;
+    std::transform(lowerTheme.begin(), lowerTheme.end(), lowerTheme.begin(), ::tolower);
+
+    int objectType = -1;
+    if (lowerTheme.find("sword") != std::string::npos || lowerTheme.find("blade") != std::string::npos) objectType = 0;
+    else if (lowerTheme.find("tree") != std::string::npos || lowerTheme.find("plant") != std::string::npos) objectType = 1;
+    else if (lowerTheme.find("vase") != std::string::npos || lowerTheme.find("pot") != std::string::npos) objectType = 2;
+    else objectType = std::uniform_int_distribution<int>(0, 2)(rng);
 
     if (objectType == 0) {
         int bladeLen = std::uniform_int_distribution<int>(15, 28)(rng);
@@ -461,7 +471,7 @@ void AIHelper::generateTerrainPatch(std::mt19937& rng, sf::FloatRect itemBounds)
     terrainY = itemBounds.top + itemBounds.height - ((terrainHeight * terrainPixelSize) * 0.75f);
 }
 
-std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas, bool isAnimation) {
+std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::Image& currentCanvas, const std::string& provider, const std::string& apiKey, bool isAnimation) {
     if (isGenerating) return "";
 
     isGenerating = true;
@@ -508,6 +518,8 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
         lightColor = thematicPalettes[selectedPalette][1];
         darkColor = thematicPalettes[selectedPalette][2];
     }
+
+    bool usedDataset = false;
 
     if (currentTheme == "wfc") {
         width = 112;
@@ -571,6 +583,8 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
         if (!isAnimation) {
             generateTerrainPatch(rng, finalBounds);
         }
+
+        usedDataset = true;
     }
     else if (isTrained) {
         std::vector<int> templateIndices(datasetTemplates.size());
@@ -656,9 +670,7 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
             float itemWidth = testTemplate.width * pixelSize;
             float itemHeight = testTemplate.height * pixelSize;
 
-            if (itemWidth > bounds.width || itemHeight > bounds.height) {
-                continue;
-            }
+            if (itemWidth > bounds.width || itemHeight > bounds.height) continue;
 
             if (isAnimation) {
                 validSpot = true;
@@ -722,11 +734,7 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
                 for (const auto& pastItem : history) {
                     if (newRect.intersects(pastItem.bounds)) {
                         bool pastIsStructure = (pastItem.category != "healing" && pastItem.category != "status-cures" && pastItem.category != "vitamins" && pastItem.category != "clutter");
-
-                        if (isClutter && pastIsStructure) {
-                            continue;
-                        }
-
+                        if (isClutter && pastIsStructure) continue;
                         intersects = true;
                         break;
                     }
@@ -747,46 +755,56 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
             if (validSpot) break;
         }
 
-        if (!validSpot) {
-            isGenerating = false;
-            return "ERROR: Canvas is too crowded or no items match theme!";
-        }
-
-        const auto& selectedTemplate = datasetTemplates[chosenIndex];
-        height = selectedTemplate.height;
-        width = selectedTemplate.width;
-
-        sf::FloatRect finalBounds(currentX, currentY, finalItemWidth, finalItemHeight);
-        PlacedItem newObj = { chosenIndex, selectedTemplate.category, finalBounds };
-        history.push_back(newObj);
-
-        bool isClutter = (selectedTemplate.category == "healing" || selectedTemplate.category == "status-cures" || selectedTemplate.category == "vitamins" || selectedTemplate.category == "clutter");
-        if (!isClutter && !isAnimation) {
-            generateTerrainPatch(rng, finalBounds);
-        }
-
-        grid.clear();
-        grid.resize(width * height, 0);
-
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                char cell = selectedTemplate.pixels[y][x];
-                if (cell == 'W') grid[y * width + x] = 6;
-                else if (cell == 'H') grid[y * width + x] = 2;
-                else if (cell == 'X') grid[y * width + x] = 1;
-                else if (cell == 'S') grid[y * width + x] = 3;
-                else if (cell == 'O') grid[y * width + x] = 5;
+        if (chosenIndex != -1) {
+            if (!validSpot) {
+                isGenerating = false;
+                return "ERROR: Canvas is too crowded!";
             }
+
+            const auto& selectedTemplate = datasetTemplates[chosenIndex];
+            height = selectedTemplate.height;
+            width = selectedTemplate.width;
+
+            sf::FloatRect finalBounds(currentX, currentY, finalItemWidth, finalItemHeight);
+            PlacedItem newObj = { chosenIndex, selectedTemplate.category, finalBounds };
+            history.push_back(newObj);
+
+            bool isClutter = (selectedTemplate.category == "healing" || selectedTemplate.category == "status-cures" || selectedTemplate.category == "vitamins" || selectedTemplate.category == "clutter");
+            if (!isClutter && !isAnimation) {
+                generateTerrainPatch(rng, finalBounds);
+            }
+
+            grid.clear();
+            grid.resize(width * height, 0);
+
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    char cell = selectedTemplate.pixels[y][x];
+                    if (cell == 'W') grid[y * width + x] = 6;
+                    else if (cell == 'H') grid[y * width + x] = 2;
+                    else if (cell == 'X') grid[y * width + x] = 1;
+                    else if (cell == 'S') grid[y * width + x] = 3;
+                    else if (cell == 'O') grid[y * width + x] = 5;
+                }
+            }
+            applyOutline();
+
+            usedDataset = true;
         }
-        applyOutline();
     }
-    else {
-        width = 48;
-        height = 48;
+
+    if (!usedDataset) {
+        std::vector<std::string> blueprint = generateFromLLM(currentTheme, provider, apiKey);
+
+        if (blueprint.empty()) {
+            std::cerr << "AI returned an empty blueprint. Falling back to procedural." << std::endl;
+            width = 20;
+            height = 20;
+            blueprint = generateDynamicBlueprint(rng, currentTheme);
+        }
+
         grid.clear();
         grid.resize(width * height, 0);
-
-        std::vector<std::string> blueprint = generateDynamicBlueprint(rng);
         generateFromTemplate(rng, blueprint);
         applyShading();
         applyOutline();
@@ -800,6 +818,7 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
 
         if (!isAnimation) {
             sf::FloatRect finalBounds(currentX, currentY, itemWidth, itemHeight);
+            history.push_back({ -1, "procedural", finalBounds });
             generateTerrainPatch(rng, finalBounds);
         }
     }
@@ -877,6 +896,7 @@ void AIHelper::update(sf::RenderTexture& canvas) {
     }
     canvas.display();
 }
+
 void AIHelper::loadThesaurus(const std::string& filename) {
     dynamicThesaurus.clear();
     stopWords = { "spawn", "drop", "make", "create", "with", "a", "some", "the", "an", "of" };
@@ -903,11 +923,13 @@ void AIHelper::loadThesaurus(const std::string& filename) {
         }
     }
 }
+
 void AIHelper::forceFinish(sf::RenderTexture& canvas) {
     while (isGenerating) {
         update(canvas);
     }
 }
+
 void AIHelper::parseCommand(const std::string& input, int& outQuantity, bool& outIsFill, std::string& outTheme) {
     outQuantity = 1;
     outIsFill = false;
@@ -938,4 +960,9 @@ void AIHelper::parseCommand(const std::string& input, int& outQuantity, bool& ou
 
     if (outIsFill) outQuantity = 999;
     if (outTheme.empty()) outTheme = input;
+}
+
+std::vector<std::string> AIHelper::generateFromLLM(const std::string& theme, const std::string& provider, const std::string& apiKey) {
+    std::cout << "Requesting AI Blueprint for: " << theme << " using " << provider << std::endl;
+    return LocalPythonBridge::executeAndReadBlueprint(provider, apiKey, theme);
 }
