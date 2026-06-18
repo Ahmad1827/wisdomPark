@@ -65,31 +65,83 @@ Frame& Frame::operator=(const Frame& other) {
 Frame::Frame(Frame&& other) noexcept = default;
 Frame& Frame::operator=(Frame&& other) noexcept = default;
 
-Canvas::Canvas() : isDrawing(false), brushSize(5.0f), brushColor(sf::Color::Black), activeLayer(0), onionSkinEnabled(false), onionSkinOpacity(85.0f) {}
+Canvas::Canvas() : isDrawing(false), brushSize(5.0f), brushColor(sf::Color::Black), activeLayer(0),
+onionSkinEnabled(false), onionSkinOpacity(85.0f),
+viewScale(1.0f), targetScale(1.0f) {}
 
 void Canvas::init() {
+    deskTexture.loadFromFile("assets/workbench.png", sf::IntRect(114, 702, 1669, 379));
+    deskSprite.setTexture(deskTexture);
+    deskSprite.setOrigin(1669.f / 2.f, 379.f / 2.f);
+    deskSprite.setPosition(1920.f / 2.f, 850.f);
+
     canvasTexture.loadFromFile("assets/canvas.png");
     canvasSprite.setTexture(canvasTexture);
-    float canvasScale = 700.0f / canvasSprite.getLocalBounds().height;
-    canvasSprite.setScale(canvasScale, canvasScale);
 
-    float canvasWidth = canvasSprite.getLocalBounds().width * canvasScale;
-    float canvasHeight = canvasSprite.getLocalBounds().height * canvasScale;
-    float canvasX = (1920.0f - canvasWidth) / 2.0f;
-    float canvasY = 20.0f;
-    canvasSprite.setPosition(canvasX, canvasY);
+    float cScale = 700.f / canvasSprite.getLocalBounds().height;
+    canvasSprite.setScale(cScale, cScale);
+    canvasSprite.setOrigin(canvasSprite.getLocalBounds().width / 2.f, canvasSprite.getLocalBounds().height / 2.f);
 
-    float frameOffsetX = canvasWidth * 0.08f;
-    float frameOffsetYTop = canvasHeight * 0.16f;
-    float frameOffsetYBot = canvasHeight * 0.16f;
+    canvasSprite.setPosition(1920.f / 2.f, deskSprite.getPosition().y - (379.f / 2.f) - (700.f / 2.f) + 120.f);
+
+    sf::FloatRect cBounds = canvasSprite.getGlobalBounds();
+    float frameOffsetX = cBounds.width * 0.08f;
+    float frameOffsetYTop = cBounds.height * 0.16f;
+    float frameOffsetYBot = cBounds.height * 0.16f;
+
     drawArea = sf::FloatRect(
-        canvasX + frameOffsetX,
-        canvasY + frameOffsetYTop,
-        canvasWidth - (frameOffsetX * 2.0f),
-        canvasHeight - frameOffsetYTop - frameOffsetYBot
+        cBounds.left + frameOffsetX,
+        cBounds.top + frameOffsetYTop,
+        cBounds.width - (frameOffsetX * 2.0f),
+        cBounds.height - frameOffsetYTop - frameOffsetYBot
     );
 
     frames.emplace_back();
+}
+
+void Canvas::updateTransform(float dt, sf::FloatRect space) {
+    sf::FloatRect dBounds = deskSprite.getGlobalBounds();
+    sf::FloatRect cBounds = canvasSprite.getGlobalBounds();
+
+    float left = std::min(dBounds.left, cBounds.left);
+    float top = std::min(dBounds.top, cBounds.top);
+    float right = std::max(dBounds.left + dBounds.width, cBounds.left + cBounds.width);
+    float bottom = std::max(dBounds.top + dBounds.height, cBounds.top + cBounds.height);
+
+    float unionW = right - left;
+    float unionH = bottom - top;
+
+    float pad = 60.f;
+    space.left += pad;
+    space.top += pad;
+    space.width -= pad * 2;
+    space.height -= pad * 2;
+
+    float sX = space.width / unionW;
+    float sY = space.height / unionH;
+    targetScale = std::min(sX, sY);
+
+    float spaceCX = space.left + space.width / 2.f;
+    float spaceCY = space.top + space.height / 2.f;
+    float unionCX = left + unionW / 2.f;
+    float unionCY = top + unionH / 2.f;
+
+    targetOffset.x = spaceCX - (unionCX * targetScale);
+    targetOffset.y = spaceCY - (unionCY * targetScale);
+
+    viewScale += (targetScale - viewScale) * 12.f * dt;
+    viewOffset.x += (targetOffset.x - viewOffset.x) * 12.f * dt;
+    viewOffset.y += (targetOffset.y - viewOffset.y) * 12.f * dt;
+}
+
+sf::Transform Canvas::getTransform() const {
+    sf::Transform t;
+    t.translate(viewOffset).scale(viewScale, viewScale);
+    return t;
+}
+
+sf::Transform Canvas::getInverseTransform() const {
+    return getTransform().getInverse();
 }
 
 void Canvas::addFrame(int index) {
@@ -116,11 +168,11 @@ void Canvas::setOnionSkin(bool enabled, float opacity) {
 bool Canvas::isOnionSkinEnabled() const { return onionSkinEnabled; }
 float Canvas::getOnionSkinOpacity() const { return onionSkinOpacity; }
 
-void Canvas::handleMousePressed(sf::Vector2f mousePos, bool middleClick, int currentFrame) {
-    if (drawArea.contains(mousePos)) {
+void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool middleClick, int currentFrame) {
+    if (drawArea.contains(logicalPos)) {
         if (!middleClick) {
             isDrawing = true;
-            lastPos = mousePos;
+            lastPos = logicalPos;
         }
     }
 }
@@ -129,9 +181,9 @@ void Canvas::handleMouseReleased() {
     isDrawing = false;
 }
 
-void Canvas::handleMouseMoved(sf::Vector2f mousePos, int currentFrame) {
-    if (isDrawing && drawArea.contains(mousePos) && currentFrame >= 0 && currentFrame < frames.size()) {
-        sf::Vector2f d = mousePos - lastPos;
+void Canvas::handleMouseMoved(sf::Vector2f logicalPos, int currentFrame) {
+    if (isDrawing && drawArea.contains(logicalPos) && currentFrame >= 0 && currentFrame < frames.size()) {
+        sf::Vector2f d = logicalPos - lastPos;
         float length = std::sqrt(d.x * d.x + d.y * d.y);
 
         sf::RectangleShape line(sf::Vector2f(length, brushSize));
@@ -142,7 +194,7 @@ void Canvas::handleMouseMoved(sf::Vector2f mousePos, int currentFrame) {
 
         sf::CircleShape circle(brushSize / 2.f);
         circle.setOrigin(brushSize / 2.f, brushSize / 2.f);
-        circle.setPosition(mousePos);
+        circle.setPosition(logicalPos);
         circle.setFillColor(brushColor);
 
         auto& tex = frames[currentFrame].layers[activeLayer].texture;
@@ -157,9 +209,9 @@ void Canvas::handleMouseMoved(sf::Vector2f mousePos, int currentFrame) {
         }
 
         tex->display();
-        lastPos = mousePos;
+        lastPos = logicalPos;
     }
-    else if (!drawArea.contains(mousePos)) {
+    else if (!drawArea.contains(logicalPos)) {
         isDrawing = false;
     }
 }
@@ -205,15 +257,16 @@ void Canvas::redo(int currentFrame) {
     }
 }
 
-void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying) {
-    window.draw(canvasSprite);
+void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states) {
+    window.draw(deskSprite, states);
+    window.draw(canvasSprite, states);
 
     if (!isPlaying && onionSkinEnabled && currentFrame > 0 && currentFrame < frames.size()) {
         for (const auto& layer : frames[currentFrame - 1].layers) {
             if (layer.visible) {
                 sf::Sprite onionSpr(layer.texture->getTexture());
                 onionSpr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(onionSkinOpacity)));
-                window.draw(onionSpr, sf::BlendAlpha);
+                window.draw(onionSpr, states);
             }
         }
     }
@@ -223,19 +276,19 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying) {
             if (layer.visible) {
                 sf::Sprite spr(layer.texture->getTexture());
                 spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(layer.opacity)));
-                window.draw(spr);
+                window.draw(spr, states);
             }
         }
     }
 }
 
-void Canvas::drawShadows(sf::RenderWindow& window, sf::Vector2f sunPos, const std::vector<sf::FloatRect>& items, const std::vector<std::string>& categories) {
+void Canvas::drawShadows(sf::RenderWindow& window, sf::Vector2f logicalSunPos, const std::vector<sf::FloatRect>& items, const std::vector<std::string>& categories, const sf::RenderStates& states) {
     for (size_t i = 0; i < items.size(); ++i) {
         bool isClutter = (categories[i] == "healing" || categories[i] == "status-cures" || categories[i] == "vitamins" || categories[i] == "clutter");
         float shadowLen = isClutter ? 30.0f : 150.0f;
 
         sf::Vector2f baseCenter(items[i].left + items[i].width / 2.0f, items[i].top + items[i].height);
-        sf::Vector2f dir = baseCenter - sunPos;
+        sf::Vector2f dir = baseCenter - logicalSunPos;
         float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y);
         if (dist > 0) { dir.x /= dist; dir.y /= dist; }
 
@@ -247,23 +300,23 @@ void Canvas::drawShadows(sf::RenderWindow& window, sf::Vector2f sunPos, const st
         shadow.setPoint(3, sf::Vector2f(items[i].left + dir.x * shadowLen, items[i].top + items[i].height + dir.y * shadowLen));
 
         shadow.setFillColor(sf::Color(0, 0, 0, 100));
-        window.draw(shadow);
+        window.draw(shadow, states);
     }
 
     sf::CircleShape sunShape(15);
     sunShape.setOrigin(15, 15);
-    sunShape.setPosition(sunPos);
+    sunShape.setPosition(logicalSunPos);
     sunShape.setFillColor(sf::Color(255, 255, 200, 200));
     sunShape.setOutlineThickness(2);
     sunShape.setOutlineColor(sf::Color::Yellow);
-    window.draw(sunShape);
+    window.draw(sunShape, states);
 }
 
 sf::FloatRect Canvas::getDrawArea() const { return drawArea; }
 
-sf::RenderTexture* Canvas::getFrame(int index) {
-    if (index >= 0 && index < frames.size()) {
-        return frames[index].layers[activeLayer].texture.get();
+sf::RenderTexture* Canvas::getActiveRenderTexture(int currentFrame) {
+    if (currentFrame >= 0 && currentFrame < frames.size()) {
+        return frames[currentFrame].layers[activeLayer].texture.get();
     }
     return nullptr;
 }

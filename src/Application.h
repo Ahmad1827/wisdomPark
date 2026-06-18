@@ -16,9 +16,10 @@ private:
     Timeline timeline;
     UIManager uiManager;
     AIHelper aiHelper;
+    sf::Clock frameClock;
 
     void processEvents();
-    void update();
+    void update(float dt);
     void render();
 
 public:

@@ -1,40 +1,35 @@
 #include "UIManager.h"
 #include <iostream>
 
-UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1) {}
+UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false) {}
 
 void UIManager::init() {
     bgTexture.loadFromFile("assets/landofwisdompark.png");
     bgSprite.setTexture(bgTexture);
-
-    deskTexture.loadFromFile("assets/workbench.png", sf::IntRect(114, 702, 1669, 379));
-    deskSprite.setTexture(deskTexture);
-    deskSprite.setPosition(114.0f, 702.0f);
 
     font.loadFromFile("assets/font.otf");
 
     welcomeScreen.init();
     settingsModal.init();
     leftToolbar.init();
-    topMenuBar.init();
     rightProperties.init();
     bottomTimeline.init();
 
     uiText.setFont(font);
-    uiText.setCharacterSize(40);
-    uiText.setOutlineColor(sf::Color::Black);
+    uiText.setCharacterSize(30);
+    uiText.setOutlineColor(sf::Color(0, 0, 0, 150));
     uiText.setOutlineThickness(2.f);
 
     promptBox.setSize(sf::Vector2f(600.f, 50.f));
-    promptBox.setPosition(1920.f / 2.f - 300.f, 1080.f - 220.f);
-    promptBox.setFillColor(sf::Color(20, 20, 20, 240));
-    promptBox.setOutlineColor(sf::Color(0, 122, 204));
-    promptBox.setOutlineThickness(2.f);
+    promptBox.setPosition(1920.f / 2.f - 300.f, 1080.f - 300.f);
+    promptBox.setFillColor(sf::Color(15, 15, 18, 220));
+    promptBox.setOutlineThickness(1.f);
+    promptBox.setOutlineColor(sf::Color(255, 255, 255, 30));
 
     promptDisplay.setFont(font);
-    promptDisplay.setCharacterSize(24);
+    promptDisplay.setCharacterSize(20);
     promptDisplay.setFillColor(sf::Color::White);
-    promptDisplay.setPosition(1920.f / 2.f - 290.f, 1080.f - 210.f);
+    promptDisplay.setPosition(1920.f / 2.f - 290.f, 1080.f - 288.f);
 }
 
 void UIManager::showMessage(const std::string& msg, sf::Color color) {
@@ -42,7 +37,7 @@ void UIManager::showMessage(const std::string& msg, sf::Color color) {
     uiText.setFillColor(color);
     sf::FloatRect textRect = uiText.getLocalBounds();
     uiText.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
-    uiText.setPosition(1920.0f / 2.0f, 100.0f);
+    uiText.setPosition(1920.0f / 2.0f, 80.0f);
     showingText = true;
     textAlpha = 255.0f;
     textClock.restart();
@@ -50,6 +45,8 @@ void UIManager::showMessage(const std::string& msg, sf::Color color) {
 
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper) {
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
+
+    sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
 
     if (settingsModal.getIsOpen()) {
         if (event.type == sf::Event::TextEntered) {
@@ -101,19 +98,28 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
                 else {
                     if (!settings.isConfigured()) {
-                        showMessage("ERROR: Configure AI Provider in Settings First!", sf::Color::Red);
+                        showMessage("ERROR: Configure AI Provider in Settings (Press ESC)", sf::Color::Red);
                     }
                     else {
                         bool isFill;
                         std::string parsedTheme;
                         aiHelper.parseCommand(currentPrompt, promptQuantity, isFill, parsedTheme);
                         aiHelper.setTheme(parsedTheme);
-                        showMessage("AI Configured. Click Mascot to Generate: " + parsedTheme, sf::Color::Green);
+                        showMessage("AI Configured. Click Canvas to Generate: " + parsedTheme, sf::Color::Green);
                     }
                 }
             }
 
             if (isTypingPrompt) return;
+
+            if (event.key.code == sf::Keyboard::Escape) {
+                settingsModal.open(settings);
+            }
+            if (event.key.code == sf::Keyboard::Tab) {
+                focusMode = !focusMode;
+                if (focusMode) showMessage("Focus Mode: ON (Press TAB to exit)", sf::Color::White);
+                else showMessage("Focus Mode: OFF", sf::Color::White);
+            }
 
             if (event.key.code == sf::Keyboard::Right) timeline.nextFrame();
             if (event.key.code == sf::Keyboard::Left) timeline.prevFrame();
@@ -144,21 +150,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (event.key.code == sf::Keyboard::Y) canvas.redo(timeline.getCurrentFrame());
         }
 
-        if (!timeline.isPlaying()) {
+        if (!timeline.isPlaying() && !settingsModal.getIsOpen()) {
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-
-                std::string topAction = topMenuBar.handleClick(mousePos);
-                if (!topAction.empty()) {
-                    if (topAction == "settings" || topAction == "ai") {
-                        settingsModal.open(settings);
-                    }
-                    return;
-                }
 
                 std::string leftAction = leftToolbar.handleClick(mousePos, settings.isConfigured());
                 if (!leftAction.empty()) {
                     if (leftAction == "ai_disabled") {
-                        showMessage("Configure an AI provider in Settings.", sf::Color::Red);
+                        showMessage("Configure an AI provider (Press ESC).", sf::Color::Red);
                     }
                     else if (leftAction == "pencil") {
                         canvas.setBrushColor(sf::Color::Black);
@@ -172,7 +170,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         promptDisplay.setString("> _");
                         showMessage("AI Terminal: Type prompt and press Enter", sf::Color(0, 191, 255));
                     }
-                    return;
+                    return; // Prevent drawing if panel clicked
                 }
 
                 std::string rightAction = rightProperties.handleClick(mousePos);
@@ -189,7 +187,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     else if (rightAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity() - 25.f);
 
                     rightProperties.syncState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity());
-                    if (rightAction == "section_toggle") return;
                     return;
                 }
 
@@ -213,19 +210,19 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     return;
                 }
 
-                if (aiHelper.getBounds().contains(mousePos)) {
+                if (aiHelper.getBounds().contains(logicalMousePos)) {
                     if (!settings.isConfigured()) {
-                        showMessage("Configure AI Provider in Settings first!", sf::Color::Red);
+                        showMessage("Configure AI Provider (Press ESC) first!", sf::Color::Red);
                     }
                     else {
                         aiHelper.toggle();
                         if (aiHelper.isActive()) {
                             canvas.saveUndoState(timeline.getCurrentFrame());
-                            sf::Image currentImg = canvas.getFrame(timeline.getCurrentFrame())->getTexture().copyToImage();
+                            sf::Image currentImg = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
 
                             int spawnedCount = 0;
                             for (int i = 0; i < promptQuantity; ++i) {
-                                sf::Image iterImg = canvas.getFrame(timeline.getCurrentFrame())->getTexture().copyToImage();
+                                sf::Image iterImg = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
                                 std::string errorMsg = aiHelper.startGeneratingComplexArt(canvas.getDrawArea(), iterImg, settings.activeProvider, settings.apiKeys[settings.activeProvider], false);
 
                                 if (!errorMsg.empty()) {
@@ -244,7 +241,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                                 }
                                 spawnedCount++;
                                 if (promptQuantity > 1) {
-                                    aiHelper.forceFinish(*canvas.getFrame(timeline.getCurrentFrame()));
+                                    aiHelper.forceFinish(*canvas.getActiveRenderTexture(timeline.getCurrentFrame()));
                                 }
                             }
                             if (spawnedCount == promptQuantity && promptQuantity > 1) {
@@ -255,7 +252,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     return;
                 }
 
-                canvas.handleMousePressed(mousePos, false, timeline.getCurrentFrame());
+                canvas.handleMousePressed(logicalMousePos, false, timeline.getCurrentFrame());
             }
 
             if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
@@ -263,7 +260,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (event.type == sf::Event::MouseMoved) {
-                canvas.handleMouseMoved(mousePos, timeline.getCurrentFrame());
+                canvas.handleMouseMoved(logicalMousePos, timeline.getCurrentFrame());
             }
 
             if (event.type == sf::Event::MouseWheelScrolled) {
@@ -275,7 +272,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     }
 }
 
-void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings) {
+void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas) {
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
 
     if (settingsModal.getIsOpen()) {
@@ -283,11 +280,23 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     }
 
     if (currentState == AppState::Welcome) {
+        welcomeScreen.updateHover(mousePos);
         welcomeScreen.updateStatus(settings.isConfigured(), settings.activeProvider);
     }
     else if (currentState == AppState::Painting) {
 
-        topMenuBar.updateHover(mousePos);
+        leftToolbar.update(dt, focusMode);
+        rightProperties.update(dt, focusMode);
+        bottomTimeline.update(dt, focusMode);
+
+        sf::FloatRect availableSpace(
+            std::max(0.f, leftToolbar.getPanelRightEdge()),
+            0.f,
+            std::min(1920.f, rightProperties.getPanelLeftEdge()) - std::max(0.f, leftToolbar.getPanelRightEdge()),
+            std::min(1080.f, bottomTimeline.getPanelTopEdge())
+        );
+        canvas.updateTransform(dt, availableSpace);
+
         leftToolbar.updateHover(mousePos);
         rightProperties.updateHover(mousePos);
         bottomTimeline.updateHover(mousePos);
@@ -313,27 +322,31 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
     window.draw(bgSprite);
 
     if (currentState == AppState::Welcome) {
-        window.draw(deskSprite);
         welcomeScreen.draw(window);
     }
     else if (currentState == AppState::Painting) {
-        canvas.draw(window, timeline.getCurrentFrame(), timeline.isPlaying());
+
+        sf::RenderStates canvasStates;
+        canvasStates.transform = canvas.getTransform();
+
+        canvas.draw(window, timeline.getCurrentFrame(), timeline.isPlaying(), canvasStates);
 
         if (isLightingMode) {
             sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
+            sf::Vector2f logicalSunPos = canvas.getInverseTransform().transformPoint(mousePos);
+
             std::vector<sf::FloatRect> bounds;
             std::vector<std::string> cats;
             for (const auto& item : aiHelper.getHistory()) {
                 bounds.push_back(item.bounds);
                 cats.push_back(item.category);
             }
-            canvas.drawShadows(window, mousePos, bounds, cats);
+            canvas.drawShadows(window, logicalSunPos, bounds, cats, canvasStates);
         }
 
-        window.draw(deskSprite);
+        sf::RenderStates defaultStates;
         aiHelper.draw(window);
 
-        topMenuBar.draw(window, SettingsManager::loadSettings().isConfigured());
         leftToolbar.draw(window, SettingsManager::loadSettings().isConfigured());
         rightProperties.draw(window);
         bottomTimeline.draw(window, timeline, canvas);

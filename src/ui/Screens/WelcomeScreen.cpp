@@ -20,32 +20,39 @@ void WelcomeScreen::init() {
         btn.id = id;
         btn.rect.setSize(sf::Vector2f(400.f, 80.f));
         btn.rect.setPosition(1920.f / 2.f - 200.f, y);
-        btn.rect.setFillColor(sf::Color(40, 40, 45));
-        btn.rect.setOutlineThickness(2.f);
-        btn.rect.setOutlineColor(sf::Color(100, 100, 100));
+        btn.rect.setFillColor(sf::Color(40, 40, 45, 230));
+        btn.rect.setOutlineThickness(1.f);
+        btn.rect.setOutlineColor(sf::Color(100, 100, 110, 150));
 
         btn.text.setFont(font);
         btn.text.setString(text);
         btn.text.setCharacterSize(30);
         btn.text.setFillColor(sf::Color::White);
-        
+
         sf::FloatRect tRect = btn.text.getLocalBounds();
         btn.text.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
         btn.text.setPosition(btn.rect.getPosition().x + 200.f, btn.rect.getPosition().y + 40.f);
-        
+
         buttons.push_back(btn);
-    };
+        };
 
     makeBtn("new_project", "New Animation Project", 400.f);
     makeBtn("config_ai", "Configure AI Providers", 520.f);
     makeBtn("exit", "Exit Software", 640.f);
 }
 
+void WelcomeScreen::updateHover(sf::Vector2f mousePos) {
+    for (auto& btn : buttons) {
+        btn.isHovered = btn.rect.getGlobalBounds().contains(mousePos);
+    }
+}
+
 void WelcomeScreen::updateStatus(bool configured, const std::string& provider) {
     if (configured) {
         status.setString("AI Configured: " + provider);
         status.setFillColor(sf::Color::Green);
-    } else {
+    }
+    else {
         status.setString("AI Not Configured");
         status.setFillColor(sf::Color::Red);
     }
@@ -54,7 +61,13 @@ void WelcomeScreen::updateStatus(bool configured, const std::string& provider) {
 void WelcomeScreen::draw(sf::RenderWindow& window) {
     window.draw(title);
     window.draw(status);
-    for (const auto& btn : buttons) {
+    for (auto& btn : buttons) {
+        if (btn.isHovered) {
+            btn.rect.setFillColor(sf::Color(60, 60, 65, 250));
+        }
+        else {
+            btn.rect.setFillColor(sf::Color(40, 40, 45, 230));
+        }
         window.draw(btn.rect);
         window.draw(btn.text);
     }

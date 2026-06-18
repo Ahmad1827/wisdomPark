@@ -10,12 +10,12 @@ void AISettingsModal::init() {
 
     modalBg.setSize(sf::Vector2f(700.f, 500.f));
     modalBg.setPosition(1920.f / 2.f - 350.f, 1080.f / 2.f - 250.f);
-    modalBg.setFillColor(sf::Color(35, 35, 40, 240));
+    modalBg.setFillColor(sf::Color(25, 25, 30, 250));
     modalBg.setOutlineThickness(2.f);
-    modalBg.setOutlineColor(sf::Color(100, 100, 110));
+    modalBg.setOutlineColor(sf::Color(100, 100, 110, 100));
 
     title.setFont(font);
-    title.setString("Configure AI Providers");
+    title.setString("Studio Settings");
     title.setCharacterSize(28);
     title.setFillColor(sf::Color::White);
     title.setPosition(modalBg.getPosition().x + 30.f, modalBg.getPosition().y + 30.f);
@@ -32,7 +32,7 @@ void AISettingsModal::init() {
         btn.id = p;
         btn.rect.setSize(sf::Vector2f(140.f, 40.f));
         btn.rect.setPosition(px, modalBg.getPosition().y + 130.f);
-        btn.rect.setFillColor(sf::Color(50, 50, 55));
+        btn.rect.setFillColor(sf::Color(40, 40, 45));
 
         btn.text.setFont(font);
         btn.text.setString(p);
@@ -54,7 +54,7 @@ void AISettingsModal::init() {
 
     inputBox.setSize(sf::Vector2f(640.f, 50.f));
     inputBox.setPosition(modalBg.getPosition().x + 30.f, modalBg.getPosition().y + 260.f);
-    inputBox.setFillColor(sf::Color(20, 20, 25));
+    inputBox.setFillColor(sf::Color(15, 15, 20));
     inputBox.setOutlineThickness(1.f);
     inputBox.setOutlineColor(sf::Color(80, 80, 90));
 
@@ -114,7 +114,7 @@ void AISettingsModal::updateProviderButtons() {
         }
     }
     inputText.setString(inputBuffer + "_");
-    statusText.setString("Editing settings for: " + selectedProvider);
+    statusText.setString("Editing settings for AI Provider: " + selectedProvider);
 }
 
 void AISettingsModal::updateHover(sf::Vector2f mousePos) {
@@ -152,7 +152,7 @@ bool AISettingsModal::handleClick(sf::Vector2f mousePos, AppSettings& settings) 
 
     for (auto& btn : providerButtons) {
         if (btn.rect.getGlobalBounds().contains(mousePos)) {
-            settings.apiKeys[selectedProvider] = inputBuffer; // save current before switching
+            settings.apiKeys[selectedProvider] = inputBuffer;
             selectedProvider = btn.id;
             if (settings.apiKeys.count(selectedProvider)) inputBuffer = settings.apiKeys[selectedProvider];
             else inputBuffer = "";
@@ -174,7 +174,7 @@ bool AISettingsModal::handleClick(sf::Vector2f mousePos, AppSettings& settings) 
         return true;
     }
 
-    return true; // Block clicks passing through
+    return true;
 }
 
 void AISettingsModal::draw(sf::RenderWindow& window) {

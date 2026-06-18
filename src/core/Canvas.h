@@ -34,8 +34,12 @@ private:
     std::vector<sf::Image> undoHistory;
     std::vector<sf::Image> redoHistory;
 
-    sf::Sprite canvasSprite;
+    sf::Texture deskTexture;
+    sf::Sprite deskSprite;
+
     sf::Texture canvasTexture;
+    sf::Sprite canvasSprite;
+
     sf::FloatRect drawArea;
 
     bool isDrawing;
@@ -46,6 +50,11 @@ private:
     int activeLayer;
     bool onionSkinEnabled;
     float onionSkinOpacity;
+
+    sf::Vector2f viewOffset;
+    float viewScale;
+    sf::Vector2f targetOffset;
+    float targetScale;
 
 public:
     Canvas();
@@ -59,9 +68,9 @@ public:
     bool isOnionSkinEnabled() const;
     float getOnionSkinOpacity() const;
 
-    void handleMousePressed(sf::Vector2f mousePos, bool middleClick, int currentFrame);
+    void handleMousePressed(sf::Vector2f logicalPos, bool middleClick, int currentFrame);
     void handleMouseReleased();
-    void handleMouseMoved(sf::Vector2f mousePos, int currentFrame);
+    void handleMouseMoved(sf::Vector2f logicalPos, int currentFrame);
 
     void setBrushSize(float size);
     float getBrushSize() const;
@@ -72,10 +81,14 @@ public:
     void redo(int currentFrame);
     void saveUndoState(int currentFrame);
 
-    void draw(sf::RenderWindow& window, int currentFrame, bool isPlaying);
-    void drawShadows(sf::RenderWindow& window, sf::Vector2f sunPos, const std::vector<sf::FloatRect>& items, const std::vector<std::string>& categories);
+    void updateTransform(float dt, sf::FloatRect availableSpace);
+    sf::Transform getTransform() const;
+    sf::Transform getInverseTransform() const;
+
+    void draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states);
+    void drawShadows(sf::RenderWindow& window, sf::Vector2f logicalSunPos, const std::vector<sf::FloatRect>& items, const std::vector<std::string>& categories, const sf::RenderStates& states);
 
     sf::FloatRect getDrawArea() const;
-    sf::RenderTexture* getFrame(int index);
+    sf::RenderTexture* getActiveRenderTexture(int currentFrame);
     size_t getFrameCount() const;
 };

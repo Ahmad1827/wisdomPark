@@ -7,6 +7,7 @@ struct WelcomeButton {
     sf::RectangleShape rect;
     sf::Text text;
     std::string id;
+    bool isHovered = false;
 };
 
 class WelcomeScreen {
@@ -19,6 +20,7 @@ private:
 public:
     WelcomeScreen();
     void init();
+    void updateHover(sf::Vector2f mousePos);
     void updateStatus(bool configured, const std::string& provider);
     void draw(sf::RenderWindow& window);
     std::string handleClick(sf::Vector2f mousePos);

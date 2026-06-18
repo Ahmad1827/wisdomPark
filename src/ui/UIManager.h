@@ -9,7 +9,6 @@
 #include "Screens/WelcomeScreen.h"
 #include "Screens/AISettingsModal.h"
 #include "LeftToolbar.h"
-#include "TopMenuBar.h"
 #include "RightProperties.h"
 #include "BottomTimeline.h"
 
@@ -17,13 +16,10 @@ class UIManager {
 private:
     sf::Texture bgTexture;
     sf::Sprite bgSprite;
-    sf::Texture deskTexture;
-    sf::Sprite deskSprite;
 
     WelcomeScreen welcomeScreen;
     AISettingsModal settingsModal;
     LeftToolbar leftToolbar;
-    TopMenuBar topMenuBar;
     RightProperties rightProperties;
     BottomTimeline bottomTimeline;
 
@@ -40,6 +36,7 @@ private:
 
     bool isLightingMode;
     int promptQuantity;
+    bool focusMode;
 
     void showMessage(const std::string& msg, sf::Color color);
 
@@ -47,6 +44,6 @@ public:
     UIManager();
     void init();
     void handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper);
-    void update(sf::RenderWindow& window, AppState currentState, AppSettings& settings);
+    void update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas);
     void draw(sf::RenderWindow& window, AppState currentState, Canvas& canvas, AIHelper& aiHelper, Timeline& timeline);
 };
