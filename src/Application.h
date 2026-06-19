@@ -4,6 +4,7 @@
 #include "core/SettingsManager.h"
 #include "core/Canvas.h"
 #include "core/Timeline.h"
+#include "core/ProjectManager.h"
 #include "ui/UIManager.h"
 #include "ai/AIHelper.h"
 
@@ -12,6 +13,8 @@ private:
     sf::RenderWindow window;
     AppState currentState;
     AppSettings appSettings;
+
+    ProjectManager projectManager;
     Canvas canvas;
     Timeline timeline;
     UIManager uiManager;

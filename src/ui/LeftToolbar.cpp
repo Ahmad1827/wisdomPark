@@ -1,17 +1,15 @@
 #include "LeftToolbar.h"
 
-LeftToolbar::LeftToolbar() : activeToolId("pencil"), width(80.f), currentX(-80.f), targetX(-80.f), state(PanelState::Hidden) {}
+LeftToolbar::LeftToolbar() : activeToolId("brush"), width(90.f), currentX(-90.f), targetX(-90.f), state(PanelState::Hidden) {}
 
 void LeftToolbar::init() {
     font.loadFromFile("assets/font.otf");
 
-    // Glass panel aesthetic
     background.setSize(sf::Vector2f(width, 1080.f));
     background.setFillColor(sf::Color(15, 15, 18, 220));
     background.setOutlineThickness(1.f);
     background.setOutlineColor(sf::Color(255, 255, 255, 15));
 
-    // Edge Reveal Handle
     handleBg.setSize(sf::Vector2f(24.f, 80.f));
     handleBg.setFillColor(sf::Color(30, 30, 35, 200));
     handleBg.setOutlineThickness(1.f);
@@ -22,7 +20,6 @@ void LeftToolbar::init() {
     handleLabel.setCharacterSize(16);
     handleLabel.setFillColor(sf::Color(200, 200, 200));
 
-    // Pin Button
     pinBtn.setSize(sf::Vector2f(width - 20.f, 24.f));
     pinBtn.setFillColor(sf::Color(255, 255, 255, 10));
 
@@ -35,7 +32,7 @@ void LeftToolbar::init() {
         ToolItem btn;
         btn.id = id;
         btn.isAiTool = aiTool;
-        btn.rect.setSize(sf::Vector2f(width - 20.f, 60.f));
+        btn.rect.setSize(sf::Vector2f(width - 20.f, 50.f));
 
         btn.label.setFont(font);
         btn.label.setString(text);
@@ -47,15 +44,17 @@ void LeftToolbar::init() {
         tools.push_back(btn);
         };
 
-    float startY = 80.f;
-    float gap = 70.f;
-    makeBtn("pencil", "Draw", startY);
-    makeBtn("eraser", "Erase", startY + gap * 1);
-    makeBtn("fill", "Fill", startY + gap * 2);
-    makeBtn("select", "Select", startY + gap * 3);
-    makeBtn("anim", "Anim", startY + gap * 4);
-    makeBtn("layers", "Layers", startY + gap * 5);
-    makeBtn("ai_gen", "AI Gen", startY + gap * 6, true);
+    float startY = 70.f;
+    float gap = 60.f;
+    makeBtn("brush", "Brush", startY);
+    makeBtn("pencil", "Pencil", startY + gap * 1);
+    makeBtn("eraser", "Erase", startY + gap * 2);
+    makeBtn("fill", "Bucket", startY + gap * 3);
+    makeBtn("line", "Line", startY + gap * 4);
+    makeBtn("rect", "Rect", startY + gap * 5);
+    makeBtn("circle", "Circle", startY + gap * 6);
+    makeBtn("eyedropper", "Pick", startY + gap * 7);
+    makeBtn("ai_gen", "AI Gen", startY + gap * 8, true);
 }
 
 void LeftToolbar::update(float dt, bool focusMode) {
@@ -63,19 +62,14 @@ void LeftToolbar::update(float dt, bool focusMode) {
         targetX = -width;
     }
     else {
-        if (state == PanelState::Pinned || state == PanelState::Visible) {
-            targetX = 0.f;
-        }
-        else {
-            targetX = -width;
-        }
+        if (state == PanelState::Pinned || state == PanelState::Visible) targetX = 0.f;
+        else targetX = -width;
     }
 
     currentX += (targetX - currentX) * 15.0f * dt;
 
     background.setPosition(currentX, 0.f);
 
-    // Handle stays perfectly attached to the right edge of the panel
     handleBg.setPosition(currentX + width, 500.f);
     handleLabel.setPosition(currentX + width + 6.f, 530.f);
 
@@ -93,11 +87,11 @@ void LeftToolbar::update(float dt, bool focusMode) {
     pinBtn.setPosition(currentX + 10.f, 20.f);
     pinLabel.setPosition(currentX + 25.f, 24.f);
 
-    float startY = 80.f;
+    float startY = 70.f;
     for (auto& tool : tools) {
         tool.rect.setPosition(currentX + 10.f, startY);
-        tool.label.setPosition(currentX + (width / 2.f), startY + 30.f);
-        startY += 70.f;
+        tool.label.setPosition(currentX + (width / 2.f), startY + 25.f);
+        startY += 60.f;
     }
 }
 
@@ -105,13 +99,8 @@ void LeftToolbar::updateHover(sf::Vector2f mousePos) {
     bool inPanel = background.getGlobalBounds().contains(mousePos);
     bool inHandle = handleBg.getGlobalBounds().contains(mousePos);
 
-    // State Machine transitions
-    if (state == PanelState::Hidden && inHandle) {
-        state = PanelState::Visible;
-    }
-    else if (state == PanelState::Visible && !inPanel && !inHandle) {
-        state = PanelState::Hidden;
-    }
+    if (state == PanelState::Hidden && inHandle) state = PanelState::Visible;
+    else if (state == PanelState::Visible && !inPanel && !inHandle) state = PanelState::Hidden;
 
     for (auto& tool : tools) {
         tool.isHovered = tool.rect.getGlobalBounds().contains(mousePos);
@@ -132,7 +121,6 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured) {
 
     for (auto& tool : tools) {
         bool disabled = tool.isAiTool && !isAIConfigured;
-
         if (disabled) {
             tool.rect.setFillColor(sf::Color(255, 255, 255, 2));
             tool.label.setFillColor(sf::Color(100, 100, 100));
@@ -158,7 +146,7 @@ std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured)
     }
 
     if (state == PanelState::Hidden && handleBg.getGlobalBounds().contains(mousePos)) {
-        state = PanelState::Pinned; // Clicking handle forces open and pins
+        state = PanelState::Pinned;
         return "handle_click";
     }
 

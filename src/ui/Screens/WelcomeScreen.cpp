@@ -13,16 +13,16 @@ void WelcomeScreen::init() {
 
     status.setFont(font);
     status.setCharacterSize(20);
-    status.setPosition(10.f, 10.f);
+    status.setPosition(20.f, 20.f);
 
     auto makeBtn = [&](std::string id, std::string text, float y) {
         WelcomeButton btn;
         btn.id = id;
         btn.rect.setSize(sf::Vector2f(400.f, 80.f));
         btn.rect.setPosition(1920.f / 2.f - 200.f, y);
-        btn.rect.setFillColor(sf::Color(40, 40, 45, 230));
+        btn.rect.setFillColor(sf::Color(25, 25, 30, 230));
         btn.rect.setOutlineThickness(1.f);
-        btn.rect.setOutlineColor(sf::Color(100, 100, 110, 150));
+        btn.rect.setOutlineColor(sf::Color(100, 100, 110, 100));
 
         btn.text.setFont(font);
         btn.text.setString(text);
@@ -37,7 +37,7 @@ void WelcomeScreen::init() {
         };
 
     makeBtn("new_project", "New Animation Project", 400.f);
-    makeBtn("config_ai", "Configure AI Providers", 520.f);
+    makeBtn("config_ai", "Studio Settings", 520.f);
     makeBtn("exit", "Exit Software", 640.f);
 }
 
@@ -50,23 +50,24 @@ void WelcomeScreen::updateHover(sf::Vector2f mousePos) {
 void WelcomeScreen::updateStatus(bool configured, const std::string& provider) {
     if (configured) {
         status.setString("AI Configured: " + provider);
-        status.setFillColor(sf::Color::Green);
+        status.setFillColor(sf::Color(0, 191, 255));
     }
     else {
         status.setString("AI Not Configured");
-        status.setFillColor(sf::Color::Red);
+        status.setFillColor(sf::Color(200, 50, 50));
     }
 }
 
 void WelcomeScreen::draw(sf::RenderWindow& window) {
     window.draw(title);
     window.draw(status);
+
     for (auto& btn : buttons) {
         if (btn.isHovered) {
-            btn.rect.setFillColor(sf::Color(60, 60, 65, 250));
+            btn.rect.setFillColor(sf::Color(45, 45, 55, 250));
         }
         else {
-            btn.rect.setFillColor(sf::Color(40, 40, 45, 230));
+            btn.rect.setFillColor(sf::Color(25, 25, 30, 230));
         }
         window.draw(btn.rect);
         window.draw(btn.text);

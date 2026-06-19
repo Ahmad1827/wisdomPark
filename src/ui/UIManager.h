@@ -5,8 +5,9 @@
 #include "../core/SettingsManager.h"
 #include "../core/Canvas.h"
 #include "../core/Timeline.h"
+#include "../core/ProjectManager.h"
 #include "../ai/AIHelper.h"
-#include "Screens/WelcomeScreen.h"
+#include "Screens/ProjectBrowser.h"
 #include "Screens/AISettingsModal.h"
 #include "LeftToolbar.h"
 #include "RightProperties.h"
@@ -17,11 +18,12 @@ private:
     sf::Texture bgTexture;
     sf::Sprite bgSprite;
 
-    WelcomeScreen welcomeScreen;
+    ProjectBrowser projectBrowser;
     AISettingsModal settingsModal;
     LeftToolbar leftToolbar;
     RightProperties rightProperties;
     BottomTimeline bottomTimeline;
+    ProjectManager* projManager;
 
     sf::Font font;
     std::string currentPrompt;
@@ -38,12 +40,14 @@ private:
     int promptQuantity;
     bool focusMode;
 
+    std::string activeProjectName;
+
     void showMessage(const std::string& msg, sf::Color color);
 
 public:
     UIManager();
-    void init();
-    void handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper);
+    void init(ProjectManager* pm);
+    void handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm);
     void update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas);
     void draw(sf::RenderWindow& window, AppState currentState, Canvas& canvas, AIHelper& aiHelper, Timeline& timeline);
 };

@@ -9,7 +9,7 @@ Application::Application()
     appSettings = SettingsManager::loadSettings();
 
     canvas.init();
-    uiManager.init();
+    uiManager.init(&projectManager);
 
     aiHelper.trainOnDataset("dataset.json");
     aiHelper.loadThesaurus("thesaurus.txt");
@@ -31,8 +31,8 @@ void Application::processEvents() {
         if (event.type == sf::Event::Closed) {
             window.close();
         }
-        // Removed the hardcoded ESC close so UIManager can use it for Settings
-        uiManager.handleEvent(event, window, currentState, appSettings, canvas, timeline, aiHelper);
+
+        uiManager.handleEvent(event, window, currentState, appSettings, canvas, timeline, aiHelper, projectManager);
     }
 }
 
