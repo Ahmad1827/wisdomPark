@@ -69,6 +69,9 @@
     <ClCompile Include="src\ui\ColorPalettePanel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\SelectionManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\ai\AIHelper.h">
@@ -123,6 +126,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\ColorPalettePanel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\SelectionManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

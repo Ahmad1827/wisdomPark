@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include "SelectionManager.h"
 
 enum class BlendMode {
     Normal,
@@ -66,7 +67,6 @@ private:
     sf::Vector2u canvasLogicalSize;
 
     bool isDrawing;
-    sf::Vector2f startPos;
     sf::Vector2f lastPos;
 
     ToolType activeTool;
@@ -89,13 +89,7 @@ private:
     sf::Vector2f targetOffset;
     float targetScale;
 
-    // Selection Data
-    bool hasSelection;
-    sf::FloatRect selectionBounds;
-    sf::Texture selectionTexture;
-    sf::Vector2f selectionOffset;
-    bool isMovingSelection;
-    float selectionDashOffset;
+    SelectionManager selection;
 
     sf::RenderStates getSFMLBlendMode(BlendMode mode) const;
     void executeScanlineFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
@@ -126,7 +120,11 @@ public:
 
     void setActiveTool(ToolType tool);
     ToolType getActiveTool() const;
+
     void commitSelection(int currentFrame);
+    void copySelection();
+    void pasteSelection(int currentFrame);
+    void deleteSelection(int currentFrame);
 
     void handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame);
     void handleMouseReleased(sf::Vector2f logicalPos, int currentFrame);

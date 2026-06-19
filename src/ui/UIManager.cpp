@@ -126,15 +126,21 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (event.key.code == sf::Keyboard::End) timeline.setFrame(canvas.getFrameCount() - 1);
 
             if (event.key.code == sf::Keyboard::Delete) {
-                if (canvas.getFrameCount() > 1) {
+                if (canvas.getActiveTool() == ToolType::Select) canvas.deleteSelection(timeline.getCurrentFrame());
+                else if (canvas.getFrameCount() > 1) {
                     canvas.deleteFrame(timeline.getCurrentFrame());
                     if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(canvas.getFrameCount() - 1);
                 }
             }
 
-            if (ctrlPressed && event.key.code == sf::Keyboard::D) { canvas.duplicateFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
-            if (ctrlPressed && event.key.code == sf::Keyboard::N) { canvas.addFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
+            if (ctrlPressed && event.key.code == sf::Keyboard::C) canvas.copySelection();
+            if (ctrlPressed && event.key.code == sf::Keyboard::V) canvas.pasteSelection(timeline.getCurrentFrame());
+            if (ctrlPressed && event.key.code == sf::Keyboard::D) {
+                canvas.commitSelection(timeline.getCurrentFrame());
+                canvas.setActiveTool(ToolType::Brush);
+            }
 
+            if (ctrlPressed && event.key.code == sf::Keyboard::N) { canvas.addFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
             if (ctrlPressed && event.key.code == sf::Keyboard::S) {
                 if (pm.saveProject(activeProjectName, canvas, 12)) showMessage("Project Saved Successfully!", sf::Color::Green);
                 else showMessage("Error Saving Project!", sf::Color::Red);
