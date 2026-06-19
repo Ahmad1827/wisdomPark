@@ -8,7 +8,8 @@ enum class BlendMode {
     Normal,
     Multiply,
     Additive,
-    Screen
+    Screen,
+    Overlay
 };
 
 enum class ToolType {
@@ -16,10 +17,7 @@ enum class ToolType {
     Pencil,
     Eraser,
     Fill,
-    Line,
-    Rectangle,
-    Circle,
-    Eyedropper
+    Select
 };
 
 struct Layer {
@@ -53,18 +51,15 @@ class Canvas {
 private:
     std::vector<Frame> frames;
 
-    // History stack for Undo/Redo
     std::vector<std::vector<Frame>> undoHistory;
     std::vector<std::vector<Frame>> redoHistory;
 
     sf::Texture deskTexture;
     sf::Sprite deskSprite;
 
-    // Fixed mismatched names to align with Canvas.cpp
     sf::Texture canvasTexture;
     sf::Sprite canvasSprite;
 
-    // Live preview buffer for shape tools
     sf::RenderTexture previewTexture;
 
     sf::FloatRect drawArea;
@@ -76,8 +71,12 @@ private:
 
     ToolType activeTool;
     float brushSize;
-    sf::Color brushColor;
+    float brushHardness;
+    sf::Color primaryColor;
+    sf::Color secondaryColor;
     bool brushSmoothing;
+    float fillTolerance;
+    bool fillContiguous;
 
     int activeLayer;
     bool onionSkinEnabled;
@@ -90,9 +89,18 @@ private:
     sf::Vector2f targetOffset;
     float targetScale;
 
+    // Selection Data
+    bool hasSelection;
+    sf::FloatRect selectionBounds;
+    sf::Texture selectionTexture;
+    sf::Vector2f selectionOffset;
+    bool isMovingSelection;
+    float selectionDashOffset;
+
     sf::RenderStates getSFMLBlendMode(BlendMode mode) const;
-    void executeFloodFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
-    void bakePreviewToLayer(int currentFrame);
+    void executeScanlineFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
+    void executeGlobalFill(sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
+    bool colorMatches(const sf::Color& a, const sf::Color& b) const;
 
 public:
     Canvas();
@@ -104,9 +112,13 @@ public:
     void deleteFrame(int index);
     void clearAllFrames();
 
-    void addLayerToFrame(int frameIndex, const std::string& name = "New Layer");
+    void addLayer(int frameIndex, const std::string& name = "New Layer");
+    void deleteLayer(int frameIndex, int layerIndex);
+    void duplicateLayer(int frameIndex, int layerIndex);
     void setLayerProperties(int frameIndex, int layerIndex, const std::string& name, bool visible, bool locked, float opacity, BlendMode mode);
     void moveLayer(int frameIndex, int fromIndex, int toIndex);
+    void setActiveLayer(int index);
+    int getActiveLayer() const;
 
     void setOnionSkin(bool enabled, float opacity, int prevCount = 1, int nextCount = 0);
     bool isOnionSkinEnabled() const;
@@ -114,16 +126,20 @@ public:
 
     void setActiveTool(ToolType tool);
     ToolType getActiveTool() const;
+    void commitSelection(int currentFrame);
 
-    void handleMousePressed(sf::Vector2f logicalPos, bool middleClick, int currentFrame);
+    void handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame);
     void handleMouseReleased(sf::Vector2f logicalPos, int currentFrame);
     void handleMouseMoved(sf::Vector2f logicalPos, int currentFrame);
 
     void setBrushSize(float size);
     float getBrushSize() const;
-    void setBrushColor(sf::Color color);
-    sf::Color getBrushColor() const;
+    void setBrushHardness(float hardness);
+    void setPrimaryColor(sf::Color color);
+    void setSecondaryColor(sf::Color color);
+    sf::Color getPrimaryColor() const;
     void setBrushSmoothing(bool smoothing);
+    void setFillSettings(float tolerance, bool contiguous);
 
     void undo();
     void redo();

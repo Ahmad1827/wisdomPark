@@ -15,6 +15,7 @@ void UIManager::init(ProjectManager* pm) {
     leftToolbar.init();
     rightProperties.init();
     bottomTimeline.init();
+    colorPalettePanel.init();
 
     uiText.setFont(font);
     uiText.setCharacterSize(30);
@@ -127,105 +128,113 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (event.key.code == sf::Keyboard::Delete) {
                 if (canvas.getFrameCount() > 1) {
                     canvas.deleteFrame(timeline.getCurrentFrame());
-                    if (timeline.getCurrentFrame() >= canvas.getFrameCount()) timeline.setFrame(canvas.getFrameCount() - 1);
+                    if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(canvas.getFrameCount() - 1);
                 }
             }
 
             if (ctrlPressed && event.key.code == sf::Keyboard::D) { canvas.duplicateFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
             if (ctrlPressed && event.key.code == sf::Keyboard::N) { canvas.addFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
 
-            // Project Save Shortcut
             if (ctrlPressed && event.key.code == sf::Keyboard::S) {
                 if (pm.saveProject(activeProjectName, canvas, 12)) showMessage("Project Saved Successfully!", sf::Color::Green);
                 else showMessage("Error Saving Project!", sf::Color::Red);
             }
 
-            // Advanced History Shortcuts
             if (ctrlPressed && event.key.code == sf::Keyboard::Z) canvas.undo();
             if (ctrlPressed && event.key.code == sf::Keyboard::Y) canvas.redo();
         }
 
         if (!timeline.isPlaying() && !settingsModal.getIsOpen()) {
-            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            if (event.type == sf::Event::MouseButtonPressed) {
 
-                std::string leftAction = leftToolbar.handleClick(mousePos, settings.isConfigured());
-                if (!leftAction.empty()) {
-                    if (leftAction == "ai_disabled") showMessage("Configure an AI provider in Settings.", sf::Color::Red);
-                    else if (leftAction == "brush") canvas.setActiveTool(ToolType::Brush);
-                    else if (leftAction == "pencil") canvas.setActiveTool(ToolType::Pencil);
-                    else if (leftAction == "eraser") canvas.setActiveTool(ToolType::Eraser);
-                    else if (leftAction == "fill") canvas.setActiveTool(ToolType::Fill);
-                    else if (leftAction == "line") canvas.setActiveTool(ToolType::Line);
-                    else if (leftAction == "rect") canvas.setActiveTool(ToolType::Rectangle);
-                    else if (leftAction == "circle") canvas.setActiveTool(ToolType::Circle);
-                    else if (leftAction == "eyedropper") canvas.setActiveTool(ToolType::Eyedropper);
-                    else if (leftAction == "ai_gen") {
-                        isTypingPrompt = true; currentPrompt = ""; promptDisplay.setString("> _");
-                        showMessage("AI Terminal: Type prompt and press Enter", sf::Color(0, 191, 255));
-                    }
+                sf::Color pCol, sCol;
+                if (colorPalettePanel.handleClick(mousePos, pCol, sCol)) {
+                    if (event.mouseButton.button == sf::Mouse::Right) canvas.setSecondaryColor(sCol);
+                    else canvas.setPrimaryColor(pCol);
                     return;
                 }
 
-                std::string rightAction = rightProperties.handleClick(mousePos);
-                if (!rightAction.empty()) {
-                    if (rightAction == "theme_all") aiHelper.setTheme("all");
-                    else if (rightAction == "theme_struct") aiHelper.setTheme("structure");
-                    else if (rightAction == "theme_clutter") aiHelper.setTheme("clutter");
-                    else if (rightAction == "theme_custom") aiHelper.setTheme("custom");
-                    else if (rightAction == "theme_wfc") aiHelper.setTheme("wfc");
-                    else if (rightAction == "toggle_light") isLightingMode = !isLightingMode;
-                    else if (rightAction == "toggle_terrain") aiHelper.toggleTerrain();
-                    else if (rightAction == "onion_toggle") canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity());
-                    else if (rightAction == "onion_op_up") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity() + 25.f);
-                    else if (rightAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity() - 25.f);
-
-                    rightProperties.syncState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity());
-                    if (rightAction == "section_toggle" || rightAction == "pin_toggle") return;
-                    return;
-                }
-
-                std::string bottomAction = bottomTimeline.handleClick(mousePos);
-                if (!bottomAction.empty()) {
-                    if (bottomAction == "play") timeline.togglePlayback();
-                    else if (bottomAction == "add") { canvas.addFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
-                    else if (bottomAction == "dup") { canvas.duplicateFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
-                    else if (bottomAction == "del") {
-                        if (canvas.getFrameCount() > 1) {
-                            canvas.deleteFrame(timeline.getCurrentFrame());
-                            if (timeline.getCurrentFrame() >= canvas.getFrameCount()) timeline.setFrame(canvas.getFrameCount() - 1);
+                if (event.mouseButton.button == sf::Mouse::Left) {
+                    std::string leftAction = leftToolbar.handleClick(mousePos, settings.isConfigured());
+                    if (!leftAction.empty()) {
+                        if (leftAction == "ai_disabled") showMessage("Configure an AI provider in Settings.", sf::Color::Red);
+                        else if (leftAction == "brush") canvas.setActiveTool(ToolType::Brush);
+                        else if (leftAction == "pencil") canvas.setActiveTool(ToolType::Pencil);
+                        else if (leftAction == "eraser") canvas.setActiveTool(ToolType::Eraser);
+                        else if (leftAction == "fill") canvas.setActiveTool(ToolType::Fill);
+                        else if (leftAction == "select") canvas.setActiveTool(ToolType::Select);
+                        else if (leftAction == "ai_gen") {
+                            isTypingPrompt = true; currentPrompt = ""; promptDisplay.setString("> _");
+                            showMessage("AI Terminal: Type prompt and press Enter", sf::Color(0, 191, 255));
                         }
+                        return;
                     }
-                    return;
-                }
 
-                int clickedFrame = bottomTimeline.handleFrameClick(mousePos, canvas.getFrameCount());
-                if (clickedFrame != -1) { timeline.setFrame(clickedFrame); return; }
+                    std::string rightAction = rightProperties.handleClick(mousePos);
+                    if (!rightAction.empty()) {
+                        if (rightAction == "theme_all") aiHelper.setTheme("all");
+                        else if (rightAction == "theme_struct") aiHelper.setTheme("structure");
+                        else if (rightAction == "theme_clutter") aiHelper.setTheme("clutter");
+                        else if (rightAction == "theme_custom") aiHelper.setTheme("custom");
+                        else if (rightAction == "theme_wfc") aiHelper.setTheme("wfc");
+                        else if (rightAction == "toggle_light") isLightingMode = !isLightingMode;
+                        else if (rightAction == "toggle_terrain") aiHelper.toggleTerrain();
+                        else if (rightAction == "onion_toggle") canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity());
+                        else if (rightAction == "onion_op_up") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity() + 25.f);
+                        else if (rightAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity() - 25.f);
 
-                if (aiHelper.getBounds().contains(logicalMousePos)) {
-                    if (!settings.isConfigured()) { showMessage("Configure AI Provider (Press ESC) first!", sf::Color::Red); }
-                    else {
-                        aiHelper.toggle();
-                        if (aiHelper.isActive()) {
-                            canvas.saveUndoState();
-                            sf::Image currentImg = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
-                            std::string errorMsg = aiHelper.startGeneratingComplexArt(canvas.getDrawArea(), currentImg, settings.activeProvider, settings.apiKeys[settings.activeProvider], false);
-                            if (!errorMsg.empty()) {
-                                showMessage(errorMsg, sf::Color::Red);
-                                canvas.undo();
-                                aiHelper.toggle();
-                            }
-                            else {
-                                showMessage("AI Generation Started...", sf::Color::Yellow);
+                        rightProperties.syncState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity());
+                        if (rightAction == "section_toggle" || rightAction == "pin_toggle") return;
+                        return;
+                    }
+
+                    std::string bottomAction = bottomTimeline.handleClick(mousePos);
+                    if (!bottomAction.empty()) {
+                        if (bottomAction == "play") timeline.togglePlayback();
+                        else if (bottomAction == "add") { canvas.addFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
+                        else if (bottomAction == "dup") { canvas.duplicateFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
+                        else if (bottomAction == "del") {
+                            if (canvas.getFrameCount() > 1) {
+                                canvas.deleteFrame(timeline.getCurrentFrame());
+                                if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(canvas.getFrameCount() - 1);
                             }
                         }
+                        return;
                     }
-                    return;
+
+                    int clickedFrame = bottomTimeline.handleFrameClick(mousePos, canvas.getFrameCount());
+                    if (clickedFrame != -1) { timeline.setFrame(clickedFrame); return; }
+
+                    if (aiHelper.getBounds().contains(logicalMousePos)) {
+                        if (!settings.isConfigured()) { showMessage("Configure AI Provider (Press ESC) first!", sf::Color::Red); }
+                        else {
+                            aiHelper.toggle();
+                            if (aiHelper.isActive()) {
+                                canvas.saveUndoState();
+                                sf::Image currentImg = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
+                                std::string errorMsg = aiHelper.startGeneratingComplexArt(canvas.getDrawArea(), currentImg, settings.activeProvider, settings.apiKeys[settings.activeProvider], false);
+                                if (!errorMsg.empty()) {
+                                    showMessage(errorMsg, sf::Color::Red);
+                                    canvas.undo();
+                                    aiHelper.toggle();
+                                }
+                                else {
+                                    showMessage("AI Generation Started...", sf::Color::Yellow);
+                                }
+                            }
+                        }
+                        return;
+                    }
                 }
 
-                canvas.handleMousePressed(logicalMousePos, false, timeline.getCurrentFrame());
+                if (canvas.getActiveTool() != ToolType::Select) {
+                    canvas.commitSelection(timeline.getCurrentFrame());
+                }
+
+                canvas.handleMousePressed(logicalMousePos, event.mouseButton.button == sf::Mouse::Right, timeline.getCurrentFrame());
             }
 
-            if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+            if (event.type == sf::Event::MouseButtonReleased) {
                 canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
             }
 
@@ -253,6 +262,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         leftToolbar.update(dt, focusMode);
         rightProperties.update(dt, focusMode);
         bottomTimeline.update(dt, focusMode);
+        colorPalettePanel.update(dt, focusMode);
 
         sf::FloatRect availableSpace(
             std::max(0.f, leftToolbar.getPanelRightEdge()),
@@ -265,6 +275,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         leftToolbar.updateHover(mousePos);
         rightProperties.updateHover(mousePos);
         bottomTimeline.updateHover(mousePos);
+        colorPalettePanel.updateHover(mousePos);
 
         if (showingText && textClock.getElapsedTime().asSeconds() > 2.0f) showingText = false;
         else if (showingText && textClock.getElapsedTime().asSeconds() > 1.5f) {
@@ -303,6 +314,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         leftToolbar.draw(window, SettingsManager::loadSettings().isConfigured());
         rightProperties.draw(window);
         bottomTimeline.draw(window, timeline, canvas);
+        colorPalettePanel.draw(window);
 
         if (showingText) window.draw(uiText);
         if (isTypingPrompt) { window.draw(promptBox); window.draw(promptDisplay); }

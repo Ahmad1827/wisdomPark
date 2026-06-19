@@ -158,6 +158,7 @@
     <ClCompile Include="src\ui\Screens\ProjectBrowser.cpp" />
     <ClCompile Include="src\ui\Screens\WelcomeScreen.cpp" />
     <ClCompile Include="src\ui\BottomTimeline.cpp" />
+    <ClCompile Include="src\ui\ColorPalettePanel.cpp" />
     <ClCompile Include="src\ui\TopMenuBar.cpp" />
     <ClCompile Include="src\ui\UIManager.cpp" />
   </ItemGroup>
@@ -172,6 +173,7 @@
     <ClInclude Include="src\core\SettingsManager.h" />
     <ClInclude Include="src\core\Timeline.h" />
     <ClInclude Include="src\ui\BottomTimeline.h" />
+    <ClInclude Include="src\ui\ColorPalettePanel.h" />
     <ClInclude Include="src\ui\LeftToolbar.h" />
     <ClInclude Include="src\ui\RightProperties.h" />
     <ClInclude Include="src\ui\Screens\AISettingsModal.h" />

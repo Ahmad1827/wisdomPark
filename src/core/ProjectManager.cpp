@@ -33,7 +33,7 @@ std::vector<ProjectMetadata> ProjectManager::getRecentProjects() {
 
     for (const auto& entry : fs::directory_iterator(projectsDir)) {
         if (entry.is_directory() && entry.path().extension() == ".wpark") {
-            std::string metaPath = entry.path().string() + "/meta.json"; // using simple text mapped conceptually
+            std::string metaPath = entry.path().string() + "/meta.json";
             if (fs::exists(metaPath)) {
                 std::ifstream file(metaPath);
                 ProjectMetadata meta;
@@ -97,7 +97,6 @@ bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fp
         << getCurrentTime() << "\n";
     metaFile.close();
 
-    // Generate Thumbnail from Frame 0
     if (canvas.getFrameCount() > 0) {
         sf::RenderTexture composite;
         composite.create(size.x, size.y);
@@ -165,7 +164,8 @@ bool ProjectManager::loadProject(const std::string& name, Canvas& canvas, int& o
         int l = 0;
 
         while (std::getline(layerMeta, lLine)) {
-            if (l > 1) canvas.addLayerToFrame(f, "Layer");
+            // Fixes the "addLayerToFrame is not a member of Canvas" error
+            if (l > 1) canvas.addLayer(f, "Layer");
 
             size_t pos1 = lLine.find('|');
             size_t pos2 = lLine.find('|', pos1 + 1);

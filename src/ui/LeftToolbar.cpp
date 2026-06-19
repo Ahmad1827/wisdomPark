@@ -46,15 +46,14 @@ void LeftToolbar::init() {
 
     float startY = 70.f;
     float gap = 60.f;
+
+    // Purged old shapes, kept only the strictly requested tools
     makeBtn("brush", "Brush", startY);
     makeBtn("pencil", "Pencil", startY + gap * 1);
     makeBtn("eraser", "Erase", startY + gap * 2);
     makeBtn("fill", "Bucket", startY + gap * 3);
-    makeBtn("line", "Line", startY + gap * 4);
-    makeBtn("rect", "Rect", startY + gap * 5);
-    makeBtn("circle", "Circle", startY + gap * 6);
-    makeBtn("eyedropper", "Pick", startY + gap * 7);
-    makeBtn("ai_gen", "AI Gen", startY + gap * 8, true);
+    makeBtn("select", "Select", startY + gap * 4);
+    makeBtn("ai_gen", "AI Gen", startY + gap * 5, true);
 }
 
 void LeftToolbar::update(float dt, bool focusMode) {

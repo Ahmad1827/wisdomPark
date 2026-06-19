@@ -12,6 +12,7 @@
 #include "LeftToolbar.h"
 #include "RightProperties.h"
 #include "BottomTimeline.h"
+#include "ColorPalettePanel.h"
 
 class UIManager {
 private:
@@ -23,6 +24,8 @@ private:
     LeftToolbar leftToolbar;
     RightProperties rightProperties;
     BottomTimeline bottomTimeline;
+    ColorPalettePanel colorPalettePanel;
+
     ProjectManager* projManager;
 
     sf::Font font;
