@@ -27,6 +27,8 @@ private:
     sf::Text pinLabel;
 
     std::vector<ToolItem> tools;
+    std::vector<ToolItem> selectionActions;
+
     sf::Font font;
     std::string activeToolId;
 
@@ -40,8 +42,8 @@ public:
     void init();
     void update(float dt, bool focusMode);
     void updateHover(sf::Vector2f mousePos);
-    void draw(sf::RenderWindow& window, bool isAIConfigured);
-    std::string handleClick(sf::Vector2f mousePos, bool isAIConfigured);
+    void draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSelection);
+    std::string handleClick(sf::Vector2f mousePos, bool isAIConfigured, bool hasSelection);
 
     float getPanelRightEdge() const;
     std::string getActiveTool() const;

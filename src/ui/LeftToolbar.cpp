@@ -47,13 +47,32 @@ void LeftToolbar::init() {
     float startY = 70.f;
     float gap = 60.f;
 
-    // Purged old shapes, kept only the strictly requested tools
     makeBtn("brush", "Brush", startY);
     makeBtn("pencil", "Pencil", startY + gap * 1);
     makeBtn("eraser", "Erase", startY + gap * 2);
     makeBtn("fill", "Bucket", startY + gap * 3);
     makeBtn("select", "Select", startY + gap * 4);
     makeBtn("ai_gen", "AI Gen", startY + gap * 5, true);
+
+    auto makeActionBtn = [&](std::string id, std::string text) {
+        ToolItem btn;
+        btn.id = id;
+        btn.rect.setSize(sf::Vector2f(width - 20.f, 30.f));
+
+        btn.label.setFont(font);
+        btn.label.setString(text);
+        btn.label.setCharacterSize(10);
+
+        sf::FloatRect tRect = btn.label.getLocalBounds();
+        btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
+
+        selectionActions.push_back(btn);
+        };
+
+    makeActionBtn("flip_h", "Flip H");
+    makeActionBtn("flip_v", "Flip V");
+    makeActionBtn("dup_sel", "Duplicate");
+    makeActionBtn("del_sel", "Deselect");
 }
 
 void LeftToolbar::update(float dt, bool focusMode) {
@@ -92,6 +111,13 @@ void LeftToolbar::update(float dt, bool focusMode) {
         tool.label.setPosition(currentX + (width / 2.f), startY + 25.f);
         startY += 60.f;
     }
+
+    startY += 20.f;
+    for (auto& act : selectionActions) {
+        act.rect.setPosition(currentX + 10.f, startY);
+        act.label.setPosition(currentX + (width / 2.f), startY + 15.f);
+        startY += 40.f;
+    }
 }
 
 void LeftToolbar::updateHover(sf::Vector2f mousePos) {
@@ -104,9 +130,13 @@ void LeftToolbar::updateHover(sf::Vector2f mousePos) {
     for (auto& tool : tools) {
         tool.isHovered = tool.rect.getGlobalBounds().contains(mousePos);
     }
+
+    for (auto& act : selectionActions) {
+        act.isHovered = act.rect.getGlobalBounds().contains(mousePos);
+    }
 }
 
-void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured) {
+void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSelection) {
     window.draw(background);
 
     if (state != PanelState::Pinned) {
@@ -136,9 +166,18 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured) {
         window.draw(tool.rect);
         window.draw(tool.label);
     }
+
+    if (hasSelection) {
+        for (auto& act : selectionActions) {
+            act.rect.setFillColor(act.isHovered ? sf::Color(0, 191, 255, 150) : sf::Color(0, 122, 204, 100));
+            act.label.setFillColor(sf::Color::White);
+            window.draw(act.rect);
+            window.draw(act.label);
+        }
+    }
 }
 
-std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured) {
+std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured, bool hasSelection) {
     if (pinBtn.getGlobalBounds().contains(mousePos)) {
         state = (state == PanelState::Pinned) ? PanelState::Visible : PanelState::Pinned;
         return "pin_toggle";
@@ -156,6 +195,15 @@ std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured)
             return tool.id;
         }
     }
+
+    if (hasSelection) {
+        for (const auto& act : selectionActions) {
+            if (act.rect.getGlobalBounds().contains(mousePos)) {
+                return act.id;
+            }
+        }
+    }
+
     return "";
 }
 

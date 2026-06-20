@@ -1,5 +1,6 @@
 #include "UIManager.h"
 #include <iostream>
+#include <algorithm>
 
 UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project") {}
 
@@ -13,9 +14,8 @@ void UIManager::init(ProjectManager* pm) {
     projectBrowser.init(pm);
     settingsModal.init();
     leftToolbar.init();
-    rightProperties.init();
+    rightPanelManager.init();
     bottomTimeline.init();
-    colorPalettePanel.init();
 
     uiText.setFont(font);
     uiText.setCharacterSize(30);
@@ -154,14 +154,15 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (event.type == sf::Event::MouseButtonPressed) {
 
                 sf::Color pCol, sCol;
-                if (colorPalettePanel.handleClick(mousePos, pCol, sCol)) {
+                if (rightPanelManager.handlePaletteClick(mousePos, pCol, sCol)) {
                     if (event.mouseButton.button == sf::Mouse::Right) canvas.setSecondaryColor(sCol);
                     else canvas.setPrimaryColor(pCol);
                     return;
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Left) {
-                    std::string leftAction = leftToolbar.handleClick(mousePos, settings.isConfigured());
+                    bool hasActiveSel = (canvas.getActiveTool() == ToolType::Select);
+                    std::string leftAction = leftToolbar.handleClick(mousePos, settings.isConfigured(), hasActiveSel);
                     if (!leftAction.empty()) {
                         if (leftAction == "ai_disabled") showMessage("Configure an AI provider in Settings.", sf::Color::Red);
                         else if (leftAction == "brush") canvas.setActiveTool(ToolType::Brush);
@@ -173,10 +174,17 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             isTypingPrompt = true; currentPrompt = ""; promptDisplay.setString("> _");
                             showMessage("AI Terminal: Type prompt and press Enter", sf::Color(0, 191, 255));
                         }
+                        else if (leftAction == "flip_h") canvas.flipSelectionHorizontal(timeline.getCurrentFrame());
+                        else if (leftAction == "flip_v") canvas.flipSelectionVertical(timeline.getCurrentFrame());
+                        else if (leftAction == "dup_sel") canvas.duplicateSelection(timeline.getCurrentFrame());
+                        else if (leftAction == "del_sel") {
+                            canvas.commitSelection(timeline.getCurrentFrame());
+                            canvas.setActiveTool(ToolType::Brush);
+                        }
                         return;
                     }
 
-                    std::string rightAction = rightProperties.handleClick(mousePos);
+                    std::string rightAction = rightPanelManager.handleClick(mousePos, canvas, timeline.getCurrentFrame());
                     if (!rightAction.empty()) {
                         if (rightAction == "theme_all") aiHelper.setTheme("all");
                         else if (rightAction == "theme_struct") aiHelper.setTheme("structure");
@@ -189,7 +197,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         else if (rightAction == "onion_op_up") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity() + 25.f);
                         else if (rightAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity() - 25.f);
 
-                        rightProperties.syncState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity());
+                        rightPanelManager.syncPropertiesState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity());
                         if (rightAction == "section_toggle" || rightAction == "pin_toggle") return;
                         return;
                     }
@@ -266,22 +274,22 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     else if (currentState == AppState::Painting) {
 
         leftToolbar.update(dt, focusMode);
-        rightProperties.update(dt, focusMode);
+        rightPanelManager.update(dt, focusMode);
         bottomTimeline.update(dt, focusMode);
-        colorPalettePanel.update(dt, focusMode);
 
-        sf::FloatRect availableSpace(
-            std::max(0.f, leftToolbar.getPanelRightEdge()),
-            0.f,
-            std::min(1920.f, rightProperties.getPanelLeftEdge()) - std::max(0.f, leftToolbar.getPanelRightEdge()),
-            std::min(1080.f, bottomTimeline.getPanelTopEdge())
-        );
+        float availLeft = std::max(0.0f, leftToolbar.getPanelRightEdge());
+        float availRight = std::min(1920.0f, rightPanelManager.getMinLeftEdge());
+        float availTop = 0.0f;
+        float availBottom = std::min(1080.0f, bottomTimeline.getPanelTopEdge());
+        float availWidth = std::max(0.0f, availRight - availLeft);
+        float availHeight = std::max(0.0f, availBottom - availTop);
+
+        sf::FloatRect availableSpace(availLeft, availTop, availWidth, availHeight);
         canvas.updateTransform(dt, availableSpace);
 
         leftToolbar.updateHover(mousePos);
-        rightProperties.updateHover(mousePos);
+        rightPanelManager.updateHover(mousePos);
         bottomTimeline.updateHover(mousePos);
-        colorPalettePanel.updateHover(mousePos);
 
         if (showingText && textClock.getElapsedTime().asSeconds() > 2.0f) showingText = false;
         else if (showingText && textClock.getElapsedTime().asSeconds() > 1.5f) {
@@ -317,10 +325,9 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         sf::RenderStates defaultStates;
         aiHelper.draw(window);
 
-        leftToolbar.draw(window, SettingsManager::loadSettings().isConfigured());
-        rightProperties.draw(window);
+        leftToolbar.draw(window, SettingsManager::loadSettings().isConfigured(), canvas.getActiveTool() == ToolType::Select && canvas.getActiveTool() == ToolType::Select);
+        rightPanelManager.draw(window, canvas, timeline.getCurrentFrame());
         bottomTimeline.draw(window, timeline, canvas);
-        colorPalettePanel.draw(window);
 
         if (showingText) window.draw(uiText);
         if (isTypingPrompt) { window.draw(promptBox); window.draw(promptDisplay); }

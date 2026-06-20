@@ -3,7 +3,6 @@
 #include <vector>
 #include <string>
 
-// Enum reused logically, declared locally for safety if not shared
 enum class RightPanelState { Hidden, Visible, Pinned };
 
 struct PropItem {
@@ -51,5 +50,8 @@ public:
     std::string handleClick(sf::Vector2f mousePos);
     void syncState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity);
 
-    float getPanelLeftEdge() const;
+    float getCurrentX() const;
+    void forceClose();
+    bool isHovered() const;
+    bool isPanelPinned() const;
 };

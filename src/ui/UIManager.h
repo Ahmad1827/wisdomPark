@@ -10,9 +10,8 @@
 #include "Screens/ProjectBrowser.h"
 #include "Screens/AISettingsModal.h"
 #include "LeftToolbar.h"
-#include "RightProperties.h"
+#include "RightPanelManager.h"
 #include "BottomTimeline.h"
-#include "ColorPalettePanel.h"
 
 class UIManager {
 private:
@@ -22,9 +21,8 @@ private:
     ProjectBrowser projectBrowser;
     AISettingsModal settingsModal;
     LeftToolbar leftToolbar;
-    RightProperties rightProperties;
+    RightPanelManager rightPanelManager;
     BottomTimeline bottomTimeline;
-    ColorPalettePanel colorPalettePanel;
 
     ProjectManager* projManager;
 

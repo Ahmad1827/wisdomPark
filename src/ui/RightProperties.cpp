@@ -77,8 +77,8 @@ void RightProperties::update(float dt, bool focusMode) {
 
     background.setPosition(currentX, 0.f);
 
-    handleBg.setPosition(currentX - 24.f, 500.f);
-    handleLabel.setPosition(currentX - 18.f, 530.f);
+    handleBg.setPosition(currentX - 24.f, 50.f);
+    handleLabel.setPosition(currentX - 18.f, 80.f);
 
     if (state == RightPanelState::Pinned) {
         handleLabel.setString("x");
@@ -110,7 +110,7 @@ void RightProperties::updateLayout() {
                 item.label.setPosition(currentX + 30.f, startY + 8.f);
                 startY += 35.f;
             }
-            startY += 10.f; // Extra padding after an open section
+            startY += 10.f;
         }
     }
 }
@@ -225,4 +225,7 @@ void RightProperties::syncState(const std::string& theme, bool lighting, bool te
     }
 }
 
-float RightProperties::getPanelLeftEdge() const { return currentX; }
+float RightProperties::getCurrentX() const { return currentX; }
+void RightProperties::forceClose() { if (state != RightPanelState::Pinned) state = RightPanelState::Hidden; }
+bool RightProperties::isHovered() const { return state == RightPanelState::Visible; }
+bool RightProperties::isPanelPinned() const { return state == RightPanelState::Pinned; }

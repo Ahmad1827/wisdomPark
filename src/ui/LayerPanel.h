@@ -1,10 +1,11 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <vector>
+#include "../core/Canvas.h"
 
-enum class PalettePanelState { Hidden, Visible, Pinned };
+enum class LayerPanelState { Hidden, Visible, Pinned };
 
-class ColorPalettePanel {
+class LayerPanel {
 private:
     sf::RectangleShape background;
     sf::RectangleShape handleBg;
@@ -13,26 +14,25 @@ private:
     sf::RectangleShape pinBtn;
     sf::Text pinLabel;
 
-    sf::RectangleShape primaryBox;
-    sf::RectangleShape secondaryBox;
+    sf::RectangleShape addBtn;
+    sf::RectangleShape dupBtn;
+    sf::RectangleShape delBtn;
 
-    std::vector<sf::RectangleShape> swatches;
     sf::Font font;
 
     float width;
     float currentX;
     float targetX;
-    PalettePanelState state;
+    LayerPanelState state;
 
 public:
-    ColorPalettePanel();
+    LayerPanel();
     void init();
     void update(float dt, bool focusMode);
     void updateHover(sf::Vector2f mousePos);
-    void draw(sf::RenderWindow& window);
-    bool handleClick(sf::Vector2f mousePos, sf::Color& outPrimary, sf::Color& outSecondary);
+    void draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame);
+    bool handleClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame);
 
-    void setColors(sf::Color primary, sf::Color secondary);
     float getCurrentX() const;
     void forceClose();
     bool isHovered() const;

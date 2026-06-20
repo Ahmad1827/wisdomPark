@@ -13,7 +13,7 @@ class SelectionManager {
 private:
     SelectionState state;
     std::vector<sf::Vector2f> pathPoints;
-    std::vector<sf::Vector2f> localPoints; // Stored in local space for transforms
+    std::vector<sf::Vector2f> localPoints;
 
     sf::FloatRect boundingBox;
     sf::Texture floatingTexture;
@@ -26,9 +26,11 @@ private:
     float dashOffset;
 
     sf::Vector2f dragStartPos;
+    bool isDragging;
 
     bool isInsidePolygon(sf::Vector2f point, const std::vector<sf::Vector2f>& polygon) const;
     void calculateBoundingBox();
+    void clampToCanvas(sf::Vector2u canvasSize);
 
 public:
     SelectionManager();
@@ -36,23 +38,28 @@ public:
     void update(float dt);
     void draw(sf::RenderWindow& window, const sf::RenderStates& baseStates);
 
-    void startLasso(sf::Vector2f pos);
-    void addLassoPoint(sf::Vector2f pos);
+    void startLasso(sf::Vector2f pos, sf::Vector2u canvasSize);
+    void addLassoPoint(sf::Vector2f pos, sf::Vector2u canvasSize);
     void endLasso();
 
     bool isPointInsideSelection(sf::Vector2f pos) const;
 
-    void cutFromLayer(sf::RenderTexture* layerTexture);
+    void extractFromLayer(sf::RenderTexture* layerTexture, bool removeOriginal);
     void commitToLayer(sf::RenderTexture* layerTexture);
     void discardFloating();
     void clearSelection();
 
     void startDrag(sf::Vector2f pos);
-    void drag(sf::Vector2f pos);
+    void drag(sf::Vector2f pos, sf::Vector2u canvasSize);
+    void endDrag();
 
     void copy();
-    void paste();
+    void paste(sf::Vector2u canvasSize);
     void deleteSelection(sf::RenderTexture* layerTexture);
+
+    void flipHorizontal();
+    void flipVertical();
+    void duplicate(sf::RenderTexture* layerTexture, sf::Vector2u canvasSize);
 
     SelectionState getState() const;
     bool isActive() const;

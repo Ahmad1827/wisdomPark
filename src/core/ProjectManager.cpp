@@ -164,7 +164,6 @@ bool ProjectManager::loadProject(const std::string& name, Canvas& canvas, int& o
         int l = 0;
 
         while (std::getline(layerMeta, lLine)) {
-            // Fixes the "addLayerToFrame is not a member of Canvas" error
             if (l > 1) canvas.addLayer(f, "Layer");
 
             size_t pos1 = lLine.find('|');

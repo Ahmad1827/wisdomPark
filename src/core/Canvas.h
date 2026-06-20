@@ -5,21 +5,9 @@
 #include <string>
 #include "SelectionManager.h"
 
-enum class BlendMode {
-    Normal,
-    Multiply,
-    Additive,
-    Screen,
-    Overlay
-};
+enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 
-enum class ToolType {
-    Brush,
-    Pencil,
-    Eraser,
-    Fill,
-    Select
-};
+enum class ToolType { Brush, Pencil, Eraser, Fill, Select };
 
 struct Layer {
     sf::RenderTexture* texture;
@@ -39,7 +27,6 @@ struct Layer {
 
 struct Frame {
     std::vector<Layer> layers;
-
     Frame();
     ~Frame();
     Frame(const Frame& other);
@@ -51,23 +38,23 @@ struct Frame {
 class Canvas {
 private:
     std::vector<Frame> frames;
-
     std::vector<std::vector<Frame>> undoHistory;
     std::vector<std::vector<Frame>> redoHistory;
 
     sf::Texture deskTexture;
     sf::Sprite deskSprite;
-
     sf::Texture canvasTexture;
     sf::Sprite canvasSprite;
-
     sf::RenderTexture previewTexture;
 
     sf::FloatRect drawArea;
     sf::Vector2u canvasLogicalSize;
 
     bool isDrawing;
+    sf::Vector2f startPos;
     sf::Vector2f lastPos;
+    sf::Vector2f lastHoverLocalPos;
+    bool isHoveringCanvas;
 
     ToolType activeTool;
     float brushSize;
@@ -125,6 +112,9 @@ public:
     void copySelection();
     void pasteSelection(int currentFrame);
     void deleteSelection(int currentFrame);
+    void flipSelectionHorizontal(int currentFrame);
+    void flipSelectionVertical(int currentFrame);
+    void duplicateSelection(int currentFrame);
 
     void handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame);
     void handleMouseReleased(sf::Vector2f logicalPos, int currentFrame);

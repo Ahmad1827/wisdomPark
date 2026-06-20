@@ -1,6 +1,6 @@
 #include "ColorPalettePanel.h"
 
-ColorPalettePanel::ColorPalettePanel() : width(200.f), currentX(1920.f), targetX(1920.f), isPinned(false), isHoveredAnywhere(false) {}
+ColorPalettePanel::ColorPalettePanel() : width(200.f), currentX(1920.f), targetX(1920.f), state(PalettePanelState::Hidden) {}
 
 void ColorPalettePanel::init() {
     font.loadFromFile("assets/font.otf");
@@ -9,6 +9,16 @@ void ColorPalettePanel::init() {
     background.setFillColor(sf::Color(15, 15, 18, 220));
     background.setOutlineThickness(1.f);
     background.setOutlineColor(sf::Color(255, 255, 255, 15));
+
+    handleBg.setSize(sf::Vector2f(24.f, 80.f));
+    handleBg.setFillColor(sf::Color(30, 30, 35, 200));
+    handleBg.setOutlineThickness(1.f);
+    handleBg.setOutlineColor(sf::Color(255, 255, 255, 30));
+
+    handleLabel.setFont(font);
+    handleLabel.setString("<");
+    handleLabel.setCharacterSize(16);
+    handleLabel.setFillColor(sf::Color(200, 200, 200));
 
     pinBtn.setSize(sf::Vector2f(width - 20.f, 24.f));
     pinBtn.setFillColor(sf::Color(255, 255, 255, 10));
@@ -26,7 +36,6 @@ void ColorPalettePanel::init() {
     secondaryBox.setOutlineThickness(1.f);
     secondaryBox.setOutlineColor(sf::Color(100, 100, 100));
 
-    // Aseprite-inspired default palette
     std::vector<sf::Color> defaultColors = {
         sf::Color(0, 0, 0), sf::Color(255, 255, 255), sf::Color(157, 157, 157),
         sf::Color(255, 0, 68), sf::Color(250, 166, 19), sf::Color(255, 219, 0),
@@ -42,11 +51,17 @@ void ColorPalettePanel::init() {
 }
 
 void ColorPalettePanel::update(float dt, bool focusMode) {
-    if (focusMode) targetX = 1920.f + 20.f;
-    else targetX = (isPinned || isHoveredAnywhere) ? 1920.f - width - 10.f : 1920.f + 20.f;
+    if (focusMode) targetX = 1920.f;
+    else targetX = (state == PalettePanelState::Pinned || state == PalettePanelState::Visible) ? 1920.f - width : 1920.f;
 
     currentX += (targetX - currentX) * 15.0f * dt;
     background.setPosition(currentX, 600.f);
+
+    handleBg.setPosition(currentX - 24.f, 650.f);
+    handleLabel.setPosition(currentX - 18.f, 680.f);
+
+    if (state == PalettePanelState::Pinned) handleLabel.setString("x");
+    else handleLabel.setString("<");
 
     pinBtn.setPosition(currentX + 10.f, 610.f);
     pinLabel.setPosition(currentX + 20.f, 614.f);
@@ -64,15 +79,23 @@ void ColorPalettePanel::update(float dt, bool focusMode) {
 }
 
 void ColorPalettePanel::updateHover(sf::Vector2f mousePos) {
-    isHoveredAnywhere = mousePos.x > (currentX - 20.f) && mousePos.y > 580.f;
+    bool inPanel = background.getGlobalBounds().contains(mousePos);
+    bool inHandle = handleBg.getGlobalBounds().contains(mousePos);
+
+    if (state == PalettePanelState::Hidden && inHandle) state = PalettePanelState::Visible;
+    else if (state == PalettePanelState::Visible && !inPanel && !inHandle) state = PalettePanelState::Hidden;
 }
 
 void ColorPalettePanel::draw(sf::RenderWindow& window) {
     window.draw(background);
+    if (state != PalettePanelState::Pinned) {
+        window.draw(handleBg);
+        window.draw(handleLabel);
+    }
     window.draw(pinBtn);
     window.draw(pinLabel);
 
-    window.draw(secondaryBox); // Draw behind
+    window.draw(secondaryBox);
     window.draw(primaryBox);
 
     for (auto& s : swatches) window.draw(s);
@@ -80,7 +103,13 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
 
 bool ColorPalettePanel::handleClick(sf::Vector2f mousePos, sf::Color& outPrimary, sf::Color& outSecondary) {
     if (pinBtn.getGlobalBounds().contains(mousePos)) {
-        isPinned = !isPinned; return true;
+        state = (state == PalettePanelState::Pinned) ? PalettePanelState::Visible : PalettePanelState::Pinned;
+        return true;
+    }
+
+    if (state == PalettePanelState::Hidden && handleBg.getGlobalBounds().contains(mousePos)) {
+        state = PalettePanelState::Pinned;
+        return true;
     }
 
     for (auto& s : swatches) {
@@ -100,7 +129,10 @@ bool ColorPalettePanel::handleClick(sf::Vector2f mousePos, sf::Color& outPrimary
 }
 
 void ColorPalettePanel::setColors(sf::Color primary, sf::Color secondary) {
-    primaryBox.setFillColor(primary);
-    secondaryBox.setFillColor(secondary);
+    primaryBox.setFillColor(primary); secondaryBox.setFillColor(secondary);
 }
-float ColorPalettePanel::getPanelLeftEdge() const { return currentX; }
+
+float ColorPalettePanel::getCurrentX() const { return currentX; }
+void ColorPalettePanel::forceClose() { if (state != PalettePanelState::Pinned) state = PalettePanelState::Hidden; }
+bool ColorPalettePanel::isHovered() const { return state == PalettePanelState::Visible; }
+bool ColorPalettePanel::isPanelPinned() const { return state == PalettePanelState::Pinned; }
