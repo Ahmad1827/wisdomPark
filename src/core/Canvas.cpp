@@ -92,14 +92,14 @@ void Canvas::initCustom(int width, int height) {
     canvasLogicalSize = sf::Vector2u(width, height);
 
     if (!deskTexture.loadFromFile("assets/workbench.png", sf::IntRect(114, 702, 1669, 379))) {
-        std::cerr << "CRITICAL: Missing workbench.png\n";
+
     }
     deskSprite.setTexture(deskTexture);
     deskSprite.setOrigin(1669.f / 2.f, 379.f / 2.f);
     deskSprite.setPosition(1920.f / 2.f, 850.f);
 
     if (!canvasTexture.loadFromFile("assets/canvas.png")) {
-        std::cerr << "CRITICAL: Missing canvas.png\n";
+
     }
     canvasSprite.setTexture(canvasTexture);
 

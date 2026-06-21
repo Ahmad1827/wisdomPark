@@ -6,6 +6,8 @@ UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(25
 
 void UIManager::init(ProjectManager* pm) {
     projManager = pm;
+    keybindManager.init();
+
     bgTexture.loadFromFile("assets/landofwisdompark.png");
     bgSprite.setTexture(bgTexture);
 
@@ -13,6 +15,8 @@ void UIManager::init(ProjectManager* pm) {
 
     projectBrowser.init(pm);
     settingsModal.init();
+    keybindPanel.init(&keybindManager);
+
     leftToolbar.init();
     rightPanelManager.init();
     bottomTimeline.init();
@@ -49,6 +53,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
     sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
 
+    if (keybindPanel.isVisible()) {
+        keybindPanel.handleEvent(event);
+        return;
+    }
+
     if (settingsModal.getIsOpen()) {
         if (event.type == sf::Event::TextEntered) settingsModal.handleTextEntered(event.text.unicode);
         else if (event.type == sf::Event::KeyPressed) settingsModal.handleKeyPress(event.key.code, settings);
@@ -80,6 +89,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
             }
         }
+        if (keybindManager.isActionTriggered("proj_new", event)) {
+            activeProjectName = "New_Project_" + std::to_string(std::time(nullptr));
+            pm.createNewProject(activeProjectName, 1920, 1080, 12, canvas);
+            currentState = AppState::Painting;
+            showMessage("Created New Project", sf::Color::Green);
+        }
     }
     else if (currentState == AppState::Painting) {
         if (event.type == sf::Event::TextEntered && isTypingPrompt) {
@@ -91,8 +106,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (event.type == sf::Event::KeyPressed) {
-            bool ctrlPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl);
-
             if (event.key.code == sf::Keyboard::Enter) {
                 isTypingPrompt = !isTypingPrompt;
                 if (isTypingPrompt) {
@@ -113,44 +126,65 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
             if (isTypingPrompt) return;
 
-            if (event.key.code == sf::Keyboard::Escape) settingsModal.open(settings);
-            if (event.key.code == sf::Keyboard::Tab) {
-                focusMode = !focusMode;
-                showMessage(focusMode ? "Focus Mode: ON (Press TAB to exit)" : "Focus Mode: OFF", sf::Color::White);
+            if (event.key.code == sf::Keyboard::Escape) {
+                settingsModal.open(settings);
             }
 
-            if (event.key.code == sf::Keyboard::Right) timeline.nextFrame();
-            if (event.key.code == sf::Keyboard::Left) timeline.prevFrame();
-            if (event.key.code == sf::Keyboard::Space) timeline.togglePlayback();
-            if (event.key.code == sf::Keyboard::Home) timeline.setFrame(0);
-            if (event.key.code == sf::Keyboard::End) timeline.setFrame(canvas.getFrameCount() - 1);
+            if (keybindManager.isActionTriggered("ui_settings", event)) {
+                keybindPanel.toggle();
+            }
 
-            if (event.key.code == sf::Keyboard::Delete) {
-                if (canvas.getActiveTool() == ToolType::Select) canvas.deleteSelection(timeline.getCurrentFrame());
-                else if (canvas.getFrameCount() > 1) {
+            if (keybindManager.isActionTriggered("time_next", event)) timeline.nextFrame();
+            if (keybindManager.isActionTriggered("time_prev", event)) timeline.prevFrame();
+            if (keybindManager.isActionTriggered("time_play", event)) timeline.togglePlayback();
+            if (keybindManager.isActionTriggered("time_start", event)) timeline.setFrame(0);
+            if (keybindManager.isActionTriggered("time_end", event)) timeline.setFrame(canvas.getFrameCount() - 1);
+
+            if (keybindManager.isActionTriggered("time_add", event)) { canvas.addFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
+            if (keybindManager.isActionTriggered("time_del", event)) {
+                if (canvas.getFrameCount() > 1) {
                     canvas.deleteFrame(timeline.getCurrentFrame());
                     if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(canvas.getFrameCount() - 1);
                 }
             }
 
-            if (ctrlPressed && event.key.code == sf::Keyboard::C) canvas.copySelection();
-            if (ctrlPressed && event.key.code == sf::Keyboard::V) canvas.pasteSelection(timeline.getCurrentFrame());
-            if (ctrlPressed && event.key.code == sf::Keyboard::D) {
+            if (keybindManager.isActionTriggered("layer_new", event)) canvas.addLayer(timeline.getCurrentFrame(), "New Layer");
+            if (keybindManager.isActionTriggered("layer_dup", event)) canvas.duplicateLayer(timeline.getCurrentFrame(), canvas.getActiveLayer());
+            if (keybindManager.isActionTriggered("layer_del", event)) canvas.deleteLayer(timeline.getCurrentFrame(), canvas.getActiveLayer());
+
+            if (keybindManager.isActionTriggered("edit_del_sel", event)) {
+                if (canvas.getActiveTool() == ToolType::Select) canvas.deleteSelection(timeline.getCurrentFrame());
+            }
+            if (keybindManager.isActionTriggered("edit_deselect", event)) {
                 canvas.commitSelection(timeline.getCurrentFrame());
                 canvas.setActiveTool(ToolType::Brush);
             }
 
-            if (ctrlPressed && event.key.code == sf::Keyboard::N) { canvas.addFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
-            if (ctrlPressed && event.key.code == sf::Keyboard::S) {
+            if (keybindManager.isActionTriggered("edit_copy", event)) canvas.copySelection();
+            if (keybindManager.isActionTriggered("edit_paste", event)) canvas.pasteSelection(timeline.getCurrentFrame());
+            if (keybindManager.isActionTriggered("edit_dup_sel", event)) canvas.duplicateSelection(timeline.getCurrentFrame());
+
+            if (canvas.getActiveTool() == ToolType::Select) {
+                if (keybindManager.isActionTriggered("sel_flip_h", event)) canvas.flipSelectionHorizontal(timeline.getCurrentFrame());
+                if (keybindManager.isActionTriggered("sel_flip_v", event)) canvas.flipSelectionVertical(timeline.getCurrentFrame());
+            }
+
+            if (keybindManager.isActionTriggered("tool_brush", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Brush); leftToolbar.setActiveTool("brush"); }
+            if (keybindManager.isActionTriggered("tool_pencil", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Pencil); leftToolbar.setActiveTool("pencil"); }
+            if (keybindManager.isActionTriggered("tool_eraser", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Eraser); leftToolbar.setActiveTool("eraser"); }
+            if (keybindManager.isActionTriggered("tool_fill", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Fill); leftToolbar.setActiveTool("fill"); }
+            if (keybindManager.isActionTriggered("tool_select", event)) { canvas.setActiveTool(ToolType::Select); leftToolbar.setActiveTool("select"); }
+
+            if (keybindManager.isActionTriggered("proj_save", event)) {
                 if (pm.saveProject(activeProjectName, canvas, 12)) showMessage("Project Saved Successfully!", sf::Color::Green);
                 else showMessage("Error Saving Project!", sf::Color::Red);
             }
 
-            if (ctrlPressed && event.key.code == sf::Keyboard::Z) canvas.undo();
-            if (ctrlPressed && event.key.code == sf::Keyboard::Y) canvas.redo();
+            if (keybindManager.isActionTriggered("edit_undo", event)) canvas.undo();
+            if (keybindManager.isActionTriggered("edit_redo", event)) canvas.redo();
         }
 
-        if (!timeline.isPlaying() && !settingsModal.getIsOpen()) {
+        if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible()) {
             if (event.type == sf::Event::MouseButtonPressed) {
 
                 sf::Color pCol, sCol;
@@ -180,6 +214,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         else if (leftAction == "del_sel") {
                             canvas.commitSelection(timeline.getCurrentFrame());
                             canvas.setActiveTool(ToolType::Brush);
+                            leftToolbar.setActiveTool("brush");
                         }
                         return;
                     }
@@ -257,7 +292,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (event.type == sf::Event::MouseWheelScrolled && event.mouseWheelScroll.wheel == sf::Mouse::VerticalWheel) {
-                canvas.setBrushSize(canvas.getBrushSize() + event.mouseWheelScroll.delta);
+                if (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
+
+                }
+                else {
+                    canvas.setBrushSize(canvas.getBrushSize() + event.mouseWheelScroll.delta);
+                }
             }
         }
     }
@@ -267,6 +307,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
 
     if (settingsModal.getIsOpen()) settingsModal.updateHover(mousePos);
+    if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);
 
     if (currentState == AppState::Welcome) {
         projectBrowser.updateHover(mousePos);
@@ -325,12 +366,14 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         sf::RenderStates defaultStates;
         aiHelper.draw(window);
 
-        leftToolbar.draw(window, SettingsManager::loadSettings().isConfigured(), canvas.getActiveTool() == ToolType::Select && canvas.getActiveTool() == ToolType::Select);
+        leftToolbar.draw(window, SettingsManager::loadSettings().isConfigured(), canvas.getActiveTool() == ToolType::Select);
         rightPanelManager.draw(window, canvas, timeline.getCurrentFrame());
         bottomTimeline.draw(window, timeline, canvas);
 
         if (showingText) window.draw(uiText);
         if (isTypingPrompt) { window.draw(promptBox); window.draw(promptDisplay); }
+
+        keybindPanel.draw(window);
     }
 
     if (settingsModal.getIsOpen()) settingsModal.draw(window);

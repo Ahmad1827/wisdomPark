@@ -6,9 +6,11 @@
 #include "../core/Canvas.h"
 #include "../core/Timeline.h"
 #include "../core/ProjectManager.h"
+#include "../core/KeybindManager.h"
 #include "../ai/AIHelper.h"
 #include "Screens/ProjectBrowser.h"
 #include "Screens/AISettingsModal.h"
+#include "KeybindSettingsPanel.h"
 #include "LeftToolbar.h"
 #include "RightPanelManager.h"
 #include "BottomTimeline.h"
@@ -20,11 +22,14 @@ private:
 
     ProjectBrowser projectBrowser;
     AISettingsModal settingsModal;
+    KeybindSettingsPanel keybindPanel;
+
     LeftToolbar leftToolbar;
     RightPanelManager rightPanelManager;
     BottomTimeline bottomTimeline;
 
     ProjectManager* projManager;
+    KeybindManager keybindManager;
 
     sf::Font font;
     std::string currentPrompt;
