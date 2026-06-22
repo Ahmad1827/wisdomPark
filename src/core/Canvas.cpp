@@ -479,9 +479,9 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, int currentFrame) {
         sf::RenderStates rs = (activeTool == ToolType::Eraser) ? sf::RenderStates(sf::BlendNone) : sf::RenderStates::Default;
 
         if (activeTool == ToolType::Brush && brushHardness < 1.0f) {
-            int steps = std::max(1.f, length / (brushSize * 0.1f));
+            int steps = static_cast<int>(std::max(1.0f, length / (brushSize * 0.1f)));
             for (int i = 0; i <= steps; ++i) {
-                sf::Vector2f p = lastPos + d * (float(i) / steps);
+                sf::Vector2f p = lastPos + d * (static_cast<float>(i) / static_cast<float>(steps));
                 p.x = std::clamp(p.x, 0.f, static_cast<float>(canvasLogicalSize.x));
                 p.y = std::clamp(p.y, 0.f, static_cast<float>(canvasLogicalSize.y));
 
@@ -494,7 +494,7 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, int currentFrame) {
                 edgeCol.a = 0;
 
                 for (int v = 0; v <= pts; v++) {
-                    float angle = v * 3.14159f * 2.f / pts;
+                    float angle = static_cast<float>(v) * 3.14159f * 2.0f / static_cast<float>(pts);
                     fan[v + 1].position = p + sf::Vector2f(std::cos(angle) * brushSize / 2.f, std::sin(angle) * brushSize / 2.f);
                     fan[v + 1].color = edgeCol;
                 }
@@ -593,7 +593,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         for (int i = 1; i <= onionSkinPrevCount; ++i) {
             int prevIdx = currentFrame - i;
             if (prevIdx >= 0 && prevIdx < static_cast<int>(frames.size())) {
-                float fadeOpac = onionSkinOpacity * (1.0f - (float)(i - 1) / onionSkinPrevCount);
+                float fadeOpac = onionSkinOpacity * (1.0f - (static_cast<float>(i) - 1.0f) / static_cast<float>(onionSkinPrevCount));
                 for (const auto& layer : frames[prevIdx].layers) {
                     if (layer.visible) {
                         sf::Sprite onionSpr(layer.texture->getTexture());
@@ -608,7 +608,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         for (int i = 1; i <= onionSkinNextCount; ++i) {
             int nextIdx = currentFrame + i;
             if (nextIdx >= 0 && nextIdx < static_cast<int>(frames.size())) {
-                float fadeOpac = onionSkinOpacity * (1.0f - (float)(i - 1) / onionSkinNextCount);
+                float fadeOpac = onionSkinOpacity * (1.0f - (static_cast<float>(i) - 1.0f) / static_cast<float>(onionSkinNextCount));
                 for (const auto& layer : frames[nextIdx].layers) {
                     if (layer.visible) {
                         sf::Sprite onionSpr(layer.texture->getTexture());

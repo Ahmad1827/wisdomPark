@@ -138,13 +138,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (keybindManager.isActionTriggered("time_prev", event)) timeline.prevFrame();
             if (keybindManager.isActionTriggered("time_play", event)) timeline.togglePlayback();
             if (keybindManager.isActionTriggered("time_start", event)) timeline.setFrame(0);
-            if (keybindManager.isActionTriggered("time_end", event)) timeline.setFrame(canvas.getFrameCount() - 1);
+            if (keybindManager.isActionTriggered("time_end", event)) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
 
             if (keybindManager.isActionTriggered("time_add", event)) { canvas.addFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
             if (keybindManager.isActionTriggered("time_del", event)) {
                 if (canvas.getFrameCount() > 1) {
                     canvas.deleteFrame(timeline.getCurrentFrame());
-                    if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(canvas.getFrameCount() - 1);
+                    if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
                 }
             }
 
@@ -245,13 +245,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         else if (bottomAction == "del") {
                             if (canvas.getFrameCount() > 1) {
                                 canvas.deleteFrame(timeline.getCurrentFrame());
-                                if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(canvas.getFrameCount() - 1);
+                                if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
                             }
                         }
                         return;
                     }
 
-                    int clickedFrame = bottomTimeline.handleFrameClick(mousePos, canvas.getFrameCount());
+                    int clickedFrame = bottomTimeline.handleFrameClick(mousePos, static_cast<int>(canvas.getFrameCount()));
                     if (clickedFrame != -1) { timeline.setFrame(clickedFrame); return; }
 
                     if (aiHelper.getBounds().contains(logicalMousePos)) {
@@ -318,10 +318,10 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         rightPanelManager.update(dt, focusMode);
         bottomTimeline.update(dt, focusMode);
 
-        float availLeft = std::max(0.0f, leftToolbar.getPanelRightEdge());
-        float availRight = std::min(1920.0f, rightPanelManager.getMinLeftEdge());
+        float availLeft = std::max(0.0f, static_cast<float>(leftToolbar.getPanelRightEdge()));
+        float availRight = std::min(1920.0f, static_cast<float>(rightPanelManager.getMinLeftEdge()));
         float availTop = 0.0f;
-        float availBottom = std::min(1080.0f, bottomTimeline.getPanelTopEdge());
+        float availBottom = std::min(1080.0f, static_cast<float>(bottomTimeline.getPanelTopEdge()));
         float availWidth = std::max(0.0f, availRight - availLeft);
         float availHeight = std::max(0.0f, availBottom - availTop);
 

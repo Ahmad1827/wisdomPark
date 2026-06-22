@@ -152,6 +152,8 @@
     <ClCompile Include="src\core\ProjectManager.cpp" />
     <ClCompile Include="src\core\SelectionManager.cpp" />
     <ClCompile Include="src\core\KeybindManager.cpp" />
+    <ClCompile Include="src\core\BrushManager.cpp" />
+    <ClCompile Include="src\core\AudioManager.cpp" />
     <ClCompile Include="src\ui\KeybindSettingsPanel.cpp" />
     <ClCompile Include="src\core\Timeline.cpp" />
     <ClCompile Include="src\main.cpp" />
@@ -174,6 +176,7 @@
     <ClInclude Include="src\Application.h" />
     <ClInclude Include="src\core\AppState.h" />
     <ClInclude Include="src\core\Canvas.h" />
+    <ClInclude Include="src\core\BrushManager.h" />
     <ClInclude Include="src\ui\KeybindSettingsPanel.h" />
     <ClInclude Include="src\core\KeybindManager.h" />
     <ClInclude Include="src\core\SelectionManager.h" />
