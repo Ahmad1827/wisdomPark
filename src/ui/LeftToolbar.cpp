@@ -72,6 +72,7 @@ void LeftToolbar::init() {
     makeActionBtn("flip_h", "Flip H");
     makeActionBtn("flip_v", "Flip V");
     makeActionBtn("dup_sel", "Duplicate");
+    makeActionBtn("erase_sel", "Erase");
     makeActionBtn("del_sel", "Deselect");
 }
 
@@ -144,7 +145,7 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
         window.draw(handleLabel);
     }
 
-    pinBtn.setFillColor(pinBtn.getGlobalBounds().contains(sf::Vector2f(sf::Mouse::getPosition(window))) ? sf::Color(255, 255, 255, 25) : sf::Color(255, 255, 255, 10));
+    pinBtn.setFillColor(pinBtn.getGlobalBounds().contains(sf::Vector2f(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y))) ? sf::Color(255, 255, 255, 25) : sf::Color(255, 255, 255, 10));
     window.draw(pinBtn);
     window.draw(pinLabel);
 
@@ -169,7 +170,12 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
 
     if (hasSelection) {
         for (auto& act : selectionActions) {
-            act.rect.setFillColor(act.isHovered ? sf::Color(0, 191, 255, 150) : sf::Color(0, 122, 204, 100));
+            if (act.id == "erase_sel") {
+                act.rect.setFillColor(act.isHovered ? sf::Color(200, 50, 50, 150) : sf::Color(150, 40, 40, 100));
+            }
+            else {
+                act.rect.setFillColor(act.isHovered ? sf::Color(0, 191, 255, 150) : sf::Color(0, 122, 204, 100));
+            }
             act.label.setFillColor(sf::Color::White);
             window.draw(act.rect);
             window.draw(act.label);

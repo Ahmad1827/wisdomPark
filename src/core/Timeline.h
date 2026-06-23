@@ -22,7 +22,6 @@ private:
     int playbackStart = 0;
     int playbackEnd = 0;
     bool playing = false;
-    bool justStartedPlaying = false;
     float frameTimer = 0.0f;
     float baseFps = 12.0f;
 

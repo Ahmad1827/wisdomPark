@@ -3,18 +3,19 @@
 #include <cmath>
 
 Timeline::Timeline() {
+    isLoopingEnabled = true;
     addFrame();
 }
 
 void Timeline::update(float dt) {
     if (!playing) return;
 
-    if (justStartedPlaying) {
-        justStartedPlaying = false;
-        return;
+    float safeDt = dt;
+    if (safeDt > 1.0f) {
+        safeDt /= 1000.0f;
     }
 
-    frameTimer += dt;
+    frameTimer += safeDt;
 
     float timePerFrame = 1.0f / std::max(1.0f, baseFps);
     float currentDur = static_cast<float>(frames[currentFrameIndex].duration) * timePerFrame;
@@ -200,7 +201,7 @@ void Timeline::nextFrame() {
         currentFrameIndex++;
     }
     else if (isLoopingEnabled) {
-        currentFrameIndex = loopStart;
+        currentFrameIndex = std::max(0, std::min(loopStart, static_cast<int>(frames.size()) - 1));
     }
     else {
         playing = false;
@@ -212,7 +213,7 @@ void Timeline::prevFrame() {
         currentFrameIndex--;
     }
     else if (isLoopingEnabled) {
-        currentFrameIndex = loopEnd;
+        currentFrameIndex = std::max(0, std::min(loopEnd, static_cast<int>(frames.size()) - 1));
     }
 }
 
@@ -222,15 +223,11 @@ bool Timeline::isPlaying() const {
 
 void Timeline::togglePlayback() {
     playing = !playing;
+    frameTimer = 0.0f;
     if (playing) {
-        justStartedPlaying = true;
-        frameTimer = 0.0f;
-        if (currentFrameIndex >= (isLoopingEnabled ? loopEnd : playbackEnd)) {
-            currentFrameIndex = isLoopingEnabled ? loopStart : playbackStart;
+        if (!isLoopingEnabled && currentFrameIndex >= playbackEnd) {
+            currentFrameIndex = playbackStart;
         }
-    }
-    else {
-        frameTimer = 0.0f;
     }
 }
 
