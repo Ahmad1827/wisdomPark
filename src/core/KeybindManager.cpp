@@ -19,52 +19,71 @@ void KeybindManager::init() {
     registerDefault("tool_eraser", "Eraser", "Tools", sf::Keyboard::E);
     registerDefault("tool_fill", "Fill", "Tools", sf::Keyboard::G);
     registerDefault("tool_select", "Select", "Tools", sf::Keyboard::S);
+    registerDefault("tool_move", "Move", "Tools", sf::Keyboard::V);
+    registerDefault("tool_text", "Text", "Tools", sf::Keyboard::T);
+    registerDefault("tool_search", "Search Actions", "Tools", sf::Keyboard::K, true);
+
+    registerDefault("brush_presets", "Brush Presets", "Brushes", sf::Keyboard::B, false, true);
 
     registerDefault("proj_new", "New Project", "Project", sf::Keyboard::N, true);
     registerDefault("proj_open", "Open Project", "Project", sf::Keyboard::O, true);
     registerDefault("proj_save", "Save Project", "Project", sf::Keyboard::S, true);
+    registerDefault("proj_save_as", "Save As", "Project", sf::Keyboard::S, true, true);
     registerDefault("proj_close", "Close Project", "Project", sf::Keyboard::W, true);
+    registerDefault("proj_pixel_mode", "Toggle Pixel Mode", "Project", sf::Keyboard::P, true);
 
     registerDefault("edit_undo", "Undo", "Edit", sf::Keyboard::Z, true);
     registerDefault("edit_redo", "Redo", "Edit", sf::Keyboard::Y, true);
-    registerDefault("edit_copy", "Copy Selection", "Edit", sf::Keyboard::C, true);
-    registerDefault("edit_paste", "Paste Selection", "Edit", sf::Keyboard::V, true);
-    registerDefault("edit_dup_sel", "Duplicate Selection", "Edit", sf::Keyboard::D, true);
-    registerDefault("edit_del_sel", "Delete Selection", "Edit", sf::Keyboard::Delete);
-    registerDefault("edit_deselect", "Deselect", "Edit", sf::Keyboard::Escape);
-    registerDefault("sel_flip_h", "Flip Horizontal", "Edit", sf::Keyboard::H);
-    registerDefault("sel_flip_v", "Flip Vertical", "Edit", sf::Keyboard::H, false, true);
+    registerDefault("edit_copy", "Copy", "Edit", sf::Keyboard::C, true);
+    registerDefault("edit_paste", "Paste", "Edit", sf::Keyboard::V, true);
+
+    registerDefault("sel_dup", "Duplicate Selection", "Selection", sf::Keyboard::D, true);
+    registerDefault("sel_del", "Delete Selection", "Selection", sf::Keyboard::Delete);
+    registerDefault("sel_deselect", "Deselect", "Selection", sf::Keyboard::Escape);
+    registerDefault("sel_flip_h", "Flip Horizontal", "Selection", sf::Keyboard::H);
+    registerDefault("sel_flip_v", "Flip Vertical", "Selection", sf::Keyboard::H, false, true);
+    registerDefault("sel_magic_wand", "Magic Wand", "Selection", sf::Keyboard::W);
+    registerDefault("sel_rotate", "Rotate Selection", "Selection", sf::Keyboard::R);
+    registerDefault("sel_scale", "Scale Selection", "Selection", sf::Keyboard::R, false, true);
 
     registerDefault("time_next", "Next Frame", "Timeline", sf::Keyboard::Right);
     registerDefault("time_prev", "Previous Frame", "Timeline", sf::Keyboard::Left);
     registerDefault("time_add", "Add Frame", "Timeline", sf::Keyboard::Add);
     registerDefault("time_del", "Delete Frame", "Timeline", sf::Keyboard::Subtract);
     registerDefault("time_play", "Play/Pause", "Timeline", sf::Keyboard::Space);
-    registerDefault("time_start", "Go to Start", "Timeline", sf::Keyboard::Home);
-    registerDefault("time_end", "Go to End", "Timeline", sf::Keyboard::End);
+    registerDefault("time_zoom_in", "Timeline Zoom In", "Timeline", sf::Keyboard::Equal, true);
+    registerDefault("time_zoom_out", "Timeline Zoom Out", "Timeline", sf::Keyboard::Dash, true);
 
     registerDefault("layer_new", "New Layer", "Layers", sf::Keyboard::L, true);
     registerDefault("layer_dup", "Duplicate Layer", "Layers", sf::Keyboard::L, true, true);
     registerDefault("layer_del", "Delete Layer", "Layers", sf::Keyboard::Delete, true);
+    registerDefault("layer_folder", "Layer Folder", "Layers", sf::Keyboard::L, true, false, true);
+    registerDefault("layer_up", "Move Layer Up", "Layers", sf::Keyboard::RBracket);
+    registerDefault("layer_down", "Move Layer Down", "Layers", sf::Keyboard::LBracket);
 
-    registerDefault("ui_settings", "Toggle Settings", "UI", sf::Keyboard::Tab);
+    registerDefault("view_zoom_in", "Zoom In", "View", sf::Keyboard::Unknown);
+    registerDefault("view_zoom_out", "Zoom Out", "View", sf::Keyboard::Unknown);
+    registerDefault("view_zoom_reset", "Reset Zoom", "View", sf::Keyboard::Num0, true);
+    registerDefault("view_grid", "Toggle Grid", "View", sf::Keyboard::G, true);
+
+    registerDefault("audio_import", "Import Audio", "Audio", sf::Keyboard::M, true);
+
+    registerDefault("export_gif", "Export GIF", "Export", sf::Keyboard::G, true, true);
+
+    registerDefault("ui_settings", "Toggle Keybinds", "UI", sf::Keyboard::Tab);
 
     loadConfig();
 }
 
 std::string KeybindManager::keybindToString(const Keybind& kb) const {
-    if (kb.key == sf::Keyboard::Unknown) return "None";
+    if (kb.key == sf::Keyboard::Unknown) return "MouseWheel";
     std::string res = "";
     if (kb.ctrl) res += "Ctrl+";
     if (kb.shift) res += "Shift+";
     if (kb.alt) res += "Alt+";
 
-    if (kb.key >= sf::Keyboard::A && kb.key <= sf::Keyboard::Z) {
-        res += (char)('A' + (kb.key - sf::Keyboard::A));
-    }
-    else if (kb.key >= sf::Keyboard::Num0 && kb.key <= sf::Keyboard::Num9) {
-        res += (char)('0' + (kb.key - sf::Keyboard::Num0));
-    }
+    if (kb.key >= sf::Keyboard::A && kb.key <= sf::Keyboard::Z) res += (char)('A' + (kb.key - sf::Keyboard::A));
+    else if (kb.key >= sf::Keyboard::Num0 && kb.key <= sf::Keyboard::Num9) res += (char)('0' + (kb.key - sf::Keyboard::Num0));
     else if (kb.key == sf::Keyboard::Escape) res += "Esc";
     else if (kb.key == sf::Keyboard::Space) res += "Space";
     else if (kb.key == sf::Keyboard::Delete) res += "Del";
@@ -74,8 +93,12 @@ std::string KeybindManager::keybindToString(const Keybind& kb) const {
     else if (kb.key == sf::Keyboard::End) res += "End";
     else if (kb.key == sf::Keyboard::Add) res += "+";
     else if (kb.key == sf::Keyboard::Subtract) res += "-";
+    else if (kb.key == sf::Keyboard::Equal) res += "=";
+    else if (kb.key == sf::Keyboard::Dash) res += "-";
     else if (kb.key == sf::Keyboard::Tab) res += "Tab";
-    else res += "Key_" + std::to_string(kb.key);
+    else if (kb.key == sf::Keyboard::LBracket) res += "[";
+    else if (kb.key == sf::Keyboard::RBracket) res += "]";
+    else res += "Key";
 
     return res;
 }

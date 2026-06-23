@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include "SelectionManager.h"
+#include "BrushManager.h"
 
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 
@@ -54,20 +55,19 @@ private:
     sf::Vector2f startPos;
     sf::Vector2f lastPos;
     sf::Vector2f lastHoverLocalPos;
+    sf::Vector2f rawMousePos;
     bool isHoveringCanvas;
 
     ToolType activeTool;
-    float brushSize;
-    float brushHardness;
     sf::Color primaryColor;
     sf::Color secondaryColor;
-    bool brushSmoothing;
     float fillTolerance;
     bool fillContiguous;
 
     int activeLayer;
     bool onionSkinEnabled;
-    float onionSkinOpacity;
+    float onionSkinPrevOpacity;
+    float onionSkinNextOpacity;
     int onionSkinPrevCount;
     int onionSkinNextCount;
 
@@ -77,6 +77,7 @@ private:
     float targetScale;
 
     SelectionManager selection;
+    BrushManager brushEngine;
 
     sf::RenderStates getSFMLBlendMode(BlendMode mode) const;
     void executeScanlineFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
@@ -101,12 +102,17 @@ public:
     void setActiveLayer(int index);
     int getActiveLayer() const;
 
-    void setOnionSkin(bool enabled, float opacity, int prevCount = 1, int nextCount = 0);
+    void setOnionSkin(bool enabled, float prevOpac, float nextOpac);
     bool isOnionSkinEnabled() const;
-    float getOnionSkinOpacity() const;
+    float getOnionSkinPrevOpacity() const;
+    float getOnionSkinNextOpacity() const;
 
     void setActiveTool(ToolType tool);
     ToolType getActiveTool() const;
+    BrushManager& getBrushEngine();
+
+    void setBrushSize(float size);
+    float getBrushSize() const;
 
     void commitSelection(int currentFrame);
     void copySelection();
@@ -118,15 +124,11 @@ public:
 
     void handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame);
     void handleMouseReleased(sf::Vector2f logicalPos, int currentFrame);
-    void handleMouseMoved(sf::Vector2f logicalPos, int currentFrame);
+    void handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int currentFrame);
 
-    void setBrushSize(float size);
-    float getBrushSize() const;
-    void setBrushHardness(float hardness);
     void setPrimaryColor(sf::Color color);
     void setSecondaryColor(sf::Color color);
     sf::Color getPrimaryColor() const;
-    void setBrushSmoothing(bool smoothing);
     void setFillSettings(float tolerance, bool contiguous);
 
     void undo();

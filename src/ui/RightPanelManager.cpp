@@ -57,8 +57,8 @@ float RightPanelManager::getMinLeftEdge() const {
     return minEdge;
 }
 
-void RightPanelManager::syncPropertiesState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity) {
-    rightProperties.syncState(theme, lighting, terrain, onion, onionOpacity);
+void RightPanelManager::syncPropertiesState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity, float currentFps) {
+    rightProperties.syncState(theme, lighting, terrain, onion, onionOpacity, currentFps);
 }
 
 bool RightPanelManager::handlePaletteClick(sf::Vector2f mousePos, sf::Color& outPrimary, sf::Color& outSecondary) {

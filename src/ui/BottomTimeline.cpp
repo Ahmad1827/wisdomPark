@@ -138,7 +138,7 @@ void BottomTimeline::draw(sf::RenderWindow& window, Timeline& timeline, Canvas& 
         sf::RectangleShape fRect(sf::Vector2f(50.f, 60.f));
         fRect.setPosition(startX + i * 60.f, y);
 
-        if (i == timeline.getCurrentFrame()) {
+        if (static_cast<int>(i) == timeline.getCurrentFrame()) {
             fRect.setFillColor(sf::Color(0, 122, 204, 150));
             fRect.setOutlineThickness(1.f);
             fRect.setOutlineColor(sf::Color(255, 255, 255, 200));

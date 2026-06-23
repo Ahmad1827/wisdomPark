@@ -1,6 +1,7 @@
 #include "UIManager.h"
 #include <iostream>
 #include <algorithm>
+#include <ctime>
 
 UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project") {}
 
@@ -24,12 +25,12 @@ void UIManager::init(ProjectManager* pm) {
     uiText.setFont(font);
     uiText.setCharacterSize(30);
     uiText.setOutlineColor(sf::Color(0, 0, 0, 150));
-    uiText.setOutlineThickness(2.f);
+    uiText.setOutlineThickness(2.0f);
 
     promptBox.setSize(sf::Vector2f(600.f, 50.f));
     promptBox.setPosition(1920.f / 2.f - 300.f, 1080.f - 300.f);
     promptBox.setFillColor(sf::Color(15, 15, 18, 220));
-    promptBox.setOutlineThickness(1.f);
+    promptBox.setOutlineThickness(1.0f);
     promptBox.setOutlineColor(sf::Color(255, 255, 255, 30));
 
     promptDisplay.setFont(font);
@@ -71,7 +72,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             std::string action = projectBrowser.handleClick(mousePos, meta);
 
             if (action == "new_project") {
-                activeProjectName = "New_Project_" + std::to_string(std::time(nullptr));
+                activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
                 pm.createNewProject(activeProjectName, 1920, 1080, 12, canvas);
                 currentState = AppState::Painting;
                 showMessage("Created New Project", sf::Color::Green);
@@ -90,7 +91,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
         if (keybindManager.isActionTriggered("proj_new", event)) {
-            activeProjectName = "New_Project_" + std::to_string(std::time(nullptr));
+            activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
             pm.createNewProject(activeProjectName, 1920, 1080, 12, canvas);
             currentState = AppState::Painting;
             showMessage("Created New Project", sf::Color::Green);
@@ -134,17 +135,35 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 keybindPanel.toggle();
             }
 
-            if (keybindManager.isActionTriggered("time_next", event)) timeline.nextFrame();
-            if (keybindManager.isActionTriggered("time_prev", event)) timeline.prevFrame();
-            if (keybindManager.isActionTriggered("time_play", event)) timeline.togglePlayback();
-            if (keybindManager.isActionTriggered("time_start", event)) timeline.setFrame(0);
-            if (keybindManager.isActionTriggered("time_end", event)) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
+            if (keybindManager.isActionTriggered("time_next", event)) {
+                timeline.nextFrame();
+            }
+            if (keybindManager.isActionTriggered("time_prev", event)) {
+                timeline.prevFrame();
+            }
+            if (keybindManager.isActionTriggered("time_play", event)) {
+                timeline.togglePlayback();
+            }
+            if (keybindManager.isActionTriggered("time_start", event)) {
+                timeline.setFrame(0);
+            }
+            if (keybindManager.isActionTriggered("time_end", event)) {
+                timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
+            }
 
-            if (keybindManager.isActionTriggered("time_add", event)) { canvas.addFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
+            if (keybindManager.isActionTriggered("time_add", event)) {
+                canvas.addFrame(timeline.getCurrentFrame());
+                timeline.addFrameAfter(timeline.getCurrentFrame());
+                timeline.nextFrame();
+            }
             if (keybindManager.isActionTriggered("time_del", event)) {
                 if (canvas.getFrameCount() > 1) {
-                    canvas.deleteFrame(timeline.getCurrentFrame());
-                    if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
+                    int cur = timeline.getCurrentFrame();
+                    canvas.deleteFrame(cur);
+                    timeline.deleteFrame(cur);
+                    if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) {
+                        timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
+                    }
                 }
             }
 
@@ -185,6 +204,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible()) {
+
             if (event.type == sf::Event::MouseButtonPressed) {
 
                 sf::Color pCol, sCol;
@@ -195,6 +215,39 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Left) {
+
+                    int clickedFrame = bottomTimeline.handleFrameClick(mousePos, static_cast<size_t>(canvas.getFrameCount()));
+                    if (clickedFrame != -1) {
+                        timeline.setFrame(clickedFrame);
+                        return;
+                    }
+
+                    std::string bottomAction = bottomTimeline.handleClick(mousePos);
+                    if (!bottomAction.empty()) {
+                        if (bottomAction == "play") timeline.togglePlayback();
+                        else if (bottomAction == "add") {
+                            canvas.addFrame(timeline.getCurrentFrame());
+                            timeline.addFrameAfter(timeline.getCurrentFrame());
+                            timeline.nextFrame();
+                        }
+                        else if (bottomAction == "dup") {
+                            canvas.duplicateFrame(timeline.getCurrentFrame());
+                            timeline.duplicateFrame(timeline.getCurrentFrame());
+                            timeline.nextFrame();
+                        }
+                        else if (bottomAction == "del") {
+                            if (canvas.getFrameCount() > 1) {
+                                int cur = timeline.getCurrentFrame();
+                                canvas.deleteFrame(cur);
+                                timeline.deleteFrame(cur);
+                                if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) {
+                                    timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
+                                }
+                            }
+                        }
+                        return;
+                    }
+
                     bool hasActiveSel = (canvas.getActiveTool() == ToolType::Select);
                     std::string leftAction = leftToolbar.handleClick(mousePos, settings.isConfigured(), hasActiveSel);
                     if (!leftAction.empty()) {
@@ -221,38 +274,22 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
                     std::string rightAction = rightPanelManager.handleClick(mousePos, canvas, timeline.getCurrentFrame());
                     if (!rightAction.empty()) {
-                        if (rightAction == "theme_all") aiHelper.setTheme("all");
+                        if (rightAction == "fps_up") timeline.setFps(timeline.getFps() + 1.0f);
+                        else if (rightAction == "fps_down") timeline.setFps(std::max(1.0f, timeline.getFps() - 1.0f));
+                        else if (rightAction == "theme_all") aiHelper.setTheme("all");
                         else if (rightAction == "theme_struct") aiHelper.setTheme("structure");
                         else if (rightAction == "theme_clutter") aiHelper.setTheme("clutter");
                         else if (rightAction == "theme_custom") aiHelper.setTheme("custom");
                         else if (rightAction == "theme_wfc") aiHelper.setTheme("wfc");
                         else if (rightAction == "toggle_light") isLightingMode = !isLightingMode;
                         else if (rightAction == "toggle_terrain") aiHelper.toggleTerrain();
-                        else if (rightAction == "onion_toggle") canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity());
-                        else if (rightAction == "onion_op_up") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity() + 25.f);
-                        else if (rightAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity() - 25.f);
+                        else if (rightAction == "onion_toggle") canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
+                        else if (rightAction == "onion_op_up") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() + 25.f, canvas.getOnionSkinNextOpacity() + 25.f);
+                        else if (rightAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() - 25.f, canvas.getOnionSkinNextOpacity() - 25.f);
 
-                        rightPanelManager.syncPropertiesState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinOpacity());
                         if (rightAction == "section_toggle" || rightAction == "pin_toggle") return;
                         return;
                     }
-
-                    std::string bottomAction = bottomTimeline.handleClick(mousePos);
-                    if (!bottomAction.empty()) {
-                        if (bottomAction == "play") timeline.togglePlayback();
-                        else if (bottomAction == "add") { canvas.addFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
-                        else if (bottomAction == "dup") { canvas.duplicateFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
-                        else if (bottomAction == "del") {
-                            if (canvas.getFrameCount() > 1) {
-                                canvas.deleteFrame(timeline.getCurrentFrame());
-                                if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
-                            }
-                        }
-                        return;
-                    }
-
-                    int clickedFrame = bottomTimeline.handleFrameClick(mousePos, static_cast<int>(canvas.getFrameCount()));
-                    if (clickedFrame != -1) { timeline.setFrame(clickedFrame); return; }
 
                     if (aiHelper.getBounds().contains(logicalMousePos)) {
                         if (!settings.isConfigured()) { showMessage("Configure AI Provider (Press ESC) first!", sf::Color::Red); }
@@ -285,17 +322,18 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
             if (event.type == sf::Event::MouseButtonReleased) {
                 canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
+                if (canvas.getDrawArea().contains(logicalMousePos)) {
+                    sf::Image img = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
+                    timeline.getFrameData(timeline.getCurrentFrame()).thumbnail = img;
+                }
             }
 
             if (event.type == sf::Event::MouseMoved) {
-                canvas.handleMouseMoved(logicalMousePos, timeline.getCurrentFrame());
+                canvas.handleMouseMoved(logicalMousePos, mousePos, timeline.getCurrentFrame());
             }
 
             if (event.type == sf::Event::MouseWheelScrolled && event.mouseWheelScroll.wheel == sf::Mouse::VerticalWheel) {
-                if (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
-
-                }
-                else {
+                if (!sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) && !sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
                     canvas.setBrushSize(canvas.getBrushSize() + event.mouseWheelScroll.delta);
                 }
             }
@@ -349,6 +387,8 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         projectBrowser.draw(window);
     }
     else if (currentState == AppState::Painting) {
+
+        rightPanelManager.syncPropertiesState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), timeline.getFps());
 
         sf::RenderStates canvasStates;
         canvasStates.transform = canvas.getTransform();

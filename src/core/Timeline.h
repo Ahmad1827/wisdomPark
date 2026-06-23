@@ -22,8 +22,9 @@ private:
     int playbackStart = 0;
     int playbackEnd = 0;
     bool playing = false;
+    bool justStartedPlaying = false;
     float frameTimer = 0.0f;
-    float fps = 12.0f;
+    float baseFps = 12.0f;
 
 public:
     Timeline();
@@ -32,9 +33,11 @@ public:
     void update(float dt);
 
     void addFrame();
+    void addFrameAfter(int index);
     void deleteFrame(int index);
     void duplicateFrame(int index);
     void swapFrames(int indexA, int indexB);
+    void moveFrame(int fromIndex, int toIndex);
     void copyFrame(int index, TimelineFrame& clipboard);
     void pasteFrame(int index, const TimelineFrame& clipboard);
 
@@ -65,6 +68,8 @@ public:
 
     bool isPlaying() const;
     void togglePlayback();
+    void setFps(float fps);
+    float getFps() const;
 
     void updateThumbnails(const std::vector<sf::Image>& currentLayerImages);
 };

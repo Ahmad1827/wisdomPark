@@ -1,6 +1,4 @@
-#ifndef BRUSHMANAGER_H
-#define BRUSHMANAGER_H
-
+#pragma once
 #include <SFML/Graphics.hpp>
 #include <string>
 #include <vector>
@@ -27,14 +25,19 @@ struct BrushPreset {
     float scatter;
     float rotation;
     bool pressureSensitivity;
-    sf::Texture texture;
+    sf::Texture brushTexture;
 };
 
 class BrushManager {
 private:
     std::map<std::string, BrushPreset> presets;
-    BrushPreset activePreset;
-    sf::Vector2f lastStabilizedPosition;
+    std::string activePresetName;
+    sf::Vector2f lastStabilizedPos;
+    sf::Vector2f lastDrawnPos;
+    float distanceAccumulator;
+
+    sf::Texture generateBrushTexture(float hardness, int size);
+    void applyStamp(sf::RenderTexture* targetTex, sf::Vector2f pos, float currentSize, float currentOpacity, sf::Color color);
 
 public:
     BrushManager();
@@ -55,9 +58,7 @@ public:
     void setStabilization(float value);
     void setSmoothing(float value);
 
-    sf::Vector2f applyStabilization(sf::Vector2f currentTarget, float strength);
-    void paintStroke(sf::Image& layerImage, sf::Vector2f start, sf::Vector2f end, sf::Color color, float pressure = 1.0f);
-    void updatePreviewCursor(sf::RenderWindow& window, sf::Vector2f mousePos, sf::Color color);
+    void resetStroke(sf::Vector2f startPos);
+    void paintStroke(sf::RenderTexture* targetTex, sf::Vector2f targetPos, sf::Color color, float pressure = 1.0f);
+    void drawPreviewCursor(sf::RenderWindow& window, sf::Vector2f mousePos, sf::Color color, float scale);
 };
-
-#endif

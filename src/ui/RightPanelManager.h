@@ -20,6 +20,6 @@ public:
     void draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame);
     std::string handleClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame);
     float getMinLeftEdge() const;
-    void syncPropertiesState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity);
+    void syncPropertiesState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity, float currentFps);
     bool handlePaletteClick(sf::Vector2f mousePos, sf::Color& outPrimary, sf::Color& outSecondary);
 };

@@ -76,30 +76,28 @@ Frame& Frame::operator=(const Frame& other) {
 Frame::Frame(Frame&& other) noexcept = default;
 Frame& Frame::operator=(Frame&& other) noexcept = default;
 
-Canvas::Canvas() : isDrawing(false), startPos(0.f, 0.f), lastPos(0.f, 0.f), lastHoverLocalPos(0.f, 0.f), isHoveringCanvas(false),
-activeTool(ToolType::Brush), brushSize(15.0f), brushHardness(0.5f),
-primaryColor(sf::Color::Black), secondaryColor(sf::Color::White), brushSmoothing(true),
+Canvas::Canvas() : isDrawing(false), startPos(0.f, 0.f), lastPos(0.f, 0.f), lastHoverLocalPos(0.f, 0.f), rawMousePos(0.f, 0.f), isHoveringCanvas(false),
+activeTool(ToolType::Brush), primaryColor(sf::Color::Black), secondaryColor(sf::Color::White),
 fillTolerance(0.f), fillContiguous(true),
-activeLayer(1), onionSkinEnabled(false), onionSkinOpacity(85.0f), onionSkinPrevCount(1), onionSkinNextCount(0),
+activeLayer(1), onionSkinEnabled(true), onionSkinPrevOpacity(89.25f), onionSkinNextOpacity(89.25f), onionSkinPrevCount(1), onionSkinNextCount(1),
 viewScale(1.0f), targetScale(1.0f), canvasLogicalSize(1920, 1080) {
     previewTexture.create(1920, 1080);
     previewTexture.clear(sf::Color::Transparent);
+    brushEngine.initDefaultPresets();
 }
 
 void Canvas::init() { initCustom(1920, 1080); }
 
 void Canvas::initCustom(int width, int height) {
-    canvasLogicalSize = sf::Vector2u(width, height);
+    canvasLogicalSize = sf::Vector2u(static_cast<unsigned int>(width), static_cast<unsigned int>(height));
 
     if (!deskTexture.loadFromFile("assets/workbench.png", sf::IntRect(114, 702, 1669, 379))) {
-
     }
     deskSprite.setTexture(deskTexture);
     deskSprite.setOrigin(1669.f / 2.f, 379.f / 2.f);
     deskSprite.setPosition(1920.f / 2.f, 850.f);
 
     if (!canvasTexture.loadFromFile("assets/canvas.png")) {
-
     }
     canvasSprite.setTexture(canvasTexture);
 
@@ -121,7 +119,7 @@ void Canvas::initCustom(int width, int height) {
     );
 
     if (static_cast<unsigned int>(width) != previewTexture.getSize().x || static_cast<unsigned int>(height) != previewTexture.getSize().y) {
-        previewTexture.create(width, height);
+        previewTexture.create(static_cast<unsigned int>(width), static_cast<unsigned int>(height));
     }
     previewTexture.clear(sf::Color::Transparent);
 
@@ -136,20 +134,20 @@ void Canvas::updateTransform(float dt, sf::FloatRect space) {
     sf::FloatRect dBounds = deskSprite.getGlobalBounds();
     sf::FloatRect cBounds = canvasSprite.getGlobalBounds();
 
-    float left = std::min(dBounds.left, cBounds.left);
-    float top = std::min(dBounds.top, cBounds.top);
-    float right = std::max(dBounds.left + dBounds.width, cBounds.left + cBounds.width);
-    float bottom = std::max(dBounds.top + dBounds.height, cBounds.top + cBounds.height);
+    float left = std::min(static_cast<float>(dBounds.left), static_cast<float>(cBounds.left));
+    float top = std::min(static_cast<float>(dBounds.top), static_cast<float>(cBounds.top));
+    float right = std::max(static_cast<float>(dBounds.left + dBounds.width), static_cast<float>(cBounds.left + cBounds.width));
+    float bottom = std::max(static_cast<float>(dBounds.top + dBounds.height), static_cast<float>(cBounds.top + cBounds.height));
 
     float unionW = right - left;
     float unionH = bottom - top;
 
     float pad = 60.f;
-    space.left += pad; space.top += pad; space.width -= pad * 2; space.height -= pad * 2;
+    space.left += pad; space.top += pad; space.width -= pad * 2.0f; space.height -= pad * 2.0f;
 
     float sX = space.width / unionW;
     float sY = space.height / unionH;
-    targetScale = std::min(sX, sY);
+    targetScale = std::min(static_cast<float>(sX), static_cast<float>(sY));
 
     float spaceCX = space.left + space.width / 2.f;
     float spaceCY = space.top + space.height / 2.f;
@@ -215,7 +213,7 @@ void Canvas::setLayerProperties(int frameIndex, int layerIndex, const std::strin
         l.name = name;
         l.visible = visible;
         l.locked = locked;
-        l.opacity = std::clamp(opacity, 0.f, 1.f);
+        l.opacity = std::max(0.0f, std::min(static_cast<float>(opacity), 1.0f));
         l.blendMode = mode;
     }
 }
@@ -234,22 +232,22 @@ void Canvas::moveLayer(int frameIndex, int fromIndex, int toIndex) {
 }
 
 void Canvas::setActiveLayer(int index) {
-    activeLayer = std::max(0, index);
+    activeLayer = std::max(0, static_cast<int>(index));
 }
 
 int Canvas::getActiveLayer() const {
     return activeLayer;
 }
 
-void Canvas::setOnionSkin(bool enabled, float opacity, int prevCount, int nextCount) {
+void Canvas::setOnionSkin(bool enabled, float prevOpac, float nextOpac) {
     onionSkinEnabled = enabled;
-    onionSkinOpacity = std::clamp(opacity, 0.0f, 255.0f);
-    onionSkinPrevCount = prevCount;
-    onionSkinNextCount = nextCount;
+    onionSkinPrevOpacity = std::max(0.0f, std::min(prevOpac, 255.0f));
+    onionSkinNextOpacity = std::max(0.0f, std::min(nextOpac, 255.0f));
 }
 
 bool Canvas::isOnionSkinEnabled() const { return onionSkinEnabled; }
-float Canvas::getOnionSkinOpacity() const { return onionSkinOpacity; }
+float Canvas::getOnionSkinPrevOpacity() const { return onionSkinPrevOpacity; }
+float Canvas::getOnionSkinNextOpacity() const { return onionSkinNextOpacity; }
 
 void Canvas::commitSelection(int currentFrame) {
     if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
@@ -308,24 +306,33 @@ void Canvas::setActiveTool(ToolType tool) {
     activeTool = tool;
     isDrawing = false;
     if (tool == ToolType::Pencil) {
-        brushSize = 2.0f;
-        brushHardness = 1.0f;
+        brushEngine.selectPreset("Pencil");
     }
     else if (tool == ToolType::Brush) {
-        brushSize = 15.0f;
-        brushHardness = 0.5f;
+        brushEngine.selectPreset("Paint");
+    }
+    else if (tool == ToolType::Eraser) {
+        brushEngine.selectPreset("Eraser");
     }
 }
 
 ToolType Canvas::getActiveTool() const { return activeTool; }
+BrushManager& Canvas::getBrushEngine() { return brushEngine; }
+
+void Canvas::setBrushSize(float size) { brushEngine.setBrushSize(size); }
+float Canvas::getBrushSize() const { return brushEngine.getActivePreset().size; }
 
 bool Canvas::colorMatches(const sf::Color& a, const sf::Color& b) const {
-    if (fillTolerance <= 0.f) return a == b;
-    float dist = std::abs(a.r - b.r) + std::abs(a.g - b.g) + std::abs(a.b - b.b) + std::abs(a.a - b.a);
-    return (dist / (4.0f * 255.0f)) <= fillTolerance;
+    if (fillTolerance <= 0.0f) return a == b;
+    float diffR = std::abs(static_cast<float>(a.r) - static_cast<float>(b.r));
+    float diffG = std::abs(static_cast<float>(a.g) - static_cast<float>(b.g));
+    float diffB = std::abs(static_cast<float>(a.b) - static_cast<float>(b.b));
+    float diffA = std::abs(static_cast<float>(a.a) - static_cast<float>(b.a));
+    return ((diffR + diffG + diffB + diffA) / (4.0f * 255.0f)) <= fillTolerance;
 }
 
 void Canvas::executeGlobalFill(sf::Color targetColor, sf::Color replacementColor, sf::Image& image) {
+    if (colorMatches(targetColor, replacementColor)) return;
     int w = static_cast<int>(image.getSize().x);
     int h = static_cast<int>(image.getSize().y);
     for (int y = 0; y < h; ++y) {
@@ -345,35 +352,58 @@ void Canvas::executeScanlineFill(sf::Vector2i startPoint, sf::Color targetColor,
     if (startPoint.x < 0 || startPoint.x >= w || startPoint.y < 0 || startPoint.y >= h) return;
     if (!colorMatches(image.getPixel(startPoint.x, startPoint.y), targetColor)) return;
 
-    std::queue<sf::Vector2i> q;
-    q.push(startPoint);
+    std::vector<bool> visited(static_cast<size_t>(w * h), false);
+    std::stack<sf::Vector2i> stack;
+    stack.push(startPoint);
 
-    while (!q.empty()) {
-        sf::Vector2i pt = q.front();
-        q.pop();
+    while (!stack.empty()) {
+        sf::Vector2i pt = stack.top();
+        stack.pop();
 
-        int x = pt.x;
-        int y = pt.y;
+        int cx = pt.x;
+        int cy = pt.y;
 
-        while (x > 0 && colorMatches(image.getPixel(x - 1, y), targetColor)) x--;
+        int linearIndex = cy * w + cx;
+        if (visited[static_cast<size_t>(linearIndex)]) continue;
+
+        while (cx > 0 && colorMatches(image.getPixel(cx - 1, cy), targetColor)) {
+            cx--;
+        }
 
         bool spanAbove = false;
         bool spanBelow = false;
 
-        while (x < w && colorMatches(image.getPixel(x, y), targetColor)) {
-            image.setPixel(x, y, replacementColor);
+        while (cx < w && colorMatches(image.getPixel(cx, cy), targetColor)) {
+            int currentLinearIndex = cy * w + cx;
+            if (!visited[static_cast<size_t>(currentLinearIndex)]) {
+                image.setPixel(cx, cy, replacementColor);
+                visited[static_cast<size_t>(currentLinearIndex)] = true;
+            }
 
-            if (y > 0) {
-                bool matchAbove = colorMatches(image.getPixel(x, y - 1), targetColor);
-                if (!spanAbove && matchAbove) { q.push(sf::Vector2i(x, y - 1)); spanAbove = true; }
-                else if (spanAbove && !matchAbove) spanAbove = false;
+            if (cy > 0) {
+                bool matchAbove = colorMatches(image.getPixel(cx, cy - 1), targetColor);
+                int aboveIndex = (cy - 1) * w + cx;
+                if (!spanAbove && matchAbove && !visited[static_cast<size_t>(aboveIndex)]) {
+                    stack.push(sf::Vector2i(cx, cy - 1));
+                    spanAbove = true;
+                }
+                else if (spanAbove && !matchAbove) {
+                    spanAbove = false;
+                }
             }
-            if (y < h - 1) {
-                bool matchBelow = colorMatches(image.getPixel(x, y + 1), targetColor);
-                if (!spanBelow && matchBelow) { q.push(sf::Vector2i(x, y + 1)); spanBelow = true; }
-                else if (spanBelow && !matchBelow) spanBelow = false;
+
+            if (cy < h - 1) {
+                bool matchBelow = colorMatches(image.getPixel(cx, cy + 1), targetColor);
+                int belowIndex = (cy + 1) * w + cx;
+                if (!spanBelow && matchBelow && !visited[static_cast<size_t>(belowIndex)]) {
+                    stack.push(sf::Vector2i(cx, cy + 1));
+                    spanBelow = true;
+                }
+                else if (spanBelow && !matchBelow) {
+                    spanBelow = false;
+                }
             }
-            x++;
+            cx++;
         }
     }
 }
@@ -381,7 +411,7 @@ void Canvas::executeScanlineFill(sf::Vector2i startPoint, sf::Color targetColor,
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
-    sf::Vector2f texScale(canvasLogicalSize.x / drawArea.width, canvasLogicalSize.y / drawArea.height);
+    sf::Vector2f texScale(static_cast<float>(canvasLogicalSize.x) / drawArea.width, static_cast<float>(canvasLogicalSize.y) / drawArea.height);
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * texScale.x, (logicalPos.y - drawArea.top) * texScale.y);
 
     if (drawArea.contains(logicalPos)) {
@@ -433,6 +463,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             isDrawing = true;
             startPos = localPos;
             lastPos = localPos;
+            brushEngine.resetStroke(localPos);
         }
     }
 }
@@ -449,10 +480,11 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     isDrawing = false;
 }
 
-void Canvas::handleMouseMoved(sf::Vector2f logicalPos, int currentFrame) {
+void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int currentFrame) {
     isHoveringCanvas = drawArea.contains(logicalPos);
+    rawMousePos = rawPos;
 
-    sf::Vector2f texScale(canvasLogicalSize.x / drawArea.width, canvasLogicalSize.y / drawArea.height);
+    sf::Vector2f texScale(static_cast<float>(canvasLogicalSize.x) / drawArea.width, static_cast<float>(canvasLogicalSize.y) / drawArea.height);
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * texScale.x, (logicalPos.y - drawArea.top) * texScale.y);
     lastHoverLocalPos = localPos;
 
@@ -471,52 +503,29 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, int currentFrame) {
         }
 
         sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture;
-
-        sf::Vector2f d = localPos - lastPos;
-        float length = std::sqrt(d.x * d.x + d.y * d.y);
-
         sf::Color drawCol = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : primaryColor;
-        sf::RenderStates rs = (activeTool == ToolType::Eraser) ? sf::RenderStates(sf::BlendNone) : sf::RenderStates::Default;
 
-        if (activeTool == ToolType::Brush && brushHardness < 1.0f) {
-            int steps = static_cast<int>(std::max(1.0f, length / (brushSize * 0.1f)));
-            for (int i = 0; i <= steps; ++i) {
-                sf::Vector2f p = lastPos + d * (static_cast<float>(i) / static_cast<float>(steps));
-                p.x = std::clamp(p.x, 0.f, static_cast<float>(canvasLogicalSize.x));
-                p.y = std::clamp(p.y, 0.f, static_cast<float>(canvasLogicalSize.y));
+        if (activeTool == ToolType::Eraser) {
+            sf::RenderStates rs(sf::BlendNone);
+            float currentEraserSize = brushEngine.getActivePreset().size;
 
-                int pts = 16;
-                sf::VertexArray fan(sf::TriangleFan, pts + 2);
-                fan[0].position = p;
-                fan[0].color = drawCol;
-
-                sf::Color edgeCol = drawCol;
-                edgeCol.a = 0;
-
-                for (int v = 0; v <= pts; v++) {
-                    float angle = static_cast<float>(v) * 3.14159f * 2.0f / static_cast<float>(pts);
-                    fan[v + 1].position = p + sf::Vector2f(std::cos(angle) * brushSize / 2.f, std::sin(angle) * brushSize / 2.f);
-                    fan[v + 1].color = edgeCol;
-                }
-                targetTex->draw(fan, rs);
-            }
-        }
-        else {
-            sf::RectangleShape line(sf::Vector2f(length, brushSize));
-            line.setOrigin(0, brushSize / 2.f);
+            float length = std::sqrt((localPos.x - lastPos.x) * (localPos.x - lastPos.x) + (localPos.y - lastPos.y) * (localPos.y - lastPos.y));
+            sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
+            line.setOrigin(0.0f, currentEraserSize / 2.f);
             line.setPosition(lastPos);
-            line.setRotation(std::atan2(d.y, d.x) * 180.f / 3.14159265f);
+            line.setRotation(std::atan2(localPos.y - lastPos.y, localPos.x - lastPos.x) * 180.f / 3.14159265f);
             line.setFillColor(drawCol);
 
-            sf::CircleShape circle(brushSize / 2.f);
-            circle.setOrigin(brushSize / 2.f, brushSize / 2.f);
+            sf::CircleShape circle(currentEraserSize / 2.f);
+            circle.setOrigin(currentEraserSize / 2.f, currentEraserSize / 2.f);
             circle.setPosition(localPos);
             circle.setFillColor(drawCol);
 
             targetTex->draw(line, rs);
-            if (brushSmoothing || activeTool != ToolType::Pencil) {
-                targetTex->draw(circle, rs);
-            }
+            targetTex->draw(circle, rs);
+        }
+        else {
+            brushEngine.paintStroke(targetTex, localPos, drawCol, 1.0f);
         }
 
         targetTex->display();
@@ -528,13 +537,9 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, int currentFrame) {
     }
 }
 
-void Canvas::setBrushSize(float size) { brushSize = std::clamp(size, 1.0f, 100.0f); }
-float Canvas::getBrushSize() const { return brushSize; }
-void Canvas::setBrushHardness(float hardness) { brushHardness = std::clamp(hardness, 0.1f, 1.0f); }
 void Canvas::setPrimaryColor(sf::Color color) { primaryColor = color; }
 void Canvas::setSecondaryColor(sf::Color color) { secondaryColor = color; }
 sf::Color Canvas::getPrimaryColor() const { return primaryColor; }
-void Canvas::setBrushSmoothing(bool smoothing) { brushSmoothing = smoothing; }
 void Canvas::setFillSettings(float tolerance, bool contiguous) { fillTolerance = tolerance; fillContiguous = contiguous; }
 
 void Canvas::saveUndoState() {
@@ -582,7 +587,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     window.draw(deskSprite, states);
     window.draw(canvasSprite, states);
 
-    sf::Vector2f texScale(drawArea.width / canvasLogicalSize.x, drawArea.height / canvasLogicalSize.y);
+    sf::Vector2f texScale(drawArea.width / static_cast<float>(canvasLogicalSize.x), drawArea.height / static_cast<float>(canvasLogicalSize.y));
     sf::Transform innerTransform = states.transform;
     innerTransform.translate(drawArea.left, drawArea.top);
     innerTransform.scale(texScale);
@@ -593,7 +598,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         for (int i = 1; i <= onionSkinPrevCount; ++i) {
             int prevIdx = currentFrame - i;
             if (prevIdx >= 0 && prevIdx < static_cast<int>(frames.size())) {
-                float fadeOpac = onionSkinOpacity * (1.0f - (static_cast<float>(i) - 1.0f) / static_cast<float>(onionSkinPrevCount));
+                float fadeOpac = onionSkinPrevOpacity * (1.0f - (static_cast<float>(i) - 1.0f) / static_cast<float>(onionSkinPrevCount));
                 for (const auto& layer : frames[prevIdx].layers) {
                     if (layer.visible) {
                         sf::Sprite onionSpr(layer.texture->getTexture());
@@ -608,7 +613,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         for (int i = 1; i <= onionSkinNextCount; ++i) {
             int nextIdx = currentFrame + i;
             if (nextIdx >= 0 && nextIdx < static_cast<int>(frames.size())) {
-                float fadeOpac = onionSkinOpacity * (1.0f - (static_cast<float>(i) - 1.0f) / static_cast<float>(onionSkinNextCount));
+                float fadeOpac = onionSkinNextOpacity * (1.0f - (static_cast<float>(i) - 1.0f) / static_cast<float>(onionSkinNextCount));
                 for (const auto& layer : frames[nextIdx].layers) {
                     if (layer.visible) {
                         sf::Sprite onionSpr(layer.texture->getTexture());
@@ -627,7 +632,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             const auto& layer = frames[currentFrame].layers[i];
             if (layer.visible) {
                 sf::Sprite spr(layer.texture->getTexture());
-                spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255 * layer.opacity)));
+                spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * layer.opacity)));
                 sf::RenderStates layerStates = innerStates;
                 layerStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
                 window.draw(spr, layerStates);
@@ -638,13 +643,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     selection.draw(window, innerStates);
 
     if (!isPlaying && isHoveringCanvas && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser)) {
-        sf::CircleShape cursor(brushSize / 2.f);
-        cursor.setOrigin(brushSize / 2.f, brushSize / 2.f);
-        cursor.setPosition(lastHoverLocalPos);
-        cursor.setFillColor(sf::Color::Transparent);
-        cursor.setOutlineColor(sf::Color(100, 100, 100, 200));
-        cursor.setOutlineThickness(1.f / targetScale);
-        window.draw(cursor, innerStates);
+        brushEngine.drawPreviewCursor(window, rawMousePos, sf::Color::White, viewScale);
     }
 }
 
@@ -656,7 +655,7 @@ void Canvas::drawShadows(sf::RenderWindow& window, sf::Vector2f logicalSunPos, c
         sf::Vector2f baseCenter(items[i].left + items[i].width / 2.0f, items[i].top + items[i].height);
         sf::Vector2f dir = baseCenter - logicalSunPos;
         float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-        if (dist > 0) { dir.x /= dist; dir.y /= dist; }
+        if (dist > 0.0f) { dir.x /= dist; dir.y /= dist; }
 
         sf::ConvexShape shadow;
         shadow.setPointCount(4);
@@ -669,11 +668,11 @@ void Canvas::drawShadows(sf::RenderWindow& window, sf::Vector2f logicalSunPos, c
         window.draw(shadow, states);
     }
 
-    sf::CircleShape sunShape(15);
-    sunShape.setOrigin(15, 15);
+    sf::CircleShape sunShape(15.0f);
+    sunShape.setOrigin(15.0f, 15.0f);
     sunShape.setPosition(logicalSunPos);
     sunShape.setFillColor(sf::Color(255, 255, 200, 200));
-    sunShape.setOutlineThickness(2);
+    sunShape.setOutlineThickness(2.0f);
     sunShape.setOutlineColor(sf::Color::Yellow);
     window.draw(sunShape, states);
 }

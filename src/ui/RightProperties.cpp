@@ -1,5 +1,6 @@
 #include "RightProperties.h"
 #include <sstream>
+#include <iomanip>
 
 RightProperties::RightProperties() : width(260.f), currentX(1920.f), targetX(1920.f), state(RightPanelState::Hidden) {}
 
@@ -52,6 +53,7 @@ void RightProperties::init() {
         sections.push_back(sec);
         };
 
+    createSection("anim", "ANIMATION", { {"fps_up", "Increase Speed (+FPS)"}, {"fps_down", "Decrease Speed (-FPS)"}, {"fps_display", "Current: 12 FPS"} });
     createSection("onion", "ONION SKIN", { {"onion_toggle", "Toggle Onion Skin"}, {"onion_op_up", "Opacity +"}, {"onion_op_down", "Opacity -"} });
     createSection("themes", "THEMES", { {"theme_all", "All Objects"}, {"theme_struct", "Structures Only"}, {"theme_clutter", "Clutter Only"}, {"theme_custom", "Custom Art"} });
     createSection("gen", "GENERATION", { {"theme_wfc", "Procedural WFC"}, {"toggle_terrain", "Toggle Terrain"} });
@@ -144,7 +146,7 @@ void RightProperties::draw(sf::RenderWindow& window) {
         window.draw(handleLabel);
     }
 
-    pinBtn.setFillColor(pinBtn.getGlobalBounds().contains(sf::Vector2f(sf::Mouse::getPosition(window))) ? sf::Color(255, 255, 255, 25) : sf::Color(255, 255, 255, 10));
+    pinBtn.setFillColor(pinBtn.getGlobalBounds().contains(sf::Vector2f(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y))) ? sf::Color(255, 255, 255, 25) : sf::Color(255, 255, 255, 10));
     window.draw(pinBtn);
     window.draw(pinLabel);
 
@@ -195,6 +197,7 @@ std::string RightProperties::handleClick(sf::Vector2f mousePos) {
         if (sec.isOpen) {
             for (auto& item : sec.items) {
                 if (item.rect.getGlobalBounds().contains(mousePos)) {
+                    if (item.id == "fps_display") return "";
                     return item.id;
                 }
             }
@@ -203,7 +206,7 @@ std::string RightProperties::handleClick(sf::Vector2f mousePos) {
     return "";
 }
 
-void RightProperties::syncState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity) {
+void RightProperties::syncState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity, float currentFps) {
     for (auto& sec : sections) {
         for (auto& item : sec.items) {
             item.isActive = false;
@@ -220,6 +223,13 @@ void RightProperties::syncState(const std::string& theme, bool lighting, bool te
                 std::stringstream ss;
                 ss << "Toggle Onion (" << static_cast<int>((onionOpacity / 255.f) * 100) << "%)";
                 item.label.setString(ss.str());
+            }
+
+            if (item.id == "fps_display") {
+                std::stringstream ss;
+                ss << "Current Speed: " << static_cast<int>(currentFps) << " FPS";
+                item.label.setString(ss.str());
+                item.rect.setFillColor(sf::Color(0, 0, 0, 0));
             }
         }
     }

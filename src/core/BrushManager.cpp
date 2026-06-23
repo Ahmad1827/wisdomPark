@@ -1,8 +1,37 @@
 #include "BrushManager.h"
 #include <cmath>
 
-BrushManager::BrushManager() {
+BrushManager::BrushManager() : distanceAccumulator(0.0f) {
     initDefaultPresets();
+}
+
+sf::Texture BrushManager::generateBrushTexture(float hardness, int size) {
+    sf::Image img;
+    img.create(size, size, sf::Color::Transparent);
+    float radius = size / 2.0f;
+    float center = radius;
+
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            float dx = x - center + 0.5f;
+            float dy = y - center + 0.5f;
+            float dist = std::sqrt(dx * dx + dy * dy);
+
+            if (dist <= radius) {
+                float alpha = 1.0f;
+                if (hardness < 1.0f) {
+                    float coreRadius = radius * hardness;
+                    if (dist > coreRadius) {
+                        alpha = 1.0f - ((dist - coreRadius) / (radius - coreRadius));
+                    }
+                }
+                img.setPixel(x, y, sf::Color(255, 255, 255, static_cast<sf::Uint8>(alpha * 255.0f)));
+            }
+        }
+    }
+    sf::Texture tex;
+    tex.loadFromImage(img);
+    return tex;
 }
 
 void BrushManager::initDefaultPresets() {
@@ -18,6 +47,7 @@ void BrushManager::initDefaultPresets() {
     pencil.scatter = 0.0f;
     pencil.rotation = 0.0f;
     pencil.pressureSensitivity = true;
+    pencil.brushTexture = generateBrushTexture(pencil.hardness, 64);
     presets[pencil.name] = pencil;
 
     BrushPreset ink;
@@ -27,39 +57,42 @@ void BrushManager::initDefaultPresets() {
     ink.opacity = 1.0f;
     ink.hardness = 1.0f;
     ink.spacing = 0.05f;
-    ink.stabilization = 0.5f;
-    ink.smoothing = 0.6f;
+    ink.stabilization = 0.6f;
+    ink.smoothing = 0.8f;
     ink.scatter = 0.0f;
     ink.rotation = 0.0f;
     ink.pressureSensitivity = true;
+    ink.brushTexture = generateBrushTexture(ink.hardness, 64);
     presets[ink.name] = ink;
 
     BrushPreset paint;
     paint.name = "Paint";
     paint.type = BrushType::Paint;
-    paint.size = 12.0f;
+    paint.size = 15.0f;
     paint.opacity = 0.9f;
-    paint.hardness = 0.5f;
+    paint.hardness = 0.3f;
     paint.spacing = 0.15f;
-    paint.stabilization = 0.3f;
-    paint.smoothing = 0.4f;
+    paint.stabilization = 0.4f;
+    paint.smoothing = 0.5f;
     paint.scatter = 0.05f;
-    paint.rotation = 45.0f;
+    paint.rotation = 0.0f;
     paint.pressureSensitivity = true;
+    paint.brushTexture = generateBrushTexture(paint.hardness, 64);
     presets[paint.name] = paint;
 
     BrushPreset marker;
     marker.name = "Marker";
     marker.type = BrushType::Marker;
-    marker.size = 8.0f;
+    marker.size = 10.0f;
     marker.opacity = 0.4f;
-    marker.hardness = 0.8f;
+    marker.hardness = 0.7f;
     marker.spacing = 0.1f;
-    marker.stabilization = 0.2f;
+    marker.stabilization = 0.3f;
     marker.smoothing = 0.3f;
     marker.scatter = 0.0f;
-    marker.rotation = 90.0f;
+    marker.rotation = 45.0f;
     marker.pressureSensitivity = false;
+    marker.brushTexture = generateBrushTexture(marker.hardness, 64);
     presets[marker.name] = marker;
 
     BrushPreset pixel;
@@ -74,24 +107,26 @@ void BrushManager::initDefaultPresets() {
     pixel.scatter = 0.0f;
     pixel.rotation = 0.0f;
     pixel.pressureSensitivity = false;
+    sf::Image pxImg; pxImg.create(1, 1, sf::Color::White);
+    pixel.brushTexture.loadFromImage(pxImg);
     presets[pixel.name] = pixel;
 
-    BrushPreset watercolor;
-    watercolor.name = "Watercolor";
-    watercolor.type = BrushType::Watercolor;
-    watercolor.size = 20.0f;
-    watercolor.opacity = 0.2f;
-    watercolor.hardness = 0.1f;
-    watercolor.spacing = 0.3f;
-    watercolor.stabilization = 0.4f;
-    watercolor.smoothing = 0.8f;
-    watercolor.scatter = 0.15f;
-    watercolor.rotation = 12.0f;
-    watercolor.pressureSensitivity = true;
-    presets[watercolor.name] = watercolor;
+    BrushPreset eraser;
+    eraser.name = "Eraser";
+    eraser.type = BrushType::Pencil;
+    eraser.size = 20.0f;
+    eraser.opacity = 1.0f;
+    eraser.hardness = 1.0f;
+    eraser.spacing = 0.1f;
+    eraser.stabilization = 0.1f;
+    eraser.smoothing = 0.2f;
+    eraser.scatter = 0.0f;
+    eraser.rotation = 0.0f;
+    eraser.pressureSensitivity = false;
+    eraser.brushTexture = generateBrushTexture(eraser.hardness, 64);
+    presets[eraser.name] = eraser;
 
-    activePreset = pencil;
-    lastStabilizedPosition = sf::Vector2f(0.0f, 0.0f);
+    selectPreset("Pencil");
 }
 
 void BrushManager::addPreset(const BrushPreset& preset) {
@@ -100,140 +135,126 @@ void BrushManager::addPreset(const BrushPreset& preset) {
 
 void BrushManager::selectPreset(const std::string& name) {
     if (presets.find(name) != presets.end()) {
-        activePreset = presets[name];
+        activePresetName = name;
     }
 }
 
 BrushPreset& BrushManager::getActivePreset() {
-    return activePreset;
+    return presets[activePresetName];
 }
 
 const BrushPreset& BrushManager::getActivePreset() const {
-    return activePreset;
+    return presets.at(activePresetName);
 }
 
-void BrushManager::setBrushSize(float size) {
-    activePreset.size = std::max(1.0f, size);
-}
-
-void BrushManager::setBrushOpacity(float opacity) {
-    activePreset.opacity = std::max(0.0f, std::min(opacity, 1.0f));
-}
-
+void BrushManager::setBrushSize(float size) { presets[activePresetName].size = std::max(1.0f, size); }
+void BrushManager::setBrushOpacity(float opacity) { presets[activePresetName].opacity = std::max(0.0f, std::min(opacity, 1.0f)); }
 void BrushManager::setBrushHardness(float hardness) {
-    activePreset.hardness = std::max(0.0f, std::min(hardness, 1.0f));
+    presets[activePresetName].hardness = std::max(0.0f, std::min(hardness, 1.0f));
+    presets[activePresetName].brushTexture = generateBrushTexture(presets[activePresetName].hardness, 64);
+}
+void BrushManager::setBrushSpacing(float spacing) { presets[activePresetName].spacing = std::max(0.01f, spacing); }
+void BrushManager::setBrushRotation(float rotation) { presets[activePresetName].rotation = rotation; }
+void BrushManager::setBrushScatter(float scatter) { presets[activePresetName].scatter = std::max(0.0f, scatter); }
+void BrushManager::setStabilization(float value) { presets[activePresetName].stabilization = std::max(0.0f, std::min(value, 1.0f)); }
+void BrushManager::setSmoothing(float value) { presets[activePresetName].smoothing = std::max(0.0f, std::min(value, 1.0f)); }
+
+void BrushManager::resetStroke(sf::Vector2f startPos) {
+    lastStabilizedPos = startPos;
+    lastDrawnPos = startPos;
+    distanceAccumulator = 0.0f;
 }
 
-void BrushManager::setBrushSpacing(float spacing) {
-    activePreset.spacing = std::max(0.01f, spacing);
-}
+void BrushManager::applyStamp(sf::RenderTexture* targetTex, sf::Vector2f pos, float currentSize, float currentOpacity, sf::Color color) {
+    BrushPreset& act = getActivePreset();
 
-void BrushManager::setBrushRotation(float rotation) {
-    activePreset.rotation = rotation;
-}
-
-void BrushManager::setBrushScatter(float scatter) {
-    activePreset.scatter = std::max(0.0f, scatter);
-}
-
-void BrushManager::setStabilization(float value) {
-    activePreset.stabilization = std::max(0.0f, std::min(value, 1.0f));
-}
-
-void BrushManager::setSmoothing(float value) {
-    activePreset.smoothing = std::max(0.0f, std::min(value, 1.0f));
-}
-
-sf::Vector2f BrushManager::applyStabilization(sf::Vector2f currentTarget, float strength) {
-    if (strength <= 0.0f) {
-        lastStabilizedPosition = currentTarget;
-        return currentTarget;
-    }
-    sf::Vector2f diff = currentTarget - lastStabilizedPosition;
-    lastStabilizedPosition += diff * (1.0f - strength);
-    return lastStabilizedPosition;
-}
-
-void BrushManager::paintStroke(sf::Image& layerImage, sf::Vector2f start, sf::Vector2f end, sf::Color color, float pressure) {
-    float finalSize = activePreset.size;
-    if (activePreset.pressureSensitivity) {
-        finalSize *= pressure;
-    }
-    if (finalSize < 1.0f) {
-        finalSize = 1.0f;
+    if (act.type == BrushType::PixelBrush) {
+        sf::RectangleShape rect(sf::Vector2f(currentSize, currentSize));
+        rect.setOrigin(currentSize / 2.f, currentSize / 2.f);
+        rect.setPosition(std::round(pos.x), std::round(pos.y));
+        rect.setFillColor(color);
+        targetTex->draw(rect, sf::RenderStates::Default);
+        return;
     }
 
-    float finalOpacity = activePreset.opacity;
-    sf::Color drawColor = color;
-    drawColor.a = static_cast<sf::Uint8>(finalOpacity * 255.0f);
+    sf::Sprite stamp(act.brushTexture);
+    stamp.setOrigin(static_cast<float>(act.brushTexture.getSize().x) / 2.0f, static_cast<float>(act.brushTexture.getSize().y) / 2.0f);
+    stamp.setPosition(pos);
+    stamp.setRotation(act.rotation);
 
-    sf::Vector2i imgSize = sf::Vector2i(layerImage.getSize().x, layerImage.getSize().y);
-    float dx = end.x - start.x;
-    float dy = end.y - start.y;
-    float distance = std::sqrt(dx * dx + dy * dy);
-    int steps = static_cast<int>(distance / (finalSize * activePreset.spacing));
-    if (steps < 1) steps = 1;
+    float scale = currentSize / static_cast<float>(act.brushTexture.getSize().x);
+    stamp.setScale(scale, scale);
 
-    for (int i = 0; i <= steps; ++i) {
-        float t = static_cast<float>(i) / static_cast<float>(steps);
-        sf::Vector2f pt = start + (end - start) * t;
+    sf::Color stampCol = color;
+    stampCol.a = static_cast<sf::Uint8>(currentOpacity * 255.0f);
+    stamp.setColor(stampCol);
 
-        if (activePreset.scatter > 0.0f) {
+    sf::RenderStates rs;
+    if (act.type == BrushType::Watercolor) {
+        rs.blendMode = sf::BlendAlpha;
+        stampCol.a = static_cast<sf::Uint8>(currentOpacity * 100.0f);
+        stamp.setColor(stampCol);
+    }
+    else {
+        rs.blendMode = sf::BlendAlpha;
+    }
+
+    targetTex->draw(stamp, rs);
+}
+
+void BrushManager::paintStroke(sf::RenderTexture* targetTex, sf::Vector2f targetPos, sf::Color color, float pressure) {
+    BrushPreset& act = getActivePreset();
+
+    sf::Vector2f diff = targetPos - lastStabilizedPos;
+    if (act.stabilization > 0.0f) {
+        lastStabilizedPos += diff * (1.0f - act.stabilization);
+    }
+    else {
+        lastStabilizedPos = targetPos;
+    }
+
+    float strokeSize = act.size;
+    if (act.pressureSensitivity) {
+        strokeSize *= pressure;
+    }
+    strokeSize = std::max(1.0f, strokeSize);
+
+    float requiredSpacing = std::max(1.0f, strokeSize * act.spacing);
+
+    sf::Vector2f delta = lastStabilizedPos - lastDrawnPos;
+    float dist = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+
+    distanceAccumulator += dist;
+
+    while (distanceAccumulator >= requiredSpacing) {
+        sf::Vector2f drawDir;
+        if (dist > 0.0f) {
+            drawDir = delta / dist;
+        }
+        else {
+            drawDir = sf::Vector2f(0.0f, 0.0f);
+        }
+
+        lastDrawnPos += drawDir * requiredSpacing;
+        distanceAccumulator -= requiredSpacing;
+
+        sf::Vector2f stampPos = lastDrawnPos;
+
+        if (act.scatter > 0.0f) {
             float angle = static_cast<float>(rand() % 360) * 3.14159f / 180.0f;
-            float offset = static_cast<float>(rand() % 100) / 100.0f * activePreset.scatter * finalSize;
-            pt.x += std::cos(angle) * offset;
-            pt.y += std::sin(angle) * offset;
+            float offset = (static_cast<float>(rand() % 100) / 100.0f) * act.scatter * strokeSize;
+            stampPos.x += std::cos(angle) * offset;
+            stampPos.y += std::sin(angle) * offset;
         }
 
-        int radius = static_cast<int>(finalSize / 2.0f);
-        if (activePreset.type == BrushType::PixelBrush || radius < 1) {
-            int px = static_cast<int>(std::round(pt.x));
-            int py = static_cast<int>(std::round(pt.y));
-            if (px >= 0 && px < imgSize.x && py >= 0 && py < imgSize.y) {
-                layerImage.setPixel(px, py, drawColor);
-            }
-            continue;
-        }
-
-        for (int h = -radius; h <= radius; ++h) {
-            for (int w = -radius; w <= radius; ++w) {
-                int px = static_cast<int>(pt.x) + w;
-                int py = static_cast<int>(pt.y) + h;
-
-                if (px >= 0 && px < imgSize.x && py >= 0 && py < imgSize.y) {
-                    float dist = std::sqrt(static_cast<float>(w * w + h * h));
-                    if (dist <= radius) {
-                        float factor = 1.0f;
-                        if (activePreset.hardness < 1.0f) {
-                            float edgeStart = radius * activePreset.hardness;
-                            if (dist > edgeStart) {
-                                factor = 1.0f - ((dist - edgeStart) / (radius - edgeStart));
-                            }
-                        }
-                        sf::Color originalColor = layerImage.getPixel(px, py);
-                        sf::Uint8 blendAlpha = static_cast<sf::Uint8>(drawColor.a * factor);
-
-                        if (activePreset.type == BrushType::Watercolor) {
-                            blendAlpha = static_cast<sf::Uint8>(blendAlpha * 0.3f);
-                        }
-
-                        float outA = blendAlpha + originalColor.a * (1.0f - blendAlpha / 255.0f);
-                        if (outA > 0.0f) {
-                            sf::Uint8 r = static_cast<sf::Uint8>((drawColor.r * blendAlpha + originalColor.r * originalColor.a * (1.0f - blendAlpha / 255.0f)) / outA);
-                            sf::Uint8 g = static_cast<sf::Uint8>((drawColor.g * blendAlpha + originalColor.g * originalColor.a * (1.0f - blendAlpha / 255.0f)) / outA);
-                            sf::Uint8 b = static_cast<sf::Uint8>((drawColor.b * blendAlpha + originalColor.b * originalColor.a * (1.0f - blendAlpha / 255.0f)) / outA);
-                            layerImage.setPixel(px, py, sf::Color(r, g, b, static_cast<sf::Uint8>(std::min(255.0f, outA))));
-                        }
-                    }
-                }
-            }
-        }
+        applyStamp(targetTex, stampPos, strokeSize, act.opacity, color);
     }
 }
 
-void BrushManager::updatePreviewCursor(sf::RenderWindow& window, sf::Vector2f mousePos, sf::Color color) {
-    sf::CircleShape cursor(activePreset.size / 2.0f);
-    cursor.setOrigin(activePreset.size / 2.0f, activePreset.size / 2.0f);
+void BrushManager::drawPreviewCursor(sf::RenderWindow& window, sf::Vector2f mousePos, sf::Color color, float scale) {
+    float s = getActivePreset().size * scale;
+    sf::CircleShape cursor(s / 2.0f);
+    cursor.setOrigin(s / 2.0f, s / 2.0f);
     cursor.setPosition(mousePos);
     cursor.setFillColor(sf::Color::Transparent);
     cursor.setOutlineColor(color);
