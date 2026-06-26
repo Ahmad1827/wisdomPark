@@ -44,10 +44,7 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
         sf::RenderStates states = baseStates;
         states.texture = &dashTexture;
         if (state == SelectionState::Floating) {
-            sf::Transform t;
-            t.translate(floatingSprite.getPosition());
-            t.scale(floatingSprite.getScale());
-            states.transform *= t;
+            states.transform *= floatingSprite.getTransform();
         }
 
         window.draw(ants, states);
@@ -183,13 +180,13 @@ void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool re
     floatingTexture.loadFromImage(extractImg);
     floatingSprite.setTexture(floatingTexture, true);
 
-    floatingSprite.setOrigin(w / 2.f, h / 2.f);
-    floatingSprite.setPosition(boundingBox.left + w / 2.f, boundingBox.top + h / 2.f);
+    floatingSprite.setOrigin(static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f);
+    floatingSprite.setPosition(boundingBox.left + static_cast<float>(w) / 2.f, boundingBox.top + static_cast<float>(h) / 2.f);
     floatingSprite.setScale(1.f, 1.f);
 
     localPoints.clear();
     for (const auto& p : pathPoints) {
-        localPoints.push_back(p - sf::Vector2f(boundingBox.left + w / 2.f, boundingBox.top + h / 2.f));
+        localPoints.push_back(p - sf::Vector2f(boundingBox.left, boundingBox.top));
     }
 
     state = SelectionState::Floating;
@@ -258,16 +255,16 @@ void SelectionManager::paste(sf::Vector2u canvasSize) {
     floatingSprite.setTexture(floatingTexture, true);
     int w = static_cast<int>(floatingTexture.getSize().x);
     int h = static_cast<int>(floatingTexture.getSize().y);
-    floatingSprite.setOrigin(w / 2.f, h / 2.f);
+    floatingSprite.setOrigin(static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f);
     floatingSprite.setPosition(static_cast<float>(canvasSize.x) / 2.f, static_cast<float>(canvasSize.y) / 2.f);
     floatingSprite.setScale(1.f, 1.f);
 
     localPoints.clear();
-    localPoints.push_back(sf::Vector2f(-w / 2.f, -h / 2.f));
-    localPoints.push_back(sf::Vector2f(w / 2.f, -h / 2.f));
-    localPoints.push_back(sf::Vector2f(w / 2.f, h / 2.f));
-    localPoints.push_back(sf::Vector2f(-w / 2.f, h / 2.f));
-    localPoints.push_back(sf::Vector2f(-w / 2.f, -h / 2.f));
+    localPoints.push_back(sf::Vector2f(0.f, 0.f));
+    localPoints.push_back(sf::Vector2f(static_cast<float>(w), 0.f));
+    localPoints.push_back(sf::Vector2f(static_cast<float>(w), static_cast<float>(h)));
+    localPoints.push_back(sf::Vector2f(0.f, static_cast<float>(h)));
+    localPoints.push_back(sf::Vector2f(0.f, 0.f));
 
     state = SelectionState::Floating;
 }
@@ -318,8 +315,12 @@ void SelectionManager::flipVertical() {
 void SelectionManager::duplicate(sf::RenderTexture* layerTexture, sf::Vector2u canvasSize) {
     if (state == SelectionState::Selected) {
         extractFromLayer(layerTexture, false);
+        floatingSprite.move(20.f, 20.f);
+        clampToCanvas(canvasSize);
     }
-    if (state == SelectionState::Floating) {
+    else if (state == SelectionState::Floating) {
+        layerTexture->draw(floatingSprite);
+        layerTexture->display();
         floatingSprite.move(20.f, 20.f);
         clampToCanvas(canvasSize);
     }
