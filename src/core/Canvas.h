@@ -7,7 +7,6 @@
 #include "BrushManager.h"
 
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
-
 enum class ToolType { Brush, Pencil, Eraser, Fill, Select };
 
 struct Layer {
@@ -103,9 +102,12 @@ public:
     int getActiveLayer() const;
 
     void setOnionSkin(bool enabled, float prevOpac, float nextOpac);
+    void setOnionSkinCounts(int prevCount, int nextCount);
     bool isOnionSkinEnabled() const;
     float getOnionSkinPrevOpacity() const;
     float getOnionSkinNextOpacity() const;
+    int getOnionSkinPrevCount() const;
+    int getOnionSkinNextCount() const;
 
     void setActiveTool(ToolType tool);
     ToolType getActiveTool() const;

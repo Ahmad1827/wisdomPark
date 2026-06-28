@@ -136,11 +136,87 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (keybindManager.isActionTriggered("time_next", event)) {
-                timeline.nextFrame();
+                if (timeline.getCurrentFrame() < timeline.getFrameCount() - 1) {
+                    timeline.nextFrame();
+                }
+                else {
+                    bool isFrameEmpty = true;
+                    const Frame* curFrame = canvas.getFrameReadOnly(timeline.getCurrentFrame());
+                    if (curFrame) {
+                        for (const auto& layer : curFrame->layers) {
+                            sf::Image img = layer.texture->getTexture().copyToImage();
+                            const sf::Uint8* pixels = img.getPixelsPtr();
+                            size_t totalPixels = static_cast<size_t>(img.getSize().x) * static_cast<size_t>(img.getSize().y) * 4;
+                            for (size_t i = 3; i < totalPixels; i += 4) {
+                                if (pixels[i] > 0) {
+                                    isFrameEmpty = false;
+                                    break;
+                                }
+                            }
+                            if (!isFrameEmpty) break;
+                        }
+                    }
+
+                    if (isFrameEmpty) {
+                        if (showingText && uiText.getString() == sf::String("Current frame is empty. Press Right again to create another.") && textClock.getElapsedTime().asSeconds() < 2.0f) {
+                            canvas.addFrame(timeline.getCurrentFrame());
+                            timeline.addFrameAfter(timeline.getCurrentFrame());
+                            timeline.nextFrame();
+                            showingText = false;
+                        }
+                        else {
+                            showMessage("Current frame is empty. Press Right again to create another.", sf::Color::Yellow);
+                        }
+                    }
+                    else {
+                        canvas.addFrame(timeline.getCurrentFrame());
+                        timeline.addFrameAfter(timeline.getCurrentFrame());
+                        timeline.nextFrame();
+                    }
+                }
             }
+
             if (keybindManager.isActionTriggered("time_prev", event)) {
-                timeline.prevFrame();
+                if (timeline.getCurrentFrame() > 0) {
+                    timeline.prevFrame();
+                }
+                else {
+                    bool isFrameEmpty = true;
+                    const Frame* curFrame = canvas.getFrameReadOnly(timeline.getCurrentFrame());
+                    if (curFrame) {
+                        for (const auto& layer : curFrame->layers) {
+                            sf::Image img = layer.texture->getTexture().copyToImage();
+                            const sf::Uint8* pixels = img.getPixelsPtr();
+                            size_t totalPixels = static_cast<size_t>(img.getSize().x) * static_cast<size_t>(img.getSize().y) * 4;
+                            for (size_t i = 3; i < totalPixels; i += 4) {
+                                if (pixels[i] > 0) {
+                                    isFrameEmpty = false;
+                                    break;
+                                }
+                            }
+                            if (!isFrameEmpty) break;
+                        }
+                    }
+
+                    if (isFrameEmpty) {
+                        if (showingText && uiText.getString() == sf::String("Current frame is empty. Press Left again to create another.") && textClock.getElapsedTime().asSeconds() < 2.0f) {
+                            canvas.addFrame(-1);
+                            timeline.addFrameAfter(-1);
+                            timeline.setFrame(0);
+                            showingText = false;
+                        }
+                        else {
+                            showMessage("Current frame is empty. Press Left again to create another.", sf::Color::Yellow);
+                        }
+                    }
+                    else {
+                        canvas.addFrame(-1);
+                        timeline.addFrameAfter(-1);
+                        timeline.setFrame(0);
+                    }
+                }
             }
+
             if (keybindManager.isActionTriggered("time_play", event)) {
                 timeline.togglePlayback();
             }
@@ -244,6 +320,19 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                                     timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
                                 }
                             }
+                        }
+                        else if (bottomAction == "onion_toggle") {
+                            canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
+                        }
+                        else if (bottomAction == "onion_prev") {
+                            int p = canvas.getOnionSkinPrevCount();
+                            p = (p + 1) % 4;
+                            canvas.setOnionSkinCounts(p, canvas.getOnionSkinNextCount());
+                        }
+                        else if (bottomAction == "onion_next") {
+                            int n = canvas.getOnionSkinNextCount();
+                            n = (n + 1) % 4;
+                            canvas.setOnionSkinCounts(canvas.getOnionSkinPrevCount(), n);
                         }
                         return;
                     }
@@ -411,6 +500,8 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         leftToolbar.draw(window, SettingsManager::loadSettings().isConfigured(), canvas.getActiveTool() == ToolType::Select);
         rightPanelManager.draw(window, canvas, timeline.getCurrentFrame());
+
+        bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);
 
         if (showingText) window.draw(uiText);

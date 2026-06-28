@@ -172,8 +172,18 @@ sf::Transform Canvas::getTransform() const {
 
 sf::Transform Canvas::getInverseTransform() const { return getTransform().getInverse(); }
 
-void Canvas::addFrame(int index) { saveUndoState(); frames.insert(frames.begin() + index + 1, Frame()); }
-void Canvas::duplicateFrame(int index) { saveUndoState(); if (index >= 0 && index < static_cast<int>(frames.size())) frames.insert(frames.begin() + index + 1, Frame(frames[index])); }
+void Canvas::addFrame(int index) {
+    saveUndoState();
+    frames.insert(frames.begin() + (index + 1), Frame());
+}
+
+void Canvas::duplicateFrame(int index) {
+    saveUndoState();
+    if (index >= 0 && index < static_cast<int>(frames.size())) {
+        frames.insert(frames.begin() + (index + 1), Frame(frames[index]));
+    }
+}
+
 void Canvas::deleteFrame(int index) { if (frames.size() > 1 && index >= 0 && index < static_cast<int>(frames.size())) { saveUndoState(); frames.erase(frames.begin() + index); } }
 void Canvas::clearAllFrames() { saveUndoState(); frames.clear(); frames.emplace_back(); }
 
@@ -245,9 +255,16 @@ void Canvas::setOnionSkin(bool enabled, float prevOpac, float nextOpac) {
     onionSkinNextOpacity = std::max(0.0f, std::min(nextOpac, 255.0f));
 }
 
+void Canvas::setOnionSkinCounts(int prevCount, int nextCount) {
+    onionSkinPrevCount = std::max(0, prevCount);
+    onionSkinNextCount = std::max(0, nextCount);
+}
+
 bool Canvas::isOnionSkinEnabled() const { return onionSkinEnabled; }
 float Canvas::getOnionSkinPrevOpacity() const { return onionSkinPrevOpacity; }
 float Canvas::getOnionSkinNextOpacity() const { return onionSkinNextOpacity; }
+int Canvas::getOnionSkinPrevCount() const { return onionSkinPrevCount; }
+int Canvas::getOnionSkinNextCount() const { return onionSkinNextCount; }
 
 void Canvas::commitSelection(int currentFrame) {
     if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;

@@ -1,6 +1,6 @@
 #include "BottomTimeline.h"
 
-BottomTimeline::BottomTimeline() : height(140.f), currentY(1080.f), targetY(1080.f), state(BottomPanelState::Hidden) {}
+BottomTimeline::BottomTimeline() : height(140.f), currentY(1080.f), targetY(1080.f), state(BottomPanelState::Hidden), onionEnabled(true), onionPrev(1), onionNext(1) {}
 
 void BottomTimeline::init() {
     font.loadFromFile("assets/font.otf");
@@ -28,10 +28,10 @@ void BottomTimeline::init() {
     pinLabel.setCharacterSize(12);
     pinLabel.setFillColor(sf::Color(180, 180, 180));
 
-    auto makeBtn = [&](std::string id, std::string text, float x) {
+    auto makeBtn = [&](std::string id, std::string text, float w) {
         TimelineButton btn;
         btn.id = id;
-        btn.rect.setSize(sf::Vector2f(70.f, 30.f));
+        btn.rect.setSize(sf::Vector2f(w, 30.f));
 
         btn.label.setFont(font);
         btn.label.setString(text);
@@ -43,10 +43,20 @@ void BottomTimeline::init() {
         buttons.push_back(btn);
         };
 
-    makeBtn("play", "Play", 120.f);
-    makeBtn("add", "Add", 200.f);
-    makeBtn("dup", "Dup", 280.f);
-    makeBtn("del", "Del", 360.f);
+    makeBtn("play", "Play", 70.f);
+    makeBtn("add", "Add", 70.f);
+    makeBtn("dup", "Dup", 70.f);
+    makeBtn("del", "Del", 70.f);
+
+    makeBtn("onion_toggle", "Onion: ON", 85.f);
+    makeBtn("onion_prev", "Prev: 1", 70.f);
+    makeBtn("onion_next", "Next: 1", 70.f);
+}
+
+void BottomTimeline::syncOnionState(bool enabled, int prevCount, int nextCount) {
+    onionEnabled = enabled;
+    onionPrev = prevCount;
+    onionNext = nextCount;
 }
 
 void BottomTimeline::update(float dt, bool focusMode) {
@@ -84,10 +94,26 @@ void BottomTimeline::update(float dt, bool focusMode) {
     pinLabel.setPosition(45.f, currentY + 18.f);
 
     float startX = 120.f;
+    float rightX = 1920.f - 280.f;
+
     for (auto& btn : buttons) {
-        btn.rect.setPosition(startX, currentY + 12.f);
-        btn.label.setPosition(startX + 35.f, currentY + 26.f);
-        startX += 80.f;
+        if (btn.id == "onion_toggle") {
+            btn.rect.setPosition(rightX, currentY + 12.f);
+            btn.label.setPosition(rightX + 42.5f, currentY + 26.f);
+        }
+        else if (btn.id == "onion_prev") {
+            btn.rect.setPosition(rightX + 95.f, currentY + 12.f);
+            btn.label.setPosition(rightX + 95.f + 35.f, currentY + 26.f);
+        }
+        else if (btn.id == "onion_next") {
+            btn.rect.setPosition(rightX + 175.f, currentY + 12.f);
+            btn.label.setPosition(rightX + 175.f + 35.f, currentY + 26.f);
+        }
+        else {
+            btn.rect.setPosition(startX, currentY + 12.f);
+            btn.label.setPosition(startX + 35.f, currentY + 26.f);
+            startX += 80.f;
+        }
     }
 }
 
@@ -122,6 +148,24 @@ void BottomTimeline::draw(sf::RenderWindow& window, Timeline& timeline, Canvas& 
     for (auto& btn : buttons) {
         if (btn.id == "play" && timeline.isPlaying()) {
             btn.rect.setFillColor(sf::Color(0, 122, 204, 180));
+        }
+        else if (btn.id == "onion_toggle") {
+            btn.label.setString(onionEnabled ? "Onion: ON" : "Onion: OFF");
+            btn.rect.setFillColor(onionEnabled ? sf::Color(0, 122, 204, 180) : (btn.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5)));
+            sf::FloatRect tRect = btn.label.getLocalBounds();
+            btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
+        }
+        else if (btn.id == "onion_prev") {
+            btn.label.setString("Prev: " + std::to_string(onionPrev));
+            btn.rect.setFillColor(btn.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));
+            sf::FloatRect tRect = btn.label.getLocalBounds();
+            btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
+        }
+        else if (btn.id == "onion_next") {
+            btn.label.setString("Next: " + std::to_string(onionNext));
+            btn.rect.setFillColor(btn.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));
+            sf::FloatRect tRect = btn.label.getLocalBounds();
+            btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
         }
         else {
             btn.rect.setFillColor(btn.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));

@@ -31,6 +31,10 @@ private:
     float targetY;
     BottomPanelState state;
 
+    bool onionEnabled;
+    int onionPrev;
+    int onionNext;
+
 public:
     BottomTimeline();
     void init();
@@ -40,5 +44,6 @@ public:
     std::string handleClick(sf::Vector2f mousePos);
     int handleFrameClick(sf::Vector2f mousePos, size_t frameCount);
 
+    void syncOnionState(bool enabled, int prevCount, int nextCount);
     float getPanelTopEdge() const;
 };

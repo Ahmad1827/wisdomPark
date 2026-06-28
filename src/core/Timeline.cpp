@@ -43,7 +43,7 @@ void Timeline::addFrame() {
 void Timeline::addFrameAfter(int index) {
     TimelineFrame newFrame;
     newFrame.thumbnail.create(64, 64, sf::Color(40, 40, 40));
-    frames.insert(frames.begin() + index + 1, newFrame);
+    frames.insert(frames.begin() + (index + 1), newFrame);
     playbackEnd = static_cast<int>(frames.size()) - 1;
     loopEnd = playbackEnd;
 }
