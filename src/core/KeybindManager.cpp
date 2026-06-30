@@ -60,6 +60,12 @@ void KeybindManager::init() {
     registerDefault("layer_folder", "Layer Folder", "Layers", sf::Keyboard::L, true, false, true);
     registerDefault("layer_up", "Move Layer Up", "Layers", sf::Keyboard::RBracket);
     registerDefault("layer_down", "Move Layer Down", "Layers", sf::Keyboard::LBracket);
+    registerDefault("layer_vis", "Toggle Visibility", "Layers", sf::Keyboard::V, false, true);
+    registerDefault("layer_lock", "Toggle Lock", "Layers", sf::Keyboard::K, false, true);
+    registerDefault("layer_persist", "Toggle Persistence", "Layers", sf::Keyboard::P, false, true);
+
+    registerDefault("layer_merge_down", "Merge Down", "Layers", sf::Keyboard::E, true);
+    registerDefault("layer_merge_vis", "Merge Visible", "Layers", sf::Keyboard::E, true, true);
 
     registerDefault("view_zoom_in", "Zoom In", "View", sf::Keyboard::Unknown);
     registerDefault("view_zoom_out", "Zoom Out", "View", sf::Keyboard::Unknown);

@@ -20,6 +20,7 @@ void UIManager::init(ProjectManager* pm) {
 
     leftToolbar.init();
     rightPanelManager.init();
+    layerPanel.init();
     bottomTimeline.init();
 
     uiText.setFont(font);
@@ -217,15 +218,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
             }
 
-            if (keybindManager.isActionTriggered("time_play", event)) {
-                timeline.togglePlayback();
-            }
-            if (keybindManager.isActionTriggered("time_start", event)) {
-                timeline.setFrame(0);
-            }
-            if (keybindManager.isActionTriggered("time_end", event)) {
-                timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
-            }
+            if (keybindManager.isActionTriggered("time_play", event)) timeline.togglePlayback();
+            if (keybindManager.isActionTriggered("time_start", event)) timeline.setFrame(0);
+            if (keybindManager.isActionTriggered("time_end", event)) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
 
             if (keybindManager.isActionTriggered("time_add", event)) {
                 canvas.addFrame(timeline.getCurrentFrame());
@@ -246,6 +241,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (keybindManager.isActionTriggered("layer_new", event)) canvas.addLayer(timeline.getCurrentFrame(), "New Layer");
             if (keybindManager.isActionTriggered("layer_dup", event)) canvas.duplicateLayer(timeline.getCurrentFrame(), canvas.getActiveLayer());
             if (keybindManager.isActionTriggered("layer_del", event)) canvas.deleteLayer(timeline.getCurrentFrame(), canvas.getActiveLayer());
+            if (keybindManager.isActionTriggered("layer_merge_down", event)) canvas.mergeDown(timeline.getCurrentFrame());
+            if (keybindManager.isActionTriggered("layer_merge_vis", event)) canvas.mergeVisible(timeline.getCurrentFrame());
 
             if (keybindManager.isActionTriggered("edit_del_sel", event)) {
                 if (canvas.getActiveTool() == ToolType::Select) canvas.deleteSelection(timeline.getCurrentFrame());
@@ -281,6 +278,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
         if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible()) {
 
+            if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
+
             if (event.type == sf::Event::MouseButtonPressed) {
 
                 sf::Color pCol, sCol;
@@ -291,6 +290,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Left) {
+                    if (layerPanel.handleClick(mousePos, canvas, timeline.getCurrentFrame())) return;
 
                     int clickedFrame = bottomTimeline.handleFrameClick(mousePos, static_cast<size_t>(canvas.getFrameCount()));
                     if (clickedFrame != -1) {
@@ -445,11 +445,18 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     else if (currentState == AppState::Painting) {
 
         leftToolbar.update(dt, focusMode);
+        rightPanelManager.updateHover(mousePos);
+        layerPanel.updateHover(mousePos);
+
         rightPanelManager.update(dt, focusMode);
+        layerPanel.update(dt, focusMode);
         bottomTimeline.update(dt, focusMode);
 
         float availLeft = std::max(0.0f, static_cast<float>(leftToolbar.getPanelRightEdge()));
-        float availRight = std::min(1920.0f, static_cast<float>(rightPanelManager.getMinLeftEdge()));
+        float rightEdge = static_cast<float>(rightPanelManager.getMinLeftEdge());
+        float layerEdge = static_cast<float>(layerPanel.getCurrentX());
+        float availRight = std::min(1920.0f, std::min(rightEdge, layerEdge));
+
         float availTop = 0.0f;
         float availBottom = std::min(1080.0f, static_cast<float>(bottomTimeline.getPanelTopEdge()));
         float availWidth = std::max(0.0f, availRight - availLeft);
@@ -459,7 +466,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         canvas.updateTransform(dt, availableSpace);
 
         leftToolbar.updateHover(mousePos);
-        rightPanelManager.updateHover(mousePos);
         bottomTimeline.updateHover(mousePos);
 
         if (showingText && textClock.getElapsedTime().asSeconds() > 2.0f) showingText = false;
@@ -500,6 +506,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         leftToolbar.draw(window, SettingsManager::loadSettings().isConfigured(), canvas.getActiveTool() == ToolType::Select);
         rightPanelManager.draw(window, canvas, timeline.getCurrentFrame());
+        layerPanel.draw(window, canvas, timeline.getCurrentFrame());
 
         bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);

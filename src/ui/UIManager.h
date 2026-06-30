@@ -3,10 +3,10 @@
 #include <string>
 #include "../core/AppState.h"
 #include "../core/SettingsManager.h"
-#include "../core/Canvas.h"
-#include "../core/Timeline.h"
 #include "../core/ProjectManager.h"
 #include "../core/KeybindManager.h"
+#include "../core/Canvas.h"
+#include "../core/Timeline.h"
 #include "../ai/AIHelper.h"
 #include "Screens/ProjectBrowser.h"
 #include "Screens/AISettingsModal.h"
@@ -14,11 +14,25 @@
 #include "LeftToolbar.h"
 #include "RightPanelManager.h"
 #include "BottomTimeline.h"
+#include "LayerPanel.h"
 
 class UIManager {
 private:
+    bool isTypingPrompt;
+    bool showingText;
+    float textAlpha;
+    bool isLightingMode;
+    int promptQuantity;
+    bool focusMode;
+
+    ProjectManager* projManager;
+    std::string activeProjectName;
+
+    KeybindManager keybindManager;
+
     sf::Texture bgTexture;
     sf::Sprite bgSprite;
+    sf::Font font;
 
     ProjectBrowser projectBrowser;
     AISettingsModal settingsModal;
@@ -26,33 +40,20 @@ private:
 
     LeftToolbar leftToolbar;
     RightPanelManager rightPanelManager;
+    LayerPanel layerPanel;
     BottomTimeline bottomTimeline;
 
-    ProjectManager* projManager;
-    KeybindManager keybindManager;
-
-    sf::Font font;
-    std::string currentPrompt;
-    bool isTypingPrompt;
-    sf::RectangleShape promptBox;
-    sf::Text promptDisplay;
-
     sf::Text uiText;
-    bool showingText;
-    float textAlpha;
     sf::Clock textClock;
 
-    bool isLightingMode;
-    int promptQuantity;
-    bool focusMode;
-
-    std::string activeProjectName;
-
-    void showMessage(const std::string& msg, sf::Color color);
+    sf::RectangleShape promptBox;
+    sf::Text promptDisplay;
+    std::string currentPrompt;
 
 public:
     UIManager();
     void init(ProjectManager* pm);
+    void showMessage(const std::string& msg, sf::Color color);
     void handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm);
     void update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas);
     void draw(sf::RenderWindow& window, AppState currentState, Canvas& canvas, AIHelper& aiHelper, Timeline& timeline);

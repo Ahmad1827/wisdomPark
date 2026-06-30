@@ -10,15 +10,17 @@ enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 enum class ToolType { Brush, Pencil, Eraser, Fill, Select };
 
 struct Layer {
-    sf::RenderTexture* texture;
+    std::shared_ptr<sf::RenderTexture> texture;
     std::string name;
     bool visible;
     bool locked;
     float opacity;
     BlendMode blendMode;
+    bool persistent;
+    int colorTag;
 
     Layer(std::string n = "Layer");
-    ~Layer();
+    ~Layer() = default;
     Layer(const Layer& other);
     Layer& operator=(const Layer& other);
     Layer(Layer&& other) noexcept;
@@ -100,6 +102,11 @@ public:
     void moveLayer(int frameIndex, int fromIndex, int toIndex);
     void setActiveLayer(int index);
     int getActiveLayer() const;
+    void toggleLayerPersistence(int frameIndex, int layerIndex);
+    void cycleLayerColorTag(int frameIndex, int layerIndex);
+
+    void mergeDown(int frameIndex);
+    void mergeVisible(int frameIndex);
 
     void setOnionSkin(bool enabled, float prevOpac, float nextOpac);
     void setOnionSkinCounts(int prevCount, int nextCount);
