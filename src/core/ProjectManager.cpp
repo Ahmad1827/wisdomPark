@@ -32,7 +32,7 @@ std::vector<ProjectMetadata> ProjectManager::getRecentProjects() {
     ensureDirectoryExists();
 
     for (const auto& entry : fs::directory_iterator(projectsDir)) {
-        if (entry.is_directory() && entry.path().extension() == ".wpark") {
+        if (entry.is_directory() && entry.path().extension() == ".wpk") {
             std::string metaPath = entry.path().string() + "/meta.json";
             if (fs::exists(metaPath)) {
                 std::ifstream file(metaPath);
@@ -67,7 +67,7 @@ std::vector<ProjectMetadata> ProjectManager::getRecentProjects() {
 }
 
 bool ProjectManager::createNewProject(const std::string& name, int width, int height, int fps, Canvas& canvas) {
-    std::string projPath = projectsDir + "/" + name + ".wpark";
+    std::string projPath = projectsDir + "/" + name + ".wpk";
     if (fs::exists(projPath)) return false;
 
     fs::create_directory(projPath);
@@ -78,7 +78,7 @@ bool ProjectManager::createNewProject(const std::string& name, int width, int he
 }
 
 bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fps) {
-    std::string projPath = projectsDir + "/" + name + ".wpark";
+    std::string projPath = projectsDir + "/" + name + ".wpk";
     ensureDirectoryExists();
     if (!fs::exists(projPath)) {
         fs::create_directory(projPath);
@@ -94,7 +94,12 @@ bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fp
         << size.y << "\n"
         << fps << "\n"
         << canvas.getFrameCount() << "\n"
-        << getCurrentTime() << "\n";
+        << getCurrentTime() << "\n"
+        << canvas.isOnionSkinEnabled() << "\n"
+        << canvas.getOnionSkinPrevOpacity() << "\n"
+        << canvas.getOnionSkinNextOpacity() << "\n"
+        << canvas.getOnionSkinPrevCount() << "\n"
+        << canvas.getOnionSkinNextCount() << "\n";
     metaFile.close();
 
     if (canvas.getFrameCount() > 0) {
@@ -105,7 +110,7 @@ bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fp
         for (const auto& l : f0->layers) {
             if (l.visible) {
                 sf::Sprite s(l.texture->getTexture());
-                s.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(l.opacity)));
+                s.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(l.opacity * 255.0f)));
                 composite.draw(s);
             }
         }
@@ -118,9 +123,11 @@ bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fp
         if (!frame) continue;
 
         for (size_t l = 0; l < frame->layers.size(); ++l) {
-            std::string imgPath = projPath + "/layers/f" + std::to_string(f) + "_l" + std::to_string(l) + ".png";
-            sf::Image img = frame->layers[l].texture->getTexture().copyToImage();
-            img.saveToFile(imgPath);
+            if (!frame->layers[l].persistent || f == 0) {
+                std::string imgPath = projPath + "/layers/f" + std::to_string(f) + "_l" + std::to_string(l) + ".png";
+                sf::Image img = frame->layers[l].texture->getTexture().copyToImage();
+                img.saveToFile(imgPath);
+            }
         }
 
         std::ofstream layerMeta(projPath + "/f" + std::to_string(f) + "_layers.txt");
@@ -129,7 +136,9 @@ bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fp
                 << frame->layers[l].visible << "|"
                 << frame->layers[l].locked << "|"
                 << frame->layers[l].opacity << "|"
-                << static_cast<int>(frame->layers[l].blendMode) << "\n";
+                << static_cast<int>(frame->layers[l].blendMode) << "|"
+                << frame->layers[l].persistent << "|"
+                << frame->layers[l].colorTag << "\n";
         }
         layerMeta.close();
     }
@@ -137,13 +146,16 @@ bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fp
 }
 
 bool ProjectManager::loadProject(const std::string& name, Canvas& canvas, int& outFps) {
-    std::string projPath = projectsDir + "/" + name + ".wpark";
+    std::string projPath = projectsDir + "/" + name + ".wpk";
     std::string metaPath = projPath + "/meta.json";
     if (!fs::exists(metaPath)) return false;
 
     std::ifstream file(metaPath);
     std::string projName, line, lastMod;
     int width, height, frames;
+    bool onionOn = false;
+    float onionP = 89.25f, onionN = 89.25f;
+    int opc = 1, onc = 1;
 
     std::getline(file, projName);
     std::getline(file, line); width = std::stoi(line);
@@ -151,10 +163,17 @@ bool ProjectManager::loadProject(const std::string& name, Canvas& canvas, int& o
     std::getline(file, line); outFps = std::stoi(line);
     std::getline(file, line); frames = std::stoi(line);
     std::getline(file, lastMod);
+    if (std::getline(file, line)) onionOn = (line == "1");
+    if (std::getline(file, line)) onionP = std::stof(line);
+    if (std::getline(file, line)) onionN = std::stof(line);
+    if (std::getline(file, line)) opc = std::stoi(line);
+    if (std::getline(file, line)) onc = std::stoi(line);
     file.close();
 
     canvas.initCustom(width, height);
     canvas.clearAllFrames();
+    canvas.setOnionSkin(onionOn, onionP, onionN);
+    canvas.setOnionSkinCounts(opc, onc);
 
     for (int f = 0; f < frames; ++f) {
         if (f > 0) canvas.addFrame(f - 1);
@@ -166,29 +185,42 @@ bool ProjectManager::loadProject(const std::string& name, Canvas& canvas, int& o
         while (std::getline(layerMeta, lLine)) {
             if (l > 1) canvas.addLayer(f, "Layer");
 
-            size_t pos1 = lLine.find('|');
-            size_t pos2 = lLine.find('|', pos1 + 1);
-            size_t pos3 = lLine.find('|', pos2 + 1);
-            size_t pos4 = lLine.find('|', pos3 + 1);
+            size_t p1 = lLine.find('|');
+            size_t p2 = lLine.find('|', p1 + 1);
+            size_t p3 = lLine.find('|', p2 + 1);
+            size_t p4 = lLine.find('|', p3 + 1);
+            size_t p5 = lLine.find('|', p4 + 1);
+            size_t p6 = lLine.find('|', p5 + 1);
 
-            if (pos1 != std::string::npos && pos4 != std::string::npos) {
-                std::string lName = lLine.substr(0, pos1);
-                bool lVis = (lLine.substr(pos1 + 1, pos2 - pos1 - 1) == "1");
-                bool lLock = (lLine.substr(pos2 + 1, pos3 - pos2 - 1) == "1");
-                float lOpac = std::stof(lLine.substr(pos3 + 1, pos4 - pos3 - 1));
-                int lBlend = std::stoi(lLine.substr(pos4 + 1));
+            if (p1 != std::string::npos && p4 != std::string::npos) {
+                std::string lName = lLine.substr(0, p1);
+                bool lVis = (lLine.substr(p1 + 1, p2 - p1 - 1) == "1");
+                bool lLock = (lLine.substr(p2 + 1, p3 - p2 - 1) == "1");
+                float lOpac = std::stof(lLine.substr(p3 + 1, p4 - p3 - 1));
+                int lBlend = std::stoi(lLine.substr(p4 + 1, p5 - p4 - 1));
+                bool lPers = false;
+                int lTag = 0;
+
+                if (p5 != std::string::npos && p6 != std::string::npos) {
+                    lPers = (lLine.substr(p5 + 1, p6 - p5 - 1) == "1");
+                    lTag = std::stoi(lLine.substr(p6 + 1));
+                }
 
                 canvas.setLayerProperties(f, l, lName, lVis, lLock, lOpac, static_cast<BlendMode>(lBlend));
+                if (lPers && f > 0) canvas.toggleLayerPersistence(f, l);
+                for (int t = 0; t < lTag; ++t) canvas.cycleLayerColorTag(f, l);
             }
 
-            std::string imgPath = projPath + "/layers/f" + std::to_string(f) + "_l" + std::to_string(l) + ".png";
-            if (fs::exists(imgPath)) {
-                sf::Texture tex;
-                if (tex.loadFromFile(imgPath)) {
-                    sf::Sprite spr(tex);
-                    canvas.getFrame(f)->layers[l].texture->clear(sf::Color::Transparent);
-                    canvas.getFrame(f)->layers[l].texture->draw(spr);
-                    canvas.getFrame(f)->layers[l].texture->display();
+            if (!canvas.getFrameReadOnly(f)->layers[l].persistent || f == 0) {
+                std::string imgPath = projPath + "/layers/f" + std::to_string(f) + "_l" + std::to_string(l) + ".png";
+                if (fs::exists(imgPath)) {
+                    sf::Texture tex;
+                    if (tex.loadFromFile(imgPath)) {
+                        sf::Sprite spr(tex);
+                        canvas.getFrame(f)->layers[l].texture->clear(sf::Color::Transparent);
+                        canvas.getFrame(f)->layers[l].texture->draw(spr);
+                        canvas.getFrame(f)->layers[l].texture->display();
+                    }
                 }
             }
             l++;
@@ -198,7 +230,7 @@ bool ProjectManager::loadProject(const std::string& name, Canvas& canvas, int& o
 }
 
 bool ProjectManager::deleteProject(const std::string& name) {
-    std::string projPath = projectsDir + "/" + name + ".wpark";
+    std::string projPath = projectsDir + "/" + name + ".wpk";
     if (fs::exists(projPath)) {
         return fs::remove_all(projPath) > 0;
     }
@@ -206,8 +238,8 @@ bool ProjectManager::deleteProject(const std::string& name) {
 }
 
 bool ProjectManager::duplicateProject(const std::string& sourceName, const std::string& newName) {
-    std::string srcPath = projectsDir + "/" + sourceName + ".wpark";
-    std::string dstPath = projectsDir + "/" + newName + ".wpark";
+    std::string srcPath = projectsDir + "/" + sourceName + ".wpk";
+    std::string dstPath = projectsDir + "/" + newName + ".wpk";
 
     if (fs::exists(srcPath) && !fs::exists(dstPath)) {
         fs::copy(srcPath, dstPath, fs::copy_options::recursive);

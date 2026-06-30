@@ -47,6 +47,7 @@ void BottomTimeline::init() {
     makeBtn("add", "Add", 70.f);
     makeBtn("dup", "Dup", 70.f);
     makeBtn("del", "Del", 70.f);
+    makeBtn("export", "Export", 70.f);
 
     makeBtn("onion_toggle", "Onion: ON", 85.f);
     makeBtn("onion_prev", "Prev: 1", 70.f);
@@ -166,6 +167,9 @@ void BottomTimeline::draw(sf::RenderWindow& window, Timeline& timeline, Canvas& 
             btn.rect.setFillColor(btn.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));
             sf::FloatRect tRect = btn.label.getLocalBounds();
             btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
+        }
+        else if (btn.id == "export") {
+            btn.rect.setFillColor(btn.isHovered ? sf::Color(0, 150, 255, 180) : sf::Color(0, 122, 204, 180));
         }
         else {
             btn.rect.setFillColor(btn.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));

@@ -17,6 +17,7 @@ void UIManager::init(ProjectManager* pm) {
     projectBrowser.init(pm);
     settingsModal.init();
     keybindPanel.init(&keybindManager);
+    exportModal.init();
 
     leftToolbar.init();
     layerPanel.init();
@@ -65,6 +66,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         if (event.type == sf::Event::TextEntered) settingsModal.handleTextEntered(event.text.unicode);
         else if (event.type == sf::Event::KeyPressed) settingsModal.handleKeyPress(event.key.code, settings);
         else if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) settingsModal.handleClick(mousePos, settings);
+        return;
+    }
+
+    if (exportModal.getIsOpen()) {
+        exportModal.handleEvent(event, window);
         return;
     }
 
@@ -135,6 +141,23 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
             if (keybindManager.isActionTriggered("ui_settings", event)) {
                 keybindPanel.toggle();
+            }
+
+            if (keybindManager.isActionTriggered("export_png", event)) {
+                exportModal.open(canvas, timeline.getCurrentFrame());
+            }
+
+            if (keybindManager.isActionTriggered("proj_save", event)) {
+                if (pm.saveProject(activeProjectName, canvas, static_cast<int>(timeline.getFps()))) {
+                    showMessage("Project Saved Successfully!", sf::Color::Green);
+                }
+                else showMessage("Error Saving Project!", sf::Color::Red);
+            }
+
+            if (keybindManager.isActionTriggered("proj_new", event)) {
+                activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
+                pm.createNewProject(activeProjectName, 1920, 1080, 12, canvas);
+                showMessage("Created New Project", sf::Color::Green);
             }
 
             if (keybindManager.isActionTriggered("time_next", event)) {
@@ -268,16 +291,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (keybindManager.isActionTriggered("tool_fill", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Fill); leftToolbar.setActiveTool("fill"); }
             if (keybindManager.isActionTriggered("tool_select", event)) { canvas.setActiveTool(ToolType::Select); leftToolbar.setActiveTool("select"); }
 
-            if (keybindManager.isActionTriggered("proj_save", event)) {
-                if (pm.saveProject(activeProjectName, canvas, 12)) showMessage("Project Saved Successfully!", sf::Color::Green);
-                else showMessage("Error Saving Project!", sf::Color::Red);
-            }
-
             if (keybindManager.isActionTriggered("edit_undo", event)) canvas.undo();
             if (keybindManager.isActionTriggered("edit_redo", event)) canvas.redo();
         }
 
-        if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible()) {
+        if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible() && !exportModal.getIsOpen()) {
 
             if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
 
@@ -370,6 +388,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                                     timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
                                 }
                             }
+                        }
+                        else if (bottomAction == "export") {
+                            exportModal.open(canvas, timeline.getCurrentFrame());
                         }
                         else if (bottomAction == "onion_toggle") {
                             canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
@@ -469,6 +490,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
     if (settingsModal.getIsOpen()) settingsModal.updateHover(mousePos);
     if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);
+    if (exportModal.getIsOpen()) exportModal.updateHover(mousePos);
 
     if (currentState == AppState::Welcome) {
         projectBrowser.updateHover(mousePos);
@@ -556,6 +578,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         if (isTypingPrompt) { window.draw(promptBox); window.draw(promptDisplay); }
 
         keybindPanel.draw(window);
+        if (exportModal.getIsOpen()) exportModal.draw(window);
     }
 
     if (settingsModal.getIsOpen()) settingsModal.draw(window);

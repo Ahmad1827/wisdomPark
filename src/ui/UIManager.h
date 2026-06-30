@@ -7,9 +7,11 @@
 #include "../core/KeybindManager.h"
 #include "../core/Canvas.h"
 #include "../core/Timeline.h"
+#include "../core/ExportManager.h"
 #include "../ai/AIHelper.h"
 #include "Screens/ProjectBrowser.h"
 #include "Screens/AISettingsModal.h"
+#include "Screens/ExportModal.h"
 #include "KeybindSettingsPanel.h"
 #include "LeftToolbar.h"
 #include "BottomTimeline.h"
@@ -38,6 +40,7 @@ private:
     ProjectBrowser projectBrowser;
     AISettingsModal settingsModal;
     KeybindSettingsPanel keybindPanel;
+    ExportModal exportModal;
 
     LeftToolbar leftToolbar;
     BottomTimeline bottomTimeline;

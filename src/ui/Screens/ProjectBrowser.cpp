@@ -54,7 +54,7 @@ void ProjectBrowser::refresh() {
 
         if (meta.thumbnail.getSize().x > 0) {
             card.thumbnail.setTexture(meta.thumbnail);
-            float scale = 230.f / std::max(meta.thumbnail.getSize().x, meta.thumbnail.getSize().y);
+            float scale = 230.f / std::max(static_cast<float>(meta.thumbnail.getSize().x), static_cast<float>(meta.thumbnail.getSize().y));
             card.thumbnail.setScale(scale, scale);
             card.thumbnail.setPosition(x + 10.f, y + 10.f);
         }
