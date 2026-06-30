@@ -16,8 +16,8 @@ void ColorPalettePanel::init() {
     handleBg.setOutlineColor(sf::Color(255, 255, 255, 30));
 
     handleLabel.setFont(font);
-    handleLabel.setString("<");
-    handleLabel.setCharacterSize(16);
+    handleLabel.setString("< C");
+    handleLabel.setCharacterSize(14);
     handleLabel.setFillColor(sf::Color(200, 200, 200));
 
     pinBtn.setSize(sf::Vector2f(width - 20.f, 24.f));
@@ -58,10 +58,16 @@ void ColorPalettePanel::update(float dt, bool focusMode) {
     background.setPosition(currentX, 600.f);
 
     handleBg.setPosition(currentX - 24.f, 650.f);
-    handleLabel.setPosition(currentX - 18.f, 680.f);
+    handleLabel.setPosition(currentX - 20.f, 680.f);
 
-    if (state == PalettePanelState::Pinned) handleLabel.setString("x");
-    else handleLabel.setString("<");
+    if (state == PalettePanelState::Pinned) {
+        handleLabel.setString("x");
+        pinLabel.setFillColor(sf::Color(0, 191, 255));
+    }
+    else {
+        handleLabel.setString("< C");
+        pinLabel.setFillColor(sf::Color(180, 180, 180));
+    }
 
     pinBtn.setPosition(currentX + 10.f, 610.f);
     pinLabel.setPosition(currentX + 20.f, 614.f);
@@ -78,12 +84,16 @@ void ColorPalettePanel::update(float dt, bool focusMode) {
     }
 }
 
-void ColorPalettePanel::updateHover(sf::Vector2f mousePos) {
+void ColorPalettePanel::updateHover(sf::Vector2f mousePos, bool canOpen) {
     bool inPanel = background.getGlobalBounds().contains(mousePos);
     bool inHandle = handleBg.getGlobalBounds().contains(mousePos);
 
-    if (state == PalettePanelState::Hidden && inHandle) state = PalettePanelState::Visible;
-    else if (state == PalettePanelState::Visible && !inPanel && !inHandle) state = PalettePanelState::Hidden;
+    if (state == PalettePanelState::Hidden) {
+        if (canOpen && inHandle) state = PalettePanelState::Visible;
+    }
+    else if (state == PalettePanelState::Visible) {
+        if (!inPanel && !inHandle) state = PalettePanelState::Hidden;
+    }
 }
 
 void ColorPalettePanel::draw(sf::RenderWindow& window) {
@@ -101,7 +111,7 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
     for (auto& s : swatches) window.draw(s);
 }
 
-bool ColorPalettePanel::handleClick(sf::Vector2f mousePos, sf::Color& outPrimary, sf::Color& outSecondary) {
+bool ColorPalettePanel::handleClick(sf::Vector2f mousePos, Canvas& canvas) {
     if (pinBtn.getGlobalBounds().contains(mousePos)) {
         state = (state == PalettePanelState::Pinned) ? PalettePanelState::Visible : PalettePanelState::Pinned;
         return true;
@@ -115,12 +125,12 @@ bool ColorPalettePanel::handleClick(sf::Vector2f mousePos, sf::Color& outPrimary
     for (auto& s : swatches) {
         if (s.getGlobalBounds().contains(mousePos)) {
             if (sf::Mouse::isButtonPressed(sf::Mouse::Right)) {
-                outSecondary = s.getFillColor();
-                secondaryBox.setFillColor(outSecondary);
+                canvas.setSecondaryColor(s.getFillColor());
+                secondaryBox.setFillColor(s.getFillColor());
             }
             else {
-                outPrimary = s.getFillColor();
-                primaryBox.setFillColor(outPrimary);
+                canvas.setPrimaryColor(s.getFillColor());
+                primaryBox.setFillColor(s.getFillColor());
             }
             return true;
         }
@@ -136,3 +146,5 @@ float ColorPalettePanel::getCurrentX() const { return currentX; }
 void ColorPalettePanel::forceClose() { if (state != PalettePanelState::Pinned) state = PalettePanelState::Hidden; }
 bool ColorPalettePanel::isHovered() const { return state == PalettePanelState::Visible; }
 bool ColorPalettePanel::isPanelPinned() const { return state == PalettePanelState::Pinned; }
+bool ColorPalettePanel::isOpen() const { return state != PalettePanelState::Hidden; }
+sf::FloatRect ColorPalettePanel::getHandleBounds() const { return handleBg.getGlobalBounds(); }

@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <iostream>
 
-LayerPanel::LayerPanel() : scrollOffset(0.f), maxScroll(0.f), renamingLayerIndex(-1), draggedLayerIndex(-1), isDragging(false), currentX(1920.f), targetX(1920.f), width(280.f), pinned(false), hovered(false) {}
+LayerPanel::LayerPanel() : scrollOffset(0.f), maxScroll(0.f), renamingLayerIndex(-1), draggedLayerIndex(-1), isDragging(false), currentX(1920.f), targetX(1920.f), width(280.f), state(LayerPanelState::Hidden) {}
 
 void LayerPanel::init() {
     font.loadFromFile("assets/font.otf");
@@ -26,7 +26,7 @@ void LayerPanel::init() {
     headerText.setCharacterSize(14);
     headerText.setFillColor(sf::Color(200, 200, 200));
 
-    pinBtn.setSize(sf::Vector2f(50.f, 24.f));
+    pinBtn.setSize(sf::Vector2f(45.f, 24.f));
     pinBtn.setFillColor(sf::Color(50, 50, 60, 255));
     pinText.setFont(font);
     pinText.setString("Pin");
@@ -46,6 +46,7 @@ void LayerPanel::init() {
     setupBtn(delBtn, delText, "-", 25.f);
     setupBtn(mergeDownBtn, mergeDownText, "Mv", 25.f);
     setupBtn(mergeVisBtn, mergeVisText, "M*", 25.f);
+    setupBtn(pushBtn, pushText, ">>", 25.f);
 
     renameBox.setFillColor(sf::Color(10, 10, 15, 255));
     renameBox.setOutlineThickness(1.f);
@@ -56,22 +57,17 @@ void LayerPanel::init() {
 }
 
 void LayerPanel::update(float dt, bool focusMode) {
-    if (focusMode) {
-        targetX = 1920.f;
-    }
-    else {
-        if (pinned || hovered) targetX = 1920.f - width;
-        else targetX = 1920.f;
-    }
+    if (focusMode) targetX = 1920.f;
+    else targetX = (state == LayerPanelState::Pinned || state == LayerPanelState::Visible) ? 1920.f - width : 1920.f;
 
     currentX += (targetX - currentX) * 15.f * dt;
 
     background.setPosition(currentX, 0.f);
     background.setSize(sf::Vector2f(width, 1080.f));
 
-    handleBg.setPosition(currentX - 30.f, 300.f);
-    handleBg.setSize(sf::Vector2f(30.f, 80.f));
-    handleText.setPosition(currentX - 25.f, 330.f);
+    handleBg.setPosition(currentX - 24.f, 350.f);
+    handleBg.setSize(sf::Vector2f(24.f, 80.f));
+    handleText.setPosition(currentX - 20.f, 380.f);
 
     headerBg.setPosition(currentX, 0.f);
     headerBg.setSize(sf::Vector2f(width, 30.f));
@@ -79,8 +75,18 @@ void LayerPanel::update(float dt, bool focusMode) {
 
     pinBtn.setPosition(currentX + 5.f, 40.f);
     pinText.setPosition(currentX + 15.f, 43.f);
-    if (pinned) pinText.setString("Unpin");
-    else pinText.setString("Pin");
+
+    if (state == LayerPanelState::Pinned) {
+        handleText.setString("x");
+        pinText.setString("Unpin");
+    }
+    else {
+        handleText.setString("< L");
+        pinText.setString("Pin");
+    }
+
+    pushBtn.setPosition(currentX + width - 180.f, 40.f);
+    pushText.setPosition(currentX + width - 175.f, 43.f);
 
     addBtn.setPosition(currentX + width - 150.f, 40.f);
     addText.setPosition(currentX + width - 142.f, 43.f);
@@ -98,30 +104,40 @@ void LayerPanel::update(float dt, bool focusMode) {
     mergeVisText.setPosition(currentX + width - 25.f, 43.f);
 }
 
-void LayerPanel::updateHover(sf::Vector2f mousePos) {
-    hovered = background.getGlobalBounds().contains(mousePos) || handleBg.getGlobalBounds().contains(mousePos);
+void LayerPanel::updateHover(sf::Vector2f mousePos, bool canOpen) {
+    bool inPanel = background.getGlobalBounds().contains(mousePos);
+    bool inHandle = handleBg.getGlobalBounds().contains(mousePos);
+
+    if (state == LayerPanelState::Hidden) {
+        if (canOpen && inHandle) state = LayerPanelState::Visible;
+    }
+    else if (state == LayerPanelState::Visible) {
+        if (!inPanel && !inHandle) state = LayerPanelState::Hidden;
+    }
 }
 
-bool LayerPanel::isPanelPinned() const { return pinned; }
-void LayerPanel::forceClose() { if (!pinned) targetX = 1920.f; }
-bool LayerPanel::isHovered() const { return hovered; }
+bool LayerPanel::isPanelPinned() const { return state == LayerPanelState::Pinned; }
+void LayerPanel::forceClose() { if (state != LayerPanelState::Pinned) state = LayerPanelState::Hidden; }
+bool LayerPanel::isHovered() const { return state == LayerPanelState::Visible; }
 float LayerPanel::getCurrentX() const { return currentX; }
+bool LayerPanel::isOpen() const { return state != LayerPanelState::Hidden; }
+sf::FloatRect LayerPanel::getHandleBounds() const { return handleBg.getGlobalBounds(); }
 
 sf::Color LayerPanel::getTagColor(int tagId) const {
     switch (tagId) {
-    case 1: return sf::Color(255, 50, 50);   // Red
-    case 2: return sf::Color(50, 100, 255);  // Blue
-    case 3: return sf::Color(50, 200, 50);   // Green
-    case 4: return sf::Color(255, 200, 50);  // Yellow
-    case 5: return sf::Color(150, 50, 200);  // Purple
-    case 6: return sf::Color(255, 120, 0);   // Orange
-    default: return sf::Color(100, 100, 110); // None
+    case 1: return sf::Color(255, 50, 50);
+    case 2: return sf::Color(50, 100, 255);
+    case 3: return sf::Color(50, 200, 50);
+    case 4: return sf::Color(255, 200, 50);
+    case 5: return sf::Color(150, 50, 200);
+    case 6: return sf::Color(255, 120, 0);
+    default: return sf::Color(100, 100, 110);
     }
 }
 
 void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame) {
     window.draw(background);
-    if (!pinned) {
+    if (state != LayerPanelState::Pinned) {
         window.draw(handleBg);
         window.draw(handleText);
     }
@@ -134,7 +150,7 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         window.draw(r); window.draw(t);
         };
 
-    if (pinned) {
+    if (state == LayerPanelState::Pinned) {
         pinBtn.setOutlineThickness(1.f);
         pinBtn.setOutlineColor(sf::Color(0, 191, 255));
         pinText.setFillColor(sf::Color(0, 191, 255));
@@ -145,6 +161,7 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
     }
 
     styleBtn(pinBtn, pinText);
+    styleBtn(pushBtn, pushText);
     styleBtn(addBtn, addText);
     styleBtn(dupBtn, dupText);
     styleBtn(delBtn, delText);
@@ -159,6 +176,23 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
 
     float rowHeight = 45.f;
     float startY = 80.f;
+
+    if (isDragging && !sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
+        isDragging = false;
+        float my = static_cast<float>(sf::Mouse::getPosition(window).y);
+        if (draggedLayerIndex != -1) {
+            for (int i = 0; i < static_cast<int>(rowCache.size()); ++i) {
+                float checkY = startY + (rowCache.size() - 1 - i) * rowHeight - scrollOffset;
+                if (my >= checkY && my <= checkY + rowHeight) {
+                    if (i != draggedLayerIndex) {
+                        canvas.moveLayer(currentFrame, draggedLayerIndex, i);
+                    }
+                    break;
+                }
+            }
+        }
+        draggedLayerIndex = -1;
+    }
 
     sf::View oldView = window.getView();
     sf::View panelView(sf::FloatRect(currentX, startY, width, 1080.f - startY));
@@ -189,10 +223,10 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         colorTag.setFillColor(getTagColor(frame->layers[i].colorTag));
         window.draw(colorTag);
 
-        auto drawToggle = [&](sf::FloatRect r, bool state, std::string label, sf::Color activeCol) {
+        auto drawToggle = [&](sf::FloatRect r, bool toggleState, std::string label, sf::Color activeCol) {
             sf::RectangleShape toggle(sf::Vector2f(16.f, 16.f));
             toggle.setPosition(r.left + 2.f, r.top + 2.f);
-            toggle.setFillColor(state ? activeCol : sf::Color(60, 60, 70));
+            toggle.setFillColor(toggleState ? activeCol : sf::Color(60, 60, 70));
             sf::Text t(label, font, 10);
             t.setPosition(r.left + 4.f, r.top + 2.f);
             t.setFillColor(sf::Color::White);
@@ -203,7 +237,6 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         drawToggle(rowCache[i].lockBounds, frame->layers[i].locked, "L", sf::Color(200, 50, 50));
         drawToggle(rowCache[i].persistBounds, frame->layers[i].persistent, "P", sf::Color(255, 150, 0));
 
-        // Transparency Checkerboard behind Thumbnail
         sf::RectangleShape check1(sf::Vector2f(17.f, 17.f)); check1.setFillColor(sf::Color(100, 100, 100));
         sf::RectangleShape check2(sf::Vector2f(17.f, 17.f)); check2.setFillColor(sf::Color(150, 150, 150));
         float tX = currentX + 85.f; float tY = curY + 5.f;
@@ -257,16 +290,22 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
     window.setView(oldView);
 }
 
-bool LayerPanel::handleClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame) {
+std::string LayerPanel::processClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame) {
     if (pinBtn.getGlobalBounds().contains(mousePos)) {
-        pinned = !pinned;
-        return true;
+        state = (state == LayerPanelState::Pinned) ? LayerPanelState::Visible : LayerPanelState::Pinned;
+        return "layer_pin";
     }
-    if (addBtn.getGlobalBounds().contains(mousePos)) { canvas.addLayer(currentFrame); return true; }
-    if (dupBtn.getGlobalBounds().contains(mousePos)) { canvas.duplicateLayer(currentFrame, canvas.getActiveLayer()); return true; }
-    if (delBtn.getGlobalBounds().contains(mousePos)) { canvas.deleteLayer(currentFrame, canvas.getActiveLayer()); return true; }
-    if (mergeDownBtn.getGlobalBounds().contains(mousePos)) { canvas.mergeDown(currentFrame); return true; }
-    if (mergeVisBtn.getGlobalBounds().contains(mousePos)) { canvas.mergeVisible(currentFrame); return true; }
+    if (state == LayerPanelState::Hidden && handleBg.getGlobalBounds().contains(mousePos)) {
+        state = LayerPanelState::Pinned;
+        return "handle_click";
+    }
+
+    if (pushBtn.getGlobalBounds().contains(mousePos)) return "layer_push";
+    if (addBtn.getGlobalBounds().contains(mousePos)) { canvas.addLayer(currentFrame); return "layer_add"; }
+    if (dupBtn.getGlobalBounds().contains(mousePos)) { canvas.duplicateLayer(currentFrame, canvas.getActiveLayer()); return "layer_dup"; }
+    if (delBtn.getGlobalBounds().contains(mousePos)) { canvas.deleteLayer(currentFrame, canvas.getActiveLayer()); return "layer_del"; }
+    if (mergeDownBtn.getGlobalBounds().contains(mousePos)) { canvas.mergeDown(currentFrame); return "layer_merge_d"; }
+    if (mergeVisBtn.getGlobalBounds().contains(mousePos)) { canvas.mergeVisible(currentFrame); return "layer_merge_v"; }
 
     sf::Vector2f localMouse(mousePos.x, mousePos.y + scrollOffset);
     for (int i = 0; i < static_cast<int>(rowCache.size()); ++i) {
@@ -279,45 +318,49 @@ bool LayerPanel::handleClick(sf::Vector2f mousePos, Canvas& canvas, int currentF
         if (adjustedBounds.contains(localMouse)) {
             if (sf::FloatRect(rowCache[i].colorTagBounds.left, rowCache[i].colorTagBounds.top + scrollOffset, rowCache[i].colorTagBounds.width, rowCache[i].colorTagBounds.height).contains(localMouse)) {
                 canvas.cycleLayerColorTag(currentFrame, i);
-                return true;
+                return "layer_tag";
             }
             if (sf::FloatRect(rowCache[i].eyeBounds.left, rowCache[i].eyeBounds.top + scrollOffset, rowCache[i].eyeBounds.width, rowCache[i].eyeBounds.height).contains(localMouse)) {
                 canvas.setLayerProperties(currentFrame, i, f->layers[i].name, !f->layers[i].visible, f->layers[i].locked, f->layers[i].opacity, f->layers[i].blendMode);
-                return true;
+                return "layer_vis";
             }
             if (sf::FloatRect(rowCache[i].lockBounds.left, rowCache[i].lockBounds.top + scrollOffset, rowCache[i].lockBounds.width, rowCache[i].lockBounds.height).contains(localMouse)) {
                 canvas.setLayerProperties(currentFrame, i, f->layers[i].name, f->layers[i].visible, !f->layers[i].locked, f->layers[i].opacity, f->layers[i].blendMode);
-                return true;
+                return "layer_lock";
             }
             if (sf::FloatRect(rowCache[i].persistBounds.left, rowCache[i].persistBounds.top + scrollOffset, rowCache[i].persistBounds.width, rowCache[i].persistBounds.height).contains(localMouse)) {
                 canvas.toggleLayerPersistence(currentFrame, i);
-                return true;
+                return "layer_persist";
             }
             if (sf::FloatRect(rowCache[i].opacityBounds.left, rowCache[i].opacityBounds.top + scrollOffset, rowCache[i].opacityBounds.width, rowCache[i].opacityBounds.height).contains(localMouse)) {
                 float newOp = std::clamp((localMouse.x - rowCache[i].opacityBounds.left) / rowCache[i].opacityBounds.width, 0.f, 1.f);
                 canvas.setLayerProperties(currentFrame, i, f->layers[i].name, f->layers[i].visible, f->layers[i].locked, newOp, f->layers[i].blendMode);
-                return true;
+                return "layer_op";
             }
             if (sf::FloatRect(rowCache[i].blendBounds.left, rowCache[i].blendBounds.top + scrollOffset, rowCache[i].blendBounds.width, rowCache[i].blendBounds.height).contains(localMouse)) {
                 int b = static_cast<int>(f->layers[i].blendMode) + 1;
                 if (b > 4) b = 0;
                 canvas.setLayerProperties(currentFrame, i, f->layers[i].name, f->layers[i].visible, f->layers[i].locked, f->layers[i].opacity, static_cast<BlendMode>(b));
-                return true;
+                return "layer_blend";
             }
             if (sf::FloatRect(rowCache[i].nameBounds.left, rowCache[i].nameBounds.top + scrollOffset, rowCache[i].nameBounds.width, rowCache[i].nameBounds.height).contains(localMouse)) {
                 renamingLayerIndex = i;
                 renameBuffer = f->layers[i].name;
                 canvas.setActiveLayer(i);
-                return true;
+                return "layer_rename";
             }
             canvas.setActiveLayer(i);
             draggedLayerIndex = i;
             dragStartPos = mousePos;
             isDragging = true;
-            return true;
+            return "layer_select";
         }
     }
-    return false;
+    return "";
+}
+
+bool LayerPanel::handleClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame) {
+    return !processClick(mousePos, canvas, currentFrame).empty();
 }
 
 bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canvas& canvas, int currentFrame) {
@@ -341,21 +384,6 @@ bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canv
         scrollOffset -= event.mouseWheelScroll.delta * 20.f;
         scrollOffset = std::clamp(scrollOffset, 0.f, maxScroll);
         return true;
-    }
-
-    if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
-        if (isDragging) {
-            isDragging = false;
-            float dropY = mousePos.y + scrollOffset;
-            for (int i = 0; i < static_cast<int>(rowCache.size()); ++i) {
-                if (dropY >= rowCache[i].bounds.top + scrollOffset && dropY <= rowCache[i].bounds.top + scrollOffset + rowCache[i].bounds.height) {
-                    if (i != draggedLayerIndex) canvas.moveLayer(currentFrame, draggedLayerIndex, i);
-                    break;
-                }
-            }
-            draggedLayerIndex = -1;
-            return true;
-        }
     }
     return false;
 }

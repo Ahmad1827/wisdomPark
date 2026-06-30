@@ -43,7 +43,7 @@ public:
     RightProperties();
     void init();
     void update(float dt, bool focusMode);
-    void updateHover(sf::Vector2f mousePos);
+    void updateHover(sf::Vector2f mousePos, bool canOpen);
     void draw(sf::RenderWindow& window);
     std::string handleClick(sf::Vector2f mousePos);
     void syncState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity, float currentFps);
@@ -52,4 +52,6 @@ public:
     void forceClose();
     bool isHovered() const;
     bool isPanelPinned() const;
+    bool isOpen() const;
+    sf::FloatRect getHandleBounds() const;
 };

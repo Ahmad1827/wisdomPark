@@ -104,6 +104,7 @@ public:
     int getActiveLayer() const;
     void toggleLayerPersistence(int frameIndex, int layerIndex);
     void cycleLayerColorTag(int frameIndex, int layerIndex);
+    void pushLayerToNextFrame(int currentFrame, int layerIndex);
 
     void mergeDown(int frameIndex);
     void mergeVisible(int frameIndex);
@@ -138,6 +139,7 @@ public:
     void setPrimaryColor(sf::Color color);
     void setSecondaryColor(sf::Color color);
     sf::Color getPrimaryColor() const;
+    sf::Color getSecondaryColor() const;
     void setFillSettings(float tolerance, bool contiguous);
 
     void undo();

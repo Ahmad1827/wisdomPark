@@ -18,8 +18,8 @@ void RightProperties::init() {
     handleBg.setOutlineColor(sf::Color(255, 255, 255, 30));
 
     handleLabel.setFont(font);
-    handleLabel.setString("<");
-    handleLabel.setCharacterSize(16);
+    handleLabel.setString("< P");
+    handleLabel.setCharacterSize(14);
     handleLabel.setFillColor(sf::Color(200, 200, 200));
 
     pinBtn.setSize(sf::Vector2f(width - 40.f, 24.f));
@@ -88,7 +88,7 @@ void RightProperties::update(float dt, bool focusMode) {
         pinLabel.setFillColor(sf::Color(0, 191, 255));
     }
     else {
-        handleLabel.setString("<");
+        handleLabel.setString("< P");
         pinLabel.setString("Pin Panel");
         pinLabel.setFillColor(sf::Color(180, 180, 180));
     }
@@ -117,15 +117,15 @@ void RightProperties::updateLayout() {
     }
 }
 
-void RightProperties::updateHover(sf::Vector2f mousePos) {
+void RightProperties::updateHover(sf::Vector2f mousePos, bool canOpen) {
     bool inPanel = background.getGlobalBounds().contains(mousePos);
     bool inHandle = handleBg.getGlobalBounds().contains(mousePos);
 
-    if (state == RightPanelState::Hidden && inHandle) {
-        state = RightPanelState::Visible;
+    if (state == RightPanelState::Hidden) {
+        if (canOpen && inHandle) state = RightPanelState::Visible;
     }
-    else if (state == RightPanelState::Visible && !inPanel && !inHandle) {
-        state = RightPanelState::Hidden;
+    else if (state == RightPanelState::Visible) {
+        if (!inPanel && !inHandle) state = RightPanelState::Hidden;
     }
 
     for (auto& sec : sections) {
@@ -239,3 +239,5 @@ float RightProperties::getCurrentX() const { return currentX; }
 void RightProperties::forceClose() { if (state != RightPanelState::Pinned) state = RightPanelState::Hidden; }
 bool RightProperties::isHovered() const { return state == RightPanelState::Visible; }
 bool RightProperties::isPanelPinned() const { return state == RightPanelState::Pinned; }
+bool RightProperties::isOpen() const { return state != RightPanelState::Hidden; }
+sf::FloatRect RightProperties::getHandleBounds() const { return handleBg.getGlobalBounds(); }

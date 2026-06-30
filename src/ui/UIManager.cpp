@@ -19,8 +19,9 @@ void UIManager::init(ProjectManager* pm) {
     keybindPanel.init(&keybindManager);
 
     leftToolbar.init();
-    rightPanelManager.init();
     layerPanel.init();
+    colorPalettePanel.init();
+    rightProperties.init();
     bottomTimeline.init();
 
     uiText.setFont(font);
@@ -280,17 +281,66 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
             if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
 
+            if (event.type == sf::Event::MouseMoved) {
+                if (layerPanel.getHandleBounds().contains(mousePos)) {
+                    if (rightProperties.isPanelPinned()) rightProperties.forceClose();
+                    if (colorPalettePanel.isPanelPinned()) colorPalettePanel.forceClose();
+                }
+                else if (rightProperties.getHandleBounds().contains(mousePos)) {
+                    if (layerPanel.isPanelPinned()) layerPanel.forceClose();
+                    if (colorPalettePanel.isPanelPinned()) colorPalettePanel.forceClose();
+                }
+                else if (colorPalettePanel.getHandleBounds().contains(mousePos)) {
+                    if (layerPanel.isPanelPinned()) layerPanel.forceClose();
+                    if (rightProperties.isPanelPinned()) rightProperties.forceClose();
+                }
+            }
+
             if (event.type == sf::Event::MouseButtonPressed) {
 
-                sf::Color pCol, sCol;
-                if (rightPanelManager.handlePaletteClick(mousePos, pCol, sCol)) {
-                    if (event.mouseButton.button == sf::Mouse::Right) canvas.setSecondaryColor(sCol);
-                    else canvas.setPrimaryColor(pCol);
-                    return;
+                if (event.mouseButton.button == sf::Mouse::Left || event.mouseButton.button == sf::Mouse::Right) {
+                    if (colorPalettePanel.handleClick(mousePos, canvas)) {
+                        return;
+                    }
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Left) {
-                    if (layerPanel.handleClick(mousePos, canvas, timeline.getCurrentFrame())) return;
+                    std::string lpAction = layerPanel.processClick(mousePos, canvas, timeline.getCurrentFrame());
+                    if (!lpAction.empty()) {
+                        if (lpAction == "layer_push") {
+                            int cur = timeline.getCurrentFrame();
+                            if (cur == static_cast<int>(canvas.getFrameCount()) - 1) {
+                                canvas.addFrame(cur);
+                                timeline.addFrameAfter(cur);
+                            }
+                            canvas.pushLayerToNextFrame(cur, canvas.getActiveLayer());
+                            timeline.nextFrame();
+                        }
+                        else if (lpAction == "layer_pin" && layerPanel.isPanelPinned()) {
+                            rightProperties.forceClose();
+                            colorPalettePanel.forceClose();
+                        }
+                        return;
+                    }
+
+                    std::string rpAction = rightProperties.handleClick(mousePos);
+                    if (!rpAction.empty()) {
+                        if (rpAction == "pin_toggle" || rpAction == "handle_click" || rpAction == "section_toggle") return;
+
+                        if (rpAction == "fps_up") timeline.setFps(timeline.getFps() + 1.0f);
+                        else if (rpAction == "fps_down") timeline.setFps(std::max(1.0f, timeline.getFps() - 1.0f));
+                        else if (rpAction == "theme_all") aiHelper.setTheme("all");
+                        else if (rpAction == "theme_struct") aiHelper.setTheme("structure");
+                        else if (rpAction == "theme_clutter") aiHelper.setTheme("clutter");
+                        else if (rpAction == "theme_custom") aiHelper.setTheme("custom");
+                        else if (rpAction == "theme_wfc") aiHelper.setTheme("wfc");
+                        else if (rpAction == "toggle_light") isLightingMode = !isLightingMode;
+                        else if (rpAction == "toggle_terrain") aiHelper.toggleTerrain();
+                        else if (rpAction == "onion_toggle") canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
+                        else if (rpAction == "onion_op_up") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() + 25.f, canvas.getOnionSkinNextOpacity() + 25.f);
+                        else if (rpAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() - 25.f, canvas.getOnionSkinNextOpacity() - 25.f);
+                        return;
+                    }
 
                     int clickedFrame = bottomTimeline.handleFrameClick(mousePos, static_cast<size_t>(canvas.getFrameCount()));
                     if (clickedFrame != -1) {
@@ -364,25 +414,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         return;
                     }
 
-                    std::string rightAction = rightPanelManager.handleClick(mousePos, canvas, timeline.getCurrentFrame());
-                    if (!rightAction.empty()) {
-                        if (rightAction == "fps_up") timeline.setFps(timeline.getFps() + 1.0f);
-                        else if (rightAction == "fps_down") timeline.setFps(std::max(1.0f, timeline.getFps() - 1.0f));
-                        else if (rightAction == "theme_all") aiHelper.setTheme("all");
-                        else if (rightAction == "theme_struct") aiHelper.setTheme("structure");
-                        else if (rightAction == "theme_clutter") aiHelper.setTheme("clutter");
-                        else if (rightAction == "theme_custom") aiHelper.setTheme("custom");
-                        else if (rightAction == "theme_wfc") aiHelper.setTheme("wfc");
-                        else if (rightAction == "toggle_light") isLightingMode = !isLightingMode;
-                        else if (rightAction == "toggle_terrain") aiHelper.toggleTerrain();
-                        else if (rightAction == "onion_toggle") canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
-                        else if (rightAction == "onion_op_up") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() + 25.f, canvas.getOnionSkinNextOpacity() + 25.f);
-                        else if (rightAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() - 25.f, canvas.getOnionSkinNextOpacity() - 25.f);
-
-                        if (rightAction == "section_toggle" || rightAction == "pin_toggle") return;
-                        return;
-                    }
-
                     if (aiHelper.getBounds().contains(logicalMousePos)) {
                         if (!settings.isConfigured()) { showMessage("Configure AI Provider (Press ESC) first!", sf::Color::Red); }
                         else {
@@ -445,17 +476,25 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     else if (currentState == AppState::Painting) {
 
         leftToolbar.update(dt, focusMode);
-        rightPanelManager.updateHover(mousePos);
-        layerPanel.updateHover(mousePos);
 
-        rightPanelManager.update(dt, focusMode);
+        bool isLayerOpen = layerPanel.isOpen();
+        bool isColorOpen = colorPalettePanel.isOpen();
+        bool isPropOpen = rightProperties.isOpen();
+
+        layerPanel.updateHover(mousePos, !isColorOpen && !isPropOpen);
+        colorPalettePanel.updateHover(mousePos, !isLayerOpen && !isPropOpen);
+        rightProperties.updateHover(mousePos, !isLayerOpen && !isColorOpen);
+
+        rightProperties.update(dt, focusMode);
         layerPanel.update(dt, focusMode);
+        colorPalettePanel.update(dt, focusMode);
         bottomTimeline.update(dt, focusMode);
 
         float availLeft = std::max(0.0f, static_cast<float>(leftToolbar.getPanelRightEdge()));
-        float rightEdge = static_cast<float>(rightPanelManager.getMinLeftEdge());
-        float layerEdge = static_cast<float>(layerPanel.getCurrentX());
-        float availRight = std::min(1920.0f, std::min(rightEdge, layerEdge));
+        float edgeL = static_cast<float>(layerPanel.getCurrentX());
+        float edgeC = static_cast<float>(colorPalettePanel.getCurrentX());
+        float edgeP = static_cast<float>(rightProperties.getCurrentX());
+        float availRight = std::min(1920.0f, std::min(edgeL, std::min(edgeC, edgeP)));
 
         float availTop = 0.0f;
         float availBottom = std::min(1080.0f, static_cast<float>(bottomTimeline.getPanelTopEdge()));
@@ -486,7 +525,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
     }
     else if (currentState == AppState::Painting) {
 
-        rightPanelManager.syncPropertiesState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), timeline.getFps());
+        rightProperties.syncState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), timeline.getFps());
 
         sf::RenderStates canvasStates;
         canvasStates.transform = canvas.getTransform();
@@ -505,8 +544,10 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         aiHelper.draw(window);
 
         leftToolbar.draw(window, SettingsManager::loadSettings().isConfigured(), canvas.getActiveTool() == ToolType::Select);
-        rightPanelManager.draw(window, canvas, timeline.getCurrentFrame());
+
         layerPanel.draw(window, canvas, timeline.getCurrentFrame());
+        colorPalettePanel.draw(window);
+        rightProperties.draw(window);
 
         bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);

@@ -199,25 +199,20 @@ void Canvas::addFrame(int index) {
     saveUndoState();
     Frame newFrame;
     newFrame.layers.clear();
-    if (index >= 0 && index < static_cast<int>(frames.size())) {
-        for (const auto& l : frames[index].layers) {
-            Layer newL(l.name);
-            newL.visible = l.visible;
-            newL.locked = l.locked;
-            newL.opacity = l.opacity;
-            newL.blendMode = l.blendMode;
-            newL.persistent = l.persistent;
-            newL.colorTag = l.colorTag;
-            if (l.persistent) {
-                newL.texture = l.texture;
-            }
-            newFrame.layers.push_back(newL);
+    int srcIndex = (index >= 0 && index < static_cast<int>(frames.size())) ? index : 0;
+
+    for (const auto& l : frames[srcIndex].layers) {
+        Layer newL(l.name);
+        newL.visible = l.visible;
+        newL.locked = l.locked;
+        newL.opacity = l.opacity;
+        newL.blendMode = l.blendMode;
+        newL.persistent = l.persistent;
+        newL.colorTag = l.colorTag;
+        if (l.persistent) {
+            newL.texture = l.texture;
         }
-    }
-    else {
-        newFrame.layers.emplace_back("Background");
-        newFrame.layers.emplace_back("Artwork");
-        newFrame.layers[0].persistent = true;
+        newFrame.layers.push_back(newL);
     }
     frames.insert(frames.begin() + (index + 1), newFrame);
 }
@@ -235,54 +230,63 @@ void Canvas::clearAllFrames() { saveUndoState(); frames.clear(); frames.emplace_
 void Canvas::addLayer(int frameIndex, const std::string& name) {
     if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size())) {
         saveUndoState();
-        frames[frameIndex].layers.emplace_back(name);
-        activeLayer = static_cast<int>(frames[frameIndex].layers.size()) - 1;
+        for (size_t i = 0; i < frames.size(); ++i) {
+            Layer newL(name);
+            frames[i].layers.push_back(newL);
+        }
+        activeLayer = static_cast<int>(frames[0].layers.size()) - 1;
     }
 }
 
 void Canvas::deleteLayer(int frameIndex, int layerIndex) {
-    if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size()) && frames[frameIndex].layers.size() > 1) {
-        if (layerIndex >= 0 && layerIndex < static_cast<int>(frames[frameIndex].layers.size())) {
+    if (frames.size() > 0 && frames[0].layers.size() > 1) {
+        if (layerIndex >= 0 && layerIndex < static_cast<int>(frames[0].layers.size())) {
             saveUndoState();
-            frames[frameIndex].layers.erase(frames[frameIndex].layers.begin() + layerIndex);
-            if (activeLayer >= static_cast<int>(frames[frameIndex].layers.size())) {
-                activeLayer = static_cast<int>(frames[frameIndex].layers.size()) - 1;
+            for (size_t i = 0; i < frames.size(); ++i) {
+                frames[i].layers.erase(frames[i].layers.begin() + layerIndex);
+            }
+            if (activeLayer >= static_cast<int>(frames[0].layers.size())) {
+                activeLayer = static_cast<int>(frames[0].layers.size()) - 1;
             }
         }
     }
 }
 
 void Canvas::duplicateLayer(int frameIndex, int layerIndex) {
-    if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size())) {
-        if (layerIndex >= 0 && layerIndex < static_cast<int>(frames[frameIndex].layers.size())) {
-            saveUndoState();
-            Layer copyL;
-            copyL.name = frames[frameIndex].layers[layerIndex].name + " Copy";
-            copyL.visible = frames[frameIndex].layers[layerIndex].visible;
-            copyL.locked = frames[frameIndex].layers[layerIndex].locked;
-            copyL.opacity = frames[frameIndex].layers[layerIndex].opacity;
-            copyL.blendMode = frames[frameIndex].layers[layerIndex].blendMode;
-            copyL.persistent = false;
-            copyL.colorTag = frames[frameIndex].layers[layerIndex].colorTag;
+    if (frames.size() > 0 && layerIndex >= 0 && layerIndex < static_cast<int>(frames[0].layers.size())) {
+        saveUndoState();
+        std::string newName = frames[0].layers[layerIndex].name + " Copy";
+        bool vis = frames[0].layers[layerIndex].visible;
+        bool lck = frames[0].layers[layerIndex].locked;
+        float op = frames[0].layers[layerIndex].opacity;
+        BlendMode bm = frames[0].layers[layerIndex].blendMode;
+        int ct = frames[0].layers[layerIndex].colorTag;
 
-            sf::Sprite spr(frames[frameIndex].layers[layerIndex].texture->getTexture());
+        for (size_t i = 0; i < frames.size(); ++i) {
+            Layer copyL(newName);
+            copyL.visible = vis; copyL.locked = lck; copyL.opacity = op; copyL.blendMode = bm; copyL.colorTag = ct;
+            copyL.persistent = false;
+
+            sf::Sprite spr(frames[i].layers[layerIndex].texture->getTexture());
             copyL.texture->draw(spr, sf::RenderStates(sf::BlendNone));
             copyL.texture->display();
 
-            frames[frameIndex].layers.insert(frames[frameIndex].layers.begin() + layerIndex + 1, copyL);
-            activeLayer = layerIndex + 1;
+            frames[i].layers.insert(frames[i].layers.begin() + layerIndex + 1, copyL);
         }
+        activeLayer = layerIndex + 1;
     }
 }
 
 void Canvas::setLayerProperties(int frameIndex, int layerIndex, const std::string& name, bool visible, bool locked, float opacity, BlendMode mode) {
-    if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size()) && layerIndex >= 0 && layerIndex < static_cast<int>(frames[frameIndex].layers.size())) {
-        auto& l = frames[frameIndex].layers[layerIndex];
-        l.name = name;
-        l.visible = visible;
-        l.locked = locked;
-        l.opacity = std::max(0.0f, std::min(static_cast<float>(opacity), 1.0f));
-        l.blendMode = mode;
+    if (frames.size() > 0 && layerIndex >= 0 && layerIndex < static_cast<int>(frames[0].layers.size())) {
+        for (size_t i = 0; i < frames.size(); ++i) {
+            auto& l = frames[i].layers[layerIndex];
+            l.name = name;
+            l.visible = visible;
+            l.locked = locked;
+            l.opacity = std::max(0.0f, std::min(static_cast<float>(opacity), 1.0f));
+            l.blendMode = mode;
+        }
     }
 }
 
@@ -293,90 +297,106 @@ void Canvas::toggleLayerPersistence(int frameIndex, int layerIndex) {
         auto targetTex = frames[frameIndex].layers[layerIndex].texture;
 
         for (size_t i = 0; i < frames.size(); ++i) {
-            if (layerIndex < static_cast<int>(frames[i].layers.size())) {
-                frames[i].layers[layerIndex].persistent = isPersist;
-                if (isPersist && static_cast<int>(i) != frameIndex) {
-                    frames[i].layers[layerIndex].texture = targetTex;
-                }
-                else if (!isPersist && static_cast<int>(i) != frameIndex) {
-                    auto newTex = std::make_shared<sf::RenderTexture>();
-                    newTex->create(1920, 1080);
-                    newTex->clear(sf::Color::Transparent);
-                    sf::Sprite spr(targetTex->getTexture());
-                    newTex->draw(spr, sf::RenderStates(sf::BlendNone));
-                    newTex->display();
-                    frames[i].layers[layerIndex].texture = newTex;
-                }
+            frames[i].layers[layerIndex].persistent = isPersist;
+            if (isPersist && static_cast<int>(i) != frameIndex) {
+                frames[i].layers[layerIndex].texture = targetTex;
+            }
+            else if (!isPersist && static_cast<int>(i) != frameIndex) {
+                auto newTex = std::make_shared<sf::RenderTexture>();
+                newTex->create(1920, 1080);
+                newTex->clear(sf::Color::Transparent);
+                sf::Sprite spr(targetTex->getTexture());
+                newTex->draw(spr, sf::RenderStates(sf::BlendNone));
+                newTex->display();
+                frames[i].layers[layerIndex].texture = newTex;
             }
         }
     }
 }
 
 void Canvas::cycleLayerColorTag(int frameIndex, int layerIndex) {
-    if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size()) && layerIndex >= 0 && layerIndex < static_cast<int>(frames[frameIndex].layers.size())) {
+    if (frames.size() > 0 && layerIndex >= 0 && layerIndex < static_cast<int>(frames[0].layers.size())) {
         saveUndoState();
-        int& tag = frames[frameIndex].layers[layerIndex].colorTag;
-        tag = (tag + 1) % 7;
+        int nextTag = (frames[frameIndex].layers[layerIndex].colorTag + 1) % 7;
+        for (size_t i = 0; i < frames.size(); ++i) {
+            frames[i].layers[layerIndex].colorTag = nextTag;
+        }
+    }
+}
+
+void Canvas::pushLayerToNextFrame(int currentFrame, int layerIndex) {
+    if (currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) - 1 && layerIndex >= 0 && layerIndex < static_cast<int>(frames[0].layers.size())) {
+        saveUndoState();
+        auto srcTex = frames[currentFrame].layers[layerIndex].texture;
+        auto dstTex = frames[currentFrame + 1].layers[layerIndex].texture;
+        if (!frames[currentFrame].layers[layerIndex].persistent) {
+            dstTex->clear(sf::Color::Transparent);
+            sf::Sprite spr(srcTex->getTexture());
+            dstTex->draw(spr, sf::RenderStates(sf::BlendNone));
+            dstTex->display();
+        }
     }
 }
 
 void Canvas::mergeDown(int frameIndex) {
-    if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size()) && activeLayer > 0 && activeLayer < static_cast<int>(frames[frameIndex].layers.size())) {
+    if (frames.size() > 0 && activeLayer > 0 && activeLayer < static_cast<int>(frames[0].layers.size())) {
         saveUndoState();
-        auto& topLayer = frames[frameIndex].layers[activeLayer];
-        auto& bottomLayer = frames[frameIndex].layers[activeLayer - 1];
+        for (size_t i = 0; i < frames.size(); ++i) {
+            auto& topLayer = frames[i].layers[activeLayer];
+            auto& bottomLayer = frames[i].layers[activeLayer - 1];
 
-        sf::Sprite spr(topLayer.texture->getTexture());
-        sf::RenderStates states;
-        states.blendMode = getSFMLBlendMode(topLayer.blendMode).blendMode;
-        sf::Color sprCol(255, 255, 255, static_cast<sf::Uint8>(255.0f * topLayer.opacity));
-        spr.setColor(sprCol);
+            sf::Sprite spr(topLayer.texture->getTexture());
+            sf::RenderStates states;
+            states.blendMode = getSFMLBlendMode(topLayer.blendMode).blendMode;
+            sf::Color sprCol(255, 255, 255, static_cast<sf::Uint8>(255.0f * topLayer.opacity));
+            spr.setColor(sprCol);
 
-        bottomLayer.texture->draw(spr, states);
-        bottomLayer.texture->display();
+            bottomLayer.texture->draw(spr, states);
+            bottomLayer.texture->display();
 
-        frames[frameIndex].layers.erase(frames[frameIndex].layers.begin() + activeLayer);
+            frames[i].layers.erase(frames[i].layers.begin() + activeLayer);
+        }
         activeLayer--;
     }
 }
 
 void Canvas::mergeVisible(int frameIndex) {
-    if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size())) {
+    if (frames.size() > 0) {
         saveUndoState();
-        Layer mergedLayer("Merged Visible");
+        for (size_t i = 0; i < frames.size(); ++i) {
+            Layer mergedLayer("Merged Visible");
 
-        for (const auto& layer : frames[frameIndex].layers) {
-            if (layer.visible) {
-                sf::Sprite spr(layer.texture->getTexture());
-                sf::RenderStates states;
-                states.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
-                spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * layer.opacity)));
-                mergedLayer.texture->draw(spr, states);
+            for (const auto& layer : frames[i].layers) {
+                if (layer.visible) {
+                    sf::Sprite spr(layer.texture->getTexture());
+                    sf::RenderStates states;
+                    states.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
+                    spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * layer.opacity)));
+                    mergedLayer.texture->draw(spr, states);
+                }
             }
-        }
-        mergedLayer.texture->display();
+            mergedLayer.texture->display();
 
-        for (auto it = frames[frameIndex].layers.begin(); it != frames[frameIndex].layers.end(); ) {
-            if (it->visible) it = frames[frameIndex].layers.erase(it);
-            else ++it;
+            for (auto it = frames[i].layers.begin(); it != frames[i].layers.end(); ) {
+                if (it->visible) it = frames[i].layers.erase(it);
+                else ++it;
+            }
+            frames[i].layers.push_back(mergedLayer);
         }
-
-        frames[frameIndex].layers.push_back(mergedLayer);
-        activeLayer = static_cast<int>(frames[frameIndex].layers.size()) - 1;
+        activeLayer = static_cast<int>(frames[0].layers.size()) - 1;
     }
 }
 
 void Canvas::moveLayer(int frameIndex, int fromIndex, int toIndex) {
-    if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size())) {
-        auto& flayers = frames[frameIndex].layers;
-        if (fromIndex >= 0 && fromIndex < static_cast<int>(flayers.size()) && toIndex >= 0 && toIndex < static_cast<int>(flayers.size())) {
-            saveUndoState();
-            Layer temp = std::move(flayers[fromIndex]);
-            flayers.erase(flayers.begin() + fromIndex);
-            flayers.insert(flayers.begin() + toIndex, std::move(temp));
-            if (activeLayer == fromIndex) activeLayer = toIndex;
-            else if (activeLayer == toIndex) activeLayer = fromIndex;
+    if (frames.size() > 0 && fromIndex >= 0 && fromIndex < static_cast<int>(frames[0].layers.size()) && toIndex >= 0 && toIndex < static_cast<int>(frames[0].layers.size())) {
+        saveUndoState();
+        for (size_t i = 0; i < frames.size(); ++i) {
+            Layer temp = std::move(frames[i].layers[fromIndex]);
+            frames[i].layers.erase(frames[i].layers.begin() + fromIndex);
+            frames[i].layers.insert(frames[i].layers.begin() + toIndex, std::move(temp));
         }
+        if (activeLayer == fromIndex) activeLayer = toIndex;
+        else if (activeLayer == toIndex) activeLayer = fromIndex;
     }
 }
 
@@ -696,6 +716,7 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
 void Canvas::setPrimaryColor(sf::Color color) { primaryColor = color; }
 void Canvas::setSecondaryColor(sf::Color color) { secondaryColor = color; }
 sf::Color Canvas::getPrimaryColor() const { return primaryColor; }
+sf::Color Canvas::getSecondaryColor() const { return secondaryColor; }
 void Canvas::setFillSettings(float tolerance, bool contiguous) { fillTolerance = tolerance; fillContiguous = contiguous; }
 
 void Canvas::saveUndoState() {

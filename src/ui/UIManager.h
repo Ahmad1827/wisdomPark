@@ -12,9 +12,10 @@
 #include "Screens/AISettingsModal.h"
 #include "KeybindSettingsPanel.h"
 #include "LeftToolbar.h"
-#include "RightPanelManager.h"
 #include "BottomTimeline.h"
 #include "LayerPanel.h"
+#include "ColorPalettePanel.h"
+#include "RightProperties.h"
 
 class UIManager {
 private:
@@ -39,9 +40,11 @@ private:
     KeybindSettingsPanel keybindPanel;
 
     LeftToolbar leftToolbar;
-    RightPanelManager rightPanelManager;
-    LayerPanel layerPanel;
     BottomTimeline bottomTimeline;
+
+    LayerPanel layerPanel;
+    ColorPalettePanel colorPalettePanel;
+    RightProperties rightProperties;
 
     sf::Text uiText;
     sf::Clock textClock;

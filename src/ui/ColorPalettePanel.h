@@ -1,6 +1,8 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <vector>
+#include <string>
+#include "../core/Canvas.h"
 
 enum class PalettePanelState { Hidden, Visible, Pinned };
 
@@ -28,13 +30,16 @@ public:
     ColorPalettePanel();
     void init();
     void update(float dt, bool focusMode);
-    void updateHover(sf::Vector2f mousePos);
+    void updateHover(sf::Vector2f mousePos, bool canOpen);
     void draw(sf::RenderWindow& window);
-    bool handleClick(sf::Vector2f mousePos, sf::Color& outPrimary, sf::Color& outSecondary);
 
+    bool handleClick(sf::Vector2f mousePos, Canvas& canvas);
     void setColors(sf::Color primary, sf::Color secondary);
+
     float getCurrentX() const;
     void forceClose();
     bool isHovered() const;
     bool isPanelPinned() const;
+    bool isOpen() const;
+    sf::FloatRect getHandleBounds() const;
 };

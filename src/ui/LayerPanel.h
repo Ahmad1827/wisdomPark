@@ -1,6 +1,9 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <string>
 #include "../core/Canvas.h"
+
+enum class LayerPanelState { Hidden, Visible, Pinned };
 
 class LayerPanel {
 private:
@@ -24,6 +27,8 @@ private:
     sf::Text mergeDownText;
     sf::RectangleShape mergeVisBtn;
     sf::Text mergeVisText;
+    sf::RectangleShape pushBtn;
+    sf::Text pushText;
 
     float scrollOffset;
     float maxScroll;
@@ -40,8 +45,7 @@ private:
     float currentX;
     float targetX;
     float width;
-    bool pinned;
-    bool hovered;
+    LayerPanelState state;
 
     struct LayerRow {
         sf::FloatRect bounds;
@@ -61,14 +65,17 @@ public:
     LayerPanel();
     void init();
     void update(float dt, bool focusMode);
-    void updateHover(sf::Vector2f mousePos);
+    void updateHover(sf::Vector2f mousePos, bool canOpen);
     void draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame);
-    bool handleClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame);
+    std::string processClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame);
 
+    bool handleClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame);
     bool handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canvas& canvas, int currentFrame);
 
     bool isPanelPinned() const;
     void forceClose();
     bool isHovered() const;
     float getCurrentX() const;
+    bool isOpen() const;
+    sf::FloatRect getHandleBounds() const;
 };
