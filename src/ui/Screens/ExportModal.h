@@ -14,8 +14,10 @@ private:
     sf::RectangleShape closeBtn;
     sf::Text closeText;
 
-    sf::RectangleShape exportBtn;
-    sf::Text exportText;
+    sf::RectangleShape exportPngBtn;
+    sf::Text exportPngText;
+    sf::RectangleShape exportSheetBtn;
+    sf::Text exportSheetText;
 
     sf::RectangleShape transCheckbox;
     sf::Text transText;

@@ -1,9 +1,11 @@
 #include "UIManager.h"
+#include "../core/NativeDialogs.h"
 #include <iostream>
 #include <algorithm>
 #include <ctime>
+#include <filesystem>
 
-UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project") {}
+UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath("") {}
 
 void UIManager::init(ProjectManager* pm) {
     projManager = pm;
@@ -81,14 +83,16 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
             if (action == "new_project") {
                 activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
+                activeProjectPath = "";
                 pm.createNewProject(activeProjectName, 1920, 1080, 12, canvas);
                 currentState = AppState::Painting;
                 showMessage("Created New Project", sf::Color::Green);
             }
             else if (action == "load_project") {
                 activeProjectName = meta.name;
+                activeProjectPath = meta.path;
                 int loadedFps = 12;
-                if (pm.loadProject(meta.name, canvas, loadedFps)) {
+                if (pm.loadProject(meta.path, canvas, loadedFps)) {
                     timeline.setFrame(0);
                     currentState = AppState::Painting;
                     showMessage("Loaded Project: " + meta.name, sf::Color::Green);
@@ -97,9 +101,26 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     showMessage("Failed to load project files.", sf::Color::Red);
                 }
             }
+            else if (action == "open_native") {
+                std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
+                if (!file.empty()) {
+                    activeProjectPath = file;
+                    activeProjectName = std::filesystem::path(file).stem().string();
+                    int loadedFps = 12;
+                    if (pm.loadProject(activeProjectPath, canvas, loadedFps)) {
+                        timeline.setFrame(0);
+                        currentState = AppState::Painting;
+                        showMessage("Loaded Native Project", sf::Color::Green);
+                    }
+                    else {
+                        showMessage("Failed to load native project.", sf::Color::Red);
+                    }
+                }
+            }
         }
         if (keybindManager.isActionTriggered("proj_new", event)) {
             activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
+            activeProjectPath = "";
             pm.createNewProject(activeProjectName, 1920, 1080, 12, canvas);
             currentState = AppState::Painting;
             showMessage("Created New Project", sf::Color::Green);
@@ -139,23 +160,59 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 settingsModal.open(settings);
             }
 
-            if (keybindManager.isActionTriggered("ui_settings", event)) {
-                keybindPanel.toggle();
-            }
+            if (keybindManager.isActionTriggered("ui_settings", event)) keybindPanel.toggle();
 
-            if (keybindManager.isActionTriggered("export_png", event)) {
-                exportModal.open(canvas, timeline.getCurrentFrame());
-            }
+            if (keybindManager.isActionTriggered("export_png", event)) exportModal.open(canvas, timeline.getCurrentFrame());
 
             if (keybindManager.isActionTriggered("proj_save", event)) {
-                if (pm.saveProject(activeProjectName, canvas, static_cast<int>(timeline.getFps()))) {
-                    showMessage("Project Saved Successfully!", sf::Color::Green);
+                if (activeProjectPath.empty()) {
+                    std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
+                    if (!file.empty()) {
+                        activeProjectPath = file;
+                        if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()))) {
+                            showMessage("Project Saved Successfully!", sf::Color::Green);
+                        }
+                        else showMessage("Error Saving Project!", sf::Color::Red);
+                    }
                 }
-                else showMessage("Error Saving Project!", sf::Color::Red);
+                else {
+                    if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()))) {
+                        showMessage("Project Saved Successfully!", sf::Color::Green);
+                    }
+                    else showMessage("Error Saving Project!", sf::Color::Red);
+                }
+            }
+
+            if (keybindManager.isActionTriggered("proj_save_as", event)) {
+                std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
+                if (!file.empty()) {
+                    activeProjectPath = file;
+                    if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()))) {
+                        showMessage("Project Saved As Successfully!", sf::Color::Green);
+                    }
+                    else showMessage("Error Saving Project!", sf::Color::Red);
+                }
+            }
+
+            if (keybindManager.isActionTriggered("proj_open", event)) {
+                std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
+                if (!file.empty()) {
+                    activeProjectPath = file;
+                    activeProjectName = std::filesystem::path(file).stem().string();
+                    int loadedFps = 12;
+                    if (pm.loadProject(activeProjectPath, canvas, loadedFps)) {
+                        timeline.setFrame(0);
+                        showMessage("Loaded Native Project", sf::Color::Green);
+                    }
+                    else {
+                        showMessage("Failed to load native project.", sf::Color::Red);
+                    }
+                }
             }
 
             if (keybindManager.isActionTriggered("proj_new", event)) {
                 activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
+                activeProjectPath = "";
                 pm.createNewProject(activeProjectName, 1920, 1080, 12, canvas);
                 showMessage("Created New Project", sf::Color::Green);
             }

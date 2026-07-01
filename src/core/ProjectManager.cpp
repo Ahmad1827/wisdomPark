@@ -79,13 +79,16 @@ bool ProjectManager::createNewProject(const std::string& name, int width, int he
 
 bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fps) {
     std::string projPath = projectsDir + "/" + name + ".wpk";
-    ensureDirectoryExists();
-    if (!fs::exists(projPath)) {
-        fs::create_directory(projPath);
-        fs::create_directory(projPath + "/layers");
+    return saveProjectAs(projPath, name, canvas, fps);
+}
+
+bool ProjectManager::saveProjectAs(const std::string& path, const std::string& name, Canvas& canvas, int fps) {
+    if (!fs::exists(path)) {
+        fs::create_directory(path);
+        fs::create_directory(path + "/layers");
     }
 
-    std::ofstream metaFile(projPath + "/meta.json");
+    std::ofstream metaFile(path + "/meta.json");
     if (!metaFile.is_open()) return false;
 
     sf::Vector2u size = canvas.getCanvasSize();
@@ -115,7 +118,7 @@ bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fp
             }
         }
         composite.display();
-        composite.getTexture().copyToImage().saveToFile(projPath + "/thumb.png");
+        composite.getTexture().copyToImage().saveToFile(path + "/thumb.png");
     }
 
     for (size_t f = 0; f < canvas.getFrameCount(); ++f) {
@@ -124,13 +127,13 @@ bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fp
 
         for (size_t l = 0; l < frame->layers.size(); ++l) {
             if (!frame->layers[l].persistent || f == 0) {
-                std::string imgPath = projPath + "/layers/f" + std::to_string(f) + "_l" + std::to_string(l) + ".png";
+                std::string imgPath = path + "/layers/f" + std::to_string(f) + "_l" + std::to_string(l) + ".png";
                 sf::Image img = frame->layers[l].texture->getTexture().copyToImage();
                 img.saveToFile(imgPath);
             }
         }
 
-        std::ofstream layerMeta(projPath + "/f" + std::to_string(f) + "_layers.txt");
+        std::ofstream layerMeta(path + "/f" + std::to_string(f) + "_layers.txt");
         for (size_t l = 0; l < frame->layers.size(); ++l) {
             layerMeta << frame->layers[l].name << "|"
                 << frame->layers[l].visible << "|"
@@ -145,9 +148,8 @@ bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fp
     return true;
 }
 
-bool ProjectManager::loadProject(const std::string& name, Canvas& canvas, int& outFps) {
-    std::string projPath = projectsDir + "/" + name + ".wpk";
-    std::string metaPath = projPath + "/meta.json";
+bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& outFps) {
+    std::string metaPath = path + "/meta.json";
     if (!fs::exists(metaPath)) return false;
 
     std::ifstream file(metaPath);
@@ -178,7 +180,7 @@ bool ProjectManager::loadProject(const std::string& name, Canvas& canvas, int& o
     for (int f = 0; f < frames; ++f) {
         if (f > 0) canvas.addFrame(f - 1);
 
-        std::ifstream layerMeta(projPath + "/f" + std::to_string(f) + "_layers.txt");
+        std::ifstream layerMeta(path + "/f" + std::to_string(f) + "_layers.txt");
         std::string lLine;
         int l = 0;
 
@@ -212,7 +214,7 @@ bool ProjectManager::loadProject(const std::string& name, Canvas& canvas, int& o
             }
 
             if (!canvas.getFrameReadOnly(f)->layers[l].persistent || f == 0) {
-                std::string imgPath = projPath + "/layers/f" + std::to_string(f) + "_l" + std::to_string(l) + ".png";
+                std::string imgPath = path + "/layers/f" + std::to_string(f) + "_l" + std::to_string(l) + ".png";
                 if (fs::exists(imgPath)) {
                     sf::Texture tex;
                     if (tex.loadFromFile(imgPath)) {

@@ -1,7 +1,9 @@
 #include "ExportModal.h"
+#include "../../core/NativeDialogs.h"
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
+#include <filesystem>
 
 ExportModal::ExportModal() : isOpen(false), transparentBg(true), autoCrop(false), linkedCanvas(nullptr), activeFrame(0) {}
 
@@ -18,7 +20,7 @@ void ExportModal::init() {
     modalBg.setOutlineColor(sf::Color(100, 100, 110, 100));
 
     title.setFont(font);
-    title.setString("Export Preview");
+    title.setString("Export Options");
     title.setCharacterSize(24);
     title.setFillColor(sf::Color::White);
     title.setPosition(modalBg.getPosition().x + 30.f, modalBg.getPosition().y + 30.f);
@@ -33,15 +35,25 @@ void ExportModal::init() {
     closeText.setFillColor(sf::Color::White);
     closeText.setPosition(closeBtn.getPosition().x + 25.f, closeBtn.getPosition().y + 10.f);
 
-    exportBtn.setSize(sf::Vector2f(200.f, 50.f));
-    exportBtn.setPosition(modalBg.getPosition().x + 670.f, modalBg.getPosition().y + 520.f);
-    exportBtn.setFillColor(sf::Color(0, 122, 204));
+    exportPngBtn.setSize(sf::Vector2f(180.f, 50.f));
+    exportPngBtn.setPosition(modalBg.getPosition().x + 670.f, modalBg.getPosition().y + 450.f);
+    exportPngBtn.setFillColor(sf::Color(0, 122, 204));
 
-    exportText.setFont(font);
-    exportText.setString("Save As PNG");
-    exportText.setCharacterSize(18);
-    exportText.setFillColor(sf::Color::White);
-    exportText.setPosition(exportBtn.getPosition().x + 40.f, exportBtn.getPosition().y + 13.f);
+    exportPngText.setFont(font);
+    exportPngText.setString("Export PNG");
+    exportPngText.setCharacterSize(18);
+    exportPngText.setFillColor(sf::Color::White);
+    exportPngText.setPosition(exportPngBtn.getPosition().x + 40.f, exportPngBtn.getPosition().y + 13.f);
+
+    exportSheetBtn.setSize(sf::Vector2f(180.f, 50.f));
+    exportSheetBtn.setPosition(modalBg.getPosition().x + 670.f, modalBg.getPosition().y + 520.f);
+    exportSheetBtn.setFillColor(sf::Color(0, 150, 50));
+
+    exportSheetText.setFont(font);
+    exportSheetText.setString("Sprite Sheet");
+    exportSheetText.setCharacterSize(18);
+    exportSheetText.setFillColor(sf::Color::White);
+    exportSheetText.setPosition(exportSheetBtn.getPosition().x + 40.f, exportSheetBtn.getPosition().y + 13.f);
 
     transCheckbox.setSize(sf::Vector2f(24.f, 24.f));
     transCheckbox.setPosition(modalBg.getPosition().x + 670.f, modalBg.getPosition().y + 150.f);
@@ -49,7 +61,7 @@ void ExportModal::init() {
     transCheckbox.setOutlineThickness(1.f);
 
     transText.setFont(font);
-    transText.setString("Transparent Background");
+    transText.setString("Transparent BG");
     transText.setCharacterSize(14);
     transText.setFillColor(sf::Color::White);
     transText.setPosition(modalBg.getPosition().x + 705.f, modalBg.getPosition().y + 153.f);
@@ -60,7 +72,7 @@ void ExportModal::init() {
     cropCheckbox.setOutlineThickness(1.f);
 
     cropText.setFont(font);
-    cropText.setString("Auto Crop Empty Space");
+    cropText.setString("Auto Crop");
     cropText.setCharacterSize(14);
     cropText.setFillColor(sf::Color::White);
     cropText.setPosition(modalBg.getPosition().x + 705.f, modalBg.getPosition().y + 203.f);
@@ -118,7 +130,7 @@ void ExportModal::updatePreview() {
 
     std::stringstream ss;
     ss << "Resolution:\n" << finalImg.getSize().x << " x " << finalImg.getSize().y << " px\n\n";
-    ss << "Uncompressed Size:\n~" << std::fixed << std::setprecision(2) << mb << " MB\n\n";
+    ss << "Est Size (Single):\n~" << std::fixed << std::setprecision(2) << mb << " MB\n\n";
     ss << "Total Frames:\n" << linkedCanvas->getFrameCount();
     infoText.setString(ss.str());
 
@@ -129,7 +141,8 @@ void ExportModal::updatePreview() {
 void ExportModal::updateHover(sf::Vector2f mousePos) {
     if (!isOpen) return;
     closeBtn.setFillColor(closeBtn.getGlobalBounds().contains(mousePos) ? sf::Color(80, 80, 90) : sf::Color(50, 50, 60));
-    exportBtn.setFillColor(exportBtn.getGlobalBounds().contains(mousePos) ? sf::Color(0, 150, 255) : sf::Color(0, 122, 204));
+    exportPngBtn.setFillColor(exportPngBtn.getGlobalBounds().contains(mousePos) ? sf::Color(0, 150, 255) : sf::Color(0, 122, 204));
+    exportSheetBtn.setFillColor(exportSheetBtn.getGlobalBounds().contains(mousePos) ? sf::Color(0, 180, 80) : sf::Color(0, 150, 50));
     transCheckbox.setOutlineColor(transCheckbox.getGlobalBounds().contains(mousePos) ? sf::Color::White : sf::Color::Transparent);
     cropCheckbox.setOutlineColor(cropCheckbox.getGlobalBounds().contains(mousePos) ? sf::Color::White : sf::Color::Transparent);
 }
@@ -151,9 +164,29 @@ void ExportModal::handleEvent(const sf::Event& event, sf::RenderWindow& window) 
             autoCrop = !autoCrop;
             updatePreview();
         }
-        else if (exportBtn.getGlobalBounds().contains(mousePos)) {
-            ExportManager::exportSingleImage(*linkedCanvas, activeFrame, "export_preview.png", transparentBg, autoCrop);
-            close();
+        else if (exportPngBtn.getGlobalBounds().contains(mousePos)) {
+            if (linkedCanvas->getFrameCount() > 1) {
+                std::string folder = NativeDialogs::selectFolderDialog();
+                if (!folder.empty()) {
+                    ExportManager::exportPNGSequence(*linkedCanvas, folder, transparentBg, autoCrop);
+                    close();
+                }
+            }
+            else {
+                std::string file = NativeDialogs::saveFileDialog("PNG Files\0*.png\0", "png", "export.png");
+                if (!file.empty()) {
+                    ExportManager::exportSingleImage(*linkedCanvas, activeFrame, file, transparentBg, autoCrop);
+                    close();
+                }
+            }
+        }
+        else if (exportSheetBtn.getGlobalBounds().contains(mousePos)) {
+            std::string file = NativeDialogs::saveFileDialog("PNG Files\0*.png\0", "png", "spritesheet.png");
+            if (!file.empty()) {
+                // Fixed column width parameter simulation (placeholder 10)
+                ExportManager::exportSpriteSheet(*linkedCanvas, file, 10, transparentBg, autoCrop);
+                close();
+            }
         }
     }
 }
@@ -166,8 +199,11 @@ void ExportModal::draw(sf::RenderWindow& window) {
     window.draw(title);
     window.draw(closeBtn);
     window.draw(closeText);
-    window.draw(exportBtn);
-    window.draw(exportText);
+
+    window.draw(exportPngBtn);
+    window.draw(exportPngText);
+    window.draw(exportSheetBtn);
+    window.draw(exportSheetText);
 
     window.draw(transCheckbox);
     window.draw(transText);

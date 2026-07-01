@@ -30,6 +30,7 @@ private:
 
     ProjectManager* projManager;
     std::string activeProjectName;
+    std::string activeProjectPath;
 
     KeybindManager keybindManager;
 

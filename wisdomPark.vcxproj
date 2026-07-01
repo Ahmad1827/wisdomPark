@@ -158,6 +158,7 @@
     <ClCompile Include="src\core\AudioManager.cpp" />
     <ClCompile Include="src\core\ExportManager.cpp" />
     <ClCompile Include="src\core\FillManager.cpp" />
+    <ClCompile Include="src\core\NativeDialogs.cpp" />
     <ClCompile Include="src\ui\KeybindSettingsPanel.cpp" />
     <ClCompile Include="src\core\Timeline.cpp" />
     <ClCompile Include="src\main.cpp" />
@@ -185,6 +186,7 @@
     <ClInclude Include="src\core\AudioManager.h" />
     <ClInclude Include="src\core\ExportManager.h" />
     <ClInclude Include="src\core\FillManager.h" />
+    <ClInclude Include="src\core\NativeDialogs.h" />
     <ClInclude Include="src\ui\KeybindSettingsPanel.h" />
     <ClInclude Include="src\core\KeybindManager.h" />
     <ClInclude Include="src\core\SelectionManager.h" />
