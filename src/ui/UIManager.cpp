@@ -350,11 +350,28 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
             if (keybindManager.isActionTriggered("edit_undo", event)) canvas.undo();
             if (keybindManager.isActionTriggered("edit_redo", event)) canvas.redo();
+
+            if (keybindManager.isActionTriggered("tool_eyedropper", event)) {
+                if (canvas.getDrawArea().contains(logicalMousePos)) {
+                    sf::Image flat = ExportManager::flattenFrame(canvas, timeline.getCurrentFrame());
+                    sf::Vector2f texScale(static_cast<float>(canvas.getCanvasSize().x) / canvas.getDrawArea().width, static_cast<float>(canvas.getCanvasSize().y) / canvas.getDrawArea().height);
+                    int px = static_cast<int>((logicalMousePos.x - canvas.getDrawArea().left) * texScale.x);
+                    int py = static_cast<int>((logicalMousePos.y - canvas.getDrawArea().top) * texScale.y);
+                    if (px >= 0 && px < static_cast<int>(flat.getSize().x) && py >= 0 && py < static_cast<int>(flat.getSize().y)) {
+                        sf::Color picked = flat.getPixel(px, py);
+                        canvas.setPrimaryColor(picked);
+                        colorPalettePanel.setColors(picked, canvas.getSecondaryColor());
+                        colorPalettePanel.getColorManager().addRecentColor(picked);
+                        showMessage("Color Picked", sf::Color::Green);
+                    }
+                }
+            }
         }
 
         if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible() && !exportModal.getIsOpen()) {
 
             if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
+            if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
 
             if (event.type == sf::Event::MouseMoved) {
                 if (layerPanel.getHandleBounds().contains(mousePos)) {
@@ -556,9 +573,9 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
         leftToolbar.update(dt, focusMode);
 
-        bool isLayerOpen = layerPanel.isOpen();
-        bool isColorOpen = colorPalettePanel.isOpen();
-        bool isPropOpen = rightProperties.isOpen();
+        bool isLayerOpen = layerPanel.isHovered() || layerPanel.isPanelPinned() || layerPanel.getCurrentX() < 1919.f;
+        bool isColorOpen = colorPalettePanel.isHovered() || colorPalettePanel.isPanelPinned() || colorPalettePanel.getCurrentX() < 1919.f;
+        bool isPropOpen = rightProperties.isHovered() || rightProperties.isPanelPinned() || rightProperties.getCurrentX() < 1919.f;
 
         layerPanel.updateHover(mousePos, !isColorOpen && !isPropOpen);
         colorPalettePanel.updateHover(mousePos, !isLayerOpen && !isPropOpen);
@@ -566,7 +583,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
         rightProperties.update(dt, focusMode);
         layerPanel.update(dt, focusMode);
-        colorPalettePanel.update(dt, focusMode);
+        colorPalettePanel.update(dt, focusMode, canvas);
         bottomTimeline.update(dt, focusMode);
 
         float availLeft = std::max(0.0f, static_cast<float>(leftToolbar.getPanelRightEdge()));

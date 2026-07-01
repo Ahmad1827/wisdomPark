@@ -2,7 +2,7 @@
 #include <sstream>
 #include <iomanip>
 
-RightProperties::RightProperties() : width(260.f), currentX(1920.f), targetX(1920.f), state(RightPanelState::Hidden) {}
+RightProperties::RightProperties() : width(260.f), currentX(1920.f), targetX(1920.f), state(RightPanelState::Hidden), hovered(false), pinned(false) {}
 
 void RightProperties::init() {
     font.loadFromFile("assets/font.otf");
@@ -123,9 +123,14 @@ void RightProperties::updateHover(sf::Vector2f mousePos, bool canOpen) {
 
     if (state == RightPanelState::Hidden) {
         if (canOpen && inHandle) state = RightPanelState::Visible;
+        hovered = inHandle;
     }
     else if (state == RightPanelState::Visible) {
         if (!inPanel && !inHandle) state = RightPanelState::Hidden;
+        hovered = inPanel || inHandle;
+    }
+    else {
+        hovered = inPanel || inHandle;
     }
 
     for (auto& sec : sections) {
@@ -180,11 +185,13 @@ void RightProperties::draw(sf::RenderWindow& window) {
 std::string RightProperties::handleClick(sf::Vector2f mousePos) {
     if (pinBtn.getGlobalBounds().contains(mousePos)) {
         state = (state == RightPanelState::Pinned) ? RightPanelState::Visible : RightPanelState::Pinned;
+        pinned = (state == RightPanelState::Pinned);
         return "pin_toggle";
     }
 
     if (state == RightPanelState::Hidden && handleBg.getGlobalBounds().contains(mousePos)) {
         state = RightPanelState::Pinned;
+        pinned = true;
         return "handle_click";
     }
 
@@ -236,8 +243,7 @@ void RightProperties::syncState(const std::string& theme, bool lighting, bool te
 }
 
 float RightProperties::getCurrentX() const { return currentX; }
-void RightProperties::forceClose() { if (state != RightPanelState::Pinned) state = RightPanelState::Hidden; }
-bool RightProperties::isHovered() const { return state == RightPanelState::Visible; }
+void RightProperties::forceClose() { if (state != RightPanelState::Pinned) state = RightPanelState::Hidden; hovered = false; pinned = false; }
+bool RightProperties::isHovered() const { return hovered; }
 bool RightProperties::isPanelPinned() const { return state == RightPanelState::Pinned; }
-bool RightProperties::isOpen() const { return state != RightPanelState::Hidden; }
 sf::FloatRect RightProperties::getHandleBounds() const { return handleBg.getGlobalBounds(); }

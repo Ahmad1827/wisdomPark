@@ -36,6 +36,8 @@ private:
     float currentX;
     float targetX;
     RightPanelState state;
+    bool hovered;
+    bool pinned;
 
     void updateLayout();
 
@@ -52,6 +54,5 @@ public:
     void forceClose();
     bool isHovered() const;
     bool isPanelPinned() const;
-    bool isOpen() const;
     sf::FloatRect getHandleBounds() const;
 };
