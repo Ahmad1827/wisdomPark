@@ -602,17 +602,29 @@ bool Canvas::colorMatches(const sf::Color& a, const sf::Color& b) const {
     float diffG = std::abs(static_cast<float>(a.g) - static_cast<float>(b.g));
     float diffB = std::abs(static_cast<float>(a.b) - static_cast<float>(b.b));
     float diffA = std::abs(static_cast<float>(a.a) - static_cast<float>(b.a));
-    return ((diffR + diffG + diffB + diffA) / (4.0f * 255.0f)) <= fillTolerance;
+    float maxDiff = std::max(std::max(diffR, diffG), std::max(diffB, diffA));
+    return (maxDiff / 255.0f) <= fillTolerance;
 }
 
 void Canvas::executeGlobalFill(sf::Color targetColor, sf::Color replacementColor, sf::Image& image) {
     if (colorMatches(targetColor, replacementColor)) return;
-    int w = static_cast<int>(image.getSize().x);
-    int h = static_cast<int>(image.getSize().y);
+
+    int w = std::min(static_cast<int>(image.getSize().x), static_cast<int>(canvasLogicalSize.x));
+    int h = std::min(static_cast<int>(image.getSize().y), static_cast<int>(canvasLogicalSize.y));
+
+    sf::Uint8* pixels = const_cast<sf::Uint8*>(image.getPixelsPtr());
+    int fullW = static_cast<int>(image.getSize().x);
+
     for (int y = 0; y < h; ++y) {
+        size_t rowStart = (static_cast<size_t>(y) * fullW) * 4;
         for (int x = 0; x < w; ++x) {
-            if (colorMatches(image.getPixel(x, y), targetColor)) {
-                image.setPixel(x, y, replacementColor);
+            size_t idx = rowStart + static_cast<size_t>(x) * 4;
+            sf::Color px(pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3]);
+            if (colorMatches(px, targetColor)) {
+                pixels[idx] = replacementColor.r;
+                pixels[idx + 1] = replacementColor.g;
+                pixels[idx + 2] = replacementColor.b;
+                pixels[idx + 3] = replacementColor.a;
             }
         }
     }
@@ -621,36 +633,69 @@ void Canvas::executeGlobalFill(sf::Color targetColor, sf::Color replacementColor
 void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image) {
     if (colorMatches(targetColor, replacementColor)) return;
 
-    int w = static_cast<int>(image.getSize().x);
-    int h = static_cast<int>(image.getSize().y);
+    int w = std::min(static_cast<int>(image.getSize().x), static_cast<int>(canvasLogicalSize.x));
+    int h = std::min(static_cast<int>(image.getSize().y), static_cast<int>(canvasLogicalSize.y));
+
     if (startPoint.x < 0 || startPoint.x >= w || startPoint.y < 0 || startPoint.y >= h) return;
-    if (!colorMatches(image.getPixel(startPoint.x, startPoint.y), targetColor)) return;
 
-    std::queue<sf::Vector2i> q;
-    std::vector<bool> visited(w * h, false);
+    sf::Uint8* pixels = const_cast<sf::Uint8*>(image.getPixelsPtr());
+    int fullW = static_cast<int>(image.getSize().x);
 
-    q.push(startPoint);
-    visited[startPoint.y * w + startPoint.x] = true;
+    auto getPx = [&](int x, int y) -> sf::Color {
+        size_t idx = (static_cast<size_t>(y) * fullW + x) * 4;
+        return sf::Color(pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3]);
+        };
 
-    const int dx[] = { -1, 1, 0, 0 };
-    const int dy[] = { 0, 0, -1, 1 };
+    if (!colorMatches(getPx(startPoint.x, startPoint.y), targetColor)) return;
 
-    while (!q.empty()) {
-        sf::Vector2i p = q.front();
-        q.pop();
+    auto setPx = [&](int x, int y, sf::Color c) {
+        size_t idx = (static_cast<size_t>(y) * fullW + x) * 4;
+        pixels[idx] = c.r; pixels[idx + 1] = c.g; pixels[idx + 2] = c.b; pixels[idx + 3] = c.a;
+        };
 
-        image.setPixel(p.x, p.y, replacementColor);
+    std::vector<sf::Vector2i> stack;
+    stack.push_back(startPoint);
 
-        for (int i = 0; i < 4; ++i) {
-            int nx = p.x + dx[i];
-            int ny = p.y + dy[i];
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                int idx = ny * w + nx;
-                if (!visited[idx] && colorMatches(image.getPixel(nx, ny), targetColor)) {
-                    visited[idx] = true;
-                    q.push(sf::Vector2i(nx, ny));
+    while (!stack.empty()) {
+        sf::Vector2i p = stack.back();
+        stack.pop_back();
+
+        int x = p.x;
+        int y = p.y;
+
+        while (x >= 0 && colorMatches(getPx(x, y), targetColor)) {
+            x--;
+        }
+        x++;
+
+        bool spanAbove = false;
+        bool spanBelow = false;
+
+        while (x < w && colorMatches(getPx(x, y), targetColor)) {
+            setPx(x, y, replacementColor);
+
+            if (y > 0) {
+                bool match = colorMatches(getPx(x, y - 1), targetColor);
+                if (!spanAbove && match) {
+                    stack.push_back(sf::Vector2i(x, y - 1));
+                    spanAbove = true;
+                }
+                else if (spanAbove && !match) {
+                    spanAbove = false;
                 }
             }
+
+            if (y < h - 1) {
+                bool match = colorMatches(getPx(x, y + 1), targetColor);
+                if (!spanBelow && match) {
+                    stack.push_back(sf::Vector2i(x, y + 1));
+                    spanBelow = true;
+                }
+                else if (spanBelow && !match) {
+                    spanBelow = false;
+                }
+            }
+            x++;
         }
     }
 }
@@ -748,7 +793,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
             if (activeTool == ToolType::Fill) {
                 if (isPixelMode) fillTolerance = 0.0f;
-                else fillTolerance = 0.45f;
+                else fillTolerance = 0.08f;
 
                 saveUndoState();
                 sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
