@@ -12,6 +12,7 @@
 #include "Screens/ProjectBrowser.h"
 #include "Screens/AISettingsModal.h"
 #include "Screens/ExportModal.h"
+#include "Screens/NewProjectModal.h"
 #include "KeybindSettingsPanel.h"
 #include "LeftToolbar.h"
 #include "BottomTimeline.h"
@@ -42,6 +43,7 @@ private:
     AISettingsModal settingsModal;
     KeybindSettingsPanel keybindPanel;
     ExportModal exportModal;
+    NewProjectModal newProjectModal;
 
     LeftToolbar leftToolbar;
     BottomTimeline bottomTimeline;
@@ -57,9 +59,19 @@ private:
     sf::Text promptDisplay;
     std::string currentPrompt;
 
+    bool isPanning;
+    sf::Vector2f lastPanMousePos;
+
+    sf::RectangleShape toolBg;
+    sf::RectangleShape sizeSliderBg;
+    sf::RectangleShape sizeSliderHandle;
+    sf::Text sizeLabelText;
+    sf::Text sizeValueText;
+    bool isDraggingSizeSlider;
+
 public:
     UIManager();
-    void init(ProjectManager* pm);
+    void init(ProjectManager* pm, Canvas* baseCanvas);
     void showMessage(const std::string& msg, sf::Color color);
     void handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm);
     void update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas);

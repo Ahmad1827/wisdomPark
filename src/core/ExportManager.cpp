@@ -38,8 +38,6 @@ sf::IntRect ExportManager::calculateAutoCrop(const sf::Image& img) {
     int maxY = -1;
     bool found = false;
 
-    // A small alpha threshold (5) is used instead of (> 0) to completely ignore 
-    // nearly invisible ghosting artifacts or anti-aliasing bleeds left on the edges.
     for (unsigned int y = 0; y < img.getSize().y; ++y) {
         for (unsigned int x = 0; x < img.getSize().x; ++x) {
             if (img.getPixel(x, y).a > 5) {
@@ -59,7 +57,6 @@ sf::IntRect ExportManager::calculateAutoCrop(const sf::Image& img) {
 sf::Image ExportManager::applyCropAndBackground(const sf::Image& img, sf::IntRect cropRect, bool transparentBg) {
     if (cropRect.width <= 0 || cropRect.height <= 0) cropRect = sf::IntRect(0, 0, img.getSize().x, img.getSize().y);
 
-    // Hard boundary safety clamp to prevent SFML out-of-bounds pixel read crashes
     if (cropRect.left < 0) cropRect.left = 0;
     if (cropRect.top < 0) cropRect.top = 0;
     if (cropRect.left + cropRect.width > static_cast<int>(img.getSize().x)) cropRect.width = img.getSize().x - cropRect.left;
@@ -98,8 +95,6 @@ bool ExportManager::exportPNGSequence(Canvas& canvas, const std::string& directo
     if (frameCount == 0) return false;
 
     std::vector<sf::Image> frames;
-
-    // Fixed: Track absolute boundaries, not recursive width modifications
     int masterMinX = 999999;
     int masterMinY = 999999;
     int masterMaxX = -1;
@@ -141,8 +136,6 @@ bool ExportManager::exportSpriteSheet(Canvas& canvas, const std::string& filepat
     if (frameCount == 0 || columns <= 0) return false;
 
     std::vector<sf::Image> frames;
-
-    // Fixed: Track absolute boundaries, not recursive width modifications
     int masterMinX = 999999;
     int masterMinY = 999999;
     int masterMaxX = -1;
@@ -180,8 +173,8 @@ bool ExportManager::exportSpriteSheet(Canvas& canvas, const std::string& filepat
 
     for (size_t i = 0; i < frameCount; ++i) {
         sf::Image cropped = applyCropAndBackground(frames[i], activeCrop, transparentBg);
-        int col = i % columns;
-        int row = i / columns;
+        int col = static_cast<int>(i) % columns;
+        int row = static_cast<int>(i) / columns;
         spriteSheet.copy(cropped, col * fw, row * fh, sf::IntRect(0, 0, fw, fh), true);
     }
 

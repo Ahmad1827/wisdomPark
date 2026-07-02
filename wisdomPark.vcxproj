@@ -168,6 +168,7 @@
     <ClCompile Include="src\ui\Screens\AISettingsModal.cpp" />
     <ClCompile Include="src\ui\Screens\ProjectBrowser.cpp" />
     <ClCompile Include="src\ui\Screens\ExportModal.cpp" />
+    <ClCompile Include="src\ui\Screens\NewProjectModal.cpp" />
     <ClCompile Include="src\ui\Screens\WelcomeScreen.cpp" />
     <ClCompile Include="src\ui\BottomTimeline.cpp" />
     <ClCompile Include="src\ui\ColorPalettePanel.cpp" />
@@ -203,6 +204,7 @@
     <ClInclude Include="src\ui\RightProperties.h" />
     <ClInclude Include="src\ui\Screens\AISettingsModal.h" />
     <ClInclude Include="src\ui\Screens\ExportModal.h" />
+    <ClInclude Include="src\ui\Screens\NewProjectModal.h" />
     <ClInclude Include="src\ui\Screens\ProjectBrowser.h" />
     <ClInclude Include="src\ui\Screens\WelcomeScreen.h" />
     <ClInclude Include="src\ui\TopMenuBar.h" />

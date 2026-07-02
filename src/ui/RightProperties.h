@@ -22,6 +22,8 @@ struct PropSection {
     bool isHovered = false;
 };
 
+class Canvas; // Forward declaration
+
 class RightProperties {
 private:
     sf::RectangleShape background;
@@ -48,6 +50,7 @@ public:
     void updateHover(sf::Vector2f mousePos, bool canOpen);
     void draw(sf::RenderWindow& window);
     std::string handleClick(sf::Vector2f mousePos);
+    bool handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canvas& canvas, int currentFrame);
     void syncState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity, float currentFps);
 
     float getCurrentX() const;

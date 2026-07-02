@@ -5,9 +5,9 @@
 #include <ctime>
 #include <filesystem>
 
-UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath("") {}
+UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isPanning(false), isDraggingSizeSlider(false) {}
 
-void UIManager::init(ProjectManager* pm) {
+void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     projManager = pm;
     keybindManager.init();
 
@@ -20,6 +20,7 @@ void UIManager::init(ProjectManager* pm) {
     settingsModal.init();
     keybindPanel.init(&keybindManager);
     exportModal.init();
+    newProjectModal.init();
 
     leftToolbar.init();
     layerPanel.init();
@@ -42,6 +43,28 @@ void UIManager::init(ProjectManager* pm) {
     promptDisplay.setCharacterSize(20);
     promptDisplay.setFillColor(sf::Color::White);
     promptDisplay.setPosition(1920.f / 2.f - 290.f, 1080.f - 288.f);
+
+    toolBg.setSize(sf::Vector2f(44.f, 160.f));
+    toolBg.setFillColor(sf::Color(25, 25, 30, 240));
+    toolBg.setOutlineThickness(1.f);
+    toolBg.setOutlineColor(sf::Color(100, 100, 110));
+
+    sizeSliderBg.setSize(sf::Vector2f(10.f, 100.f));
+    sizeSliderBg.setFillColor(sf::Color(15, 15, 20));
+    sizeSliderBg.setOutlineThickness(1.f);
+    sizeSliderBg.setOutlineColor(sf::Color(60, 60, 70));
+
+    sizeSliderHandle.setSize(sf::Vector2f(20.f, 10.f));
+    sizeSliderHandle.setFillColor(sf::Color(0, 191, 255));
+
+    sizeLabelText.setFont(font);
+    sizeLabelText.setString("SIZE");
+    sizeLabelText.setCharacterSize(10);
+    sizeLabelText.setFillColor(sf::Color(180, 180, 180));
+
+    sizeValueText.setFont(font);
+    sizeValueText.setCharacterSize(12);
+    sizeValueText.setFillColor(sf::Color::White);
 }
 
 void UIManager::showMessage(const std::string& msg, sf::Color color) {
@@ -76,24 +99,43 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         return;
     }
 
+    if (newProjectModal.getIsOpen()) {
+        std::string res = newProjectModal.handleEvent(event, window);
+        if (res == "create_normal") {
+            activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
+            activeProjectPath = "";
+            canvas.setPixelMode(false);
+            pm.createNewProject(activeProjectName, 1920, 1080, 12, false, canvas);
+            currentState = AppState::Painting;
+            showMessage("Created Normal Project", sf::Color::Green);
+        }
+        else if (res == "create_pixel") {
+            activeProjectName = "Pixel_Art_" + std::to_string(static_cast<long long>(std::time(nullptr)));
+            activeProjectPath = "";
+            canvas.setPixelMode(true);
+            pm.createNewProject(activeProjectName, 64, 64, 12, true, canvas);
+            currentState = AppState::Painting;
+            showMessage("Created Pixel Art Project", sf::Color::Green);
+        }
+        return;
+    }
+
     if (currentState == AppState::Welcome) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
             ProjectMetadata meta;
             std::string action = projectBrowser.handleClick(mousePos, meta);
 
             if (action == "new_project") {
-                activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
-                activeProjectPath = "";
-                pm.createNewProject(activeProjectName, 1920, 1080, 12, canvas);
-                currentState = AppState::Painting;
-                showMessage("Created New Project", sf::Color::Green);
+                newProjectModal.open();
             }
             else if (action == "load_project") {
                 activeProjectName = meta.name;
                 activeProjectPath = meta.path;
                 int loadedFps = 12;
-                if (pm.loadProject(meta.path, canvas, loadedFps)) {
+                bool isPix = false;
+                if (pm.loadProject(meta.path, canvas, loadedFps, isPix)) {
                     timeline.setFrame(0);
+                    canvas.setPixelMode(isPix);
                     currentState = AppState::Painting;
                     showMessage("Loaded Project: " + meta.name, sf::Color::Green);
                 }
@@ -107,8 +149,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     activeProjectPath = file;
                     activeProjectName = std::filesystem::path(file).stem().string();
                     int loadedFps = 12;
-                    if (pm.loadProject(activeProjectPath, canvas, loadedFps)) {
+                    bool isPix = false;
+                    if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
                         timeline.setFrame(0);
+                        canvas.setPixelMode(isPix);
                         currentState = AppState::Painting;
                         showMessage("Loaded Native Project", sf::Color::Green);
                     }
@@ -119,11 +163,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
         if (keybindManager.isActionTriggered("proj_new", event)) {
-            activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
-            activeProjectPath = "";
-            pm.createNewProject(activeProjectName, 1920, 1080, 12, canvas);
-            currentState = AppState::Painting;
-            showMessage("Created New Project", sf::Color::Green);
+            newProjectModal.open();
         }
     }
     else if (currentState == AppState::Painting) {
@@ -169,14 +209,14 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
                     if (!file.empty()) {
                         activeProjectPath = file;
-                        if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()))) {
+                        if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
                             showMessage("Project Saved Successfully!", sf::Color::Green);
                         }
                         else showMessage("Error Saving Project!", sf::Color::Red);
                     }
                 }
                 else {
-                    if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()))) {
+                    if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
                         showMessage("Project Saved Successfully!", sf::Color::Green);
                     }
                     else showMessage("Error Saving Project!", sf::Color::Red);
@@ -187,7 +227,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
                 if (!file.empty()) {
                     activeProjectPath = file;
-                    if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()))) {
+                    if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
                         showMessage("Project Saved As Successfully!", sf::Color::Green);
                     }
                     else showMessage("Error Saving Project!", sf::Color::Red);
@@ -200,8 +240,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     activeProjectPath = file;
                     activeProjectName = std::filesystem::path(file).stem().string();
                     int loadedFps = 12;
-                    if (pm.loadProject(activeProjectPath, canvas, loadedFps)) {
+                    bool isPix = false;
+                    if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
                         timeline.setFrame(0);
+                        canvas.setPixelMode(isPix);
                         showMessage("Loaded Native Project", sf::Color::Green);
                     }
                     else {
@@ -211,10 +253,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (keybindManager.isActionTriggered("proj_new", event)) {
-                activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
-                activeProjectPath = "";
-                pm.createNewProject(activeProjectName, 1920, 1080, 12, canvas);
-                showMessage("Created New Project", sf::Color::Green);
+                newProjectModal.open();
             }
 
             if (keybindManager.isActionTriggered("time_next", event)) {
@@ -342,11 +381,24 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (keybindManager.isActionTriggered("sel_flip_v", event)) canvas.flipSelectionVertical(timeline.getCurrentFrame());
             }
 
-            if (keybindManager.isActionTriggered("tool_brush", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Brush); leftToolbar.setActiveTool("brush"); }
-            if (keybindManager.isActionTriggered("tool_pencil", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Pencil); leftToolbar.setActiveTool("pencil"); }
-            if (keybindManager.isActionTriggered("tool_eraser", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Eraser); leftToolbar.setActiveTool("eraser"); }
-            if (keybindManager.isActionTriggered("tool_fill", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Fill); leftToolbar.setActiveTool("fill"); }
-            if (keybindManager.isActionTriggered("tool_select", event)) { canvas.setActiveTool(ToolType::Select); leftToolbar.setActiveTool("select"); }
+            if (canvas.getPixelMode()) {
+                if (keybindManager.isActionTriggered("tool_brush", event)) {
+                    canvas.cyclePixelBrushSize();
+                    showMessage("Brush Size: " + std::to_string(canvas.getPixelBrushSize()) + "px", sf::Color::Green);
+                }
+                if (keybindManager.isActionTriggered("view_grid", event)) { canvas.togglePixelGrid(); }
+                if (keybindManager.isActionTriggered("tool_move", event)) { canvas.toggleTileMode(); }
+                if (keybindManager.isActionTriggered("layer_vis", event)) { canvas.resetView(); showMessage("View Reset", sf::Color::Green); }
+                if (keybindManager.isActionTriggered("tool_eraser", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Eraser); leftToolbar.setActiveTool("eraser"); }
+                if (keybindManager.isActionTriggered("tool_pencil", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Pencil); leftToolbar.setActiveTool("pencil"); }
+            }
+            else {
+                if (keybindManager.isActionTriggered("tool_brush", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Brush); leftToolbar.setActiveTool("brush"); }
+                if (keybindManager.isActionTriggered("tool_pencil", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Pencil); leftToolbar.setActiveTool("pencil"); }
+                if (keybindManager.isActionTriggered("tool_eraser", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Eraser); leftToolbar.setActiveTool("eraser"); }
+                if (keybindManager.isActionTriggered("tool_fill", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Fill); leftToolbar.setActiveTool("fill"); }
+                if (keybindManager.isActionTriggered("tool_select", event)) { canvas.setActiveTool(ToolType::Select); leftToolbar.setActiveTool("select"); }
+            }
 
             if (keybindManager.isActionTriggered("edit_undo", event)) canvas.undo();
             if (keybindManager.isActionTriggered("edit_redo", event)) canvas.redo();
@@ -368,7 +420,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
 
-        if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible() && !exportModal.getIsOpen()) {
+        if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible() && !exportModal.getIsOpen() && !newProjectModal.getIsOpen()) {
 
             if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
             if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
@@ -388,7 +440,20 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
             }
 
+            if (event.type == sf::Event::MouseWheelScrolled && event.mouseWheelScroll.wheel == sf::Mouse::VerticalWheel) {
+                canvas.zoom(event.mouseWheelScroll.delta);
+            }
+
             if (event.type == sf::Event::MouseButtonPressed) {
+                if (event.mouseButton.button == sf::Mouse::Middle || event.mouseButton.button == sf::Mouse::Right) {
+                    isPanning = true;
+                    lastPanMousePos = mousePos;
+                    if (event.mouseButton.button == sf::Mouse::Right && canvas.getPixelMode()) {
+                    }
+                    else if (event.mouseButton.button == sf::Mouse::Middle) {
+                        return;
+                    }
+                }
 
                 if (event.mouseButton.button == sf::Mouse::Left || event.mouseButton.button == sf::Mouse::Right) {
                     if (colorPalettePanel.handleClick(mousePos, canvas)) {
@@ -397,6 +462,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Left) {
+
+                    if (sizeSliderBg.getGlobalBounds().contains(mousePos)) {
+                        isDraggingSizeSlider = true;
+                        return;
+                    }
+
                     std::string lpAction = layerPanel.processClick(mousePos, canvas, timeline.getCurrentFrame());
                     if (!lpAction.empty()) {
                         if (lpAction == "layer_push") {
@@ -531,28 +602,63 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                 }
 
-                if (canvas.getActiveTool() != ToolType::Select) {
-                    canvas.commitSelection(timeline.getCurrentFrame());
+                if (!isPanning || canvas.getPixelMode()) {
+                    canvas.handleMousePressed(logicalMousePos, event.mouseButton.button == sf::Mouse::Right, timeline.getCurrentFrame());
                 }
-
-                canvas.handleMousePressed(logicalMousePos, event.mouseButton.button == sf::Mouse::Right, timeline.getCurrentFrame());
             }
 
             if (event.type == sf::Event::MouseButtonReleased) {
-                canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
-                if (canvas.getDrawArea().contains(logicalMousePos)) {
-                    sf::Image img = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
-                    timeline.getFrameData(timeline.getCurrentFrame()).thumbnail = img;
+                if (isDraggingSizeSlider && event.mouseButton.button == sf::Mouse::Left) {
+                    isDraggingSizeSlider = false;
+                    return;
+                }
+
+                if (event.mouseButton.button == sf::Mouse::Right && isPanning) {
+                    float dist = std::sqrt(std::pow(mousePos.x - lastPanMousePos.x, 2) + std::pow(mousePos.y - lastPanMousePos.y, 2));
+                    if (dist > 5.0f) {
+                        isPanning = false;
+                        canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
+                        return;
+                    }
+                    isPanning = false;
+                }
+                else if (event.mouseButton.button == sf::Mouse::Middle) {
+                    isPanning = false;
+                    return;
+                }
+
+                if (!isPanning) {
+                    canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
+
+                    if (canvas.getDrawArea().contains(logicalMousePos)) {
+                        sf::Image img = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
+                        timeline.getFrameData(timeline.getCurrentFrame()).thumbnail = img;
+                    }
                 }
             }
 
             if (event.type == sf::Event::MouseMoved) {
-                canvas.handleMouseMoved(logicalMousePos, mousePos, timeline.getCurrentFrame());
-            }
+                if (isDraggingSizeSlider) {
+                    float localY = mousePos.y - sizeSliderBg.getPosition().y;
+                    float percent = 1.0f - std::clamp(localY / sizeSliderBg.getSize().y, 0.0f, 1.0f);
 
-            if (event.type == sf::Event::MouseWheelScrolled && event.mouseWheelScroll.wheel == sf::Mouse::VerticalWheel) {
-                if (!sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) && !sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
-                    canvas.setBrushSize(canvas.getBrushSize() + event.mouseWheelScroll.delta);
+                    if (canvas.getPixelMode()) {
+                        int newSize = 1 + static_cast<int>(percent * 31.0f);
+                        canvas.setPixelBrushSize(newSize);
+                    }
+                    else {
+                        float newSize = 1.0f + (percent * 99.0f);
+                        canvas.setBrushSize(newSize);
+                    }
+                }
+
+                if (isPanning) {
+                    canvas.pan(mousePos - lastPanMousePos);
+                    lastPanMousePos = mousePos;
+                }
+
+                if (!isPanning && !isDraggingSizeSlider) {
+                    canvas.handleMouseMoved(logicalMousePos, mousePos, timeline.getCurrentFrame());
                 }
             }
         }
@@ -565,6 +671,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     if (settingsModal.getIsOpen()) settingsModal.updateHover(mousePos);
     if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);
     if (exportModal.getIsOpen()) exportModal.updateHover(mousePos);
+    if (newProjectModal.getIsOpen()) newProjectModal.updateHover(mousePos);
 
     if (currentState == AppState::Welcome) {
         projectBrowser.updateHover(mousePos);
@@ -603,6 +710,26 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         leftToolbar.updateHover(mousePos);
         bottomTimeline.updateHover(mousePos);
 
+        float tbX = leftToolbar.getPanelRightEdge();
+        toolBg.setPosition(tbX + 15.f, 100.f);
+        sizeLabelText.setPosition(tbX + 22.f, 110.f);
+        sizeSliderBg.setPosition(tbX + 32.f, 130.f);
+
+        float handlePercent = 0.f;
+        if (canvas.getPixelMode()) {
+            handlePercent = (canvas.getPixelBrushSize() - 1.0f) / 31.0f;
+            sizeValueText.setString(std::to_string(canvas.getPixelBrushSize()));
+        }
+        else {
+            handlePercent = (canvas.getBrushSize() - 1.0f) / 99.0f;
+            sizeValueText.setString(std::to_string(static_cast<int>(canvas.getBrushSize())));
+        }
+
+        float handleY = sizeSliderBg.getPosition().y + sizeSliderBg.getSize().y - (handlePercent * sizeSliderBg.getSize().y);
+        sizeSliderHandle.setPosition(sizeSliderBg.getPosition().x - 5.f, handleY - 5.f);
+
+        sizeValueText.setPosition(tbX + 22.f + (canvas.getPixelMode() && canvas.getPixelBrushSize() < 10 ? 5.f : 0.f), sizeSliderBg.getPosition().y + sizeSliderBg.getSize().y + 10.f);
+
         if (showingText && textClock.getElapsedTime().asSeconds() > 2.0f) showingText = false;
         else if (showingText && textClock.getElapsedTime().asSeconds() > 1.5f) {
             textAlpha = std::max(0.0f, textAlpha - 255.0f * (1.0f / 60.0f));
@@ -618,6 +745,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
     if (currentState == AppState::Welcome) {
         projectBrowser.draw(window);
+        if (newProjectModal.getIsOpen()) newProjectModal.draw(window);
     }
     else if (currentState == AppState::Painting) {
 
@@ -644,6 +772,12 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         layerPanel.draw(window, canvas, timeline.getCurrentFrame());
         colorPalettePanel.draw(window);
         rightProperties.draw(window);
+
+        window.draw(toolBg);
+        window.draw(sizeLabelText);
+        window.draw(sizeSliderBg);
+        window.draw(sizeSliderHandle);
+        window.draw(sizeValueText);
 
         bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);

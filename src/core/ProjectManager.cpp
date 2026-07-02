@@ -40,14 +40,13 @@ std::vector<ProjectMetadata> ProjectManager::getRecentProjects() {
                 meta.path = entry.path().string();
 
                 std::string line;
-                if (std::getline(file, meta.name) &&
-                    std::getline(file, line)) {
-                    meta.width = std::stoi(line);
-                }
-                if (std::getline(file, line)) { meta.height = std::stoi(line); }
-                if (std::getline(file, line)) { meta.fps = std::stoi(line); }
-                if (std::getline(file, line)) { meta.frameCount = std::stoi(line); }
+                if (std::getline(file, meta.name) && std::getline(file, line)) meta.width = std::stoi(line);
+                if (std::getline(file, line)) meta.height = std::stoi(line);
+                if (std::getline(file, line)) meta.fps = std::stoi(line);
+                if (std::getline(file, line)) meta.frameCount = std::stoi(line);
                 if (std::getline(file, meta.lastModified)) {}
+                for (int i = 0; i < 5; ++i) std::getline(file, line);
+                if (std::getline(file, line)) meta.isPixelMode = (line == "1");
 
                 std::string thumbPath = entry.path().string() + "/thumb.png";
                 if (fs::exists(thumbPath)) {
@@ -66,7 +65,7 @@ std::vector<ProjectMetadata> ProjectManager::getRecentProjects() {
     return projects;
 }
 
-bool ProjectManager::createNewProject(const std::string& name, int width, int height, int fps, Canvas& canvas) {
+bool ProjectManager::createNewProject(const std::string& name, int width, int height, int fps, bool isPixelMode, Canvas& canvas) {
     std::string projPath = projectsDir + "/" + name + ".wpk";
     if (fs::exists(projPath)) return false;
 
@@ -74,15 +73,15 @@ bool ProjectManager::createNewProject(const std::string& name, int width, int he
     fs::create_directory(projPath + "/layers");
 
     canvas.initCustom(width, height);
-    return saveProject(name, canvas, fps);
+    return saveProject(name, canvas, fps, isPixelMode);
 }
 
-bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fps) {
+bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fps, bool isPixelMode) {
     std::string projPath = projectsDir + "/" + name + ".wpk";
-    return saveProjectAs(projPath, name, canvas, fps);
+    return saveProjectAs(projPath, name, canvas, fps, isPixelMode);
 }
 
-bool ProjectManager::saveProjectAs(const std::string& path, const std::string& name, Canvas& canvas, int fps) {
+bool ProjectManager::saveProjectAs(const std::string& path, const std::string& name, Canvas& canvas, int fps, bool isPixelMode) {
     if (!fs::exists(path)) {
         fs::create_directory(path);
         fs::create_directory(path + "/layers");
@@ -102,7 +101,8 @@ bool ProjectManager::saveProjectAs(const std::string& path, const std::string& n
         << canvas.getOnionSkinPrevOpacity() << "\n"
         << canvas.getOnionSkinNextOpacity() << "\n"
         << canvas.getOnionSkinPrevCount() << "\n"
-        << canvas.getOnionSkinNextCount() << "\n";
+        << canvas.getOnionSkinNextCount() << "\n"
+        << (isPixelMode ? "1" : "0") << "\n";
     metaFile.close();
 
     if (canvas.getFrameCount() > 0) {
@@ -148,7 +148,7 @@ bool ProjectManager::saveProjectAs(const std::string& path, const std::string& n
     return true;
 }
 
-bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& outFps) {
+bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& outFps, bool& outIsPixelMode) {
     std::string metaPath = path + "/meta.json";
     if (!fs::exists(metaPath)) return false;
 
@@ -158,6 +158,7 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
     bool onionOn = false;
     float onionP = 89.25f, onionN = 89.25f;
     int opc = 1, onc = 1;
+    outIsPixelMode = false;
 
     std::getline(file, projName);
     std::getline(file, line); width = std::stoi(line);
@@ -170,6 +171,7 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
     if (std::getline(file, line)) onionN = std::stof(line);
     if (std::getline(file, line)) opc = std::stoi(line);
     if (std::getline(file, line)) onc = std::stoi(line);
+    if (std::getline(file, line)) outIsPixelMode = (line == "1");
     file.close();
 
     canvas.initCustom(width, height);

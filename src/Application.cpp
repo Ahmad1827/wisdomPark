@@ -9,7 +9,7 @@ Application::Application()
     appSettings = SettingsManager::loadSettings();
 
     canvas.init();
-    uiManager.init(&projectManager);
+    uiManager.init(&projectManager, &canvas);
 
     aiHelper.trainOnDataset("dataset.json");
     aiHelper.loadThesaurus("thesaurus.txt");
@@ -38,7 +38,7 @@ void Application::processEvents() {
 
 void Application::update(float dt) {
     if (currentState == AppState::Painting) {
-        timeline.update(canvas.getFrameCount());
+        timeline.update(static_cast<float>(canvas.getFrameCount()));
         aiHelper.update(*canvas.getActiveRenderTexture(timeline.getCurrentFrame()));
     }
     uiManager.update(window, currentState, appSettings, dt, canvas);

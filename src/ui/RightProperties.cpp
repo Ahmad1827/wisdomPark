@@ -1,4 +1,5 @@
 #include "RightProperties.h"
+#include "../core/Canvas.h"
 #include <sstream>
 #include <iomanip>
 
@@ -211,6 +212,10 @@ std::string RightProperties::handleClick(sf::Vector2f mousePos) {
         }
     }
     return "";
+}
+
+bool RightProperties::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canvas& canvas, int currentFrame) {
+    return false; // Properties logic explicitly mapped and isolated directly through handleClick orchestration
 }
 
 void RightProperties::syncState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity, float currentFps) {
