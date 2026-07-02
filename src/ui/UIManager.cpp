@@ -44,7 +44,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     promptDisplay.setFillColor(sf::Color::White);
     promptDisplay.setPosition(1920.f / 2.f - 290.f, 1080.f - 288.f);
 
-    toolBg.setSize(sf::Vector2f(44.f, 160.f));
+    toolBg.setSize(sf::Vector2f(44.f, 180.f));
     toolBg.setFillColor(sf::Color(25, 25, 30, 240));
     toolBg.setOutlineThickness(1.f);
     toolBg.setOutlineColor(sf::Color(100, 100, 110));
@@ -65,6 +65,13 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     sizeValueText.setFont(font);
     sizeValueText.setCharacterSize(12);
     sizeValueText.setFillColor(sf::Color::White);
+
+    pixelPerfBtn.setSize(sf::Vector2f(30.f, 20.f));
+    pixelPerfBtn.setFillColor(sf::Color(40, 40, 50));
+    pixelPerfText.setFont(font);
+    pixelPerfText.setString("PERF");
+    pixelPerfText.setCharacterSize(10);
+    pixelPerfText.setFillColor(sf::Color::White);
 }
 
 void UIManager::showMessage(const std::string& msg, sf::Color color) {
@@ -468,6 +475,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         return;
                     }
 
+                    if (canvas.getPixelMode() && pixelPerfBtn.getGlobalBounds().contains(mousePos)) {
+                        canvas.togglePixelPerfect();
+                        return;
+                    }
+
                     std::string lpAction = layerPanel.processClick(mousePos, canvas, timeline.getCurrentFrame());
                     if (!lpAction.empty()) {
                         if (lpAction == "layer_push") {
@@ -730,6 +742,9 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
         sizeValueText.setPosition(tbX + 22.f + (canvas.getPixelMode() && canvas.getPixelBrushSize() < 10 ? 5.f : 0.f), sizeSliderBg.getPosition().y + sizeSliderBg.getSize().y + 10.f);
 
+        pixelPerfBtn.setPosition(tbX + 17.f, 245.f);
+        pixelPerfText.setPosition(tbX + 19.f, 248.f);
+
         if (showingText && textClock.getElapsedTime().asSeconds() > 2.0f) showingText = false;
         else if (showingText && textClock.getElapsedTime().asSeconds() > 1.5f) {
             textAlpha = std::max(0.0f, textAlpha - 255.0f * (1.0f / 60.0f));
@@ -778,6 +793,20 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         window.draw(sizeSliderBg);
         window.draw(sizeSliderHandle);
         window.draw(sizeValueText);
+
+        if (canvas.getPixelMode()) {
+            if (canvas.isPixelPerfectEnabled()) {
+                pixelPerfBtn.setOutlineThickness(1.f);
+                pixelPerfBtn.setOutlineColor(sf::Color(0, 191, 255));
+                pixelPerfBtn.setFillColor(sf::Color(60, 60, 80));
+            }
+            else {
+                pixelPerfBtn.setOutlineThickness(0.f);
+                pixelPerfBtn.setFillColor(sf::Color(40, 40, 50));
+            }
+            window.draw(pixelPerfBtn);
+            window.draw(pixelPerfText);
+        }
 
         bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);

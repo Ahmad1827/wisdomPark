@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <stack>
 #include <queue>
 
 Layer::Layer(std::string n) : name(n), visible(true), locked(false), opacity(1.0f), blendMode(BlendMode::Normal), persistent(false), colorTag(0) {
@@ -106,7 +107,7 @@ activeTool(ToolType::Brush), primaryColor(sf::Color::Black), secondaryColor(sf::
 fillTolerance(0.f), fillContiguous(true),
 activeLayer(1), onionSkinEnabled(true), onionSkinPrevOpacity(89.25f), onionSkinNextOpacity(89.25f), onionSkinPrevCount(1), onionSkinNextCount(1),
 viewScale(1.0f), targetScale(1.0f), canvasLogicalSize(1920, 1080), zoomMultiplier(1.0f), panOffset(0.f, 0.f),
-isPixelMode(false), pixelBrushSize(1), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false) {
+isPixelMode(false), pixelBrushSize(1), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false), pixelPerfectEnabled(false) {
     brushEngine.initDefaultPresets();
 }
 
@@ -131,9 +132,9 @@ void Canvas::initCustom(int width, int height) {
     canvasSprite.setPosition(1920.f / 2.f, deskSprite.getPosition().y - (379.f / 2.f) - (700.f / 2.f) + 120.f);
 
     sf::FloatRect cBounds = canvasSprite.getGlobalBounds();
-    float frameOffsetX = cBounds.width * 0.045f;
-    float frameOffsetYTop = cBounds.height * 0.045f;
-    float frameOffsetYBot = cBounds.height * 0.045f;
+    float frameOffsetX = cBounds.width * 0.055f;
+    float frameOffsetYTop = cBounds.height * 0.055f;
+    float frameOffsetYBot = cBounds.height * 0.055f;
 
     drawArea = sf::FloatRect(
         cBounds.left + frameOffsetX,
@@ -668,7 +669,7 @@ void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
     px.setPosition(static_cast<float>(tx), static_cast<float>(ty));
 
     sf::RenderStates states;
-    if (activeTool == ToolType::Eraser) states.blendMode = sf::BlendNone;
+    if (activeTool == ToolType::Eraser || c == sf::Color::Transparent) states.blendMode = sf::BlendNone;
 
     target->draw(px, states);
 
@@ -688,17 +689,25 @@ void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
     }
 }
 
-void Canvas::drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx) {
+std::vector<sf::Vector2i> Canvas::getBresenhamPoints(int x0, int y0, int x1, int y1) {
+    std::vector<sf::Vector2i> pts;
     int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     int dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     int err = dx + dy, e2;
-
     while (true) {
-        drawPixelExact(x0, y0, c, frameIdx);
+        pts.push_back(sf::Vector2i(x0, y0));
         if (x0 == x1 && y0 == y1) break;
         e2 = 2 * err;
         if (e2 >= dy) { err += dy; x0 += sx; }
         if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+    return pts;
+}
+
+void Canvas::drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx) {
+    auto pts = getBresenhamPoints(x0, y0, x1, y1);
+    for (auto p : pts) {
+        drawPixelExact(p.x, p.y, c, frameIdx);
     }
 }
 
@@ -739,7 +748,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
             if (activeTool == ToolType::Fill) {
                 if (isPixelMode) fillTolerance = 0.0f;
-                else fillTolerance = 0.2f;
+                else fillTolerance = 0.45f;
 
                 saveUndoState();
                 sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
@@ -768,6 +777,14 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
             if (isPixelMode) {
                 sf::Color pC = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : drawCol;
+
+                if (pixelPerfectEnabled && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser) && pixelBrushSize == 1) {
+                    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                    layerSnapshot = targetTex->getTexture().copyToImage();
+                    activeStroke.clear();
+                    activeStroke.push_back(sf::Vector2i(localPos.x, localPos.y));
+                }
+
                 drawPixelExact(static_cast<int>(localPos.x), static_cast<int>(localPos.y), pC, currentFrame);
             }
             else {
@@ -823,7 +840,40 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
         sf::Color drawCol = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : primaryColor;
 
         if (isPixelMode) {
-            drawBresenhamLine(static_cast<int>(lastPos.x), static_cast<int>(lastPos.y), static_cast<int>(localPos.x), static_cast<int>(localPos.y), drawCol, currentFrame);
+            if (pixelPerfectEnabled && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser) && pixelBrushSize == 1) {
+                auto pts = getBresenhamPoints(static_cast<int>(lastPos.x), static_cast<int>(lastPos.y), static_cast<int>(localPos.x), static_cast<int>(localPos.y));
+                for (size_t i = 1; i < pts.size(); ++i) activeStroke.push_back(pts[i]);
+
+                std::vector<sf::Vector2i> filtered;
+                for (auto p : activeStroke) {
+                    if (filtered.empty()) { filtered.push_back(p); continue; }
+                    if (filtered.back() == p) continue;
+                    if (filtered.size() >= 2) {
+                        sf::Vector2i a = filtered[filtered.size() - 2];
+                        sf::Vector2i b = filtered[filtered.size() - 1];
+                        sf::Vector2i c = p;
+                        if ((a.x == b.x && b.y == c.y && a.x != c.x && a.y != c.y) ||
+                            (a.y == b.y && b.x == c.x && a.x != c.x && a.y != c.y)) {
+                            filtered.pop_back();
+                        }
+                    }
+                    filtered.push_back(p);
+                }
+                activeStroke = filtered;
+
+                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                targetTex->clear(sf::Color::Transparent);
+                sf::Texture temp; temp.loadFromImage(layerSnapshot);
+                targetTex->draw(sf::Sprite(temp), sf::RenderStates(sf::BlendNone));
+
+                for (auto p : activeStroke) {
+                    drawPixelExact(p.x, p.y, drawCol, currentFrame);
+                }
+                targetTex->display();
+            }
+            else {
+                drawBresenhamLine(static_cast<int>(lastPos.x), static_cast<int>(lastPos.y), static_cast<int>(localPos.x), static_cast<int>(localPos.y), drawCol, currentFrame);
+            }
         }
         else {
             sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
@@ -878,7 +928,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
         if (pixelGridEnabled && viewScale > 1.5f) {
             sf::VertexArray lines(sf::Lines);
-            sf::Color paperLine(180, 190, 210, 100);
+            sf::Color paperLine(120, 130, 160, 200);
             int step = pixelBrushSize;
             for (int x = 0; x <= static_cast<int>(canvasLogicalSize.x); x += step) {
                 lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), 0.f), paperLine));
@@ -1031,3 +1081,5 @@ void Canvas::toggleTileMode() {
     else if (!tileModeX && tileModeY) { tileModeX = true; tileModeY = true; }
     else { tileModeX = false; tileModeY = false; }
 }
+void Canvas::togglePixelPerfect() { pixelPerfectEnabled = !pixelPerfectEnabled; }
+bool Canvas::isPixelPerfectEnabled() const { return pixelPerfectEnabled; }

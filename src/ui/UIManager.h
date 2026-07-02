@@ -69,6 +69,9 @@ private:
     sf::Text sizeValueText;
     bool isDraggingSizeSlider;
 
+    sf::RectangleShape pixelPerfBtn;
+    sf::Text pixelPerfText;
+
 public:
     UIManager();
     void init(ProjectManager* pm, Canvas* baseCanvas);

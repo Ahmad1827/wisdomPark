@@ -89,6 +89,10 @@ private:
     bool pixelSnapEnabled;
     bool tileModeX;
     bool tileModeY;
+    bool pixelPerfectEnabled;
+
+    std::vector<sf::Vector2i> activeStroke;
+    sf::Image layerSnapshot;
 
     bool colorMatches(const sf::Color& a, const sf::Color& b) const;
     void executeGlobalFill(sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
@@ -96,6 +100,7 @@ private:
 
     void drawPixelExact(int x, int y, sf::Color c, int frameIdx);
     void drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx);
+    std::vector<sf::Vector2i> getBresenhamPoints(int x0, int y0, int x1, int y1);
 
 public:
     Canvas();
@@ -179,11 +184,13 @@ public:
     void setPixelMode(bool enabled);
     bool getPixelMode() const;
     void setPixelBrushSize(int size);
-    void cyclePixelBrushSize();
     int getPixelBrushSize() const;
+    void cyclePixelBrushSize();
     void togglePixelGrid();
     bool isPixelGridEnabled() const;
     void togglePixelSnap();
     bool isPixelSnapEnabled() const;
     void toggleTileMode();
+    void togglePixelPerfect();
+    bool isPixelPerfectEnabled() const;
 };
