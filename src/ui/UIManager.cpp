@@ -455,11 +455,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (event.mouseButton.button == sf::Mouse::Middle || event.mouseButton.button == sf::Mouse::Right) {
                     isPanning = true;
                     lastPanMousePos = mousePos;
-                    if (event.mouseButton.button == sf::Mouse::Right && canvas.getPixelMode()) {
-                    }
-                    else if (event.mouseButton.button == sf::Mouse::Middle) {
-                        return;
-                    }
+                    return;
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Left || event.mouseButton.button == sf::Mouse::Right) {
@@ -614,7 +610,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                 }
 
-                if (!isPanning || canvas.getPixelMode()) {
+                if (!isPanning) {
                     canvas.handleMousePressed(logicalMousePos, event.mouseButton.button == sf::Mouse::Right, timeline.getCurrentFrame());
                 }
             }
@@ -626,13 +622,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Right && isPanning) {
-                    float dist = std::sqrt(std::pow(mousePos.x - lastPanMousePos.x, 2) + std::pow(mousePos.y - lastPanMousePos.y, 2));
-                    if (dist > 5.0f) {
-                        isPanning = false;
-                        canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
-                        return;
-                    }
                     isPanning = false;
+                    return;
                 }
                 else if (event.mouseButton.button == sf::Mouse::Middle) {
                     isPanning = false;

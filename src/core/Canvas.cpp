@@ -609,15 +609,15 @@ bool Canvas::colorMatches(const sf::Color& a, const sf::Color& b) const {
 void Canvas::executeGlobalFill(sf::Color targetColor, sf::Color replacementColor, sf::Image& image) {
     if (colorMatches(targetColor, replacementColor)) return;
 
-    int w = std::min(static_cast<int>(image.getSize().x), static_cast<int>(canvasLogicalSize.x));
-    int h = std::min(static_cast<int>(image.getSize().y), static_cast<int>(canvasLogicalSize.y));
+    unsigned int w = std::min(image.getSize().x, canvasLogicalSize.x);
+    unsigned int h = std::min(image.getSize().y, canvasLogicalSize.y);
 
     sf::Uint8* pixels = const_cast<sf::Uint8*>(image.getPixelsPtr());
-    int fullW = static_cast<int>(image.getSize().x);
+    unsigned int fullW = image.getSize().x;
 
-    for (int y = 0; y < h; ++y) {
+    for (unsigned int y = 0; y < h; ++y) {
         size_t rowStart = (static_cast<size_t>(y) * fullW) * 4;
-        for (int x = 0; x < w; ++x) {
+        for (unsigned int x = 0; x < w; ++x) {
             size_t idx = rowStart + static_cast<size_t>(x) * 4;
             sf::Color px(pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3]);
             if (colorMatches(px, targetColor)) {
@@ -633,8 +633,8 @@ void Canvas::executeGlobalFill(sf::Color targetColor, sf::Color replacementColor
 void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image) {
     if (colorMatches(targetColor, replacementColor)) return;
 
-    int w = std::min(static_cast<int>(image.getSize().x), static_cast<int>(canvasLogicalSize.x));
-    int h = std::min(static_cast<int>(image.getSize().y), static_cast<int>(canvasLogicalSize.y));
+    int w = static_cast<int>(std::min(image.getSize().x, canvasLogicalSize.x));
+    int h = static_cast<int>(std::min(image.getSize().y, canvasLogicalSize.y));
 
     if (startPoint.x < 0 || startPoint.x >= w || startPoint.y < 0 || startPoint.y >= h) return;
 
@@ -642,14 +642,14 @@ void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf
     int fullW = static_cast<int>(image.getSize().x);
 
     auto getPx = [&](int x, int y) -> sf::Color {
-        size_t idx = (static_cast<size_t>(y) * fullW + x) * 4;
+        size_t idx = (static_cast<size_t>(y) * fullW + static_cast<size_t>(x)) * 4;
         return sf::Color(pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3]);
         };
 
     if (!colorMatches(getPx(startPoint.x, startPoint.y), targetColor)) return;
 
     auto setPx = [&](int x, int y, sf::Color c) {
-        size_t idx = (static_cast<size_t>(y) * fullW + x) * 4;
+        size_t idx = (static_cast<size_t>(y) * fullW + static_cast<size_t>(x)) * 4;
         pixels[idx] = c.r; pixels[idx + 1] = c.g; pixels[idx + 2] = c.b; pixels[idx + 3] = c.a;
         };
 
@@ -709,9 +709,9 @@ void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
     sf::RectangleShape px(sf::Vector2f(static_cast<float>(pixelBrushSize), static_cast<float>(pixelBrushSize)));
     px.setFillColor(c);
 
-    int tx = (x / pixelBrushSize) * pixelBrushSize;
-    int ty = (y / pixelBrushSize) * pixelBrushSize;
-    px.setPosition(static_cast<float>(tx), static_cast<float>(ty));
+    float tx = static_cast<float>(x) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
+    float ty = static_cast<float>(y) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
+    px.setPosition(tx, ty);
 
     sf::RenderStates states;
     if (activeTool == ToolType::Eraser || c == sf::Color::Transparent) states.blendMode = sf::BlendNone;
@@ -719,18 +719,18 @@ void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
     target->draw(px, states);
 
     if (tileModeX) {
-        px.setPosition(static_cast<float>(tx - canvasLogicalSize.x), static_cast<float>(ty)); target->draw(px, states);
-        px.setPosition(static_cast<float>(tx + canvasLogicalSize.x), static_cast<float>(ty)); target->draw(px, states);
+        px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty); target->draw(px, states);
+        px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty); target->draw(px, states);
     }
     if (tileModeY) {
-        px.setPosition(static_cast<float>(tx), static_cast<float>(ty - canvasLogicalSize.y)); target->draw(px, states);
-        px.setPosition(static_cast<float>(tx), static_cast<float>(ty + canvasLogicalSize.y)); target->draw(px, states);
+        px.setPosition(tx, ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+        px.setPosition(tx, ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
     }
     if (tileModeX && tileModeY) {
-        px.setPosition(static_cast<float>(tx - canvasLogicalSize.x), static_cast<float>(ty - canvasLogicalSize.y)); target->draw(px, states);
-        px.setPosition(static_cast<float>(tx + canvasLogicalSize.x), static_cast<float>(ty - canvasLogicalSize.y)); target->draw(px, states);
-        px.setPosition(static_cast<float>(tx - canvasLogicalSize.x), static_cast<float>(ty + canvasLogicalSize.y)); target->draw(px, states);
-        px.setPosition(static_cast<float>(tx + canvasLogicalSize.x), static_cast<float>(ty + canvasLogicalSize.y)); target->draw(px, states);
+        px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+        px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+        px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+        px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
     }
 }
 
@@ -759,12 +759,20 @@ void Canvas::drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int 
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
-    sf::Vector2f texScale(static_cast<float>(canvasLogicalSize.x) / drawArea.width, static_cast<float>(canvasLogicalSize.y) / drawArea.height);
-    sf::Vector2f localPos((logicalPos.x - drawArea.left) * texScale.x, (logicalPos.y - drawArea.top) * texScale.y);
+    // Only abort drawing if panning is requested. Otherwise we continue with rightClick = true
+    // so users can draw with secondary color.
+    if (rightClick && !isPixelMode) {
+        // If not pixel mode, user might be right-clicking to pan or draw secondary. 
+        // We'll let drawing logic run, but UIManager might intercept it for panning.
+    }
+
+    float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
+    float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
+    sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
 
     if (isPixelMode && pixelSnapEnabled) {
-        localPos.x = std::round(localPos.x);
-        localPos.y = std::round(localPos.y);
+        localPos.x = std::floor(localPos.x);
+        localPos.y = std::floor(localPos.y);
     }
 
     if (drawArea.contains(logicalPos)) {
@@ -827,10 +835,11 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
                     layerSnapshot = targetTex->getTexture().copyToImage();
                     activeStroke.clear();
-                    activeStroke.push_back(sf::Vector2i(localPos.x, localPos.y));
+                    activeStroke.push_back(sf::Vector2i(static_cast<int>(localPos.x), static_cast<int>(localPos.y)));
                 }
 
                 drawPixelExact(static_cast<int>(localPos.x), static_cast<int>(localPos.y), pC, currentFrame);
+                frames[currentFrame].layers[activeLayer].texture->display();
             }
             else {
                 brushEngine.resetStroke(localPos);
@@ -858,12 +867,13 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     isHoveringCanvas = drawArea.contains(logicalPos);
     rawMousePos = rawPos;
 
-    sf::Vector2f texScale(static_cast<float>(canvasLogicalSize.x) / drawArea.width, static_cast<float>(canvasLogicalSize.y) / drawArea.height);
-    sf::Vector2f localPos((logicalPos.x - drawArea.left) * texScale.x, (logicalPos.y - drawArea.top) * texScale.y);
+    float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
+    float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
+    sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
 
     if (isPixelMode && pixelSnapEnabled) {
-        localPos.x = std::round(localPos.x);
-        localPos.y = std::round(localPos.y);
+        localPos.x = std::floor(localPos.x);
+        localPos.y = std::floor(localPos.y);
     }
 
     lastHoverLocalPos = localPos;
@@ -885,6 +895,8 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
         sf::Color drawCol = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : primaryColor;
 
         if (isPixelMode) {
+            sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+
             if (pixelPerfectEnabled && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser) && pixelBrushSize == 1) {
                 auto pts = getBresenhamPoints(static_cast<int>(lastPos.x), static_cast<int>(lastPos.y), static_cast<int>(localPos.x), static_cast<int>(localPos.y));
                 for (size_t i = 1; i < pts.size(); ++i) activeStroke.push_back(pts[i]);
@@ -906,7 +918,6 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                 }
                 activeStroke = filtered;
 
-                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
                 targetTex->clear(sf::Color::Transparent);
                 sf::Texture temp; temp.loadFromImage(layerSnapshot);
                 targetTex->draw(sf::Sprite(temp), sf::RenderStates(sf::BlendNone));
@@ -918,6 +929,7 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
             }
             else {
                 drawBresenhamLine(static_cast<int>(lastPos.x), static_cast<int>(lastPos.y), static_cast<int>(localPos.x), static_cast<int>(localPos.y), drawCol, currentFrame);
+                targetTex->display();
             }
         }
         else {
@@ -967,21 +979,40 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     innerStates.transform = innerTransform;
 
     if (isPixelMode) {
-        sf::RectangleShape bg(sf::Vector2f(static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y)));
-        bg.setFillColor(sf::Color(250, 252, 255));
-        window.draw(bg, innerStates);
+        float tileSize = 4.0f;
+        int cols = static_cast<int>(std::ceil(canvasLogicalSize.x / tileSize));
+        int rows = static_cast<int>(std::ceil(canvasLogicalSize.y / tileSize));
+        sf::VertexArray checkerboard(sf::Quads);
+        sf::Color c1(190, 190, 190);
+        sf::Color c2(240, 240, 240);
 
-        if (pixelGridEnabled && viewScale > 1.5f) {
-            sf::VertexArray lines(sf::Lines);
-            sf::Color paperLine(120, 130, 160, 200);
-            int step = pixelBrushSize;
-            for (int x = 0; x <= static_cast<int>(canvasLogicalSize.x); x += step) {
-                lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), 0.f), paperLine));
-                lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), static_cast<float>(canvasLogicalSize.y)), paperLine));
+        for (int r = 0; r < rows; ++r) {
+            for (int c = 0; c < cols; ++c) {
+                sf::Color color = ((r + c) % 2 == 0) ? c1 : c2;
+                float x = c * tileSize;
+                float y = r * tileSize;
+                float w = std::min(tileSize, static_cast<float>(canvasLogicalSize.x) - x);
+                float h = std::min(tileSize, static_cast<float>(canvasLogicalSize.y) - y);
+
+                checkerboard.append(sf::Vertex(sf::Vector2f(x, y), color));
+                checkerboard.append(sf::Vertex(sf::Vector2f(x + w, y), color));
+                checkerboard.append(sf::Vertex(sf::Vector2f(x + w, y + h), color));
+                checkerboard.append(sf::Vertex(sf::Vector2f(x, y + h), color));
             }
-            for (int y = 0; y <= static_cast<int>(canvasLogicalSize.y); y += step) {
-                lines.append(sf::Vertex(sf::Vector2f(0.f, static_cast<float>(y)), paperLine));
-                lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(canvasLogicalSize.x), static_cast<float>(y)), paperLine));
+        }
+        window.draw(checkerboard, innerStates);
+
+        if (pixelGridEnabled && viewScale > 3.0f) {
+            sf::VertexArray lines(sf::Lines);
+            sf::Color gridLine(180, 180, 180, 150);
+            unsigned int step = 1;
+            for (unsigned int x = 0; x <= canvasLogicalSize.x; x += step) {
+                lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), 0.f), gridLine));
+                lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), static_cast<float>(canvasLogicalSize.y)), gridLine));
+            }
+            for (unsigned int y = 0; y <= canvasLogicalSize.y; y += step) {
+                lines.append(sf::Vertex(sf::Vector2f(0.f, static_cast<float>(y)), gridLine));
+                lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(canvasLogicalSize.x), static_cast<float>(y)), gridLine));
             }
             window.draw(lines, innerStates);
         }
@@ -1035,19 +1066,32 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     selection.draw(window, innerStates);
 
-    if (!isPlaying && isHoveringCanvas && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser)) {
+    sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
+    sf::Vector2f currentRawMousePos(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
+    sf::Vector2f logicalPos = getInverseTransform().transformPoint(currentRawMousePos);
+    bool currentlyHovering = drawArea.contains(logicalPos);
+
+    if (!isPlaying && currentlyHovering && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser)) {
         if (isPixelMode) {
-            sf::RectangleShape px(sf::Vector2f(static_cast<float>(pixelBrushSize), static_cast<float>(pixelBrushSize)));
-            px.setFillColor(sf::Color::Transparent);
-            px.setOutlineThickness(1.f / viewScale);
-            px.setOutlineColor(sf::Color::White);
-            int tx = (static_cast<int>(lastHoverLocalPos.x) / pixelBrushSize) * pixelBrushSize;
-            int ty = (static_cast<int>(lastHoverLocalPos.y) / pixelBrushSize) * pixelBrushSize;
-            px.setPosition(static_cast<float>(tx), static_cast<float>(ty));
-            window.draw(px, innerStates);
+            float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
+            float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
+            sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
+
+            float tx = std::floor(localPos.x) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
+            float ty = std::floor(localPos.y) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
+
+            sf::RectangleShape pxHover(sf::Vector2f(static_cast<float>(pixelBrushSize), static_cast<float>(pixelBrushSize)));
+            pxHover.setFillColor(sf::Color(255, 255, 255, 90));
+            pxHover.setOutlineThickness(0.f);
+            pxHover.setPosition(tx, ty);
+
+            sf::RenderStates hoverStates = innerStates;
+            hoverStates.blendMode = sf::BlendAdd;
+
+            window.draw(pxHover, hoverStates);
         }
         else {
-            brushEngine.drawPreviewCursor(window, rawMousePos, sf::Color::White, viewScale);
+            brushEngine.drawPreviewCursor(window, currentRawMousePos, sf::Color::White, viewScale);
         }
     }
 }
