@@ -91,6 +91,8 @@ private:
     bool tileModeY;
     bool pixelPerfectEnabled;
 
+    bool isDirty;
+
     std::vector<sf::Vector2i> activeStroke;
     sf::Image layerSnapshot;
 
@@ -193,4 +195,7 @@ public:
     void toggleTileMode();
     void togglePixelPerfect();
     bool isPixelPerfectEnabled() const;
+
+    bool getIsDirty() const;
+    void clearIsDirty();
 };

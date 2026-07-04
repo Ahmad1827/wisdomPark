@@ -107,7 +107,7 @@ activeTool(ToolType::Brush), primaryColor(sf::Color::Black), secondaryColor(sf::
 fillTolerance(0.f), fillContiguous(true),
 activeLayer(1), onionSkinEnabled(true), onionSkinPrevOpacity(89.25f), onionSkinNextOpacity(89.25f), onionSkinPrevCount(1), onionSkinNextCount(1),
 viewScale(1.0f), targetScale(1.0f), canvasLogicalSize(1920, 1080), zoomMultiplier(1.0f), panOffset(0.f, 0.f),
-isPixelMode(false), pixelBrushSize(1), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false), pixelPerfectEnabled(false) {
+isPixelMode(false), pixelBrushSize(1), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false), pixelPerfectEnabled(false), isDirty(false) {
     brushEngine.initDefaultPresets();
 }
 
@@ -167,6 +167,7 @@ void Canvas::initCustom(int width, int height) {
     redoHistory.clear();
     selection.clearSelection();
     resetView();
+    isDirty = false;
 }
 
 void Canvas::zoom(float delta) {
@@ -556,6 +557,7 @@ sf::Color Canvas::getSecondaryColor() const { return secondaryColor; }
 void Canvas::setFillSettings(float tolerance, bool contiguous) { fillTolerance = tolerance; fillContiguous = contiguous; }
 
 void Canvas::saveUndoState() {
+    isDirty = true;
     undoHistory.push_back(frames);
     if (undoHistory.size() > 15) undoHistory.erase(undoHistory.begin());
     redoHistory.clear();
@@ -759,11 +761,7 @@ void Canvas::drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int 
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
-    // Only abort drawing if panning is requested. Otherwise we continue with rightClick = true
-    // so users can draw with secondary color.
     if (rightClick && !isPixelMode) {
-        // If not pixel mode, user might be right-clicking to pan or draw secondary. 
-        // We'll let drawing logic run, but UIManager might intercept it for panning.
     }
 
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
@@ -771,8 +769,8 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
 
     if (isPixelMode && pixelSnapEnabled) {
-        localPos.x = std::floor(localPos.x);
-        localPos.y = std::floor(localPos.y);
+        localPos.x = std::round(localPos.x);
+        localPos.y = std::round(localPos.y);
     }
 
     if (drawArea.contains(logicalPos)) {
@@ -872,8 +870,8 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
 
     if (isPixelMode && pixelSnapEnabled) {
-        localPos.x = std::floor(localPos.x);
-        localPos.y = std::floor(localPos.y);
+        localPos.x = std::round(localPos.x);
+        localPos.y = std::round(localPos.y);
     }
 
     lastHoverLocalPos = localPos;
@@ -1172,3 +1170,6 @@ void Canvas::toggleTileMode() {
 }
 void Canvas::togglePixelPerfect() { pixelPerfectEnabled = !pixelPerfectEnabled; }
 bool Canvas::isPixelPerfectEnabled() const { return pixelPerfectEnabled; }
+
+bool Canvas::getIsDirty() const { return isDirty; }
+void Canvas::clearIsDirty() { isDirty = false; }

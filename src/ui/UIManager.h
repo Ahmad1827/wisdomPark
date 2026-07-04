@@ -72,6 +72,24 @@ private:
     sf::RectangleShape pixelPerfBtn;
     sf::Text pixelPerfText;
 
+    bool showUnsavedWarning;
+    sf::RectangleShape topBackBtn;
+    sf::Text topBackText;
+    sf::RectangleShape topSaveBtn;
+    sf::Text topSaveText;
+
+    sf::RectangleShape warnOverlay;
+    sf::RectangleShape warnBox;
+    sf::Text warnTitle;
+    sf::RectangleShape warnSaveBtn;
+    sf::Text warnSaveText;
+    sf::RectangleShape warnDiscardBtn;
+    sf::Text warnDiscardText;
+    sf::RectangleShape warnCancelBtn;
+    sf::Text warnCancelText;
+
+    bool triggerSave(Canvas& canvas, Timeline& timeline);
+
 public:
     UIManager();
     void init(ProjectManager* pm, Canvas* baseCanvas);

@@ -5,7 +5,7 @@
 #include <ctime>
 #include <filesystem>
 
-UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isPanning(false), isDraggingSizeSlider(false) {}
+UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isPanning(false), isDraggingSizeSlider(false), showUnsavedWarning(false) {}
 
 void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     projManager = pm;
@@ -72,6 +72,79 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     pixelPerfText.setString("PERF");
     pixelPerfText.setCharacterSize(10);
     pixelPerfText.setFillColor(sf::Color::White);
+
+    topBackBtn.setSize(sf::Vector2f(80.f, 40.f));
+    topBackBtn.setFillColor(sf::Color(180, 50, 50, 200));
+    topBackBtn.setPosition(1920.f / 2.f - 110.f, 20.f);
+
+    topBackText.setFont(font);
+    topBackText.setString("BACK");
+    topBackText.setCharacterSize(18);
+    topBackText.setFillColor(sf::Color::White);
+    topBackText.setPosition(1920.f / 2.f - 95.f, 30.f);
+
+    topSaveBtn.setSize(sf::Vector2f(80.f, 40.f));
+    topSaveBtn.setFillColor(sf::Color(50, 180, 50, 200));
+    topSaveBtn.setPosition(1920.f / 2.f + 10.f, 20.f);
+
+    topSaveText.setFont(font);
+    topSaveText.setString("SAVE");
+    topSaveText.setCharacterSize(18);
+    topSaveText.setFillColor(sf::Color::White);
+    topSaveText.setPosition(1920.f / 2.f + 25.f, 30.f);
+
+    warnOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
+    warnOverlay.setFillColor(sf::Color(0, 0, 0, 180));
+
+    warnBox.setSize(sf::Vector2f(600.f, 250.f));
+    warnBox.setOrigin(300.f, 125.f);
+    warnBox.setPosition(960.f, 540.f);
+    warnBox.setFillColor(sf::Color(30, 30, 35, 255));
+    warnBox.setOutlineThickness(2.f);
+    warnBox.setOutlineColor(sf::Color(100, 100, 110));
+
+    warnTitle.setFont(font);
+    warnTitle.setString("Unsaved Changes!\nDo you want to save before leaving?");
+    warnTitle.setCharacterSize(24);
+    warnTitle.setFillColor(sf::Color::White);
+    warnTitle.setOrigin(warnTitle.getLocalBounds().width / 2.f, warnTitle.getLocalBounds().height / 2.f);
+    warnTitle.setPosition(960.f, 480.f);
+
+    warnSaveBtn.setSize(sf::Vector2f(140.f, 50.f));
+    warnSaveBtn.setOrigin(70.f, 25.f);
+    warnSaveBtn.setPosition(760.f, 600.f);
+    warnSaveBtn.setFillColor(sf::Color(50, 180, 50));
+
+    warnSaveText.setFont(font);
+    warnSaveText.setString("Save & Exit");
+    warnSaveText.setCharacterSize(18);
+    warnSaveText.setFillColor(sf::Color::White);
+    warnSaveText.setOrigin(warnSaveText.getLocalBounds().width / 2.f, warnSaveText.getLocalBounds().height / 2.f);
+    warnSaveText.setPosition(760.f, 595.f);
+
+    warnDiscardBtn.setSize(sf::Vector2f(180.f, 50.f));
+    warnDiscardBtn.setOrigin(90.f, 25.f);
+    warnDiscardBtn.setPosition(960.f, 600.f);
+    warnDiscardBtn.setFillColor(sf::Color(180, 50, 50));
+
+    warnDiscardText.setFont(font);
+    warnDiscardText.setString("Exit without saving");
+    warnDiscardText.setCharacterSize(18);
+    warnDiscardText.setFillColor(sf::Color::White);
+    warnDiscardText.setOrigin(warnDiscardText.getLocalBounds().width / 2.f, warnDiscardText.getLocalBounds().height / 2.f);
+    warnDiscardText.setPosition(960.f, 595.f);
+
+    warnCancelBtn.setSize(sf::Vector2f(120.f, 50.f));
+    warnCancelBtn.setOrigin(60.f, 25.f);
+    warnCancelBtn.setPosition(1160.f, 600.f);
+    warnCancelBtn.setFillColor(sf::Color(80, 80, 90));
+
+    warnCancelText.setFont(font);
+    warnCancelText.setString("Cancel");
+    warnCancelText.setCharacterSize(18);
+    warnCancelText.setFillColor(sf::Color::White);
+    warnCancelText.setOrigin(warnCancelText.getLocalBounds().width / 2.f, warnCancelText.getLocalBounds().height / 2.f);
+    warnCancelText.setPosition(1160.f, 595.f);
 }
 
 void UIManager::showMessage(const std::string& msg, sf::Color color) {
@@ -85,9 +158,49 @@ void UIManager::showMessage(const std::string& msg, sf::Color color) {
     textClock.restart();
 }
 
+bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
+    if (activeProjectPath.empty()) {
+        std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
+        if (!file.empty()) {
+            activeProjectPath = file;
+            if (projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
+                canvas.clearIsDirty();
+                return true;
+            }
+        }
+        return false;
+    }
+    else {
+        if (projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
+            canvas.clearIsDirty();
+            return true;
+        }
+        return false;
+    }
+}
+
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
     sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
+
+    if (showUnsavedWarning) {
+        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            if (warnSaveBtn.getGlobalBounds().contains(mousePos)) {
+                if (triggerSave(canvas, timeline)) {
+                    showUnsavedWarning = false;
+                    currentState = AppState::Welcome;
+                }
+            }
+            else if (warnDiscardBtn.getGlobalBounds().contains(mousePos)) {
+                showUnsavedWarning = false;
+                currentState = AppState::Welcome;
+            }
+            else if (warnCancelBtn.getGlobalBounds().contains(mousePos)) {
+                showUnsavedWarning = false;
+            }
+        }
+        return;
+    }
 
     if (keybindPanel.isVisible()) {
         keybindPanel.handleEvent(event);
@@ -113,6 +226,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             activeProjectPath = "";
             canvas.setPixelMode(false);
             pm.createNewProject(activeProjectName, 1920, 1080, 12, false, canvas);
+            canvas.clearIsDirty();
             currentState = AppState::Painting;
             showMessage("Created Normal Project", sf::Color::Green);
         }
@@ -121,6 +235,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             activeProjectPath = "";
             canvas.setPixelMode(true);
             pm.createNewProject(activeProjectName, 64, 64, 12, true, canvas);
+            canvas.clearIsDirty();
             currentState = AppState::Painting;
             showMessage("Created Pixel Art Project", sf::Color::Green);
         }
@@ -143,6 +258,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (pm.loadProject(meta.path, canvas, loadedFps, isPix)) {
                     timeline.setFrame(0);
                     canvas.setPixelMode(isPix);
+                    canvas.clearIsDirty();
                     currentState = AppState::Painting;
                     showMessage("Loaded Project: " + meta.name, sf::Color::Green);
                 }
@@ -160,6 +276,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
                         timeline.setFrame(0);
                         canvas.setPixelMode(isPix);
+                        canvas.clearIsDirty();
                         currentState = AppState::Painting;
                         showMessage("Loaded Native Project", sf::Color::Green);
                     }
@@ -174,6 +291,28 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
     }
     else if (currentState == AppState::Painting) {
+
+        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            if (topBackBtn.getGlobalBounds().contains(mousePos)) {
+                if (canvas.getIsDirty()) {
+                    showUnsavedWarning = true;
+                }
+                else {
+                    currentState = AppState::Welcome;
+                }
+                return;
+            }
+            if (topSaveBtn.getGlobalBounds().contains(mousePos)) {
+                if (triggerSave(canvas, timeline)) {
+                    showMessage("Project Saved Successfully!", sf::Color::Green);
+                }
+                else {
+                    showMessage("Error Saving Project!", sf::Color::Red);
+                }
+                return;
+            }
+        }
+
         if (event.type == sf::Event::TextEntered && isTypingPrompt) {
             if (event.text.unicode == '\b' && !currentPrompt.empty()) currentPrompt.pop_back();
             else if (event.text.unicode < 128 && event.text.unicode != '\r' && event.text.unicode != '\n' && event.text.unicode != '\b') {
@@ -212,21 +351,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (keybindManager.isActionTriggered("export_png", event)) exportModal.open(canvas, timeline.getCurrentFrame());
 
             if (keybindManager.isActionTriggered("proj_save", event)) {
-                if (activeProjectPath.empty()) {
-                    std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
-                    if (!file.empty()) {
-                        activeProjectPath = file;
-                        if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
-                            showMessage("Project Saved Successfully!", sf::Color::Green);
-                        }
-                        else showMessage("Error Saving Project!", sf::Color::Red);
-                    }
+                if (triggerSave(canvas, timeline)) {
+                    showMessage("Project Saved Successfully!", sf::Color::Green);
                 }
                 else {
-                    if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
-                        showMessage("Project Saved Successfully!", sf::Color::Green);
-                    }
-                    else showMessage("Error Saving Project!", sf::Color::Red);
+                    showMessage("Error Saving Project!", sf::Color::Red);
                 }
             }
 
@@ -235,6 +364,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (!file.empty()) {
                     activeProjectPath = file;
                     if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
+                        canvas.clearIsDirty();
                         showMessage("Project Saved As Successfully!", sf::Color::Green);
                     }
                     else showMessage("Error Saving Project!", sf::Color::Red);
@@ -251,6 +381,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
                         timeline.setFrame(0);
                         canvas.setPixelMode(isPix);
+                        canvas.clearIsDirty();
                         showMessage("Loaded Native Project", sf::Color::Green);
                     }
                     else {
@@ -455,7 +586,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (event.mouseButton.button == sf::Mouse::Middle || event.mouseButton.button == sf::Mouse::Right) {
                     isPanning = true;
                     lastPanMousePos = mousePos;
-                    return;
+                    if (event.mouseButton.button == sf::Mouse::Right && canvas.getPixelMode()) {
+                    }
+                    else if (event.mouseButton.button == sf::Mouse::Middle) {
+                        return;
+                    }
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Left || event.mouseButton.button == sf::Mouse::Right) {
@@ -610,7 +745,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                 }
 
-                if (!isPanning) {
+                if (!isPanning || canvas.getPixelMode()) {
                     canvas.handleMousePressed(logicalMousePos, event.mouseButton.button == sf::Mouse::Right, timeline.getCurrentFrame());
                 }
             }
@@ -622,8 +757,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Right && isPanning) {
+                    float dist = std::sqrt(std::pow(mousePos.x - lastPanMousePos.x, 2) + std::pow(mousePos.y - lastPanMousePos.y, 2));
+                    if (dist > 5.0f) {
+                        isPanning = false;
+                        canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
+                        return;
+                    }
                     isPanning = false;
-                    return;
                 }
                 else if (event.mouseButton.button == sf::Mouse::Middle) {
                     isPanning = false;
@@ -743,6 +883,23 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             sf::Color oc = uiText.getOutlineColor(); oc.a = static_cast<sf::Uint8>(textAlpha);
             uiText.setFillColor(fc); uiText.setOutlineColor(oc);
         }
+
+        if (topBackBtn.getGlobalBounds().contains(mousePos)) topBackBtn.setFillColor(sf::Color(200, 70, 70, 200));
+        else topBackBtn.setFillColor(sf::Color(180, 50, 50, 200));
+
+        if (topSaveBtn.getGlobalBounds().contains(mousePos)) topSaveBtn.setFillColor(sf::Color(70, 200, 70, 200));
+        else topSaveBtn.setFillColor(sf::Color(50, 180, 50, 200));
+
+        if (showUnsavedWarning) {
+            if (warnSaveBtn.getGlobalBounds().contains(mousePos)) warnSaveBtn.setFillColor(sf::Color(70, 200, 70));
+            else warnSaveBtn.setFillColor(sf::Color(50, 180, 50));
+
+            if (warnDiscardBtn.getGlobalBounds().contains(mousePos)) warnDiscardBtn.setFillColor(sf::Color(200, 70, 70));
+            else warnDiscardBtn.setFillColor(sf::Color(180, 50, 50));
+
+            if (warnCancelBtn.getGlobalBounds().contains(mousePos)) warnCancelBtn.setFillColor(sf::Color(100, 100, 110));
+            else warnCancelBtn.setFillColor(sf::Color(80, 80, 90));
+        }
     }
 }
 
@@ -799,6 +956,11 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             window.draw(pixelPerfText);
         }
 
+        window.draw(topBackBtn);
+        window.draw(topBackText);
+        window.draw(topSaveBtn);
+        window.draw(topSaveText);
+
         bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);
 
@@ -807,6 +969,18 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         keybindPanel.draw(window);
         if (exportModal.getIsOpen()) exportModal.draw(window);
+
+        if (showUnsavedWarning) {
+            window.draw(warnOverlay);
+            window.draw(warnBox);
+            window.draw(warnTitle);
+            window.draw(warnSaveBtn);
+            window.draw(warnSaveText);
+            window.draw(warnDiscardBtn);
+            window.draw(warnDiscardText);
+            window.draw(warnCancelBtn);
+            window.draw(warnCancelText);
+        }
     }
 
     if (settingsModal.getIsOpen()) settingsModal.draw(window);
