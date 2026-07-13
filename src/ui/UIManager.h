@@ -31,14 +31,20 @@ enum class MenuState {
 };
 
 struct StartParticle {
-    float x, y, vx, vy, size, life, maxLife;
-    sf::Color baseColor;
+    float x = 0.0f;
+    float y = 0.0f;
+    float vx = 0.0f;
+    float vy = 0.0f;
+    float size = 0.0f;
+    float life = 0.0f;
+    float maxLife = 0.0f;
+    sf::Color baseColor = sf::Color::White;
 };
 
 struct LightRay {
     sf::ConvexShape shape;
-    float speed;
-    float offset;
+    float speed = 0.0f;
+    float offset = 0.0f;
 };
 
 class UIManager {
@@ -114,6 +120,17 @@ private:
     std::vector<StartParticle> particles;
     std::vector<LightRay> lightRays;
     float startupTime;
+
+    int activeTutorialIndex;
+    bool uiFullscreen;
+    bool uiBorderless;
+    bool uiVsync;
+    bool uiAutoBackup;
+    bool uiHwAccel;
+    int uiFpsLimit;
+    int uiAnimFps;
+    int uiHistorySize;
+    int easterEggClicks;
 
     void initStartMenu();
     void updateStartMenu(float dt, sf::Vector2f mousePos);
