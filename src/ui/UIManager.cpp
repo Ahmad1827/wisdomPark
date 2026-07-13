@@ -4,8 +4,9 @@
 #include <algorithm>
 #include <ctime>
 #include <filesystem>
+#include <random>
 
-UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isPanning(false), isDraggingSizeSlider(false), showUnsavedWarning(false) {}
+UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isPanning(false), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f) {}
 
 void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     projManager = pm;
@@ -114,7 +115,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     warnSaveBtn.setOrigin(70.f, 25.f);
     warnSaveBtn.setPosition(760.f, 600.f);
     warnSaveBtn.setFillColor(sf::Color(50, 180, 50));
-
+    
     warnSaveText.setFont(font);
     warnSaveText.setString("Save & Exit");
     warnSaveText.setCharacterSize(18);
@@ -145,6 +146,50 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     warnCancelText.setFillColor(sf::Color::White);
     warnCancelText.setOrigin(warnCancelText.getLocalBounds().width / 2.f, warnCancelText.getLocalBounds().height / 2.f);
     warnCancelText.setPosition(1160.f, 595.f);
+
+    initStartMenu();
+}
+
+void UIManager::initStartMenu() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> disX(0.0f, 1920.0f);
+    std::uniform_real_distribution<float> disY(0.0f, 1080.0f);
+    std::uniform_real_distribution<float> disV(-10.0f, 10.0f);
+    std::uniform_real_distribution<float> disLife(0.5f, 5.0f);
+    std::uniform_real_distribution<float> disSize(1.0f, 4.0f);
+
+    for (int i = 0; i < 150; ++i) {
+        StartParticle p;
+        p.x = disX(gen);
+        p.y = disY(gen);
+        p.vx = disV(gen);
+        p.vy = -std::abs(disV(gen)) - 5.0f;
+        p.maxLife = disLife(gen);
+        p.life = static_cast<float>(i % 100) / 100.0f * p.maxLife;
+        p.size = disSize(gen);
+        int cR = 200 + rand() % 55;
+        int cG = 150 + rand() % 100;
+        int cB = 50 + rand() % 50;
+        p.baseColor = sf::Color(static_cast<sf::Uint8>(cR), static_cast<sf::Uint8>(cG), static_cast<sf::Uint8>(cB));
+        particles.push_back(p);
+    }
+
+    for (int i = 0; i < 4; ++i) {
+        LightRay lr;
+        lr.shape.setPointCount(4);
+        float wTop = 150.f + static_cast<float>(rand() % 200);
+        float wBot = 400.f + static_cast<float>(rand() % 400);
+        float sx = 800.f + (static_cast<float>(i) * 300.f);
+        lr.shape.setPoint(0, sf::Vector2f(sx, -100.f));
+        lr.shape.setPoint(1, sf::Vector2f(sx + wTop, -100.f));
+        lr.shape.setPoint(2, sf::Vector2f(sx - 500.f + wBot, 1200.f));
+        lr.shape.setPoint(3, sf::Vector2f(sx - 500.f, 1200.f));
+        lr.shape.setFillColor(sf::Color(255, 230, 180, 8));
+        lr.speed = 10.f + static_cast<float>(rand() % 20);
+        lr.offset = static_cast<float>(rand() % 1000);
+        lightRays.push_back(lr);
+    }
 }
 
 void UIManager::showMessage(const std::string& msg, sf::Color color) {
@@ -158,6 +203,306 @@ void UIManager::showMessage(const std::string& msg, sf::Color color) {
     textClock.restart();
 }
 
+void UIManager::updateHoverValue(const std::string& key, bool isHovering, float dt, float speed) {
+    if (hoverMap.find(key) == hoverMap.end()) hoverMap[key] = 0.0f;
+    float target = isHovering ? 1.0f : 0.0f;
+    hoverMap[key] += (target - hoverMap[key]) * speed * dt;
+}
+
+float UIManager::getHover(const std::string& key) {
+    return hoverMap.count(key) ? hoverMap[key] : 0.0f;
+}
+
+void UIManager::drawGlassPanel(sf::RenderWindow& window, sf::FloatRect bounds, float hoverScale) {
+    sf::RectangleShape panel(sf::Vector2f(bounds.width, bounds.height));
+    panel.setOrigin(bounds.width / 2.f, bounds.height / 2.f);
+    panel.setPosition(bounds.left + bounds.width / 2.f, bounds.top + bounds.height / 2.f);
+    
+    float s = 1.0f + 0.02f * hoverScale;
+    panel.setScale(s, s);
+
+    panel.setFillColor(sf::Color(25, 28, 35, 190));
+    panel.setOutlineThickness(1.5f);
+    sf::Color outline = sf::Color(
+        static_cast<sf::Uint8>(100.0f + hoverScale * 155.0f), 
+        static_cast<sf::Uint8>(100.0f + hoverScale * 100.0f), 
+        120, 
+        static_cast<sf::Uint8>(150.0f + hoverScale * 105.0f)
+    );
+    panel.setOutlineColor(outline);
+
+    window.draw(panel);
+}
+
+void UIManager::drawPremiumText(sf::RenderWindow& window, const std::string& str, float x, float y, int size, sf::Color mainCol, sf::Color outlineCol, sf::Color shadowCol) {
+    sf::Text t(str, font, size);
+    sf::FloatRect b = t.getLocalBounds();
+    t.setOrigin(b.left + b.width / 2.f, b.top + b.height / 2.f);
+    
+    t.setPosition(x + 6.f, y + 6.f);
+    t.setFillColor(shadowCol);
+    window.draw(t);
+
+    t.setFillColor(outlineCol);
+    const float offsets[8][2] = {{-2,-2}, {0,-2}, {2,-2}, {-2,0}, {2,0}, {-2,2}, {0,2}, {2,2}};
+    for (int i=0; i<8; ++i) {
+        t.setPosition(x + offsets[i][0], y + offsets[i][1]);
+        window.draw(t);
+    }
+
+    t.setPosition(x, y);
+    t.setFillColor(mainCol);
+    window.draw(t);
+
+    float shineOffset = static_cast<float>(std::fmod(startupTime * 400.0f, static_cast<double>(b.width) * 3.0)) - static_cast<float>(b.width);
+    sf::RectangleShape shine(sf::Vector2f(10.f, static_cast<float>(size) * 1.5f));
+    shine.setOrigin(5.f, static_cast<float>(size) * 0.75f);
+    shine.setPosition(x - b.width/2.f + shineOffset, y);
+    shine.setRotation(25.f);
+    shine.setFillColor(sf::Color(255, 255, 255, 60));
+    window.draw(shine);
+}
+
+void UIManager::updateStartMenu(float dt, sf::Vector2f mousePos) {
+    startupTime += dt;
+    for (auto& p : particles) {
+        p.life += dt;
+        if (p.life > p.maxLife) {
+            p.life = 0.0f;
+            p.x = static_cast<float>(rand() % 1920);
+            p.y = 1080.0f + static_cast<float>(rand() % 100);
+        }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        
+        p.vx += std::sin(startupTime + p.y * 0.01f) * 2.0f * dt;
+    }
+}
+
+void UIManager::drawStartMenu(sf::RenderWindow& window) {
+    sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
+    overlay.setFillColor(sf::Color(10, 15, 25, 140));
+    window.draw(overlay);
+
+    for (const auto& lr : lightRays) {
+        sf::ConvexShape r = lr.shape;
+        float shift = std::sin(startupTime * 0.5f + lr.offset) * 50.f;
+        r.move(shift, 0.f);
+        window.draw(r, sf::RenderStates(sf::BlendAdd));
+    }
+
+    for (const auto& p : particles) {
+        sf::CircleShape circ(p.size);
+        circ.setOrigin(p.size, p.size);
+        circ.setPosition(p.x, p.y);
+        
+        float fade = 1.0f;
+        if (p.life < 0.5f) fade = p.life / 0.5f;
+        else if (p.maxLife - p.life < 0.5f) fade = (p.maxLife - p.life) / 0.5f;
+        
+        sf::Color c = p.baseColor;
+        c.a = static_cast<sf::Uint8>(std::clamp(180.0f * fade, 0.0f, 255.0f));
+        circ.setFillColor(c);
+        window.draw(circ, sf::RenderStates(sf::BlendAdd));
+    }
+
+    if (currentMenuState == MenuState::Main) drawMainMenu(window);
+    else if (currentMenuState == MenuState::Settings) drawSettingsMenu(window);
+    else if (currentMenuState == MenuState::Tutorials) drawTutorialsMenu(window);
+    else if (currentMenuState == MenuState::Credits) drawCreditsMenu(window);
+}
+
+void UIManager::drawMainMenu(sf::RenderWindow& window) {
+    sf::CircleShape glow(400.f);
+    glow.setOrigin(400.f, 400.f);
+    glow.setPosition(350.f, 250.f);
+    glow.setFillColor(sf::Color(255, 150, 50, static_cast<sf::Uint8>(15.f + std::sin(startupTime * 2.f) * 5.f)));
+    window.draw(glow, sf::RenderStates(sf::BlendAdd));
+
+    drawPremiumText(window, "WISDOM PARK", 350.f, 250.f, 75, sf::Color(255, 220, 100), sf::Color(100, 50, 10), sf::Color(0, 0, 0, 150));
+    
+    sf::Text subTitle("CREATIVE STUDIO", font, 18);
+    subTitle.setFillColor(sf::Color(200, 200, 200));
+    subTitle.setLetterSpacing(4.0f);
+    subTitle.setPosition(350.f - subTitle.getLocalBounds().width/2.f, 310.f);
+    window.draw(subTitle);
+
+    std::vector<std::string> buttons = {"Projects", "Settings", "Tutorials", "Keybinds", "Credits", "Exit"};
+    float by = 420.f;
+    for (const auto& btn : buttons) {
+        float hov = getHover("mm_" + btn);
+        sf::FloatRect bounds(150.f - hov * 10.f, by, 400.f + hov * 20.f, 60.f);
+        drawGlassPanel(window, bounds, hov);
+        
+        sf::Text t(btn, font, 24);
+        sf::Uint8 cVal = static_cast<sf::Uint8>(230.f + hov * 25.f);
+        t.setFillColor(sf::Color(cVal, cVal, cVal));
+        t.setPosition(bounds.left + 30.f + hov * 15.f, bounds.top + 15.f);
+        window.draw(t);
+        
+        by += 80.f;
+    }
+
+    sf::Text recTitle("Recent Projects", font, 24);
+    recTitle.setFillColor(sf::Color::White);
+    recTitle.setPosition(900.f, 200.f);
+    window.draw(recTitle);
+
+    sf::RectangleShape line(sf::Vector2f(800.f, 2.f));
+    line.setPosition(900.f, 240.f);
+    line.setFillColor(sf::Color(255, 255, 255, 40));
+    window.draw(line);
+
+    std::vector<std::string> recentDummies = {"Character Animation", "Walking Cycle", "Forest Scene", "Pixel RPG"};
+    std::vector<std::string> recentDetails = {"Normal  |  1920x1080  |  24 Frames  |  Modified Today", 
+                                              "Pixel Art  |  64x64  |  8 Frames  |  Modified Yesterday",
+                                              "Normal  |  3840x2160  |  1 Frame  |  Modified 3 days ago",
+                                              "Pixel Art  |  128x128  |  12 Frames  |  Modified Last Week"};
+    float ry = 280.f;
+    for (size_t i=0; i<recentDummies.size(); ++i) {
+        float hov = getHover("rec_" + std::to_string(i));
+        sf::FloatRect bounds(900.f, ry, 800.f, 100.f);
+        drawGlassPanel(window, bounds, hov);
+
+        sf::RectangleShape thumb(sf::Vector2f(140.f, 80.f));
+        thumb.setPosition(bounds.left + 10.f, bounds.top + 10.f);
+        thumb.setFillColor(sf::Color(15, 15, 20));
+        thumb.setOutlineThickness(1.f);
+        thumb.setOutlineColor(sf::Color(255, 255, 255, 50));
+        window.draw(thumb);
+
+        sf::Text pName(recentDummies[i], font, 24);
+        pName.setFillColor(sf::Color(255, 200, 100));
+        pName.setPosition(bounds.left + 170.f, bounds.top + 20.f);
+        window.draw(pName);
+
+        sf::Text pDet(recentDetails[i], font, 14);
+        pDet.setFillColor(sf::Color(180, 180, 180));
+        pDet.setPosition(bounds.left + 170.f, bounds.top + 60.f);
+        window.draw(pDet);
+
+        ry += 125.f;
+    }
+}
+
+void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hoverKey, float x, float y) {
+    float hov = getHover(hoverKey);
+    sf::FloatRect bounds(x, y, 120.f, 50.f);
+    drawGlassPanel(window, bounds, hov);
+    sf::Text t("< BACK", font, 18);
+    t.setFillColor(sf::Color::White);
+    t.setOrigin(t.getLocalBounds().width/2.f, t.getLocalBounds().height/2.f);
+    t.setPosition(bounds.left + bounds.width/2.f, bounds.top + bounds.height/2.f);
+    window.draw(t);
+}
+
+void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
+    drawBackButton(window, "btn_back", 100.f, 100.f);
+    
+    drawPremiumText(window, "SETTINGS", 960.f, 120.f, 40, sf::Color::White, sf::Color(50,50,50), sf::Color::Black);
+
+    sf::FloatRect mainBounds(260.f, 200.f, 1400.f, 750.f);
+    drawGlassPanel(window, mainBounds, 0.0f);
+
+    std::vector<std::string> cats = {"Display", "Saving & Export", "Canvas & Memory", "AI Configuration"};
+    float cx = 300.f;
+    for (const auto& c : cats) {
+        sf::Text t(c, font, 22);
+        t.setFillColor(sf::Color(255, 200, 50));
+        t.setPosition(cx, 240.f);
+        window.draw(t);
+        cx += 350.f;
+    }
+
+    std::vector<std::string> s1 = {"[ X ] Fullscreen", "[   ] Windowed", "[   ] Borderless", "< 1920 x 1080 >", "FPS Limit: 60", "[ X ] VSync", "Theme: Modern Dark", "UI Scale: 100%"};
+    std::vector<std::string> s2 = {"Autosave: 5 Mins", "Def Save: /Projects", "Def Export: /Renders", "[ X ] Auto-Backup"};
+    std::vector<std::string> s3 = {"Anim Preview FPS: 12", "Onion Skin: Default", "Undo History: 15", "[ X ] HW Acceleration"};
+    std::vector<std::string> s4 = {"Provider: OpenAI", "API Key: *********", "Generation Speed: Fast"};
+
+    auto drawCol = [&](std::vector<std::string>& list, float lx) {
+        float ly = 300.f;
+        for (const auto& item : list) {
+            sf::Text t(item, font, 18);
+            t.setFillColor(sf::Color(220, 220, 220));
+            t.setPosition(lx, ly);
+            window.draw(t);
+            ly += 50.f;
+        }
+    };
+
+    drawCol(s1, 300.f);
+    drawCol(s2, 650.f);
+    drawCol(s3, 1000.f);
+    drawCol(s4, 1350.f);
+}
+
+void UIManager::drawTutorialsMenu(sf::RenderWindow& window) {
+    drawBackButton(window, "btn_back", 100.f, 100.f);
+    drawPremiumText(window, "TUTORIALS & GUIDES", 960.f, 120.f, 40, sf::Color::White, sf::Color(50,50,50), sf::Color::Black);
+
+    std::vector<std::string> topics = {"Getting Started", "Drawing", "Animation", "Layers", "Selection", "Pixel Mode", "Keybinds", "Exporting", "AI Features"};
+    std::vector<std::string> descs = {
+        "Learn the basics of Wisdom Park.",
+        "Master the brush, pencil, and eraser.",
+        "Understand the timeline and frames.",
+        "Organize your artwork effectively.",
+        "Copy, paste, move and isolate art.",
+        "Create pixel-perfect retro sprites.",
+        "Speed up workflow with shortcuts.",
+        "Render to PNG and Sprite Sheets.",
+        "Use local and cloud AI generators."
+    };
+
+    int c = 0, r = 0;
+    for (size_t i = 0; i < topics.size(); ++i) {
+        float hov = getHover("tut_" + std::to_string(i));
+        float x = 300.f + static_cast<float>(c) * 450.f;
+        float y = 250.f + static_cast<float>(r) * 220.f;
+        sf::FloatRect bounds(x, y, 400.f, 180.f);
+        drawGlassPanel(window, bounds, hov);
+
+        sf::Text t(topics[i], font, 24);
+        t.setFillColor(sf::Color(255, 200, 100));
+        t.setPosition(bounds.left + 20.f, bounds.top + 20.f);
+        window.draw(t);
+
+        sf::Text d(descs[i], font, 16);
+        d.setFillColor(sf::Color(180, 180, 180));
+        d.setPosition(bounds.left + 20.f, bounds.top + 70.f);
+        window.draw(d);
+
+        c++;
+        if (c >= 3) { c = 0; r++; }
+    }
+}
+
+void UIManager::drawCreditsMenu(sf::RenderWindow& window) {
+    drawBackButton(window, "btn_back", 100.f, 100.f);
+    drawPremiumText(window, "CREDITS", 960.f, 120.f, 40, sf::Color::White, sf::Color(50,50,50), sf::Color::Black);
+
+    sf::FloatRect mainBounds(660.f, 250.f, 600.f, 600.f);
+    drawGlassPanel(window, mainBounds, 0.0f);
+
+    std::string creds = "WISDOM PARK STUDIO\n\nVersion: 1.0.0-release\n\n"
+                        "Engine: Custom C++ / SFML Framework\n"
+                        "Libraries: SFML 2.6.x, nlohmann::json\n\n"
+                        "License: Commercial\n\n\n"
+                        "Special Thanks:\n"
+                        "The Open Source Community\n"
+                        "AI Generative Tooling\n"
+                        "All early testers and supporters.";
+
+    sf::Text t(creds, font, 20);
+    t.setFillColor(sf::Color(220, 220, 220));
+    t.setLineSpacing(1.5f);
+    
+    sf::FloatRect tb = t.getLocalBounds();
+    t.setOrigin(tb.left + tb.width/2.f, tb.top + tb.height/2.f);
+    t.setPosition(960.f, 550.f);
+    t.setStyle(sf::Text::Bold);
+    window.draw(t);
+}
+
 bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
     if (activeProjectPath.empty()) {
         std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
@@ -169,8 +514,7 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
             }
         }
         return false;
-    }
-    else {
+    } else {
         if (projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
             canvas.clearIsDirty();
             return true;
@@ -189,17 +533,18 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (triggerSave(canvas, timeline)) {
                     showUnsavedWarning = false;
                     currentState = AppState::Welcome;
+                    currentMenuState = MenuState::Main;
                 }
-            }
-            else if (warnDiscardBtn.getGlobalBounds().contains(mousePos)) {
+            } else if (warnDiscardBtn.getGlobalBounds().contains(mousePos)) {
                 showUnsavedWarning = false;
+                canvas.clearIsDirty();
                 currentState = AppState::Welcome;
-            }
-            else if (warnCancelBtn.getGlobalBounds().contains(mousePos)) {
+                currentMenuState = MenuState::Main;
+            } else if (warnCancelBtn.getGlobalBounds().contains(mousePos)) {
                 showUnsavedWarning = false;
             }
         }
-        return;
+        return; 
     }
 
     if (keybindPanel.isVisible()) {
@@ -244,72 +589,130 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
     if (currentState == AppState::Welcome) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            ProjectMetadata meta;
-            std::string action = projectBrowser.handleClick(mousePos, meta);
+            
+            if (currentMenuState == MenuState::Main) {
+                std::vector<std::string> buttons = {"Projects", "Settings", "Tutorials", "Keybinds", "Credits", "Exit"};
+                float by = 420.f;
+                for (const auto& btn : buttons) {
+                    sf::FloatRect bBounds(150.f, by, 400.f, 60.f);
+                    if (bBounds.contains(mousePos)) {
+                        if (btn == "Projects") currentMenuState = MenuState::Projects;
+                        else if (btn == "Settings") currentMenuState = MenuState::Settings;
+                        else if (btn == "Tutorials") currentMenuState = MenuState::Tutorials;
+                        else if (btn == "Credits") currentMenuState = MenuState::Credits;
+                        else if (btn == "Keybinds") {
+                            keybindPanel.toggle();
+                            return; 
+                        }
+                        else if (btn == "Exit") window.close();
+                        return;
+                    }
+                    by += 80.f;
+                }
 
-            if (action == "new_project") {
-                newProjectModal.open();
-            }
-            else if (action == "load_project") {
-                activeProjectName = meta.name;
-                activeProjectPath = meta.path;
-                int loadedFps = 12;
-                bool isPix = false;
-                if (pm.loadProject(meta.path, canvas, loadedFps, isPix)) {
-                    timeline.setFrame(0);
-                    canvas.setPixelMode(isPix);
-                    canvas.clearIsDirty();
-                    currentState = AppState::Painting;
-                    showMessage("Loaded Project: " + meta.name, sf::Color::Green);
+                float ry = 280.f;
+                for (int i=0; i<4; ++i) {
+                    sf::FloatRect rBounds(900.f, ry, 800.f, 100.f);
+                    if (rBounds.contains(mousePos)) {
+                        std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
+                        if (!file.empty()) {
+                            activeProjectPath = file;
+                            activeProjectName = std::filesystem::path(file).stem().string();
+                            int loadedFps = 12;
+                            bool isPix = false;
+                            if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
+                                timeline.setFrame(0);
+                                canvas.setPixelMode(isPix);
+                                canvas.clearIsDirty();
+                                currentState = AppState::Painting;
+                                showMessage("Loaded Native Project", sf::Color::Green);
+                            }
+                            else showMessage("Failed to load native project.", sf::Color::Red);
+                        }
+                        return;
+                    }
+                    ry += 125.f;
                 }
-                else {
-                    showMessage("Failed to load project files.", sf::Color::Red);
+            } 
+            else if (currentMenuState == MenuState::Projects) {
+                sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
+                if (backBounds.contains(mousePos)) {
+                    currentMenuState = MenuState::Main;
+                    return;
                 }
-            }
-            else if (action == "open_native") {
-                std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
-                if (!file.empty()) {
-                    activeProjectPath = file;
-                    activeProjectName = std::filesystem::path(file).stem().string();
+
+                ProjectMetadata meta;
+                std::string action = projectBrowser.handleClick(mousePos, meta);
+                if (action == "new_project") newProjectModal.open();
+                else if (action == "load_project") {
+                    activeProjectName = meta.name;
+                    activeProjectPath = meta.path;
                     int loadedFps = 12;
                     bool isPix = false;
-                    if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
+                    if (pm.loadProject(meta.path, canvas, loadedFps, isPix)) {
                         timeline.setFrame(0);
                         canvas.setPixelMode(isPix);
                         canvas.clearIsDirty();
                         currentState = AppState::Painting;
-                        showMessage("Loaded Native Project", sf::Color::Green);
-                    }
-                    else {
-                        showMessage("Failed to load native project.", sf::Color::Red);
+                        showMessage("Loaded Project: " + meta.name, sf::Color::Green);
+                    } else showMessage("Failed to load project files.", sf::Color::Red);
+                }
+                else if (action == "open_native") {
+                    std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
+                    if (!file.empty()) {
+                        activeProjectPath = file;
+                        activeProjectName = std::filesystem::path(file).stem().string();
+                        int loadedFps = 12;
+                        bool isPix = false;
+                        if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
+                            timeline.setFrame(0);
+                            canvas.setPixelMode(isPix);
+                            canvas.clearIsDirty();
+                            currentState = AppState::Painting;
+                            showMessage("Loaded Native Project", sf::Color::Green);
+                        } else showMessage("Failed to load native project.", sf::Color::Red);
                     }
                 }
             }
+            else {
+                sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
+                if (backBounds.contains(mousePos)) {
+                    currentMenuState = MenuState::Main;
+                }
+            }
         }
+        
         if (keybindManager.isActionTriggered("proj_new", event)) {
             newProjectModal.open();
         }
     }
     else if (currentState == AppState::Painting) {
-
-        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            if (topBackBtn.getGlobalBounds().contains(mousePos)) {
-                if (canvas.getIsDirty()) {
-                    showUnsavedWarning = true;
-                }
-                else {
-                    currentState = AppState::Welcome;
-                }
-                return;
+        
+        if (event.type == sf::Event::MouseButtonPressed) {
+            if (event.mouseButton.button == sf::Mouse::Middle || event.mouseButton.button == sf::Mouse::Right) {
+                isPanning = true;
+                lastPanMousePos = mousePos;
+                return; 
             }
-            if (topSaveBtn.getGlobalBounds().contains(mousePos)) {
-                if (triggerSave(canvas, timeline)) {
-                    showMessage("Project Saved Successfully!", sf::Color::Green);
+            
+            if (event.mouseButton.button == sf::Mouse::Left) {
+                if (topBackBtn.getGlobalBounds().contains(mousePos)) {
+                    if (canvas.getIsDirty()) {
+                        showUnsavedWarning = true;
+                    } else {
+                        currentState = AppState::Welcome;
+                        currentMenuState = MenuState::Main;
+                    }
+                    return;
                 }
-                else {
-                    showMessage("Error Saving Project!", sf::Color::Red);
+                if (topSaveBtn.getGlobalBounds().contains(mousePos)) {
+                    if (triggerSave(canvas, timeline)) {
+                        showMessage("Project Saved Successfully!", sf::Color::Green);
+                    } else {
+                        showMessage("Error Saving Project!", sf::Color::Red);
+                    }
+                    return;
                 }
-                return;
             }
         }
 
@@ -353,8 +756,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (keybindManager.isActionTriggered("proj_save", event)) {
                 if (triggerSave(canvas, timeline)) {
                     showMessage("Project Saved Successfully!", sf::Color::Green);
-                }
-                else {
+                } else {
                     showMessage("Error Saving Project!", sf::Color::Red);
                 }
             }
@@ -520,9 +922,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (canvas.getPixelMode()) {
-                if (keybindManager.isActionTriggered("tool_brush", event)) {
-                    canvas.cyclePixelBrushSize();
-                    showMessage("Brush Size: " + std::to_string(canvas.getPixelBrushSize()) + "px", sf::Color::Green);
+                if (keybindManager.isActionTriggered("tool_brush", event)) { 
+                    canvas.cyclePixelBrushSize(); 
+                    showMessage("Brush Size: " + std::to_string(canvas.getPixelBrushSize()) + "px", sf::Color::Green); 
                 }
                 if (keybindManager.isActionTriggered("view_grid", event)) { canvas.togglePixelGrid(); }
                 if (keybindManager.isActionTriggered("tool_move", event)) { canvas.toggleTileMode(); }
@@ -583,16 +985,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (event.type == sf::Event::MouseButtonPressed) {
-                if (event.mouseButton.button == sf::Mouse::Middle || event.mouseButton.button == sf::Mouse::Right) {
-                    isPanning = true;
-                    lastPanMousePos = mousePos;
-                    if (event.mouseButton.button == sf::Mouse::Right && canvas.getPixelMode()) {
-                    }
-                    else if (event.mouseButton.button == sf::Mouse::Middle) {
-                        return;
-                    }
-                }
-
                 if (event.mouseButton.button == sf::Mouse::Left || event.mouseButton.button == sf::Mouse::Right) {
                     if (colorPalettePanel.handleClick(mousePos, canvas)) {
                         return;
@@ -600,7 +992,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Left) {
-
+                    
                     if (sizeSliderBg.getGlobalBounds().contains(mousePos)) {
                         isDraggingSizeSlider = true;
                         return;
@@ -745,7 +1137,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                 }
 
-                if (!isPanning || canvas.getPixelMode()) {
+                if (!isPanning) {
                     canvas.handleMousePressed(logicalMousePos, event.mouseButton.button == sf::Mouse::Right, timeline.getCurrentFrame());
                 }
             }
@@ -756,16 +1148,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     return;
                 }
 
-                if (event.mouseButton.button == sf::Mouse::Right && isPanning) {
-                    float dist = std::sqrt(std::pow(mousePos.x - lastPanMousePos.x, 2) + std::pow(mousePos.y - lastPanMousePos.y, 2));
-                    if (dist > 5.0f) {
-                        isPanning = false;
-                        canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
-                        return;
-                    }
-                    isPanning = false;
-                }
-                else if (event.mouseButton.button == sf::Mouse::Middle) {
+                if (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle) {
                     isPanning = false;
                     return;
                 }
@@ -784,13 +1167,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (isDraggingSizeSlider) {
                     float localY = mousePos.y - sizeSliderBg.getPosition().y;
                     float percent = 1.0f - std::clamp(localY / sizeSliderBg.getSize().y, 0.0f, 1.0f);
-
+                    
                     if (canvas.getPixelMode()) {
                         int newSize = 1 + static_cast<int>(percent * 31.0f);
                         canvas.setPixelBrushSize(newSize);
-                    }
-                    else {
-                        float newSize = 1.0f + (percent * 99.0f);
+                    } else {
+                        float newSize = 1.0f + (percent * 99.0f); 
                         canvas.setBrushSize(newSize);
                     }
                 }
@@ -799,7 +1181,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     canvas.pan(mousePos - lastPanMousePos);
                     lastPanMousePos = mousePos;
                 }
-
+                
                 if (!isPanning && !isDraggingSizeSlider) {
                     canvas.handleMouseMoved(logicalMousePos, mousePos, timeline.getCurrentFrame());
                 }
@@ -818,6 +1200,26 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
     if (currentState == AppState::Welcome) {
         projectBrowser.updateHover(mousePos);
+        updateStartMenu(dt, mousePos);
+        
+        if (currentMenuState == MenuState::Main) {
+            std::vector<std::string> buttons = {"Projects", "Settings", "Tutorials", "Keybinds", "Credits", "Exit"};
+            float by = 420.f;
+            for (const auto& btn : buttons) {
+                sf::FloatRect bBounds(150.f, by, 400.f, 60.f);
+                updateHoverValue("mm_" + btn, bBounds.contains(mousePos), dt);
+                by += 80.f;
+            }
+            float ry = 280.f;
+            for (int i=0; i<4; ++i) {
+                sf::FloatRect rBounds(900.f, ry, 800.f, 100.f);
+                updateHoverValue("rec_" + std::to_string(i), rBounds.contains(mousePos), dt);
+                ry += 125.f;
+            }
+        } else {
+            sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
+            updateHoverValue("btn_back", backBounds.contains(mousePos), dt);
+        }
     }
     else if (currentState == AppState::Painting) {
 
@@ -857,20 +1259,19 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         toolBg.setPosition(tbX + 15.f, 100.f);
         sizeLabelText.setPosition(tbX + 22.f, 110.f);
         sizeSliderBg.setPosition(tbX + 32.f, 130.f);
-
+        
         float handlePercent = 0.f;
         if (canvas.getPixelMode()) {
             handlePercent = (canvas.getPixelBrushSize() - 1.0f) / 31.0f;
             sizeValueText.setString(std::to_string(canvas.getPixelBrushSize()));
-        }
-        else {
+        } else {
             handlePercent = (canvas.getBrushSize() - 1.0f) / 99.0f;
             sizeValueText.setString(std::to_string(static_cast<int>(canvas.getBrushSize())));
         }
-
+        
         float handleY = sizeSliderBg.getPosition().y + sizeSliderBg.getSize().y - (handlePercent * sizeSliderBg.getSize().y);
         sizeSliderHandle.setPosition(sizeSliderBg.getPosition().x - 5.f, handleY - 5.f);
-
+        
         sizeValueText.setPosition(tbX + 22.f + (canvas.getPixelMode() && canvas.getPixelBrushSize() < 10 ? 5.f : 0.f), sizeSliderBg.getPosition().y + sizeSliderBg.getSize().y + 10.f);
 
         pixelPerfBtn.setPosition(tbX + 17.f, 245.f);
@@ -883,7 +1284,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             sf::Color oc = uiText.getOutlineColor(); oc.a = static_cast<sf::Uint8>(textAlpha);
             uiText.setFillColor(fc); uiText.setOutlineColor(oc);
         }
-
+        
         if (topBackBtn.getGlobalBounds().contains(mousePos)) topBackBtn.setFillColor(sf::Color(200, 70, 70, 200));
         else topBackBtn.setFillColor(sf::Color(180, 50, 50, 200));
 
@@ -907,7 +1308,11 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
     window.draw(bgSprite);
 
     if (currentState == AppState::Welcome) {
-        projectBrowser.draw(window);
+        drawStartMenu(window);
+        if (currentMenuState == MenuState::Projects) {
+            projectBrowser.draw(window);
+            drawBackButton(window, "btn_back", 100.f, 100.f);
+        }
         if (newProjectModal.getIsOpen()) newProjectModal.draw(window);
     }
     else if (currentState == AppState::Painting) {
@@ -969,7 +1374,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         keybindPanel.draw(window);
         if (exportModal.getIsOpen()) exportModal.draw(window);
-
+        
         if (showUnsavedWarning) {
             window.draw(warnOverlay);
             window.draw(warnBox);

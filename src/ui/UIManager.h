@@ -1,6 +1,8 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <string>
+#include <map>
+#include <vector>
 #include "../core/AppState.h"
 #include "../core/SettingsManager.h"
 #include "../core/ProjectManager.h"
@@ -19,6 +21,25 @@
 #include "LayerPanel.h"
 #include "ColorPalettePanel.h"
 #include "RightProperties.h"
+
+enum class MenuState {
+    Main,
+    Projects,
+    Settings,
+    Tutorials,
+    Credits
+};
+
+struct StartParticle {
+    float x, y, vx, vy, size, life, maxLife;
+    sf::Color baseColor;
+};
+
+struct LightRay {
+    sf::ConvexShape shape;
+    float speed;
+    float offset;
+};
 
 class UIManager {
 private:
@@ -87,6 +108,28 @@ private:
     sf::Text warnDiscardText;
     sf::RectangleShape warnCancelBtn;
     sf::Text warnCancelText;
+
+    MenuState currentMenuState;
+    std::map<std::string, float> hoverMap;
+    std::vector<StartParticle> particles;
+    std::vector<LightRay> lightRays;
+    float startupTime;
+
+    void initStartMenu();
+    void updateStartMenu(float dt, sf::Vector2f mousePos);
+    void drawStartMenu(sf::RenderWindow& window);
+
+    void updateHoverValue(const std::string& key, bool isHovering, float dt, float speed = 10.0f);
+    float getHover(const std::string& key);
+
+    void drawMainMenu(sf::RenderWindow& window);
+    void drawSettingsMenu(sf::RenderWindow& window);
+    void drawTutorialsMenu(sf::RenderWindow& window);
+    void drawCreditsMenu(sf::RenderWindow& window);
+    void drawBackButton(sf::RenderWindow& window, const std::string& hoverKey, float x, float y);
+
+    void drawPremiumText(sf::RenderWindow& window, const std::string& str, float x, float y, int size, sf::Color mainCol, sf::Color outlineCol, sf::Color shadowCol);
+    void drawGlassPanel(sf::RenderWindow& window, sf::FloatRect bounds, float hoverScale = 1.0f);
 
     bool triggerSave(Canvas& canvas, Timeline& timeline);
 

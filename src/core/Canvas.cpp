@@ -167,7 +167,6 @@ void Canvas::initCustom(int width, int height) {
     redoHistory.clear();
     selection.clearSelection();
     resetView();
-    isDirty = false;
 }
 
 void Canvas::zoom(float delta) {
@@ -557,10 +556,10 @@ sf::Color Canvas::getSecondaryColor() const { return secondaryColor; }
 void Canvas::setFillSettings(float tolerance, bool contiguous) { fillTolerance = tolerance; fillContiguous = contiguous; }
 
 void Canvas::saveUndoState() {
-    isDirty = true;
     undoHistory.push_back(frames);
     if (undoHistory.size() > 15) undoHistory.erase(undoHistory.begin());
     redoHistory.clear();
+    isDirty = true;
 }
 
 void Canvas::undo() {
@@ -761,7 +760,11 @@ void Canvas::drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int 
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
+    // Only abort drawing if panning is requested. Otherwise we continue with rightClick = true
+    // so users can draw with secondary color.
     if (rightClick && !isPixelMode) {
+        // If not pixel mode, user might be right-clicking to pan or draw secondary. 
+        // We'll let drawing logic run, but UIManager might intercept it for panning.
     }
 
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
@@ -769,8 +772,8 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
 
     if (isPixelMode && pixelSnapEnabled) {
-        localPos.x = std::round(localPos.x);
-        localPos.y = std::round(localPos.y);
+        localPos.x = std::floor(localPos.x);
+        localPos.y = std::floor(localPos.y);
     }
 
     if (drawArea.contains(logicalPos)) {
@@ -870,8 +873,8 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
 
     if (isPixelMode && pixelSnapEnabled) {
-        localPos.x = std::round(localPos.x);
-        localPos.y = std::round(localPos.y);
+        localPos.x = std::floor(localPos.x);
+        localPos.y = std::floor(localPos.y);
     }
 
     lastHoverLocalPos = localPos;
@@ -1066,14 +1069,21 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f currentRawMousePos(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
+
+    // Convert raw screen position into transformed workspace coordinates
     sf::Vector2f logicalPos = getInverseTransform().transformPoint(currentRawMousePos);
     bool currentlyHovering = drawArea.contains(logicalPos);
 
     if (!isPlaying && currentlyHovering && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser)) {
         if (isPixelMode) {
+            // Map the inverse matrix coordinates cleanly onto the canvas logical grid
             float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
             float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
-            sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
+
+            // CORRECTION: Convert coordinates relative to the transform view space
+            sf::Vector2f localPos = getInverseTransform().transformPoint(currentRawMousePos);
+            localPos.x = (localPos.x - drawArea.left) * scaleX;
+            localPos.y = (localPos.y - drawArea.top) * scaleY;
 
             float tx = std::floor(localPos.x) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
             float ty = std::floor(localPos.y) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
@@ -1150,6 +1160,9 @@ void Canvas::setPixelMode(bool enabled) { isPixelMode = enabled; }
 bool Canvas::getPixelMode() const { return isPixelMode; }
 void Canvas::setPixelBrushSize(int size) { pixelBrushSize = size; }
 int Canvas::getPixelBrushSize() const { return pixelBrushSize; }
+bool Canvas::getIsDirty() const { return isDirty; }
+void Canvas::clearIsDirty() { isDirty = false; }
+
 
 void Canvas::cyclePixelBrushSize() {
     if (pixelBrushSize == 1) pixelBrushSize = 2;
@@ -1170,6 +1183,3 @@ void Canvas::toggleTileMode() {
 }
 void Canvas::togglePixelPerfect() { pixelPerfectEnabled = !pixelPerfectEnabled; }
 bool Canvas::isPixelPerfectEnabled() const { return pixelPerfectEnabled; }
-
-bool Canvas::getIsDirty() const { return isDirty; }
-void Canvas::clearIsDirty() { isDirty = false; }

@@ -40,12 +40,12 @@ class Canvas {
 private:
     sf::Vector2u canvasLogicalSize;
     std::vector<Frame> frames;
-
+    
     int activeLayer;
     ToolType activeTool;
     sf::Color primaryColor;
     sf::Color secondaryColor;
-
+    
     float fillTolerance;
     bool fillContiguous;
 
@@ -90,7 +90,7 @@ private:
     bool tileModeX;
     bool tileModeY;
     bool pixelPerfectEnabled;
-
+    
     bool isDirty;
 
     std::vector<sf::Vector2i> activeStroke;
@@ -99,7 +99,7 @@ private:
     bool colorMatches(const sf::Color& a, const sf::Color& b) const;
     void executeGlobalFill(sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
     void executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
-
+    
     void drawPixelExact(int x, int y, sf::Color c, int frameIdx);
     void drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx);
     std::vector<sf::Vector2i> getBresenhamPoints(int x0, int y0, int x1, int y1);
@@ -173,7 +173,7 @@ public:
     void saveUndoState();
     void undo();
     void redo();
-
+    
     sf::RenderStates getSFMLBlendMode(BlendMode mode) const;
 
     void handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame);
