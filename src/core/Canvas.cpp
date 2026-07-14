@@ -5,7 +5,7 @@
 #include <stack>
 #include <queue>
 
-Layer::Layer(std::string n) : name(n), visible(true), locked(false), opacity(1.0f), blendMode(BlendMode::Normal), persistent(false), colorTag(0) {
+Layer::Layer(std::string n) : name(n), visible(true), locked(false), opacity(1.0f), blendMode(BlendMode::Normal), persistent(false), colorTag(0), isImageResource(false) {
     texture = std::make_shared<sf::RenderTexture>();
     texture->create(1920, 1080);
     texture->clear(sf::Color::Transparent);
@@ -13,7 +13,7 @@ Layer::Layer(std::string n) : name(n), visible(true), locked(false), opacity(1.0
     texture->display();
 }
 
-Layer::Layer(const Layer& other) : name(other.name), visible(other.visible), locked(other.locked), opacity(other.opacity), blendMode(other.blendMode), persistent(other.persistent), colorTag(other.colorTag) {
+Layer::Layer(const Layer& other) : name(other.name), visible(other.visible), locked(other.locked), opacity(other.opacity), blendMode(other.blendMode), persistent(other.persistent), colorTag(other.colorTag), isImageResource(other.isImageResource) {
     if (persistent) {
         texture = other.texture;
     }
@@ -28,6 +28,9 @@ Layer::Layer(const Layer& other) : name(other.name), visible(other.visible), loc
             texture->display();
         }
     }
+    if (other.staticTexture) {
+        staticTexture = other.staticTexture;
+    }
 }
 
 Layer& Layer::operator=(const Layer& other) {
@@ -39,6 +42,7 @@ Layer& Layer::operator=(const Layer& other) {
         blendMode = other.blendMode;
         persistent = other.persistent;
         colorTag = other.colorTag;
+        isImageResource = other.isImageResource;
         if (persistent) {
             texture = other.texture;
         }
@@ -55,11 +59,14 @@ Layer& Layer::operator=(const Layer& other) {
                 texture->display();
             }
         }
+        if (other.staticTexture) {
+            staticTexture = other.staticTexture;
+        }
     }
     return *this;
 }
 
-Layer::Layer(Layer&& other) noexcept : texture(std::move(other.texture)), name(std::move(other.name)), visible(other.visible), locked(other.locked), opacity(other.opacity), blendMode(other.blendMode), persistent(other.persistent), colorTag(other.colorTag) {}
+Layer::Layer(Layer&& other) noexcept : texture(std::move(other.texture)), name(std::move(other.name)), visible(other.visible), locked(other.locked), opacity(other.opacity), blendMode(other.blendMode), persistent(other.persistent), colorTag(other.colorTag), isImageResource(other.isImageResource), staticTexture(std::move(other.staticTexture)) {}
 
 Layer& Layer::operator=(Layer&& other) noexcept {
     if (this != &other) {
@@ -71,6 +78,8 @@ Layer& Layer::operator=(Layer&& other) noexcept {
         blendMode = other.blendMode;
         persistent = other.persistent;
         colorTag = other.colorTag;
+        isImageResource = other.isImageResource;
+        staticTexture = std::move(other.staticTexture);
     }
     return *this;
 }
@@ -107,7 +116,8 @@ activeTool(ToolType::Brush), primaryColor(sf::Color::Black), secondaryColor(sf::
 fillTolerance(0.f), fillContiguous(true),
 activeLayer(1), onionSkinEnabled(true), onionSkinPrevOpacity(89.25f), onionSkinNextOpacity(89.25f), onionSkinPrevCount(1), onionSkinNextCount(1),
 viewScale(1.0f), targetScale(1.0f), canvasLogicalSize(1920, 1080), zoomMultiplier(1.0f), panOffset(0.f, 0.f),
-isPixelMode(false), pixelBrushSize(1), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false), pixelPerfectEnabled(false), isDirty(false) {
+isPixelMode(false), pixelBrushSize(1), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false), pixelPerfectEnabled(false), isDirty(false),
+transformMode(TransformState::None), pendingTransform(false), currentRotation(0.0f), currentScale(1.0f, 1.0f) {
     brushEngine.initDefaultPresets();
 }
 
@@ -167,6 +177,7 @@ void Canvas::initCustom(int width, int height) {
     redoHistory.clear();
     selection.clearSelection();
     resetView();
+    isDirty = false;
 }
 
 void Canvas::zoom(float delta) {
@@ -529,6 +540,28 @@ void Canvas::duplicateSelection(int currentFrame) {
     }
 }
 
+void Canvas::cropSelection(int currentFrame) {
+    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && selection.isActive()) {
+        saveUndoState();
+        sf::Image layerImg = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
+        sf::Image croppedImg;
+        croppedImg.create(layerImg.getSize().x, layerImg.getSize().y, sf::Color::Transparent);
+        for (unsigned int x = 0; x < layerImg.getSize().x; ++x) {
+            for (unsigned int y = 0; y < layerImg.getSize().y; ++y) {
+                if (selection.isPointInsideSelection(sf::Vector2f(x, y))) {
+                    croppedImg.setPixel(x, y, layerImg.getPixel(x, y));
+                }
+            }
+        }
+        sf::Texture newTex;
+        newTex.loadFromImage(croppedImg);
+        frames[currentFrame].layers[activeLayer].texture->clear(sf::Color::Transparent);
+        frames[currentFrame].layers[activeLayer].texture->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
+        frames[currentFrame].layers[activeLayer].texture->display();
+        commitSelection(currentFrame);
+    }
+}
+
 void Canvas::setActiveTool(ToolType tool) {
     activeTool = tool;
     isDrawing = false;
@@ -556,10 +589,10 @@ sf::Color Canvas::getSecondaryColor() const { return secondaryColor; }
 void Canvas::setFillSettings(float tolerance, bool contiguous) { fillTolerance = tolerance; fillContiguous = contiguous; }
 
 void Canvas::saveUndoState() {
+    isDirty = true;
     undoHistory.push_back(frames);
     if (undoHistory.size() > 15) undoHistory.erase(undoHistory.begin());
     redoHistory.clear();
-    isDirty = true;
 }
 
 void Canvas::undo() {
@@ -760,11 +793,8 @@ void Canvas::drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int 
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
-    // Only abort drawing if panning is requested. Otherwise we continue with rightClick = true
-    // so users can draw with secondary color.
-    if (rightClick && !isPixelMode) {
-        // If not pixel mode, user might be right-clicking to pan or draw secondary. 
-        // We'll let drawing logic run, but UIManager might intercept it for panning.
+    if (rightClick) {
+        return;
     }
 
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
@@ -779,7 +809,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
     if (drawArea.contains(logicalPos)) {
         if (!frames[currentFrame].layers[activeLayer].locked && frames[currentFrame].layers[activeLayer].visible) {
 
-            sf::Color drawCol = rightClick ? secondaryColor : primaryColor;
+            sf::Color drawCol = primaryColor;
 
             if (activeTool == ToolType::Select) {
                 if (selection.isPointInsideSelection(localPos)) {
@@ -1000,9 +1030,9 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         }
         window.draw(checkerboard, innerStates);
 
-        if (pixelGridEnabled && viewScale > 3.0f) {
+        if (pixelGridEnabled && viewScale > 0.1f) {
             sf::VertexArray lines(sf::Lines);
-            sf::Color gridLine(180, 180, 180, 150);
+            sf::Color gridLine(180, 180, 180, 210);
             unsigned int step = 1;
             for (unsigned int x = 0; x <= canvasLogicalSize.x; x += step) {
                 lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), 0.f), gridLine));
@@ -1067,17 +1097,14 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f currentRawMousePos(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
 
-    // Convert raw screen position into transformed workspace coordinates
     sf::Vector2f logicalPos = getInverseTransform().transformPoint(currentRawMousePos);
     bool currentlyHovering = drawArea.contains(logicalPos);
 
     if (!isPlaying && currentlyHovering && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser)) {
         if (isPixelMode) {
-            // Map the inverse matrix coordinates cleanly onto the canvas logical grid
             float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
             float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
 
-            // CORRECTION: Convert coordinates relative to the transform view space
             sf::Vector2f localPos = getInverseTransform().transformPoint(currentRawMousePos);
             localPos.x = (localPos.x - drawArea.left) * scaleX;
             localPos.y = (localPos.y - drawArea.top) * scaleY;
@@ -1180,3 +1207,81 @@ void Canvas::toggleTileMode() {
 }
 void Canvas::togglePixelPerfect() { pixelPerfectEnabled = !pixelPerfectEnabled; }
 bool Canvas::isPixelPerfectEnabled() const { return pixelPerfectEnabled; }
+
+void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFrame) {
+    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+
+    auto tex = std::make_shared<sf::Texture>();
+    if (tex->loadFromFile(filepath)) {
+        saveUndoState();
+
+        addLayer(currentFrame, "Imported Image");
+
+        auto& targetLayer = frames[currentFrame].layers[activeLayer];
+        targetLayer.isImageResource = true;
+        targetLayer.staticTexture = tex;
+
+        sf::Vector2u texSize = tex->getSize();
+
+        // Scale the image down (never up) to fit within the canvas, preserving
+        // aspect ratio. Without this, importing a normal-resolution image into
+        // a small pixel-art canvas leaves it wildly oversized and spilling far
+        // past the canvas bounds - it was previously drawn at native pixel
+        // size regardless of canvasLogicalSize.
+        float maxW = static_cast<float>(canvasLogicalSize.x) * 0.9f;
+        float maxH = static_cast<float>(canvasLogicalSize.y) * 0.9f;
+        float scale = std::min(maxW / static_cast<float>(texSize.x), maxH / static_cast<float>(texSize.y));
+        scale = std::min(scale, 1.0f); // never upscale a smaller image
+
+        sf::Sprite importSprite(*tex);
+        importSprite.setScale(scale, scale);
+
+        float scaledW = static_cast<float>(texSize.x) * scale;
+        float scaledH = static_cast<float>(texSize.y) * scale;
+        float centerX = (canvasLogicalSize.x / 2.0f) - (scaledW / 2.0f);
+        float centerY = (canvasLogicalSize.y / 2.0f) - (scaledH / 2.0f);
+        importSprite.setPosition(centerX, centerY);
+
+        targetLayer.texture->clear(sf::Color::Transparent);
+        targetLayer.texture->draw(importSprite, sf::RenderStates(sf::BlendAlpha));
+        targetLayer.texture->display();
+
+        isDirty = true;
+
+        commitSelection(currentFrame);
+        selection.startLasso(sf::Vector2f(centerX, centerY), canvasLogicalSize);
+        selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY), canvasLogicalSize);
+        selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY + scaledH), canvasLogicalSize);
+        selection.addLassoPoint(sf::Vector2f(centerX, centerY + scaledH), canvasLogicalSize);
+        selection.endLasso();
+        selection.extractFromLayer(targetLayer.texture.get(), true);
+        setActiveTool(ToolType::Select);
+    }
+}
+
+void Canvas::enterTransformMode() {
+    if (selection.isActive() && selection.getState() == SelectionState::Floating) {
+        transformMode = TransformState::Scaling;
+        pendingTransform = true;
+    }
+}
+
+void Canvas::applyTransform(int currentFrame) {
+    if (pendingTransform) {
+        commitSelection(currentFrame);
+        transformMode = TransformState::None;
+        pendingTransform = false;
+    }
+}
+
+void Canvas::cancelTransform() {
+    if (pendingTransform) {
+        undo();
+        transformMode = TransformState::None;
+        pendingTransform = false;
+    }
+}
+
+bool Canvas::isTransforming() const {
+    return pendingTransform;
+}

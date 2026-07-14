@@ -8,6 +8,7 @@
 
 enum class ToolType { Brush, Pencil, Eraser, Fill, Select };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
+enum class TransformState { None, Scaling, Rotating, Translating };
 
 struct Layer {
     std::string name;
@@ -18,6 +19,9 @@ struct Layer {
     bool persistent;
     int colorTag;
     std::shared_ptr<sf::RenderTexture> texture;
+
+    bool isImageResource;
+    std::shared_ptr<sf::Texture> staticTexture;
 
     Layer(std::string n = "Layer");
     Layer(const Layer& other);
@@ -40,12 +44,12 @@ class Canvas {
 private:
     sf::Vector2u canvasLogicalSize;
     std::vector<Frame> frames;
-    
+
     int activeLayer;
     ToolType activeTool;
     sf::Color primaryColor;
     sf::Color secondaryColor;
-    
+
     float fillTolerance;
     bool fillContiguous;
 
@@ -90,16 +94,23 @@ private:
     bool tileModeX;
     bool tileModeY;
     bool pixelPerfectEnabled;
-    
+
     bool isDirty;
 
     std::vector<sf::Vector2i> activeStroke;
     sf::Image layerSnapshot;
 
+    TransformState transformMode;
+    sf::Sprite transformTarget;
+    sf::FloatRect originalBounds;
+    float currentRotation;
+    sf::Vector2f currentScale;
+    bool pendingTransform;
+
     bool colorMatches(const sf::Color& a, const sf::Color& b) const;
     void executeGlobalFill(sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
     void executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
-    
+
     void drawPixelExact(int x, int y, sf::Color c, int frameIdx);
     void drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx);
     std::vector<sf::Vector2i> getBresenhamPoints(int x0, int y0, int x1, int y1);
@@ -157,6 +168,7 @@ public:
     void flipSelectionHorizontal(int currentFrame);
     void flipSelectionVertical(int currentFrame);
     void duplicateSelection(int currentFrame);
+    void cropSelection(int currentFrame);
 
     void setActiveTool(ToolType tool);
     ToolType getActiveTool() const;
@@ -173,7 +185,7 @@ public:
     void saveUndoState();
     void undo();
     void redo();
-    
+
     sf::RenderStates getSFMLBlendMode(BlendMode mode) const;
 
     void handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame);
@@ -198,4 +210,10 @@ public:
 
     bool getIsDirty() const;
     void clearIsDirty();
+
+    void importImageToActiveLayer(const std::string& filepath, int currentFrame);
+    void enterTransformMode();
+    void applyTransform(int currentFrame);
+    void cancelTransform();
+    bool isTransforming() const;
 };

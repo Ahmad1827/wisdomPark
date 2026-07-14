@@ -53,6 +53,7 @@ void LeftToolbar::init() {
     makeBtn("fill", "Bucket", startY + gap * 3);
     makeBtn("select", "Select", startY + gap * 4);
     makeBtn("ai_gen", "AI Gen", startY + gap * 5, true);
+    makeBtn("import_img", "Import Img", startY + gap * 6);
 
     auto makeActionBtn = [&](std::string id, std::string text) {
         ToolItem btn;
@@ -197,7 +198,11 @@ std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured,
     for (const auto& tool : tools) {
         if (tool.rect.getGlobalBounds().contains(mousePos)) {
             if (tool.isAiTool && !isAIConfigured) return "ai_disabled";
-            activeToolId = tool.id;
+            // import_img is an action, not a persistent tool selection - don't
+            // make it "stick" as the active tool the way brush/pencil/etc do.
+            if (tool.id != "import_img") {
+                activeToolId = tool.id;
+            }
             return tool.id;
         }
     }

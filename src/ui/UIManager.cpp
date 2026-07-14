@@ -800,8 +800,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 auto checkToggle = [&](float x, float y) { return sf::FloatRect(x, y, 300.f, 30.f).contains(mousePos); };
-                auto checkStepperL = [&](float x, float y) { return sf::FloatRect(x + 200.f, y, 30.f, 30.f).contains(mousePos); };
-                auto checkStepperR = [&](float x, float y) { return sf::FloatRect(x + 270.f, y, 30.f, 30.f).contains(mousePos); };
+                auto checkStepperL = [&](float x, float y) { return sf::FloatRect(x + 190.f, y - 10.f, 40.f, 40.f).contains(mousePos); };
+                auto checkStepperR = [&](float x, float y) { return sf::FloatRect(x + 260.f, y - 10.f, 40.f, 40.f).contains(mousePos); };
 
                 if (checkToggle(380.f, 310.f)) uiFullscreen = !uiFullscreen;
                 if (checkToggle(380.f, 360.f)) { uiFullscreen = false; uiBorderless = false; }
@@ -903,9 +903,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
         if (event.type == sf::Event::TextEntered && isTypingPrompt) {
             if (event.text.unicode == '\b') {
-                if (!currentPrompt.empty()) {
-                    currentPrompt.pop_back();
-                }
+                if (!currentPrompt.empty()) currentPrompt.pop_back();
             }
             else if (event.text.unicode < 128 && event.text.unicode != '\r' && event.text.unicode != '\n' && event.text.unicode != '\b') {
                 currentPrompt += static_cast<char>(event.text.unicode);
@@ -1302,6 +1300,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             canvas.setActiveTool(ToolType::Brush);
                             leftToolbar.setActiveTool("brush");
                         }
+                        else if (leftAction == "import_img") {
+                            std::string file = NativeDialogs::openFileDialog("Image Files\0*.png;*.jpg;*.jpeg;*.bmp;*.webp\0All Files\0*.*\0");
+                            if (!file.empty()) {
+                                canvas.importImageToActiveLayer(file, timeline.getCurrentFrame());
+                                showMessage("Image Imported", sf::Color::Green);
+                            }
+                        }
                         return;
                     }
 
@@ -1346,7 +1351,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (!isPanning) {
                     canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
 
-                    if (canvas.getDrawArea().contains(logicalMousePos)) {
+                    if (canvas.getActiveTool() != ToolType::Select && canvas.getDrawArea().contains(logicalMousePos)) {
                         sf::Image img = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
                         timeline.getFrameData(timeline.getCurrentFrame()).thumbnail = img;
                     }
@@ -1414,8 +1419,8 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 updateHoverValue("btn_back", backBounds.contains(mousePos), dt);
 
                 auto checkToggle = [&](float x, float y) { return sf::FloatRect(x, y, 300.f, 30.f).contains(mousePos); };
-                auto checkStepperL = [&](float x, float y) { return sf::FloatRect(x + 190.f, y, 30.f, 30.f).contains(mousePos); };
-                auto checkStepperR = [&](float x, float y) { return sf::FloatRect(x + 260.f, y, 30.f, 30.f).contains(mousePos); };
+                auto checkStepperL = [&](float x, float y) { return sf::FloatRect(x + 190.f, y - 10.f, 40.f, 40.f).contains(mousePos); };
+                auto checkStepperR = [&](float x, float y) { return sf::FloatRect(x + 260.f, y - 10.f, 40.f, 40.f).contains(mousePos); };
 
                 updateHoverValue("set_t_fs", checkToggle(380.f, 310.f), dt);
                 updateHoverValue("set_t_bl", checkToggle(380.f, 360.f), dt);
@@ -1562,7 +1567,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         }
         if (newProjectModal.getIsOpen()) newProjectModal.draw(window);
 
-        // Fix: Keybind panel must be able to draw if toggled on the start menu
         if (keybindPanel.isVisible()) keybindPanel.draw(window);
     }
     else if (currentState == AppState::Painting) {
