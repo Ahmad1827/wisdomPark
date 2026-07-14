@@ -853,9 +853,6 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     if (activeTool == ToolType::Select) {
         if (selection.getState() == SelectionState::Drawing) {
             selection.endLasso();
-            if (isPixelMode && pixelSnapEnabled) {
-                selection.commitToLayer(nullptr);
-            }
         }
         else if (selection.getState() == SelectionState::Floating) {
             selection.endDrag();
