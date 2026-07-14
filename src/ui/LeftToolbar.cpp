@@ -70,6 +70,7 @@ void LeftToolbar::init() {
         selectionActions.push_back(btn);
         };
 
+    makeActionBtn("resize_sel", "Resize");
     makeActionBtn("flip_h", "Flip H");
     makeActionBtn("flip_v", "Flip V");
     makeActionBtn("dup_sel", "Duplicate");
@@ -118,7 +119,7 @@ void LeftToolbar::update(float dt, bool focusMode) {
     for (auto& act : selectionActions) {
         act.rect.setPosition(currentX + 10.f, startY);
         act.label.setPosition(currentX + (width / 2.f), startY + 15.f);
-        startY += 40.f;
+        startY += 35.f;
     }
 }
 
@@ -174,6 +175,9 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
             if (act.id == "erase_sel") {
                 act.rect.setFillColor(act.isHovered ? sf::Color(200, 50, 50, 150) : sf::Color(150, 40, 40, 100));
             }
+            else if (act.id == "resize_sel") {
+                act.rect.setFillColor(act.isHovered ? sf::Color(0, 200, 100, 150) : sf::Color(0, 150, 80, 100));
+            }
             else {
                 act.rect.setFillColor(act.isHovered ? sf::Color(0, 191, 255, 150) : sf::Color(0, 122, 204, 100));
             }
@@ -198,8 +202,6 @@ std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured,
     for (const auto& tool : tools) {
         if (tool.rect.getGlobalBounds().contains(mousePos)) {
             if (tool.isAiTool && !isAIConfigured) return "ai_disabled";
-            // import_img is an action, not a persistent tool selection - don't
-            // make it "stick" as the active tool the way brush/pencil/etc do.
             if (tool.id != "import_img") {
                 activeToolId = tool.id;
             }

@@ -2,7 +2,9 @@
 #include <cmath>
 #include <algorithm>
 
-SelectionManager::SelectionManager() : state(SelectionState::Inactive), dashOffset(0.f), hasClipboard(false), isDragging(false) {
+SelectionManager::SelectionManager() : state(SelectionState::Inactive), dashOffset(0.f), hasClipboard(false), isDragging(false),
+showHandles(false), handleVisualSize(6.f), isResizingFlag(false), activeHandle(-1),
+resizeAnchorWorld(0.f, 0.f), resizeAnchorLocal(0.f, 0.f), resizeDraggedLocal(0.f, 0.f) {
     sf::Image dashImg;
     dashImg.create(8, 2, sf::Color::Transparent);
     for (int i = 0; i < 4; i++) {
@@ -48,6 +50,22 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
         }
 
         window.draw(ants, states);
+    }
+
+    // Corner resize handles - already in world/canvas-space (from
+    // getHandlePositions), so draw with baseStates as-is, not multiplied by
+    // the floating sprite's transform like the dashed outline above.
+    if (state == SelectionState::Floating && showHandles) {
+        auto corners = getHandlePositions();
+        for (const auto& c : corners) {
+            sf::RectangleShape h(sf::Vector2f(handleVisualSize, handleVisualSize));
+            h.setOrigin(handleVisualSize / 2.f, handleVisualSize / 2.f);
+            h.setPosition(c);
+            h.setFillColor(sf::Color(0, 191, 255));
+            h.setOutlineThickness(std::max(0.5f, handleVisualSize * 0.15f));
+            h.setOutlineColor(sf::Color::White);
+            window.draw(h, baseStates);
+        }
     }
 }
 
@@ -97,7 +115,8 @@ void SelectionManager::calculateBoundingBox() {
     boundingBox = sf::FloatRect(minX, minY, maxX - minX, maxY - minY);
 }
 
-void SelectionManager::clampToCanvas(sf::Vector2u canvasSize) {
+void SelectionManager::clampToCanvas(sf::Vector2u canvasSize, bool skip) {
+    if (skip) return;
     if (state != SelectionState::Floating) return;
 
     sf::Vector2f pos = floatingSprite.getPosition();
@@ -199,16 +218,25 @@ void SelectionManager::commitToLayer(sf::RenderTexture* layerTexture) {
     }
     state = SelectionState::Inactive;
     isDragging = false;
+    showHandles = false;
+    isResizingFlag = false;
+    activeHandle = -1;
 }
 
 void SelectionManager::discardFloating() {
     state = SelectionState::Inactive;
     isDragging = false;
+    showHandles = false;
+    isResizingFlag = false;
+    activeHandle = -1;
 }
 
 void SelectionManager::clearSelection() {
     state = SelectionState::Inactive;
     isDragging = false;
+    showHandles = false;
+    isResizingFlag = false;
+    activeHandle = -1;
 }
 
 void SelectionManager::startDrag(sf::Vector2f pos) {
@@ -218,11 +246,11 @@ void SelectionManager::startDrag(sf::Vector2f pos) {
     }
 }
 
-void SelectionManager::drag(sf::Vector2f pos, sf::Vector2u canvasSize) {
+void SelectionManager::drag(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas) {
     if (state == SelectionState::Floating && isDragging) {
         sf::Vector2f delta = pos - dragStartPos;
         floatingSprite.move(delta);
-        clampToCanvas(canvasSize);
+        clampToCanvas(canvasSize, allowOutsideCanvas);
         dragStartPos = pos;
     }
 }
@@ -328,3 +356,105 @@ void SelectionManager::duplicate(sf::RenderTexture* layerTexture, sf::Vector2u c
 
 SelectionState SelectionManager::getState() const { return state; }
 bool SelectionManager::isActive() const { return state != SelectionState::Inactive; }
+
+// ---------------------------------------------------------------------------
+// Resize / free-transform via corner handles
+// ---------------------------------------------------------------------------
+
+void SelectionManager::setShowHandles(bool show) {
+    showHandles = show;
+    if (!show) {
+        isResizingFlag = false;
+        activeHandle = -1;
+    }
+}
+
+bool SelectionManager::isShowingHandles() const { return showHandles; }
+
+void SelectionManager::setHandleVisualSize(float localSize) {
+    handleVisualSize = std::max(1.0f, localSize);
+}
+
+std::array<sf::Vector2f, 4> SelectionManager::getHandlePositions() const {
+    float w = static_cast<float>(floatingTexture.getSize().x);
+    float h = static_cast<float>(floatingTexture.getSize().y);
+    sf::Transform t = floatingSprite.getTransform();
+    return {
+        t.transformPoint(0.f, 0.f), // TL
+        t.transformPoint(w, 0.f),   // TR
+        t.transformPoint(w, h),     // BR
+        t.transformPoint(0.f, h)    // BL
+    };
+}
+
+int SelectionManager::hitTestHandle(sf::Vector2f pos, float handleRadius) const {
+    if (state != SelectionState::Floating) return -1;
+    auto corners = getHandlePositions();
+    for (size_t i = 0; i < corners.size(); ++i) {
+        sf::Vector2f d = pos - corners[i];
+        if (std::sqrt(d.x * d.x + d.y * d.y) <= handleRadius) return static_cast<int>(i);
+    }
+    return -1;
+}
+
+bool SelectionManager::startResize(sf::Vector2f pos, float handleRadius) {
+    if (state != SelectionState::Floating) return false;
+    int idx = hitTestHandle(pos, handleRadius);
+    if (idx == -1) return false;
+
+    activeHandle = idx;
+    int anchorIdx = (idx + 2) % 4; // opposite corner stays fixed
+
+    auto worldCorners = getHandlePositions();
+    resizeAnchorWorld = worldCorners[anchorIdx];
+
+    float w = static_cast<float>(floatingTexture.getSize().x);
+    float h = static_cast<float>(floatingTexture.getSize().y);
+    sf::Vector2f origin = floatingSprite.getOrigin();
+
+    std::array<sf::Vector2f, 4> localFull = {
+        sf::Vector2f(0.f, 0.f), sf::Vector2f(w, 0.f), sf::Vector2f(w, h), sf::Vector2f(0.f, h)
+    };
+    resizeAnchorLocal = localFull[anchorIdx] - origin;
+    resizeDraggedLocal = localFull[idx] - origin;
+
+    isResizingFlag = true;
+    return true;
+}
+
+void SelectionManager::resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas) {
+    if (!isResizingFlag || state != SelectionState::Floating) return;
+
+    sf::Vector2f diffLocal = resizeDraggedLocal - resizeAnchorLocal;
+
+    float newScaleX = floatingSprite.getScale().x;
+    float newScaleY = floatingSprite.getScale().y;
+    if (std::abs(diffLocal.x) > 0.0001f) newScaleX = (pos.x - resizeAnchorWorld.x) / diffLocal.x;
+    if (std::abs(diffLocal.y) > 0.0001f) newScaleY = (pos.y - resizeAnchorWorld.y) / diffLocal.y;
+
+    // Prevent inverting/vanishing the selection - clamp to a sane minimum
+    // size in canvas-logical pixels regardless of the source texture size.
+    float w = static_cast<float>(floatingTexture.getSize().x);
+    float h = static_cast<float>(floatingTexture.getSize().y);
+    const float minDim = 4.0f;
+    float minScaleX = minDim / std::max(1.f, w);
+    float minScaleY = minDim / std::max(1.f, h);
+    if (newScaleX < minScaleX) newScaleX = minScaleX;
+    if (newScaleY < minScaleY) newScaleY = minScaleY;
+
+    sf::Vector2f newPos;
+    newPos.x = resizeAnchorWorld.x - newScaleX * resizeAnchorLocal.x;
+    newPos.y = resizeAnchorWorld.y - newScaleY * resizeAnchorLocal.y;
+
+    floatingSprite.setScale(newScaleX, newScaleY);
+    floatingSprite.setPosition(newPos);
+
+    clampToCanvas(canvasSize, allowOutsideCanvas);
+}
+
+void SelectionManager::endResize() {
+    isResizingFlag = false;
+    activeHandle = -1;
+}
+
+bool SelectionManager::isResizing() const { return isResizingFlag; }
