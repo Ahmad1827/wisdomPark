@@ -800,8 +800,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 auto checkToggle = [&](float x, float y) { return sf::FloatRect(x, y, 300.f, 30.f).contains(mousePos); };
-                auto checkStepperL = [&](float x, float y) { return sf::FloatRect(x + 190.f, y, 30.f, 30.f).contains(mousePos); };
-                auto checkStepperR = [&](float x, float y) { return sf::FloatRect(x + 260.f, y, 30.f, 30.f).contains(mousePos); };
+                auto checkStepperL = [&](float x, float y) { return sf::FloatRect(x + 200.f, y, 30.f, 30.f).contains(mousePos); };
+                auto checkStepperR = [&](float x, float y) { return sf::FloatRect(x + 270.f, y, 30.f, 30.f).contains(mousePos); };
 
                 if (checkToggle(380.f, 310.f)) uiFullscreen = !uiFullscreen;
                 if (checkToggle(380.f, 360.f)) { uiFullscreen = false; uiBorderless = false; }
@@ -902,7 +902,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (event.type == sf::Event::TextEntered && isTypingPrompt) {
-            if (event.text.unicode == '\b' && !currentPrompt.empty()) currentPrompt.pop_back();
+            if (event.text.unicode == '\b') {
+                if (!currentPrompt.empty()) {
+                    currentPrompt.pop_back();
+                }
+            }
             else if (event.text.unicode < 128 && event.text.unicode != '\r' && event.text.unicode != '\n' && event.text.unicode != '\b') {
                 currentPrompt += static_cast<char>(event.text.unicode);
             }
