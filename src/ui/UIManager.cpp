@@ -28,6 +28,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     colorPalettePanel.init();
     rightProperties.init();
     bottomTimeline.init();
+    audioPanel.init();
 
     uiText.setFont(font);
     uiText.setCharacterSize(30);
@@ -703,6 +704,25 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         return;
     }
 
+    if (audioPanel.getIsVisible()) {
+        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            std::string action = audioPanel.handleClick(mousePos);
+
+            if (action == "imported") {
+                showMessage("Audio Imported Successfully", sf::Color::Green);
+                return; // CRITICAL FIX: Stops the mouse click from falling through to the canvas
+            }
+            if (action == "closed") {
+                return; // CRITICAL FIX: Stops the mouse click from falling through to the canvas
+            }
+
+            // CRITICAL FIX: Consume the event if they clicked anywhere inside the panel background
+            if (audioPanel.handleEvent(event, mousePos)) {
+                return;
+            }
+        }
+    }
+
     if (currentState == AppState::Welcome) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
 
@@ -903,7 +923,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
         if (event.type == sf::Event::TextEntered && isTypingPrompt) {
             if (event.text.unicode == '\b') {
-                if (!currentPrompt.empty()) currentPrompt.pop_back();
+                if (!currentPrompt.empty()) {
+                    currentPrompt.pop_back();
+                }
             }
             else if (event.text.unicode < 128 && event.text.unicode != '\r' && event.text.unicode != '\n' && event.text.unicode != '\b') {
                 currentPrompt += static_cast<char>(event.text.unicode);
@@ -1148,7 +1170,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
 
-        if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible() && !exportModal.getIsOpen() && !newProjectModal.getIsOpen()) {
+        if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible() && !exportModal.getIsOpen() && !newProjectModal.getIsOpen() && !audioPanel.getIsVisible()) {
 
             if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
             if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
@@ -1308,6 +1330,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                                 showMessage("Image Imported", sf::Color::Green);
                             }
                         }
+                        else if (leftAction == "audio_panel") {
+                            audioPanel.toggle();
+                        }
                         return;
                     }
 
@@ -1387,7 +1412,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     }
 }
 
-void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas) {
+void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
 
     if (settingsModal.getIsOpen()) settingsModal.updateHover(mousePos);
@@ -1489,6 +1514,9 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         layerPanel.update(dt, focusMode);
         colorPalettePanel.update(dt, focusMode, canvas);
         bottomTimeline.update(dt, focusMode);
+        audioPanel.update(dt);
+
+        audioPanel.updatePlayback(timeline.getCurrentFrame(), timeline.getFps(), timeline.isPlaying());
 
         float availLeft = std::max(0.0f, static_cast<float>(leftToolbar.getPanelRightEdge()));
         float edgeL = static_cast<float>(layerPanel.getCurrentX());
@@ -1623,6 +1651,8 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);
+
+        audioPanel.draw(window);
 
         if (showingText) window.draw(uiText);
         if (isTypingPrompt) { window.draw(promptBox); window.draw(promptDisplay); }

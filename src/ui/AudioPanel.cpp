@@ -4,7 +4,7 @@
 #include <cmath>
 #include <algorithm>
 
-AudioPanel::AudioPanel() : currentY(1080.f), targetY(1080.f), height(300.f), isVisible(false), isRecording(false), selectedTrackIndex(-1), selectedClipIndex(-1) {}
+AudioPanel::AudioPanel() : currentY(1080.f), targetY(1080.f), height(300.f), isVisible(false), selectedTrackIndex(-1), selectedClipIndex(-1) {}
 
 AudioPanel::~AudioPanel() {
     stopAll();
@@ -12,6 +12,7 @@ AudioPanel::~AudioPanel() {
 
 void AudioPanel::init() {
     if (!font.loadFromFile("assets/font.otf")) {
+        std::cout << "Warning: AudioPanel could not load font.otf" << std::endl;
     }
 
     background.setSize(sf::Vector2f(1920.f, height));
@@ -39,17 +40,6 @@ void AudioPanel::init() {
     sf::FloatRect b1 = importBtnText.getLocalBounds();
     importBtnText.setOrigin(b1.left + b1.width / 2.f, b1.top + b1.height / 2.f);
 
-    recordBtn.setSize(sf::Vector2f(120.f, 26.f));
-    recordBtn.setFillColor(sf::Color(180, 60, 60));
-    recordBtn.setPosition(370.f, 7.f);
-
-    recordBtnText.setFont(font);
-    recordBtnText.setString("Record MIC");
-    recordBtnText.setCharacterSize(14);
-    recordBtnText.setFillColor(sf::Color::White);
-    sf::FloatRect b2 = recordBtnText.getLocalBounds();
-    recordBtnText.setOrigin(b2.left + b2.width / 2.f, b2.top + b2.height / 2.f);
-
     closeBtn.setSize(sf::Vector2f(40.f, 26.f));
     closeBtn.setFillColor(sf::Color(150, 50, 50));
     closeBtn.setPosition(1920.f - 60.f, 7.f);
@@ -60,12 +50,6 @@ void AudioPanel::init() {
     closeBtnText.setFillColor(sf::Color::White);
     sf::FloatRect b3 = closeBtnText.getLocalBounds();
     closeBtnText.setOrigin(b3.left + b3.width / 2.f, b3.top + b3.height / 2.f);
-
-    AudioTrack defaultTrack;
-    defaultTrack.name = "Track 1";
-    tracks.push_back(defaultTrack);
-
-    recorder = std::make_unique<sf::SoundBufferRecorder>();
 }
 
 void AudioPanel::toggle() {
@@ -93,9 +77,6 @@ void AudioPanel::update(float dt) {
     importBtn.setPosition(240.f, currentY + 7.f);
     importBtnText.setPosition(240.f + 60.f, currentY + 20.f);
 
-    recordBtn.setPosition(370.f, currentY + 7.f);
-    recordBtnText.setPosition(370.f + 60.f, currentY + 20.f);
-
     closeBtn.setPosition(1920.f - 60.f, currentY + 7.f);
     closeBtnText.setPosition(1920.f - 40.f, currentY + 20.f);
 }
@@ -110,12 +91,21 @@ void AudioPanel::generateWaveform(AudioClip& clip, float w, float h) {
     clip.waveformRender.setPrimitiveType(sf::Lines);
     clip.waveformRender.clear();
 
-    if (count == 0 || channels == 0 || w <= 0.0f) return;
+    // Memory Failsafe: Prevent drawing if data is invalid or width is completely absurd
+    if (count == 0 || channels == 0 || w <= 0.0f || w > 30000.f || !samples) {
+        clip.needsWaveformUpdate = false;
+        return;
+    }
 
-    std::size_t step = std::max((std::size_t)1, count / static_cast<std::size_t>(w) / channels);
+    std::size_t step = count / static_cast<std::size_t>(w);
+    if (step < channels) step = channels;
 
     for (float x = 0; x < w; x += 1.0f) {
-        std::size_t idx = static_cast<std::size_t>(x) * step * channels;
+        std::size_t idx = static_cast<std::size_t>(x) * step;
+
+        // Ensure we always align to a valid sample chunk so we don't bleed across channels
+        idx -= (idx % channels);
+
         if (idx >= count) break;
 
         float val = static_cast<float>(samples[idx]) / 32768.0f;
@@ -137,11 +127,6 @@ void AudioPanel::draw(sf::RenderWindow& window) {
 
     window.draw(importBtn);
     window.draw(importBtnText);
-
-    if (isRecording) recordBtn.setFillColor(sf::Color(255, 50, 50));
-    else recordBtn.setFillColor(sf::Color(180, 60, 60));
-    window.draw(recordBtn);
-    window.draw(recordBtnText);
 
     window.draw(closeBtn);
     window.draw(closeBtnText);
@@ -168,7 +153,10 @@ void AudioPanel::draw(sf::RenderWindow& window) {
             float clipX = 200.f + (clip.startFrame * pixelsPerFrame);
             float clipW = (clip.endFrame - clip.startFrame) * pixelsPerFrame;
 
-            sf::RectangleShape clipBg(sf::Vector2f(std::max(10.f, clipW), 40.f));
+            // Failsafe Width Clamp to prevent sf::RectangleShape allocation crashes
+            float renderWidth = std::min(15000.f, std::max(10.f, clipW));
+
+            sf::RectangleShape clipBg(sf::Vector2f(renderWidth, 40.f));
             clipBg.setPosition(clipX, trackY + 10.f);
             clipBg.setFillColor(sf::Color(50, 100, 150, 100));
             clipBg.setOutlineThickness(1.f);
@@ -176,14 +164,13 @@ void AudioPanel::draw(sf::RenderWindow& window) {
             window.draw(clipBg);
 
             if (clip.needsWaveformUpdate) {
-                generateWaveform(clip, std::max(10.f, clipW), 40.f);
+                generateWaveform(clip, renderWidth, 40.f);
             }
 
             sf::Transform t;
             t.translate(clipX, trackY + 10.f);
             window.draw(clip.waveformRender, t);
         }
-
         trackY += 65.f;
     }
 }
@@ -191,7 +178,6 @@ void AudioPanel::draw(sf::RenderWindow& window) {
 bool AudioPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
     if (!isVisible) return false;
     if (!background.getGlobalBounds().contains(mousePos)) return false;
-
     return true;
 }
 
@@ -211,62 +197,39 @@ std::string AudioPanel::handleClick(sf::Vector2f mousePos) {
         }
     }
 
-    if (recordBtn.getGlobalBounds().contains(mousePos)) {
-        if (!recorder) return "";
-        if (!isRecording) {
-            if (sf::SoundBufferRecorder::isAvailable()) {
-                recorder->start();
-                isRecording = true;
-                recordBtnText.setString("Stop REC");
-            }
-        }
-        else {
-            recorder->stop();
-            isRecording = false;
-            recordBtnText.setString("Record MIC");
-
-            const sf::SoundBuffer& buf = recorder->getBuffer();
-            if (buf.getSampleCount() > 0) {
-                AudioClip clip;
-                clip.name = "Recording";
-                clip.buffer = std::make_shared<sf::SoundBuffer>(buf);
-                clip.sound = std::make_shared<sf::Sound>(*clip.buffer);
-                clip.startFrame = 0;
-                clip.endFrame = static_cast<int>(clip.buffer->getDuration().asSeconds() * 12.0f);
-
-                if (tracks.empty()) {
-                    AudioTrack t;
-                    t.name = "Track 1";
-                    tracks.push_back(t);
-                }
-                tracks[0].clips.push_back(clip);
-            }
-        }
-        return "record_toggle";
-    }
-
     return "";
 }
 
 void AudioPanel::addAudioClip(const std::string& path, int currentFrame) {
-    auto buf = std::make_shared<sf::SoundBuffer>();
-    if (buf->loadFromFile(path)) {
-        AudioClip clip;
-        clip.filePath = path;
-        clip.name = path.substr(path.find_last_of("/\\") + 1);
-        clip.buffer = buf;
-        clip.sound = std::make_shared<sf::Sound>(*buf);
-        clip.startFrame = currentFrame;
+    try {
+        auto buf = std::make_shared<sf::SoundBuffer>();
+        if (buf->loadFromFile(path)) {
+            AudioClip clip;
+            clip.filePath = path;
+            clip.name = path.substr(path.find_last_of("/\\") + 1);
+            clip.buffer = buf;
+            clip.sound = std::make_shared<sf::Sound>(*buf);
+            clip.startFrame = currentFrame;
 
-        float durationSec = buf->getDuration().asSeconds();
-        clip.endFrame = currentFrame + static_cast<int>(durationSec * 12.0f);
+            float durationSec = buf->getDuration().asSeconds();
+            // Sanity check to prevent NaN frame bugs
+            if (std::isnan(durationSec) || durationSec <= 0.0f) durationSec = 1.0f;
 
-        if (tracks.empty()) {
-            AudioTrack t;
-            t.name = "Track 1";
-            tracks.push_back(t);
+            clip.endFrame = currentFrame + static_cast<int>(durationSec * 12.0f);
+
+            if (tracks.empty()) {
+                AudioTrack t;
+                t.name = "Track 1";
+                tracks.push_back(t);
+            }
+            tracks[0].clips.push_back(clip);
         }
-        tracks[0].clips.push_back(clip);
+    }
+    catch (const std::exception& e) {
+        std::cout << "Safely caught audio loading exception: " << e.what() << std::endl;
+    }
+    catch (...) {
+        std::cout << "Safely caught unknown audio loading exception." << std::endl;
     }
 }
 
@@ -282,6 +245,7 @@ void AudioPanel::updatePlayback(int currentFrame, float fps, bool isPlaying) {
         if (track.isMuted) continue;
         for (auto& clip : track.clips) {
             if (!clip.sound) continue;
+
             if (currentFrame == clip.startFrame) {
                 if (clip.sound->getStatus() != sf::SoundSource::Playing) {
                     clip.sound->setVolume(clip.volume * (track.trackVolume / 100.f));

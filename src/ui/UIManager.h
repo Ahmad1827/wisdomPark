@@ -21,7 +21,7 @@
 #include "LayerPanel.h"
 #include "ColorPalettePanel.h"
 #include "RightProperties.h"
-
+#include "AudioPanel.h"
 
 enum class MenuState {
     Main,
@@ -75,6 +75,7 @@ private:
 
     LeftToolbar leftToolbar;
     BottomTimeline bottomTimeline;
+    AudioPanel audioPanel;
 
     LayerPanel layerPanel;
     ColorPalettePanel colorPalettePanel;
@@ -156,6 +157,6 @@ public:
     void init(ProjectManager* pm, Canvas* baseCanvas);
     void showMessage(const std::string& msg, sf::Color color);
     void handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm);
-    void update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas);
+    void update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline);
     void draw(sf::RenderWindow& window, AppState currentState, Canvas& canvas, AIHelper& aiHelper, Timeline& timeline);
 };

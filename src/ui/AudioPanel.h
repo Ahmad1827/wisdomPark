@@ -44,8 +44,6 @@ private:
 
     sf::RectangleShape importBtn;
     sf::Text importBtnText;
-    sf::RectangleShape recordBtn;
-    sf::Text recordBtnText;
 
     sf::RectangleShape closeBtn;
     sf::Text closeBtnText;
@@ -56,9 +54,6 @@ private:
     float targetY;
     float height;
     bool isVisible;
-    bool isRecording;
-
-    std::unique_ptr<sf::SoundBufferRecorder> recorder;
 
     int selectedTrackIndex;
     int selectedClipIndex;
