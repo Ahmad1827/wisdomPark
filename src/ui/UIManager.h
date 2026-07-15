@@ -22,6 +22,7 @@
 #include "ColorPalettePanel.h"
 #include "RightProperties.h"
 
+
 enum class MenuState {
     Main,
     Projects,

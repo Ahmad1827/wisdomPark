@@ -32,11 +32,11 @@ void LeftToolbar::init() {
         ToolItem btn;
         btn.id = id;
         btn.isAiTool = aiTool;
-        btn.rect.setSize(sf::Vector2f(width - 20.f, 50.f));
+        btn.rect.setSize(sf::Vector2f(width - 20.f, 40.f));
 
         btn.label.setFont(font);
         btn.label.setString(text);
-        btn.label.setCharacterSize(12);
+        btn.label.setCharacterSize(11);
 
         sf::FloatRect tRect = btn.label.getLocalBounds();
         btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
@@ -44,8 +44,8 @@ void LeftToolbar::init() {
         tools.push_back(btn);
         };
 
-    float startY = 70.f;
-    float gap = 60.f;
+    float startY = 60.f;
+    float gap = 50.f;
 
     makeBtn("brush", "Brush", startY);
     makeBtn("pencil", "Pencil", startY + gap * 1);
@@ -53,7 +53,8 @@ void LeftToolbar::init() {
     makeBtn("fill", "Bucket", startY + gap * 3);
     makeBtn("select", "Select", startY + gap * 4);
     makeBtn("ai_gen", "AI Gen", startY + gap * 5, true);
-    makeBtn("import_img", "Import Img", startY + gap * 6);
+    makeBtn("import_img", "Image", startY + gap * 6);
+    makeBtn("audio_panel", "Audio", startY + gap * 7);
 
     auto makeActionBtn = [&](std::string id, std::string text) {
         ToolItem btn;
@@ -108,18 +109,18 @@ void LeftToolbar::update(float dt, bool focusMode) {
     pinBtn.setPosition(currentX + 10.f, 20.f);
     pinLabel.setPosition(currentX + 25.f, 24.f);
 
-    float startY = 70.f;
+    float startY = 60.f;
     for (auto& tool : tools) {
         tool.rect.setPosition(currentX + 10.f, startY);
-        tool.label.setPosition(currentX + (width / 2.f), startY + 25.f);
-        startY += 60.f;
+        tool.label.setPosition(currentX + (width / 2.f), startY + 20.f);
+        startY += 50.f;
     }
 
-    startY += 20.f;
+    startY += 10.f;
     for (auto& act : selectionActions) {
         act.rect.setPosition(currentX + 10.f, startY);
         act.label.setPosition(currentX + (width / 2.f), startY + 15.f);
-        startY += 40.f;
+        startY += 35.f;
     }
 }
 
@@ -157,12 +158,17 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
             tool.rect.setFillColor(sf::Color(255, 255, 255, 2));
             tool.label.setFillColor(sf::Color(100, 100, 100));
         }
-        else if (tool.id == activeToolId) {
+        else if (tool.id == activeToolId && tool.id != "audio_panel" && tool.id != "import_img") {
             tool.rect.setFillColor(sf::Color(0, 122, 204, 180));
             tool.label.setFillColor(sf::Color::White);
         }
         else {
-            tool.rect.setFillColor(tool.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));
+            if (tool.id == "audio_panel") {
+                tool.rect.setFillColor(tool.isHovered ? sf::Color(100, 50, 150, 200) : sf::Color(80, 40, 120, 150));
+            }
+            else {
+                tool.rect.setFillColor(tool.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));
+            }
             tool.label.setFillColor(sf::Color(220, 220, 225));
         }
 
@@ -174,6 +180,9 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
         for (auto& act : selectionActions) {
             if (act.id == "erase_sel") {
                 act.rect.setFillColor(act.isHovered ? sf::Color(200, 50, 50, 150) : sf::Color(150, 40, 40, 100));
+            }
+            else if (act.id == "resize_sel") {
+                act.rect.setFillColor(act.isHovered ? sf::Color(0, 200, 100, 150) : sf::Color(0, 150, 80, 100));
             }
             else {
                 act.rect.setFillColor(act.isHovered ? sf::Color(0, 191, 255, 150) : sf::Color(0, 122, 204, 100));
@@ -199,9 +208,7 @@ std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured,
     for (const auto& tool : tools) {
         if (tool.rect.getGlobalBounds().contains(mousePos)) {
             if (tool.isAiTool && !isAIConfigured) return "ai_disabled";
-            // import_img is an action, not a persistent tool selection - don't
-            // make it "stick" as the active tool the way brush/pencil/etc do.
-            if (tool.id != "import_img") {
+            if (tool.id != "import_img" && tool.id != "audio_panel") {
                 activeToolId = tool.id;
             }
             return tool.id;
