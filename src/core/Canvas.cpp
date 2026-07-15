@@ -493,6 +493,11 @@ void Canvas::commitSelection(int currentFrame) {
         saveUndoState();
         selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
     }
+    // Leaving a selection also exits any pending free-transform, so the
+    // resize handles never linger after the selection they belonged to
+    // has been baked into the layer or discarded.
+    transformMode = TransformState::None;
+    pendingTransform = false;
 }
 
 void Canvas::copySelection() {
@@ -511,6 +516,8 @@ void Canvas::deleteSelection(int currentFrame) {
         saveUndoState();
         selection.deleteSelection(frames[currentFrame].layers[activeLayer].texture.get());
     }
+    transformMode = TransformState::None;
+    pendingTransform = false;
 }
 
 void Canvas::flipSelectionHorizontal(int currentFrame) {
@@ -601,6 +608,8 @@ void Canvas::undo() {
         frames = undoHistory.back();
         undoHistory.pop_back();
         selection.clearSelection();
+        transformMode = TransformState::None;
+        pendingTransform = false;
     }
 }
 
@@ -610,6 +619,8 @@ void Canvas::redo() {
         frames = redoHistory.back();
         redoHistory.pop_back();
         selection.clearSelection();
+        transformMode = TransformState::None;
+        pendingTransform = false;
     }
 }
 
@@ -790,6 +801,23 @@ void Canvas::drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int 
     }
 }
 
+float Canvas::computeHandleHitRadius() const {
+    // Desired grab radius on screen, converted into canvas-logical-pixel
+    // space. drawArea.width/canvasLogicalSize.x is the world-space size of
+    // one logical pixel; viewScale is the current zoom. Dividing the desired
+    // screen radius by (that world size * viewScale) yields a radius that
+    // feels the same on screen regardless of canvas resolution or zoom.
+    float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
+    float denom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
+    return 14.0f / denom;
+}
+
+bool Canvas::isImageResourceActive(int currentFrame) const {
+    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return false;
+    if (activeLayer < 0 || activeLayer >= static_cast<int>(frames[currentFrame].layers.size())) return false;
+    return frames[currentFrame].layers[activeLayer].isImageResource;
+}
+
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
@@ -812,6 +840,14 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             sf::Color drawCol = primaryColor;
 
             if (activeTool == ToolType::Select) {
+                // Corner handles take priority over move/lasso hit-testing
+                // while a free-transform is pending.
+                if (pendingTransform && selection.getState() == SelectionState::Floating) {
+                    if (selection.startResize(localPos, computeHandleHitRadius())) {
+                        return;
+                    }
+                }
+
                 if (selection.isPointInsideSelection(localPos)) {
                     if (selection.getState() == SelectionState::Selected) {
                         saveUndoState();
@@ -885,7 +921,8 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
             selection.endLasso();
         }
         else if (selection.getState() == SelectionState::Floating) {
-            selection.endDrag();
+            if (selection.isResizing()) selection.endResize();
+            else selection.endDrag();
         }
     }
     isDrawing = false;
@@ -909,8 +946,18 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     if (activeTool == ToolType::Fill) return;
 
     if (activeTool == ToolType::Select) {
+        // "Reference" behavior: an imported image layer is allowed to be
+        // moved/resized outside the canvas bounds (e.g. to keep it visible
+        // off to the side as a drawing reference). Regular painted
+        // selections always stay clamped to the canvas.
+        bool allowOutside = isImageResourceActive(currentFrame);
+
+        if (selection.isResizing()) {
+            selection.resize(localPos, canvasLogicalSize, allowOutside);
+            return;
+        }
         if (selection.getState() == SelectionState::Drawing) selection.addLassoPoint(localPos, canvasLogicalSize);
-        else if (selection.getState() == SelectionState::Floating) selection.drag(localPos, canvasLogicalSize);
+        else if (selection.getState() == SelectionState::Floating) selection.drag(localPos, canvasLogicalSize, allowOutside);
         return;
     }
 
@@ -1092,6 +1139,13 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         }
     }
 
+    // Handles should read at a consistent screen size regardless of zoom or
+    // canvas resolution - same reasoning as computeHandleHitRadius().
+    float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
+    float handleDenom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
+    selection.setHandleVisualSize(10.0f / handleDenom);
+    selection.setShowHandles(pendingTransform);
+
     selection.draw(window, innerStates);
 
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
@@ -1226,8 +1280,7 @@ void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFr
         // Scale the image down (never up) to fit within the canvas, preserving
         // aspect ratio. Without this, importing a normal-resolution image into
         // a small pixel-art canvas leaves it wildly oversized and spilling far
-        // past the canvas bounds - it was previously drawn at native pixel
-        // size regardless of canvasLogicalSize.
+        // past the canvas bounds.
         float maxW = static_cast<float>(canvasLogicalSize.x) * 0.9f;
         float maxH = static_cast<float>(canvasLogicalSize.y) * 0.9f;
         float scale = std::min(maxW / static_cast<float>(texSize.x), maxH / static_cast<float>(texSize.y));
@@ -1259,8 +1312,18 @@ void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFr
     }
 }
 
-void Canvas::enterTransformMode() {
-    if (selection.isActive() && selection.getState() == SelectionState::Floating) {
+void Canvas::enterTransformMode(int currentFrame) {
+    if (!selection.isActive() || frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+
+    // Resize operates on the floating sprite representation - if the
+    // selection is still just a drawn lasso ("Selected"), extract it first
+    // (same step other selection actions like flip/duplicate already do).
+    if (selection.getState() == SelectionState::Selected) {
+        saveUndoState();
+        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
+    }
+
+    if (selection.getState() == SelectionState::Floating) {
         transformMode = TransformState::Scaling;
         pendingTransform = true;
     }

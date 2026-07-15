@@ -8,7 +8,7 @@
 
 enum class ToolType { Brush, Pencil, Eraser, Fill, Select };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
-enum class TransformState { None, Scaling, Rotating, Translating };
+enum class TransformState { None, Scaling };
 
 struct Layer {
     std::string name;
@@ -18,9 +18,8 @@ struct Layer {
     BlendMode blendMode;
     bool persistent;
     int colorTag;
-    std::shared_ptr<sf::RenderTexture> texture;
-
     bool isImageResource;
+    std::shared_ptr<sf::RenderTexture> texture;
     std::shared_ptr<sf::Texture> staticTexture;
 
     Layer(std::string n = "Layer");
@@ -59,7 +58,6 @@ private:
     int onionSkinPrevCount;
     int onionSkinNextCount;
 
-    sf::Transform transform;
     sf::FloatRect drawArea;
     float viewScale;
     float targetScale;
@@ -97,23 +95,33 @@ private:
 
     bool isDirty;
 
-    std::vector<sf::Vector2i> activeStroke;
-    sf::Image layerSnapshot;
-
     TransformState transformMode;
-    sf::Sprite transformTarget;
-    sf::FloatRect originalBounds;
+    bool pendingTransform;
     float currentRotation;
     sf::Vector2f currentScale;
-    bool pendingTransform;
+
+    sf::Image layerSnapshot;
+    std::vector<sf::Vector2i> activeStroke;
 
     bool colorMatches(const sf::Color& a, const sf::Color& b) const;
     void executeGlobalFill(sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
     void executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image);
 
     void drawPixelExact(int x, int y, sf::Color c, int frameIdx);
-    void drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx);
     std::vector<sf::Vector2i> getBresenhamPoints(int x0, int y0, int x1, int y1);
+    void drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx);
+
+    // Converts a desired on-screen handle-grab radius (in screen pixels) into
+    // the equivalent radius in canvas-logical-pixel space, accounting for
+    // both the canvas-to-world scale and the current view zoom - without
+    // this, an 8px hit radius would feel tiny on a huge canvas at low zoom
+    // and enormous on a small pixel-art canvas at high zoom.
+    float computeHandleHitRadius() const;
+
+    // True if the currently active layer for the given frame is an imported
+    // image layer - used to relax canvas-bounds clamping during move/resize
+    // so images can be dragged out for reference.
+    bool isImageResourceActive(int currentFrame) const;
 
 public:
     Canvas();
@@ -212,7 +220,11 @@ public:
     void clearIsDirty();
 
     void importImageToActiveLayer(const std::string& filepath, int currentFrame);
-    void enterTransformMode();
+
+    // Free-transform (resize by dragging corners). Only meaningful while a
+    // selection is floating; call enterTransformMode() after making/loading
+    // a selection to show the corner handles.
+    void enterTransformMode(int currentFrame);
     void applyTransform(int currentFrame);
     void cancelTransform();
     bool isTransforming() const;

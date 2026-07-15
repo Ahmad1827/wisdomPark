@@ -1292,6 +1292,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         else if (leftAction == "flip_h") canvas.flipSelectionHorizontal(timeline.getCurrentFrame());
                         else if (leftAction == "flip_v") canvas.flipSelectionVertical(timeline.getCurrentFrame());
                         else if (leftAction == "dup_sel") canvas.duplicateSelection(timeline.getCurrentFrame());
+                        else if (leftAction == "resize_sel") canvas.enterTransformMode(timeline.getCurrentFrame());
                         else if (leftAction == "erase_sel") {
                             canvas.deleteSelection(timeline.getCurrentFrame());
                         }
