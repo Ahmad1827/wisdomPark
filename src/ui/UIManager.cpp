@@ -619,7 +619,7 @@ void UIManager::drawCreditsMenu(sf::RenderWindow& window) {
 
 bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
     if (activeProjectPath.empty()) {
-        std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
+        std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects|*.wpk||", "wpk", activeProjectName);
         if (!file.empty()) {
             activeProjectPath = file;
             if (projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
@@ -706,7 +706,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
     if (audioPanel.getIsVisible()) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            std::string action = audioPanel.handleClick(mousePos);
+            std::string action = audioPanel.handleClick(mousePos, timeline.getCurrentFrame());
 
             if (action == "imported") {
                 showMessage("Audio Imported Successfully", sf::Color::Green);
@@ -750,7 +750,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 for (int i = 0; i < 4; ++i) {
                     sf::FloatRect rBounds(900.f, ry, 800.f, 100.f);
                     if (rBounds.contains(mousePos)) {
-                        std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
+                        std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects|*.wpk|All Files|*.*||");
                         if (!file.empty()) {
                             activeProjectPath = file;
                             activeProjectName = std::filesystem::path(file).stem().string();
@@ -795,7 +795,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     else showMessage("Failed to load project files.", sf::Color::Red);
                 }
                 else if (action == "open_native") {
-                    std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
+                    std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects|*.wpk|All Files|*.*||");
                     if (!file.empty()) {
                         activeProjectPath = file;
                         activeProjectName = std::filesystem::path(file).stem().string();
@@ -972,7 +972,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (keybindManager.isActionTriggered("proj_save_as", event)) {
-                std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
+                std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects|*.wpk||", "wpk", activeProjectName);
                 if (!file.empty()) {
                     activeProjectPath = file;
                     if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
@@ -984,7 +984,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (keybindManager.isActionTriggered("proj_open", event)) {
-                std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
+                std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects|*.wpk|All Files|*.*||");
                 if (!file.empty()) {
                     activeProjectPath = file;
                     activeProjectName = std::filesystem::path(file).stem().string();
@@ -1324,7 +1324,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             leftToolbar.setActiveTool("brush");
                         }
                         else if (leftAction == "import_img") {
-                            std::string file = NativeDialogs::openFileDialog("Image Files\0*.png;*.jpg;*.jpeg;*.bmp;*.webp\0All Files\0*.*\0");
+                            std::string file = NativeDialogs::openFileDialog("Image Files|*.png;*.jpg;*.jpeg;*.bmp;*.webp|All Files|*.*||");
                             if (!file.empty()) {
                                 canvas.importImageToActiveLayer(file, timeline.getCurrentFrame());
                                 showMessage("Image Imported", sf::Color::Green);

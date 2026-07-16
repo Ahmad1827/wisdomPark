@@ -25,6 +25,7 @@ struct AudioClip {
 
     sf::VertexArray waveformRender;
     bool needsWaveformUpdate = true;
+    bool soundLoadFailed = false;
 };
 
 struct AudioTrack {
@@ -59,6 +60,7 @@ private:
     int selectedClipIndex;
 
     void generateWaveform(AudioClip& clip, float width, float height);
+    bool ensureSoundCreated(AudioClip& clip);
 
 public:
     AudioPanel();
@@ -68,11 +70,12 @@ public:
     void draw(sf::RenderWindow& window);
 
     bool handleEvent(const sf::Event& event, sf::Vector2f mousePos);
-    std::string handleClick(sf::Vector2f mousePos);
+    std::string handleClick(sf::Vector2f mousePos, int currentFrame);
 
     void toggle();
     bool getIsVisible() const;
 
+    void scanAudioDirectory(int currentFrame);
     void addAudioClip(const std::string& path, int currentFrame);
     void updatePlayback(int currentFrame, float fps, bool isPlaying);
     void stopAll();
