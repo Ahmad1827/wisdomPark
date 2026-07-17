@@ -1,33 +1,81 @@
 #pragma once
 #include <string>
+#include <vector>
+#include <SFML/Graphics.hpp>
 
-class AIProvider {
-public:
-    virtual ~AIProvider() = default;
-    virtual std::string getProviderName() const = 0;
-    virtual std::string generateCommand(const std::string& prompt, const std::string& apiKey) const = 0;
+enum class AIOperation {
+    Generate,
+    Edit,
+    Variation,
+    RemoveBackground,
+    Upscale,
+    Colorize,
+    Inpaint,
+    Outpaint,
+    GenerateFrame
 };
 
-class OpenAIProvider : public AIProvider {
+struct AIRequest {
+    std::string prompt;
+    std::string negativePrompt;
+    AIOperation operation = AIOperation::Generate;
+    sf::Image baseImage;
+    sf::Image maskImage;
+    bool hasMask = false;
+    bool isPixelMode = false;
+    int width = 0;
+    int height = 0;
+    float transparency = 1.0f;
+};
+
+struct AIResult {
+    bool success = false;
+    std::string errorMessage;
+    sf::Image resultImage;
+};
+
+class AIProvider {
+protected:
+    std::string apiKey;
 public:
-    std::string getProviderName() const override;
-    std::string generateCommand(const std::string& prompt, const std::string& apiKey) const override;
+    virtual ~AIProvider() = default;
+    virtual void setApiKey(const std::string& key) { apiKey = key; }
+    virtual bool testConnection() = 0;
+    virtual AIResult process(const AIRequest& request) = 0;
+    virtual std::string getName() const = 0;
 };
 
 class GeminiProvider : public AIProvider {
 public:
-    std::string getProviderName() const override;
-    std::string generateCommand(const std::string& prompt, const std::string& apiKey) const override;
+    bool testConnection() override;
+    AIResult process(const AIRequest& request) override;
+    std::string getName() const override;
 };
 
-class AnthropicProvider : public AIProvider {
+class OpenAIProvider : public AIProvider {
 public:
-    std::string getProviderName() const override;
-    std::string generateCommand(const std::string& prompt, const std::string& apiKey) const override;
+    bool testConnection() override;
+    AIResult process(const AIRequest& request) override;
+    std::string getName() const override;
+};
+
+class ClaudeProvider : public AIProvider {
+public:
+    bool testConnection() override;
+    AIResult process(const AIRequest& request) override;
+    std::string getName() const override;
 };
 
 class OpenRouterProvider : public AIProvider {
 public:
-    std::string getProviderName() const override;
-    std::string generateCommand(const std::string& prompt, const std::string& apiKey) const override;
+    bool testConnection() override;
+    AIResult process(const AIRequest& request) override;
+    std::string getName() const override;
+};
+
+class OllamaProvider : public AIProvider {
+public:
+    bool testConnection() override;
+    AIResult process(const AIRequest& request) override;
+    std::string getName() const override;
 };

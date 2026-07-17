@@ -1,11 +1,25 @@
 #include "UIManager.h"
 #include "../core/NativeDialogs.h"
+#include "../core/ExportManager.h"
+#include "../ai/AIManager.h"
+#include "../ui/AIPanel.h"
+#include "../ui/AIReviewModal.h"
 #include <iostream>
 #include <algorithm>
 #include <ctime>
 #include <filesystem>
 #include <random>
+#include <fstream>
 
+static AIPanel g_aiPanel;
+static AIReviewModal g_aiReviewModal;
+static bool g_typingApiKey = false;
+static sf::RectangleShape loadingOverlay;
+static sf::RectangleShape loadingBox;
+static sf::Text loadingText;
+static sf::CircleShape loadingSpinner;
+static sf::RectangleShape loadingCancelBtn;
+static sf::Text loadingCancelText;
 UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isPanning(false), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(false), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0) {}
 
 void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
@@ -18,7 +32,6 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     font.loadFromFile("assets/font.otf");
 
     projectBrowser.init(pm);
-    settingsModal.init();
     keybindPanel.init(&keybindManager);
     exportModal.init();
     newProjectModal.init();
@@ -29,6 +42,10 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     rightProperties.init();
     bottomTimeline.init();
     audioPanel.init();
+
+    AIManager::getInstance().init();
+    g_aiPanel.init();
+    g_aiReviewModal.init();
 
     uiText.setFont(font);
     uiText.setCharacterSize(30);
@@ -147,6 +164,41 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     warnCancelText.setFillColor(sf::Color::White);
     warnCancelText.setOrigin(warnCancelText.getLocalBounds().width / 2.f, warnCancelText.getLocalBounds().height / 2.f);
     warnCancelText.setPosition(1160.f, 595.f);
+
+    loadingOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
+    loadingOverlay.setFillColor(sf::Color(10, 10, 15, 200));
+
+    loadingBox.setSize(sf::Vector2f(450.f, 220.f));
+    loadingBox.setOrigin(225.f, 110.f);
+    loadingBox.setPosition(960.f, 540.f);
+    loadingBox.setFillColor(sf::Color(25, 25, 35));
+    loadingBox.setOutlineThickness(2.f);
+    loadingBox.setOutlineColor(sf::Color(100, 150, 255));
+
+    loadingText.setFont(font);
+    loadingText.setString("Wisdom Park AI is thinking...");
+    loadingText.setCharacterSize(16);
+    loadingText.setFillColor(sf::Color::White);
+    loadingText.setOrigin(loadingText.getLocalBounds().width / 2.f, loadingText.getLocalBounds().height / 2.f);
+    loadingText.setPosition(960.f, 480.f);
+
+    loadingSpinner.setRadius(25.f);
+    loadingSpinner.setPointCount(3);
+    loadingSpinner.setFillColor(sf::Color(255, 200, 100));
+    loadingSpinner.setOrigin(25.f, 25.f);
+    loadingSpinner.setPosition(960.f, 540.f);
+
+    loadingCancelBtn.setSize(sf::Vector2f(120.f, 35.f));
+    loadingCancelBtn.setOrigin(60.f, 17.5f);
+    loadingCancelBtn.setPosition(960.f, 610.f);
+    loadingCancelBtn.setFillColor(sf::Color(180, 60, 60));
+
+    loadingCancelText.setFont(font);
+    loadingCancelText.setString("[ Cancel X ]");
+    loadingCancelText.setCharacterSize(14);
+    loadingCancelText.setFillColor(sf::Color::White);
+    loadingCancelText.setOrigin(loadingCancelText.getLocalBounds().width / 2.f, loadingCancelText.getLocalBounds().height / 2.f);
+    loadingCancelText.setPosition(960.f, 607.f);
 
     initStartMenu();
 }
@@ -275,7 +327,6 @@ void UIManager::updateStartMenu(float dt, sf::Vector2f mousePos) {
         }
         p.x += p.vx * dt;
         p.y += p.vy * dt;
-
         p.vx += std::sin(startupTime + p.y * 0.01f) * 2.0f * dt;
     }
 }
@@ -296,11 +347,9 @@ void UIManager::drawStartMenu(sf::RenderWindow& window) {
         sf::CircleShape circ(p.size);
         circ.setOrigin(p.size, p.size);
         circ.setPosition(p.x, p.y);
-
         float fade = 1.0f;
         if (p.life < 0.5f) fade = p.life / 0.5f;
         else if (p.maxLife - p.life < 0.5f) fade = (p.maxLife - p.life) / 0.5f;
-
         sf::Color c = p.baseColor;
         c.a = static_cast<sf::Uint8>(std::clamp(180.0f * fade, 0.0f, 255.0f));
         circ.setFillColor(c);
@@ -399,7 +448,6 @@ void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hove
 
 void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
     drawBackButton(window, "btn_back", 100.f, 100.f);
-
     drawPremiumText(window, "SETTINGS", 960.f, 120.f, 40, sf::Color::White, sf::Color(50, 50, 50), sf::Color::Black);
 
     auto drawCard = [&](sf::FloatRect bounds, const std::string& title) {
@@ -408,11 +456,9 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         t.setFillColor(sf::Color(255, 200, 50));
         t.setPosition(bounds.left + 30.f, bounds.top + 25.f);
         window.draw(t);
-
         sf::RectangleShape line(sf::Vector2f(bounds.width - 60.f, 2.f));
         line.setPosition(bounds.left + 30.f, bounds.top + 65.f);
         line.setFillColor(sf::Color(255, 255, 255, 40));
-        window.draw(line);
         };
 
     auto drawToggle = [&](float x, float y, const std::string& label, bool active, const std::string& hKey) {
@@ -423,14 +469,12 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         box.setOutlineThickness(1.f);
         box.setOutlineColor(sf::Color(static_cast<sf::Uint8>(100.f + hov * 50.f), static_cast<sf::Uint8>(100.f + hov * 50.f), static_cast<sf::Uint8>(120.f + hov * 50.f)));
         window.draw(box);
-
         if (active) {
             sf::RectangleShape check(sf::Vector2f(12.f, 12.f));
             check.setPosition(x + 6.f, y + 6.f);
             check.setFillColor(sf::Color::White);
             window.draw(check);
         }
-
         sf::Text t(label, font, 20);
         t.setFillColor(sf::Color(static_cast<sf::Uint8>(220.f + hov * 35.f), static_cast<sf::Uint8>(220.f + hov * 35.f), static_cast<sf::Uint8>(220.f + hov * 35.f)));
         t.setPosition(x + 40.f, y);
@@ -442,19 +486,16 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         t.setFillColor(sf::Color(220, 220, 220));
         t.setPosition(x, y);
         window.draw(t);
-
         float hovL = getHover(hKeyL);
         sf::Text btnL("<", font, 22);
         btnL.setFillColor(sf::Color(static_cast<sf::Uint8>(150.f + hovL * 105.f), static_cast<sf::Uint8>(150.f + hovL * 105.f), static_cast<sf::Uint8>(150.f + hovL * 105.f)));
         btnL.setPosition(x + 200.f, y - 2.f);
         window.draw(btnL);
-
         sf::Text v(val, font, 20);
         v.setFillColor(sf::Color(255, 200, 100));
         sf::FloatRect vb = v.getLocalBounds();
         v.setPosition(x + 245.f - vb.width / 2.f, y);
         window.draw(v);
-
         float hovR = getHover(hKeyR);
         sf::Text btnR(">", font, 22);
         btnR.setFillColor(sf::Color(static_cast<sf::Uint8>(150.f + hovR * 105.f), static_cast<sf::Uint8>(150.f + hovR * 105.f), static_cast<sf::Uint8>(150.f + hovR * 105.f)));
@@ -480,9 +521,15 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
     drawStepper(380.f, 810.f, "Undo History Size", std::to_string(uiHistorySize), "set_s_undoL", "set_s_undoR");
 
     drawCard(sf::FloatRect(1020.f, 620.f, 550.f, 350.f), "AI Generation");
-    drawStepper(1050.f, 710.f, "Provider", "OpenAI", "set_s_aiL", "set_s_aiR");
-    drawStepper(1050.f, 760.f, "API Key", "*********", "set_s_keyL", "set_s_keyR");
-    drawStepper(1050.f, 810.f, "Gen Quality", "Fast", "set_s_gqL", "set_s_gqR");
+    drawStepper(1050.f, 710.f, "Provider", AIManager::getInstance().getActiveProvider(), "set_s_aiL", "set_s_aiR");
+
+    std::string keyDisplay = AIManager::getInstance().getApiKey(AIManager::getInstance().getActiveProvider());
+    if (keyDisplay.empty()) keyDisplay = "Click to enter key...";
+    else keyDisplay = std::string(keyDisplay.length(), '*');
+    if (keyDisplay.length() > 20) keyDisplay = "..." + keyDisplay.substr(keyDisplay.length() - 17);
+    if (g_typingApiKey) keyDisplay += "_";
+
+    drawStepper(1050.f, 760.f, "API Key", keyDisplay, "set_s_keyL", "set_s_keyR");
 }
 
 void UIManager::drawTutorialsMenu(sf::RenderWindow& window) {
@@ -509,7 +556,7 @@ void UIManager::drawTutorialsMenu(sf::RenderWindow& window) {
         "Use the Select Tool (M) to draw a lasso around your art.\nOnce selected, click and drag to move the pixels.\nYou can flip selections horizontally or vertically.\nPress 'Delete' to clear the selected area.",
         "Pixel Mode disables all anti-aliasing and forces a hard grid.\nEnable 'Pixel Perfect' mode in the tool properties to automatically\nclean up jagged lines while drawing fast curves.\nUse the tile view to draw seamless repeating textures.",
         "Every major action has a keyboard shortcut.\nPress the 'Keybinds' button on the main menu or hit ESC\nin the workspace to rebind them to your preference.\nStandard defaults: B (Brush), E (Eraser), Ctrl+Z (Undo).",
-        "When your animation is complete, click Export.\nYou can save the current frame as a PNG, or export the\nentire timeline as a sequential Sprite Sheet for use\nin game engines like Unity, Godot, or Unreal Engine.",
+        "When your animation is complete, click Export.\nYou can save the current frame as a PNG, or export the\ntire timeline as a sequential Sprite Sheet for use\nin game engines like Unity, Godot, or Unreal Engine.",
         "AI Features require an active API Key in Settings.\nUse the selection tool, type a prompt in the bottom left,\nand press Enter. The AI will generate or modify the selected area\nbased on your theme settings (Structure, Clutter, Custom)."
     };
 
@@ -619,7 +666,7 @@ void UIManager::drawCreditsMenu(sf::RenderWindow& window) {
 
 bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
     if (activeProjectPath.empty()) {
-        std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects|*.wpk||", "wpk", activeProjectName);
+        std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
         if (!file.empty()) {
             activeProjectPath = file;
             if (projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
@@ -639,6 +686,39 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
 }
 
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
+
+    if (AIManager::getInstance().isProcessingAsync()) {
+        auto killAiProcess = [&]() {
+            AIManager::getInstance().abortTask();
+#if defined(_WIN32)
+            std::system("taskkill /IM python.exe /F /T >nul 2>nul");
+            std::system("taskkill /IM py.exe /F /T >nul 2>nul");
+            std::system("taskkill /IM python3.exe /F /T >nul 2>nul");
+#else
+            std::system("pkill -f run_ai.py");
+#endif
+            std::ofstream f("temp_ai_output.png");
+            f.close();
+            };
+
+        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+            killAiProcess();
+            return;
+        }
+
+        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            sf::Vector2i mPos = sf::Mouse::getPosition(window);
+            sf::Vector2f viewPos = window.mapPixelToCoords(mPos, window.getDefaultView());
+
+            if (loadingCancelBtn.getGlobalBounds().contains(viewPos) ||
+                (viewPos.x > 700.f && viewPos.x < 1220.f && viewPos.y > 450.f && viewPos.y < 750.f)) {
+                killAiProcess();
+            }
+            return;
+        }
+        return;
+    }
+
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
     sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
 
@@ -666,13 +746,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
     if (keybindPanel.isVisible()) {
         keybindPanel.handleEvent(event);
-        return;
-    }
-
-    if (settingsModal.getIsOpen()) {
-        if (event.type == sf::Event::TextEntered) settingsModal.handleTextEntered(event.text.unicode);
-        else if (event.type == sf::Event::KeyPressed) settingsModal.handleKeyPress(event.key.code, settings);
-        else if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) settingsModal.handleClick(mousePos, settings);
         return;
     }
 
@@ -709,23 +782,36 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             std::string action = audioPanel.handleClick(mousePos, timeline.getCurrentFrame());
 
             if (action == "imported") {
-                showMessage("Audio Imported Successfully", sf::Color::Green);
-                return; // CRITICAL FIX: Stops the mouse click from falling through to the canvas
-            }
-            if (action == "closed") {
-                return; // CRITICAL FIX: Stops the mouse click from falling through to the canvas
-            }
-
-            // CRITICAL FIX: Consume the event if they clicked anywhere inside the panel background
-            if (audioPanel.handleEvent(event, mousePos)) {
+                showMessage("Audio Directory Scanned Successfully", sf::Color::Green);
                 return;
             }
+            if (action == "closed") return;
+            if (audioPanel.handleEvent(event, mousePos)) return;
         }
+    }
+
+    if (g_aiReviewModal.getIsOpen()) {
+        std::string res = g_aiReviewModal.handleEvent(event, mousePos);
+        if (res == "accept_new" || res == "accept_replace") {
+            if (res == "accept_new") {
+                canvas.addLayer(timeline.getCurrentFrame(), "AI Generation");
+            }
+            g_aiReviewModal.getResultImage().saveToFile("temp_ai_import.png");
+            canvas.importImageToActiveLayer("temp_ai_import.png", timeline.getCurrentFrame());
+        }
+        return;
     }
 
     if (currentState == AppState::Welcome) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-
+            if (currentMenuState == MenuState::Settings && g_typingApiKey) {
+                if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Enter) {
+                    g_typingApiKey = false;
+                    AIManager::getInstance().saveSettingsLocally();
+                    showMessage("Key Applied Successfully!", sf::Color::Green);
+                    return;
+                }
+            }
             if (currentMenuState == MenuState::Main) {
                 std::vector<std::string> buttons = { "Projects", "Settings", "Tutorials", "Keybinds", "Credits", "Exit" };
                 float by = 420.f;
@@ -750,7 +836,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 for (int i = 0; i < 4; ++i) {
                     sf::FloatRect rBounds(900.f, ry, 800.f, 100.f);
                     if (rBounds.contains(mousePos)) {
-                        std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects|*.wpk|All Files|*.*||");
+                        std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
                         if (!file.empty()) {
                             activeProjectPath = file;
                             activeProjectName = std::filesystem::path(file).stem().string();
@@ -795,7 +881,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     else showMessage("Failed to load project files.", sf::Color::Red);
                 }
                 else if (action == "open_native") {
-                    std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects|*.wpk|All Files|*.*||");
+                    std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
                     if (!file.empty()) {
                         activeProjectPath = file;
                         activeProjectName = std::filesystem::path(file).stem().string();
@@ -813,6 +899,16 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
             }
             else if (currentMenuState == MenuState::Settings) {
+                if (sf::FloatRect(1050.f + 200.f, 760.f - 10.f, 150.f, 40.f).contains(mousePos)) {
+                    g_typingApiKey = true;
+                }
+                else {
+                    if (g_typingApiKey) {
+                        g_typingApiKey = false;
+                        AIManager::getInstance().saveSettingsLocally();
+                        showMessage("AI Configurations Applied and Saved", sf::Color::Green);
+                    }
+                }
                 sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
                 if (backBounds.contains(mousePos)) {
                     currentMenuState = MenuState::Main;
@@ -838,6 +934,16 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
                 if (checkStepperL(380.f, 810.f)) uiHistorySize = (uiHistorySize == 15) ? 50 : ((uiHistorySize == 30) ? 15 : 30);
                 if (checkStepperR(380.f, 810.f)) uiHistorySize = (uiHistorySize == 15) ? 30 : ((uiHistorySize == 30) ? 50 : 15);
+
+                if (checkStepperL(1050.f, 710.f)) AIManager::getInstance().cycleProvider(-1);
+                if (checkStepperR(1050.f, 710.f)) AIManager::getInstance().cycleProvider(1);
+
+                if (sf::FloatRect(1050.f + 200.f, 760.f - 10.f, 150.f, 40.f).contains(mousePos)) {
+                    g_typingApiKey = true;
+                }
+                else {
+                    g_typingApiKey = false;
+                }
             }
             else if (currentMenuState == MenuState::Tutorials) {
                 sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
@@ -885,11 +991,62 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
 
+        if (currentMenuState == MenuState::Settings && g_typingApiKey) {
+            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::V && event.key.control) {
+                std::string clipboardData = sf::Clipboard::getString().toAnsiString();
+
+                clipboardData.erase(std::remove(clipboardData.begin(), clipboardData.end(), '\n'), clipboardData.end());
+                clipboardData.erase(std::remove(clipboardData.begin(), clipboardData.end(), '\r'), clipboardData.end());
+                clipboardData.erase(std::remove(clipboardData.begin(), clipboardData.end(), ' '), clipboardData.end());
+
+                if (!clipboardData.empty()) {
+                    std::string prov = AIManager::getInstance().getActiveProvider();
+                    std::string existingKey = AIManager::getInstance().getApiKey(prov);
+                    AIManager::getInstance().setApiKey(prov, existingKey + clipboardData);
+                    showMessage("API Key Pasted From Clipboard", sf::Color::Green);
+                }
+                return;
+            }
+
+            if (event.type == sf::Event::TextEntered) {
+                std::string prov = AIManager::getInstance().getActiveProvider();
+                std::string k = AIManager::getInstance().getApiKey(prov);
+                if (event.text.unicode == '\b' && !k.empty()) {
+                    k.pop_back();
+                }
+                else if (event.text.unicode >= 32 && event.text.unicode < 127 && event.text.unicode != 'v' && event.text.unicode != 'V') {
+                    k += static_cast<char>(event.text.unicode);
+                }
+                AIManager::getInstance().setApiKey(prov, k);
+                return;
+            }
+        }
+
         if (keybindManager.isActionTriggered("proj_new", event)) {
             newProjectModal.open();
         }
     }
     else if (currentState == AppState::Painting) {
+
+        if (g_aiPanel.getIsVisible()) {
+            if (g_aiPanel.handleEvent(event, mousePos)) {
+                if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                    std::string action = g_aiPanel.handleClick(mousePos);
+                    if (action == "execute") {
+                        sf::Image currentCanvas = ExportManager::flattenFrame(canvas, timeline.getCurrentFrame());
+                        AIRequest req = g_aiPanel.buildRequestFromCanvasContext(canvas.getCanvasSize().x, canvas.getCanvasSize().y, canvas.getPixelMode(), 1.0f, canvas.getActiveTool() == ToolType::Select);
+                        req.baseImage = currentCanvas;
+
+                        showMessage("AI Process Initialized Async...", sf::Color::Yellow);
+                        AIManager::getInstance().executeRequest(req);
+                    }
+                    else if (action == "back") {
+                        showMessage("AI Panel Closed.", sf::Color::Cyan);
+                    }
+                }
+                return;
+            }
+        }
 
         if (event.type == sf::Event::MouseButtonPressed) {
             if (event.mouseButton.button == sf::Mouse::Middle || event.mouseButton.button == sf::Mouse::Right) {
@@ -900,9 +1057,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
             if (event.mouseButton.button == sf::Mouse::Left) {
                 if (topBackBtn.getGlobalBounds().contains(mousePos)) {
-                    if (canvas.getIsDirty()) {
-                        showUnsavedWarning = true;
-                    }
+                    if (canvas.getIsDirty()) showUnsavedWarning = true;
                     else {
                         currentState = AppState::Welcome;
                         currentMenuState = MenuState::Main;
@@ -910,12 +1065,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     return;
                 }
                 if (topSaveBtn.getGlobalBounds().contains(mousePos)) {
-                    if (triggerSave(canvas, timeline)) {
-                        showMessage("Project Saved Successfully!", sf::Color::Green);
-                    }
-                    else {
-                        showMessage("Error Saving Project!", sf::Color::Red);
-                    }
+                    if (triggerSave(canvas, timeline)) showMessage("Project Saved Successfully!", sf::Color::Green);
+                    else showMessage("Error Saving Project!", sf::Color::Red);
                     return;
                 }
             }
@@ -923,9 +1074,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
         if (event.type == sf::Event::TextEntered && isTypingPrompt) {
             if (event.text.unicode == '\b') {
-                if (!currentPrompt.empty()) {
-                    currentPrompt.pop_back();
-                }
+                if (!currentPrompt.empty()) currentPrompt.pop_back();
             }
             else if (event.text.unicode < 128 && event.text.unicode != '\r' && event.text.unicode != '\n' && event.text.unicode != '\b') {
                 currentPrompt += static_cast<char>(event.text.unicode);
@@ -939,40 +1088,27 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (isTypingPrompt) {
                     currentPrompt = "";
                     promptDisplay.setString("> _");
-                    showMessage("AI Terminal: Type prompt and press Enter", sf::Color(0, 191, 255));
-                }
-                else {
-                    if (!settings.isConfigured()) showMessage("ERROR: Configure AI Provider in Settings (Press ESC)", sf::Color::Red);
-                    else {
-                        bool isFill; std::string parsedTheme;
-                        aiHelper.parseCommand(currentPrompt, promptQuantity, isFill, parsedTheme);
-                        aiHelper.setTheme(parsedTheme);
-                        showMessage("AI Configured. Click Canvas to Generate: " + parsedTheme, sf::Color::Green);
-                    }
+                    showMessage("Legacy Terminal (Use AI Panel on the left)", sf::Color(0, 191, 255));
                 }
             }
 
             if (isTypingPrompt) return;
 
             if (event.key.code == sf::Keyboard::Escape) {
-                settingsModal.open(settings);
+                currentMenuState = MenuState::Settings;
+                currentState = AppState::Welcome;
             }
 
             if (keybindManager.isActionTriggered("ui_settings", event)) keybindPanel.toggle();
-
             if (keybindManager.isActionTriggered("export_png", event)) exportModal.open(canvas, timeline.getCurrentFrame());
 
             if (keybindManager.isActionTriggered("proj_save", event)) {
-                if (triggerSave(canvas, timeline)) {
-                    showMessage("Project Saved Successfully!", sf::Color::Green);
-                }
-                else {
-                    showMessage("Error Saving Project!", sf::Color::Red);
-                }
+                if (triggerSave(canvas, timeline)) showMessage("Project Saved Successfully!", sf::Color::Green);
+                else showMessage("Error Saving Project!", sf::Color::Red);
             }
 
             if (keybindManager.isActionTriggered("proj_save_as", event)) {
-                std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects|*.wpk||", "wpk", activeProjectName);
+                std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
                 if (!file.empty()) {
                     activeProjectPath = file;
                     if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
@@ -984,7 +1120,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (keybindManager.isActionTriggered("proj_open", event)) {
-                std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects|*.wpk|All Files|*.*||");
+                std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
                 if (!file.empty()) {
                     activeProjectPath = file;
                     activeProjectName = std::filesystem::path(file).stem().string();
@@ -1002,9 +1138,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
             }
 
-            if (keybindManager.isActionTriggered("proj_new", event)) {
-                newProjectModal.open();
-            }
+            if (keybindManager.isActionTriggered("proj_new", event)) newProjectModal.open();
 
             if (keybindManager.isActionTriggered("time_next", event)) {
                 if (timeline.getCurrentFrame() < timeline.getFrameCount() - 1) {
@@ -1035,9 +1169,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             timeline.nextFrame();
                             showingText = false;
                         }
-                        else {
-                            showMessage("Current frame is empty. Press Right again to create another.", sf::Color::Yellow);
-                        }
+                        else showMessage("Current frame is empty. Press Right again to create another.", sf::Color::Yellow);
                     }
                     else {
                         canvas.addFrame(timeline.getCurrentFrame());
@@ -1076,9 +1208,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             timeline.setFrame(0);
                             showingText = false;
                         }
-                        else {
-                            showMessage("Current frame is empty. Press Left again to create another.", sf::Color::Yellow);
-                        }
+                        else showMessage("Current frame is empty. Press Left again to create another.", sf::Color::Yellow);
                     }
                     else {
                         canvas.addFrame(-1);
@@ -1170,7 +1300,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
 
-        if (!timeline.isPlaying() && !settingsModal.getIsOpen() && !keybindPanel.isVisible() && !exportModal.getIsOpen() && !newProjectModal.getIsOpen() && !audioPanel.getIsVisible()) {
+        if (!timeline.isPlaying() && !keybindPanel.isVisible() && !exportModal.getIsOpen() && !newProjectModal.getIsOpen() && !audioPanel.getIsVisible() && !g_aiPanel.getIsVisible() && !g_aiReviewModal.getIsOpen()) {
 
             if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
             if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
@@ -1196,21 +1326,16 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
             if (event.type == sf::Event::MouseButtonPressed) {
                 if (event.mouseButton.button == sf::Mouse::Left || event.mouseButton.button == sf::Mouse::Right) {
-                    if (colorPalettePanel.handleClick(mousePos, canvas)) {
-                        return;
-                    }
+                    if (colorPalettePanel.handleClick(mousePos, canvas)) return;
                 }
 
                 if (event.mouseButton.button == sf::Mouse::Left) {
-
                     if (sizeSliderBg.getGlobalBounds().contains(mousePos)) {
-                        isDraggingSizeSlider = true;
-                        return;
+                        isDraggingSizeSlider = true; return;
                     }
 
                     if (canvas.getPixelMode() && pixelPerfBtn.getGlobalBounds().contains(mousePos)) {
-                        canvas.togglePixelPerfect();
-                        return;
+                        canvas.togglePixelPerfect(); return;
                     }
 
                     std::string lpAction = layerPanel.processClick(mousePos, canvas, timeline.getCurrentFrame());
@@ -1218,15 +1343,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         if (lpAction == "layer_push") {
                             int cur = timeline.getCurrentFrame();
                             if (cur == static_cast<int>(canvas.getFrameCount()) - 1) {
-                                canvas.addFrame(cur);
-                                timeline.addFrameAfter(cur);
+                                canvas.addFrame(cur); timeline.addFrameAfter(cur);
                             }
                             canvas.pushLayerToNextFrame(cur, canvas.getActiveLayer());
                             timeline.nextFrame();
                         }
                         else if (lpAction == "layer_pin" && layerPanel.isPanelPinned()) {
-                            rightProperties.forceClose();
-                            colorPalettePanel.forceClose();
+                            rightProperties.forceClose(); colorPalettePanel.forceClose();
                         }
                         return;
                     }
@@ -1251,109 +1374,47 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
 
                     int clickedFrame = bottomTimeline.handleFrameClick(mousePos, static_cast<size_t>(canvas.getFrameCount()));
-                    if (clickedFrame != -1) {
-                        timeline.setFrame(clickedFrame);
-                        return;
-                    }
+                    if (clickedFrame != -1) { timeline.setFrame(clickedFrame); return; }
 
                     std::string bottomAction = bottomTimeline.handleClick(mousePos);
                     if (!bottomAction.empty()) {
                         if (bottomAction == "play") timeline.togglePlayback();
-                        else if (bottomAction == "add") {
-                            canvas.addFrame(timeline.getCurrentFrame());
-                            timeline.addFrameAfter(timeline.getCurrentFrame());
-                            timeline.nextFrame();
-                        }
-                        else if (bottomAction == "dup") {
-                            canvas.duplicateFrame(timeline.getCurrentFrame());
-                            timeline.duplicateFrame(timeline.getCurrentFrame());
-                            timeline.nextFrame();
-                        }
+                        else if (bottomAction == "add") { canvas.addFrame(timeline.getCurrentFrame()); timeline.addFrameAfter(timeline.getCurrentFrame()); timeline.nextFrame(); }
+                        else if (bottomAction == "dup") { canvas.duplicateFrame(timeline.getCurrentFrame()); timeline.duplicateFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
                         else if (bottomAction == "del") {
                             if (canvas.getFrameCount() > 1) {
-                                int cur = timeline.getCurrentFrame();
-                                canvas.deleteFrame(cur);
-                                timeline.deleteFrame(cur);
-                                if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) {
-                                    timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
-                                }
+                                int cur = timeline.getCurrentFrame(); canvas.deleteFrame(cur); timeline.deleteFrame(cur);
+                                if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
                             }
                         }
-                        else if (bottomAction == "export") {
-                            exportModal.open(canvas, timeline.getCurrentFrame());
-                        }
-                        else if (bottomAction == "onion_toggle") {
-                            canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
-                        }
-                        else if (bottomAction == "onion_prev") {
-                            int p = canvas.getOnionSkinPrevCount();
-                            p = (p + 1) % 4;
-                            canvas.setOnionSkinCounts(p, canvas.getOnionSkinNextCount());
-                        }
-                        else if (bottomAction == "onion_next") {
-                            int n = canvas.getOnionSkinNextCount();
-                            n = (n + 1) % 4;
-                            canvas.setOnionSkinCounts(canvas.getOnionSkinPrevCount(), n);
-                        }
+                        else if (bottomAction == "export") exportModal.open(canvas, timeline.getCurrentFrame());
+                        else if (bottomAction == "onion_toggle") canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
+                        else if (bottomAction == "onion_prev") { int p = canvas.getOnionSkinPrevCount(); p = (p + 1) % 4; canvas.setOnionSkinCounts(p, canvas.getOnionSkinNextCount()); }
+                        else if (bottomAction == "onion_next") { int n = canvas.getOnionSkinNextCount(); n = (n + 1) % 4; canvas.setOnionSkinCounts(canvas.getOnionSkinPrevCount(), n); }
                         return;
                     }
 
                     bool hasActiveSel = (canvas.getActiveTool() == ToolType::Select);
-                    std::string leftAction = leftToolbar.handleClick(mousePos, settings.isConfigured(), hasActiveSel);
+                    std::string leftAction = leftToolbar.handleClick(mousePos, AIManager::getInstance().isAIEnabled(), hasActiveSel);
                     if (!leftAction.empty()) {
-                        if (leftAction == "ai_disabled") showMessage("Configure an AI provider in Settings.", sf::Color::Red);
+                        if (leftAction == "ai_disabled") showMessage("Enable AI in Settings.", sf::Color::Red);
                         else if (leftAction == "brush") canvas.setActiveTool(ToolType::Brush);
                         else if (leftAction == "pencil") canvas.setActiveTool(ToolType::Pencil);
                         else if (leftAction == "eraser") canvas.setActiveTool(ToolType::Eraser);
                         else if (leftAction == "fill") canvas.setActiveTool(ToolType::Fill);
                         else if (leftAction == "select") canvas.setActiveTool(ToolType::Select);
-                        else if (leftAction == "ai_gen") {
-                            isTypingPrompt = true; currentPrompt = ""; promptDisplay.setString("> _");
-                            showMessage("AI Terminal: Type prompt and press Enter", sf::Color(0, 191, 255));
-                        }
+                        else if (leftAction == "ai_gen") g_aiPanel.toggle();
                         else if (leftAction == "flip_h") canvas.flipSelectionHorizontal(timeline.getCurrentFrame());
                         else if (leftAction == "flip_v") canvas.flipSelectionVertical(timeline.getCurrentFrame());
                         else if (leftAction == "dup_sel") canvas.duplicateSelection(timeline.getCurrentFrame());
                         else if (leftAction == "resize_sel") canvas.enterTransformMode(timeline.getCurrentFrame());
-                        else if (leftAction == "erase_sel") {
-                            canvas.deleteSelection(timeline.getCurrentFrame());
-                        }
-                        else if (leftAction == "del_sel") {
-                            canvas.commitSelection(timeline.getCurrentFrame());
-                            canvas.setActiveTool(ToolType::Brush);
-                            leftToolbar.setActiveTool("brush");
-                        }
+                        else if (leftAction == "erase_sel") canvas.deleteSelection(timeline.getCurrentFrame());
+                        else if (leftAction == "del_sel") { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Brush); leftToolbar.setActiveTool("brush"); }
                         else if (leftAction == "import_img") {
-                            std::string file = NativeDialogs::openFileDialog("Image Files|*.png;*.jpg;*.jpeg;*.bmp;*.webp|All Files|*.*||");
-                            if (!file.empty()) {
-                                canvas.importImageToActiveLayer(file, timeline.getCurrentFrame());
-                                showMessage("Image Imported", sf::Color::Green);
-                            }
+                            std::string file = NativeDialogs::openFileDialog("Image Files\0*.png;*.jpg;*.jpeg;*.bmp;*.webp\0All Files\0*.*\0");
+                            if (!file.empty()) { canvas.importImageToActiveLayer(file, timeline.getCurrentFrame()); showMessage("Image Imported", sf::Color::Green); }
                         }
-                        else if (leftAction == "audio_panel") {
-                            audioPanel.toggle();
-                        }
-                        return;
-                    }
-
-                    if (aiHelper.getBounds().contains(logicalMousePos)) {
-                        if (!settings.isConfigured()) { showMessage("Configure AI Provider (Press ESC) first!", sf::Color::Red); }
-                        else {
-                            aiHelper.toggle();
-                            if (aiHelper.isActive()) {
-                                canvas.saveUndoState();
-                                sf::Image currentImg = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
-                                std::string errorMsg = aiHelper.startGeneratingComplexArt(canvas.getDrawArea(), currentImg, settings.activeProvider, settings.apiKeys[settings.activeProvider], false);
-                                if (!errorMsg.empty()) {
-                                    showMessage(errorMsg, sf::Color::Red);
-                                    canvas.undo();
-                                    aiHelper.toggle();
-                                }
-                                else {
-                                    showMessage("AI Generation Started...", sf::Color::Yellow);
-                                }
-                            }
-                        }
+                        else if (leftAction == "audio_panel") audioPanel.toggle();
                         return;
                     }
                 }
@@ -1364,19 +1425,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (event.type == sf::Event::MouseButtonReleased) {
-                if (isDraggingSizeSlider && event.mouseButton.button == sf::Mouse::Left) {
-                    isDraggingSizeSlider = false;
-                    return;
-                }
-
-                if (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle) {
-                    isPanning = false;
-                    return;
-                }
+                if (isDraggingSizeSlider && event.mouseButton.button == sf::Mouse::Left) { isDraggingSizeSlider = false; return; }
+                if (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle) { isPanning = false; return; }
 
                 if (!isPanning) {
                     canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
-
                     if (canvas.getActiveTool() != ToolType::Select && canvas.getDrawArea().contains(logicalMousePos)) {
                         sf::Image img = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
                         timeline.getFrameData(timeline.getCurrentFrame()).thumbnail = img;
@@ -1388,15 +1441,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (isDraggingSizeSlider) {
                     float localY = mousePos.y - sizeSliderBg.getPosition().y;
                     float percent = 1.0f - std::clamp(localY / sizeSliderBg.getSize().y, 0.0f, 1.0f);
-
-                    if (canvas.getPixelMode()) {
-                        int newSize = 1 + static_cast<int>(percent * 31.0f);
-                        canvas.setPixelBrushSize(newSize);
-                    }
-                    else {
-                        float newSize = 1.0f + (percent * 99.0f);
-                        canvas.setBrushSize(newSize);
-                    }
+                    if (canvas.getPixelMode()) canvas.setPixelBrushSize(1 + static_cast<int>(percent * 31.0f));
+                    else canvas.setBrushSize(1.0f + (percent * 99.0f));
                 }
 
                 if (isPanning) {
@@ -1415,11 +1461,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
 
-    if (settingsModal.getIsOpen()) settingsModal.updateHover(mousePos);
     if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);
     if (exportModal.getIsOpen()) exportModal.updateHover(mousePos);
     if (newProjectModal.getIsOpen()) newProjectModal.updateHover(mousePos);
-
+    if (AIManager::getInstance().isProcessingAsync()) {
+        loadingSpinner.rotate(150.f * dt);
+    }
     if (currentState == AppState::Welcome) {
         if (!keybindPanel.isVisible()) {
             projectBrowser.updateHover(mousePos);
@@ -1462,6 +1509,8 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 updateHoverValue("set_s_undoL", checkStepperL(380.f, 810.f), dt);
                 updateHoverValue("set_s_undoR", checkStepperR(380.f, 810.f), dt);
 
+                updateHoverValue("set_s_aiL", checkStepperL(1050.f, 710.f), dt);
+                updateHoverValue("set_s_aiR", checkStepperR(1050.f, 710.f), dt);
             }
             else if (currentMenuState == MenuState::Tutorials) {
                 sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
@@ -1499,7 +1548,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         }
     }
     else if (currentState == AppState::Painting) {
-
         leftToolbar.update(dt, focusMode);
 
         bool isLayerOpen = layerPanel.isHovered() || layerPanel.isPanelPinned() || layerPanel.getCurrentX() < 1919.f;
@@ -1515,8 +1563,21 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         colorPalettePanel.update(dt, focusMode, canvas);
         bottomTimeline.update(dt, focusMode);
         audioPanel.update(dt);
+        g_aiPanel.update(dt);
 
         audioPanel.updatePlayback(timeline.getCurrentFrame(), timeline.getFps(), timeline.isPlaying());
+
+        if (AIManager::getInstance().hasAsyncFinished()) {
+            sf::Image originalImage;
+            AIResult asyncRes = AIManager::getInstance().getAsyncResult(originalImage);
+            if (asyncRes.success) {
+                g_aiReviewModal.open(originalImage, asyncRes.resultImage);
+                showMessage("AI Generation Complete!", sf::Color::Green);
+            }
+            else {
+                showMessage("AI Process Error: " + asyncRes.errorMessage, sf::Color::Red);
+            }
+        }
 
         float availLeft = std::max(0.0f, static_cast<float>(leftToolbar.getPanelRightEdge()));
         float edgeL = static_cast<float>(layerPanel.getCurrentX());
@@ -1615,10 +1676,9 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             canvas.drawShadows(window, logicalSunPos, bounds, cats, canvasStates);
         }
 
-        sf::RenderStates defaultStates;
         aiHelper.draw(window);
 
-        leftToolbar.draw(window, SettingsManager::loadSettings().isConfigured(), canvas.getActiveTool() == ToolType::Select);
+        leftToolbar.draw(window, AIManager::getInstance().isAIEnabled(), canvas.getActiveTool() == ToolType::Select);
 
         layerPanel.draw(window, canvas, timeline.getCurrentFrame());
         colorPalettePanel.draw(window);
@@ -1653,13 +1713,22 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         bottomTimeline.draw(window, timeline, canvas);
 
         audioPanel.draw(window);
+        g_aiPanel.draw(window);
+        g_aiReviewModal.draw(window);
 
         if (showingText) window.draw(uiText);
         if (isTypingPrompt) { window.draw(promptBox); window.draw(promptDisplay); }
 
         keybindPanel.draw(window);
         if (exportModal.getIsOpen()) exportModal.draw(window);
-
+        if (AIManager::getInstance().isProcessingAsync()) {
+            window.draw(loadingOverlay);
+            window.draw(loadingBox);
+            window.draw(loadingText);
+            window.draw(loadingSpinner);
+            window.draw(loadingCancelBtn);
+            window.draw(loadingCancelText);
+        }
         if (showUnsavedWarning) {
             window.draw(warnOverlay);
             window.draw(warnBox);
@@ -1672,6 +1741,4 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             window.draw(warnCancelText);
         }
     }
-
-    if (settingsModal.getIsOpen()) settingsModal.draw(window);
 }

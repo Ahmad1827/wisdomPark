@@ -1,8 +1,6 @@
 #pragma once
 #include <string>
 #include <vector>
-#include <memory>
-#include "AIProvider.h"
 
 class LocalPythonBridge {
 public:

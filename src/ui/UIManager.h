@@ -12,7 +12,6 @@
 #include "../core/ExportManager.h"
 #include "../ai/AIHelper.h"
 #include "Screens/ProjectBrowser.h"
-#include "Screens/AISettingsModal.h"
 #include "Screens/ExportModal.h"
 #include "Screens/NewProjectModal.h"
 #include "KeybindSettingsPanel.h"
@@ -68,7 +67,6 @@ private:
     sf::Font font;
 
     ProjectBrowser projectBrowser;
-    AISettingsModal settingsModal;
     KeybindSettingsPanel keybindPanel;
     ExportModal exportModal;
     NewProjectModal newProjectModal;

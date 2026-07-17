@@ -149,6 +149,7 @@
     <ClCompile Include="src\ai\AIHelper.cpp" />
     <ClCompile Include="src\ai\AIProvider.cpp" />
     <ClCompile Include="src\ai\LocalPythonBridge.cpp" />
+    <ClCompile Include="src\ai\AIManager.cpp" />
     <ClCompile Include="src\Application.cpp" />
     <ClCompile Include="src\core\Canvas.cpp" />
     <ClCompile Include="src\core\ProjectManager.cpp" />
@@ -165,7 +166,6 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\ui\LeftToolbar.cpp" />
     <ClCompile Include="src\ui\RightProperties.cpp" />
-    <ClCompile Include="src\ui\Screens\AISettingsModal.cpp" />
     <ClCompile Include="src\ui\Screens\ProjectBrowser.cpp" />
     <ClCompile Include="src\ui\Screens\ExportModal.cpp" />
     <ClCompile Include="src\ui\Screens\NewProjectModal.cpp" />
@@ -175,12 +175,15 @@
     <ClCompile Include="src\ui\LayerPanel.cpp" />
     <ClCompile Include="src\ui\RightPanelManager.cpp" />
     <ClCompile Include="src\ui\AudioPanel.cpp" />
+    <ClCompile Include="src\ui\AIPanel.cpp" />
+    <ClCompile Include="src\ui\AIReviewModal.cpp" />
     <ClCompile Include="src\ui\TopMenuBar.cpp" />
     <ClCompile Include="src\ui\UIManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\ai\AIHelper.h" />
     <ClInclude Include="src\ai\AIProvider.h" />
+    <ClInclude Include="src\ai\AIManager.h" />
     <ClInclude Include="src\ai\LocalPythonBridge.h" />
     <ClInclude Include="src\Application.h" />
     <ClInclude Include="src\core\AppState.h" />
@@ -192,6 +195,8 @@
     <ClInclude Include="src\core\ColorManager.h" />
     <ClInclude Include="src\core\NativeDialogs.h" />
     <ClInclude Include="src\ui\AudioPanel.h" />
+    <ClInclude Include="src\ui\AIPanel.h" />
+    <ClInclude Include="src\ui\AIReviewModal.h" />
     <ClInclude Include="src\ui\KeybindSettingsPanel.h" />
     <ClInclude Include="src\core\KeybindManager.h" />
     <ClInclude Include="src\core\SelectionManager.h" />
@@ -204,7 +209,6 @@
     <ClInclude Include="src\ui\LayerPanel.h" />
     <ClInclude Include="src\ui\LeftToolbar.h" />
     <ClInclude Include="src\ui\RightProperties.h" />
-    <ClInclude Include="src\ui\Screens\AISettingsModal.h" />
     <ClInclude Include="src\ui\Screens\ExportModal.h" />
     <ClInclude Include="src\ui\Screens\NewProjectModal.h" />
     <ClInclude Include="src\ui\Screens\ProjectBrowser.h" />
