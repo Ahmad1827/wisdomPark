@@ -1,17 +1,56 @@
 import argparse
 import os
 import sys
-import base64
 import json
-import http.client
+import urllib.request
+import urllib.error
+import textwrap
+import base64
 from PIL import Image, ImageDraw
+from PIL import ImageFont
+
+def render_error_to_image(width, height, title, error_msg, out_path):
+    # Pure black solid background
+    img = Image.new('RGBA', (width, height), (0, 0, 0, 255))
+    draw = ImageDraw.Draw(img)
+    
+    # Maximum neon red caution box
+    draw.rectangle([15, 15, width - 15, height - 15], outline=(255, 0, 0, 255), width=5)
+    
+    font_path = os.path.join("assets", "font.otf")
+    if os.path.exists(font_path):
+        try:
+            title_font = ImageFont.truetype(font_path, 48)
+            body_font = ImageFont.truetype(font_path, 28)
+        except:
+            title_font = ImageFont.load_default()
+            body_font = ImageFont.load_default()
+    else:
+        title_font = ImageFont.load_default()
+        body_font = ImageFont.load_default()
+
+    margin_x = 60
+    current_y = 80
+    
+    # Draw a pure white solid banner under the header to force contrast
+    draw.rectangle([margin_x - 10, current_y - 5, width - margin_x + 10, current_y + 60], fill=(255, 255, 255, 255))
+    # Draw title text in pure pitch black on top of the white banner
+    draw.text((margin_x, current_y), f" ERROR: {title.upper()} ", fill=(0, 0, 0, 255), font=title_font)
+    
+    current_y += 110
+    draw.line([margin_x, current_y, width - margin_x, current_y], fill=(255, 0, 0, 255), width=3)
+    current_y += 50
+    
+    # Split the lines out cleanly
+    wrapped_lines = textwrap.wrap(error_msg, width=75)
+    for line in wrapped_lines:
+        # Force the body font to maximum fluorescent white text
+        draw.text((margin_x, current_y), line, fill=(255, 255, 255, 255), font=body_font)
+        current_y += 45
+
+    img.save(out_path)
 
 def main():
-    # 1. FORCE THE DELAY IMMEDIATELY BEFORE ANYTHING ELSE RUNS
-    import time
-    print("Forcing 5 second delay for UI loading test...")
-    time.sleep(5)
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--provider", type=str, required=True)
     parser.add_argument("--key", type=str, required=True)
@@ -22,108 +61,105 @@ def main():
     input_path = "temp_ai_input.png"
     output_path = "temp_ai_output.png"
 
-    # 2. SAFE WRAP FILE REMOVAL SO IT CANNOT CRASH THE SCRIPT
     try:
         if os.path.exists(output_path):
             os.remove(output_path)
-    except Exception as e:
-        print(f"Warning: Could not clear old output file: {e}")
+    except:
+        pass
 
     try:
         sketch_img = Image.open(input_path)
         width, height = sketch_img.size
+    except:
+        width, height = 1024, 1024
 
-        # Shrink image to prevent network payload choke
-        max_preview_dim = 512
-        preview_img = sketch_img.copy()
-        preview_img.thumbnail((max_preview_dim, max_preview_dim))
-        temp_thumb_path = "temp_ai_thumb.jpg"
-        preview_img.convert("RGB").save(temp_thumb_path, "JPEG", quality=80)
-
-        with open(temp_thumb_path, "rb") as f:
-            image_b64 = base64.b64encode(f.read()).decode("utf-8")
-        if os.path.exists(temp_thumb_path):
-            os.remove(temp_thumb_path)
-
-        # ROUTING MECHANISM FOR MULTIPLE PROVIDERS
-        if "openai" in provider:
-            conn = http.client.HTTPSConnection("api.openai.com", timeout=30)
-            headers = {"Content-Type": "application/json", "Authorization": f"Bearer {args.key}"}
-            url = "/v1/chat/completions"
-            payload = {
-                "model": "gpt-4o-mini",
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": f"Convert this sketch to vector coordinate lines matching prompt: {args.prompt}. Return ONLY a JSON list like: {{'lines': [[[x1,y1],[x2,y2]]]}}"},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
-                    ]
-                }],
-                "response_format": {"type": "json_object"}
-            }
-        elif "ollama" in provider:
-            # Local offline fallback generation route
-            conn = http.client.HTTPConnection("localhost", 11434, timeout=30)
+    try:
+        if provider == "openai":
+            url = "https://api.openai.com/v1/images/generations"
+            headers = {"Authorization": f"Bearer {args.key}", "Content-Type": "application/json"}
+            payload = {"prompt": args.prompt, "model": "dall-e-3", "n": 1, "size": "1024x1024"}
+            
+        elif provider == "gemini":
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:generateImages?key={args.key}"
             headers = {"Content-Type": "application/json"}
-            url = "/api/chat"
             payload = {
-                "model": "llava",
-                "messages": [{
-                    "role": "user",
-                    "content": f"Transform this image according to: {args.prompt}. Output coordinate JSON: {{'lines': []}}",
-                    "images": [image_b64]
-                }],
-                "stream": False
+                "prompt": args.prompt,
+                "numberOfImages": 1,
+                "aspectRatio": "1:1",
+                "outputMimeType": "image/jpeg"
             }
+            
+        elif provider == "claude" or provider == "anthropic":
+            raise ValueError("Anthropic Claude models currently only support text and vision analysis. They do not have a public image generation endpoint.")
+            
+        elif provider == "ollama":
+            raise ValueError("Ollama runs local LLMs for text. It does not generate images natively. You need a Stable Diffusion API or ComfyUI bridge for local images.")
+            
+        elif provider == "openrouter":
+            raise ValueError("OpenRouter primarily routes text. To use OpenRouter for images, you must configure a specific image model payload (e.g., google/imagen-3) in the settings.")
+            
         else:
-            # Default to Gemini REST routing layout
-            conn = http.client.HTTPSConnection("generativelanguage.googleapis.com", timeout=30)
-            headers = {"Content-Type": "application/json"}
-            url = f"/v1beta/models/gemini-2.5-flash:generateContent?key={args.key}"
-            payload = {
-                "contents": [{"parts": [
-                    {"inlineData": {"mimeType": "image/jpeg", "data": image_b64}},
-                    {"text": f"Transform this sketch to coordinate lines matching prompt: {args.prompt}. Return ONLY JSON structure: {{ 'lines': [ [ [x1,y1], [x2,y2] ] ] }}"}
-                ]}],
-                "generationConfig": {"responseMimeType": "application/json"}
-            }
+            url = f"https://api.{provider}.com/v1/images/generations"
+            headers = {"Authorization": f"Bearer {args.key}", "Content-Type": "application/json"}
+            payload = {"prompt": args.prompt, "n": 1}
 
-        print(f"Sending generation request package to {provider}...")
-        conn.request("POST", url, body=json.dumps(payload), headers=headers)
-        response = conn.getresponse()
-        data = response.read().decode("utf-8")
-        conn.close()
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        
+        try:
+            with urllib.request.urlopen(req) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode("utf-8")
+            try:
+                err_json = json.loads(error_body)
+                if "error" in err_json and "message" in err_json["error"]:
+                    raise ValueError(err_json["error"]["message"])
+                else:
+                    raise ValueError(error_body)
+            except:
+                raise ValueError(f"HTTP Error {e.code}: {e.reason} - {error_body}")
 
-        # Parse text out and build vector canvas lines
-        res_json = json.loads(data)
-        text_out = ""
-        if "openai" in provider:
-            text_out = res_json["choices"][0]["message"]["content"]
-        elif "ollama" in provider:
-            text_out = res_json["message"]["content"]
+        if provider == "gemini":
+            if "generatedImages" in res_data and len(res_data["generatedImages"]) > 0:
+                b64_img = res_data["generatedImages"][0].get("image", {}).get("imageBytes")
+                if not b64_img:
+                    raise ValueError("Gemini API connected successfully, but no base64 image data was found in the payload.")
+                
+                with open(output_path, "wb") as out_file:
+                    out_file.write(base64.b64decode(b64_img))
+            else:
+                raise ValueError("Invalid or empty response structure from Gemini API.")
+
         else:
-            text_out = res_json["candidates"][0]["content"]["parts"][0]["text"]
+            if "data" in res_data and len(res_data["data"]) > 0:
+                image_url = res_data["data"][0].get("url")
+                if not image_url:
+                    raise ValueError("API returned success, but no image URL was found in the data payload.")
+                
+                img_req = urllib.request.Request(image_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(img_req) as img_resp, open(output_path, 'wb') as out_file:
+                    out_file.write(img_resp.read())
+            else:
+                raise ValueError("Invalid response structure from API.")
 
-        line_data = json.loads(text_out)
-        output_image = Image.new('RGBA', (width, height), (255, 255, 255, 255))
-        draw = ImageDraw.Draw(output_image)
-        for line in line_data.get("lines", []):
-            if len(line) < 2: continue
-            flat_points = [coord for pt in line for coord in pt]
-            draw.line(flat_points, fill=(15, 15, 20, 255), width=2)
-        output_image.save(output_path)
-        print("Success: temp_ai_output.png dropped successfully.")
+        final_img = Image.open(output_path).convert("RGBA").resize((width, height))
+        final_img.save(output_path)
+        print(f"Success: Image generated via {provider}.")
 
     except Exception as e:
-        print(f"Generation channel failed: {str(e)}")
-        # FIX: Explicitly qualify PIL.Image to avoid local variable scoping panics
-        import PIL.ImageOps
-        import PIL.Image
-        
-        sketch = PIL.Image.open(input_path)
-        inverted = PIL.ImageOps.invert(sketch.convert('RGB'))
-        inverted.save(output_path)
-        print("Success: Local fallback frame dropped.")
+        print(f"Generation failed: {str(e)}, falling back to open gateway for testing...")
+        try:
+            import urllib.parse
+            safe_prompt = urllib.parse.quote(f"{args.prompt}, clean pixel art style")
+            test_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width={width}&height={height}&nologo=true"
+            
+            req = urllib.request.Request(test_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req) as resp, open(output_path, 'wb') as out_file:
+                out_file.write(resp.read())
+            print("Success: Test image downloaded successfully.")
+        except Exception as fallback_err:
+            print(f"Absolute failure: {fallback_err}")
+            render_error_to_image(width, height, "TEST ERROR", str(e), output_path)
 
 if __name__ == "__main__":
     main()

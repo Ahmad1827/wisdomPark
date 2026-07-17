@@ -21,6 +21,7 @@
 #include "ColorPalettePanel.h"
 #include "RightProperties.h"
 #include "AudioPanel.h"
+#include <SFML/Network.hpp>
 
 enum class MenuState {
     Main,
@@ -49,6 +50,7 @@ struct LightRay {
 
 class UIManager {
 private:
+    sf::UdpSocket handTrackerSocket;
     bool isTypingPrompt;
     bool showingText;
     float textAlpha;

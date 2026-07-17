@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <random>
 #include <fstream>
+#include <sstream>
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -46,6 +47,9 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     AIManager::getInstance().init();
     g_aiPanel.init();
     g_aiReviewModal.init();
+
+    handTrackerSocket.bind(5005);
+    handTrackerSocket.setBlocking(false);
 
     uiText.setFont(font);
     uiText.setCharacterSize(30);
@@ -1459,6 +1463,31 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 }
 
 void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
+    char buffer[1024];
+    std::size_t received;
+    sf::IpAddress sender;
+    unsigned short port;
+
+    if (handTrackerSocket.receive(buffer, sizeof(buffer), received, sender, port) == sf::Socket::Done) {
+        buffer[received] = '\0';
+        std::string dataString(buffer);
+        std::stringstream ss(dataString);
+        std::string item;
+
+        float normalizedX = 0.0f;
+        float normalizedY = 0.0f;
+        int isPinching = 0;
+
+        if (std::getline(ss, item, ',')) normalizedX = std::stof(item);
+        if (std::getline(ss, item, ',')) normalizedY = std::stof(item);
+        if (std::getline(ss, item, ',')) isPinching = std::stoi(item);
+
+        int screenX = static_cast<int>(normalizedX * 1920.0f);
+        int screenY = static_cast<int>(normalizedY * 1080.0f);
+
+        sf::Mouse::setPosition(sf::Vector2i(screenX, screenY), window);
+    }
+    
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
 
     if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);
