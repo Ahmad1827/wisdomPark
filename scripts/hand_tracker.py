@@ -14,6 +14,7 @@ prev_x, prev_y = 0, 0
 smoothing_factor = 6.0
 left_click_active = 0
 right_click_active = 0
+zoom_active = 0
 
 while True:
     success, img = cap.read()
@@ -29,6 +30,7 @@ while True:
         
         index_x, index_y = lmList[8][0], lmList[8][1]
         middle_x, middle_y = lmList[12][0], lmList[12][1]
+        pinky_x, pinky_y = lmList[20][0], lmList[20][1]
         thumb_x, thumb_y = lmList[4][0], lmList[4][1]
         
         h, w, c = img.shape
@@ -44,18 +46,24 @@ while True:
         
         left_dist, _, img = detector.findDistance((index_x, index_y), (thumb_x, thumb_y), img)
         right_dist, _, img = detector.findDistance((middle_x, middle_y), (thumb_x, thumb_y), img)
+        zoom_dist, _, img = detector.findDistance((pinky_x, pinky_y), (thumb_x, thumb_y), img)
         
-        if left_dist < 30:
+        if left_dist < 35:
             left_click_active = 1
-        elif left_dist > 50:
+        elif left_dist > 55:
             left_click_active = 0
 
-        if right_dist < 30:
+        if right_dist < 35:
             right_click_active = 1
-        elif right_dist > 50:
+        elif right_dist > 55:
             right_click_active = 0
+
+        if zoom_dist < 40:
+            zoom_active = 1
+        elif zoom_dist > 60:
+            zoom_active = 0
         
-        payload = f"{smooth_x:.4f},{smooth_y:.4f},{left_click_active},{right_click_active}"
+        payload = f"{smooth_x:.4f},{smooth_y:.4f},{left_click_active},{right_click_active},{zoom_active}"
         sock.sendto(payload.encode('utf-8'), server_address)
 
     cv2.imshow("Wisdom Park Hand Tracker", img)

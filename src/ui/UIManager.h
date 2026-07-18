@@ -22,6 +22,7 @@
 #include "RightProperties.h"
 #include "AudioPanel.h"
 #include <SFML/Network.hpp>
+#include <chrono>
 
 enum class MenuState {
     Main,
@@ -50,6 +51,15 @@ struct LightRay {
 
 class UIManager {
 private:
+    int lastLeftState = 0;
+    int lastRightState = 0;
+    int lastZoomState = 0;
+    std::chrono::steady_clock::time_point lastLeftDown;
+    std::chrono::steady_clock::time_point lastRightDown;
+    int doubleClickThreshold = 250;
+    bool isScrolling = false;
+    float dragOriginY = 0.0f;
+    float zoomOriginY = 0.0f;
     sf::UdpSocket handTrackerSocket;
     bool isTypingPrompt;
     bool showingText;

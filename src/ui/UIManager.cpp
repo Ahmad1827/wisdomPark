@@ -1471,7 +1471,10 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     static int lastLeftState = 0;
     static int lastRightState = 0;
 
-    if (handTrackerSocket.receive(buffer, sizeof(buffer), received, sender, port) == sf::Socket::Done) {
+    static int lastZoomState = 0;
+    static float zoomOriginY = 0.0f;
+
+    if (handTrackerSocket.receive(buffer, sizeof(buffer) - 1, received, sender, port) == sf::Socket::Done) {
         buffer[received] = '\0';
         std::string dataString(buffer);
         std::stringstream ss(dataString);
@@ -1481,11 +1484,18 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         float normalizedY = 0.0f;
         int isLeftPinching = 0;
         int isRightPinching = 0;
+        int isZoomPinching = 0;
 
-        if (std::getline(ss, item, ',')) normalizedX = std::stof(item);
-        if (std::getline(ss, item, ',')) normalizedY = std::stof(item);
-        if (std::getline(ss, item, ',')) isLeftPinching = std::stoi(item);
-        if (std::getline(ss, item, ',')) isRightPinching = std::stoi(item);
+        try {
+            if (std::getline(ss, item, ',')) normalizedX = std::stof(item);
+            if (std::getline(ss, item, ',')) normalizedY = std::stof(item);
+            if (std::getline(ss, item, ',')) isLeftPinching = std::stoi(item);
+            if (std::getline(ss, item, ',')) isRightPinching = std::stoi(item);
+            if (std::getline(ss, item, ',')) isZoomPinching = std::stoi(item);
+        }
+        catch (...) {
+            return;
+        }
 
         int screenX = static_cast<int>(normalizedX * 1920.0f);
         int screenY = static_cast<int>(normalizedY * 1080.0f);
@@ -1506,8 +1516,23 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
         }
 
+        if (isZoomPinching == 1) {
+            if (lastZoomState == 0) {
+                zoomOriginY = normalizedY;
+            }
+            float deltaY = normalizedY - zoomOriginY;
+            if (std::abs(deltaY) > 0.015f) {
+                int scrollAmt = (deltaY < 0.0f) ? 120 : -120;
+                keybd_event(VK_CONTROL, 0, 0, 0);
+                mouse_event(MOUSEEVENTF_WHEEL, 0, 0, scrollAmt, 0);
+                keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+                zoomOriginY = normalizedY;
+            }
+        }
+
         lastLeftState = isLeftPinching;
         lastRightState = isRightPinching;
+        lastZoomState = isZoomPinching;
     }
     
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
