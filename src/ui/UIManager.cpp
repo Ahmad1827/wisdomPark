@@ -11,6 +11,7 @@
 #include <random>
 #include <fstream>
 #include <sstream>
+#include <windows.h>
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -1467,6 +1468,8 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     std::size_t received;
     sf::IpAddress sender;
     unsigned short port;
+    static int lastLeftState = 0;
+    static int lastRightState = 0;
 
     if (handTrackerSocket.receive(buffer, sizeof(buffer), received, sender, port) == sf::Socket::Done) {
         buffer[received] = '\0';
@@ -1476,16 +1479,35 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
         float normalizedX = 0.0f;
         float normalizedY = 0.0f;
-        int isPinching = 0;
+        int isLeftPinching = 0;
+        int isRightPinching = 0;
 
         if (std::getline(ss, item, ',')) normalizedX = std::stof(item);
         if (std::getline(ss, item, ',')) normalizedY = std::stof(item);
-        if (std::getline(ss, item, ',')) isPinching = std::stoi(item);
+        if (std::getline(ss, item, ',')) isLeftPinching = std::stoi(item);
+        if (std::getline(ss, item, ',')) isRightPinching = std::stoi(item);
 
         int screenX = static_cast<int>(normalizedX * 1920.0f);
         int screenY = static_cast<int>(normalizedY * 1080.0f);
 
         sf::Mouse::setPosition(sf::Vector2i(screenX, screenY), window);
+
+        if (isLeftPinching == 1 && lastLeftState == 0) {
+            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+        }
+        else if (isLeftPinching == 0 && lastLeftState == 1) {
+            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+        }
+
+        if (isRightPinching == 1 && lastRightState == 0) {
+            mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
+        }
+        else if (isRightPinching == 0 && lastRightState == 1) {
+            mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+        }
+
+        lastLeftState = isLeftPinching;
+        lastRightState = isRightPinching;
     }
     
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
