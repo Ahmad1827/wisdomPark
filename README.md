@@ -1,52 +1,97 @@
-﻿# Wisdom Park
+﻿# Wisdom Park Studio
 
-Wisdom Park is a custom 2D animation and pixel-art engine built for creating and managing multi-layered animation projects.
+**Wisdom Park** is a high-performance, custom-built 2D animation and pixel art studio written in C++ and powered by SFML. Designed for professional workflows, it bridges the gap between traditional frame-by-frame animation, retro pixel-perfect art, and modern AI-assisted generation.
 
-## Overview
+---
 
-Designed with a focus on systems architecture and efficient asset control, Wisdom Park provides a tailored environment for digital artists and animators. It bypasses generic UI constraints by offering a dedicated workspace for frame-by-frame drawing, custom color management, and robust file serialization.
+## Core Features
 
-## Key Features
+### Canvas & Drawing Engine
+* **Dynamic Canvas Resolutions:** Create projects ranging from 16x16 pixel art sprites to 4K HD illustrations, with accurate memory allocation to ensure optimal performance.
+* **Dual Rendering Modes:**
+  * *Normal Mode:* Smooth, anti-aliased brush strokes.
+  * *Pixel Art Mode:* Hard-edged rendering with zero blurring, 1:1 grid snapping, and visual tile-wrapping support for seamless textures.
+* **Pixel Perfect Algorithm:** Real-time stroke cleanup algorithm that removes L-shaped corner pixels for flawless retro line art.
+* **Advanced Selection (Lasso):** Draw custom selection bounds, drag, flip horizontally/vertically, duplicate, crop, and perform free-transform (scaling) on selected pixel data.
+* **Flood Fill:** Queue-based contiguous or global color replacement with adjustable tolerance.
 
-* **Core Animation & Canvas Engine**
-  * Frame-by-frame timeline controls with variable FPS playback.
-  * Multi-layer compositing supporting visibility, locking, opacity scaling, and custom blend modes (Multiply, Additive, Screen).
-  * Layer persistence for static backgrounds across animation frames.
-  * Adjustable onion skinning (previous/next frame rendering).
+### Animation & Timeline
+* **Frame-by-Frame Timeline:** Add, duplicate, delete, and rearrange frames with real-time playback and adjustable FPS.
+* **Advanced Onion Skinning:** View previous and next frames simultaneously. Fully configurable frame counts and opacity fading.
+* **Audio Sync:** Built-in audio panel to scan and playback audio files perfectly synced to your animation timeline.
 
-* **Advanced Color Palette System**
-  * Live HSV color picker with RGB and HEX input synchronization.
-  * Automatic mathematical color harmony generation (Complementary, Analogous, Triadic, Monochromatic).
-  * Persistent custom swatches and recent color history caching.
-  * Native eyedropper tool mapped directly to canvas pixel data.
+### Layer Management
+* **Infinite Layers:** Add, duplicate, delete, and merge (Down / Visible) layers.
+* **Layer Properties:** Visibility toggles, edit-locking, opacity control, and Blend Modes (Normal, Multiply, Additive, Screen, Overlay).
+* **Persistent Layers:** Lock a layer (e.g., a static background) so it remains persistent across all animation frames without needing to copy memory.
+* **Image Importing:** Dynamically import PNG/JPG reference images directly into the active layer with automatic bounding-box scaling.
 
-* **Project Management (.wpk)**
-  * Custom directory-based `.wpk` (Wisdom Park) project file structure.
-  * Automatically serializes layer metadata, frame properties, and thumbnails to disk.
-  * Integrated Win32 API hooks for native Windows Save, Open, and Folder Selection dialogs.
+### AI & Generative Tools
+* **Async AI Generation:** Highlight a selection, enter a prompt via the integrated terminal or AI Panel, and asynchronously generate new art or modify existing pixels.
+* **Context-Aware Themes:** Generate assets based on specific architectural parameters (Structure, Clutter, Custom, Wave Function Collapse).
+* **Review Modal:** Preview AI-generated results in a pop-up modal before committing or rejecting the changes to your canvas.
 
-* **Export Pipeline**
-  * **Single Frame:** Export the current active frame as a flattened PNG.
-  * **Image Sequence:** Dump all timeline frames into a designated directory as sequential PNGs.
-  * **Sprite Sheets:** Generate a unified sprite sheet with customizable column wrapping.
-  * **Auto-Crop:** Alpha-channel scanning to automatically crop empty transparent space around sprites during export.
+### ✋ Hardware Input Integration
+* **Hand Tracking Camera Controls:** Built-in UDP socket listener that receives real-time coordinate data from an external Python/OpenCV hand-tracking script.
+* **Gesture Actions:** Control the mouse, left/right click via finger pinches, and zoom the canvas using a two-finger vertical/horizontal pinch-and-drag.
 
-## Tech Stack
+### Project Management (.wpk)
+* **Custom File Format:** Saves projects as `.wpk` directories containing JSON metadata, serialized timeline/layer data, and individual layer PNGs.
+* **Project Browser:** Visual start menu with thumbnails, resolution stats, last-modified dates, and safe deletion.
+* **Exporting:** Flatten frames and export them as standard PNG files or full sprite sheets.
 
-* **Language:** C++
-* **Graphics Framework:** SFML (Simple and Fast Multimedia Library)
-* **OS Integration:** Win32 API (`windows.h`, `commdlg.h`, `shlobj.h`)
-* **Standard Library:** `<filesystem>`, `<fstream>`, `<chrono>`
+---
 
-## Architecture 
+## Tech Stack & Dependencies
 
-The engine is modularized into dedicated core managers:
-* `Canvas.cpp` / `Timeline.cpp`: Manages the underlying 2D grid, render textures, layer arrays, and frame transitions.
-* `ProjectManager.cpp`: Handles the serialization and deserialization of the `.wpk` project states to the local disk.
-* `ExportManager.cpp`: Responsible for flattening frame stacks, calculating bounding boxes for auto-cropping, and building sprite sheets.
-* `ColorManager.cpp`: Handles mathematical conversions between HSV/RGB color spaces to drive UI components and harmony logic.
-* `UIManager.cpp`: The central hub bridging SFML window events to the various tool panels (LayerPanel, ColorPalettePanel, RightProperties, BottomTimeline).
+* **Language:** C++17
+* **Graphics & Windowing:** SFML 2.6.x (Simple and Fast Multimedia Library)
+* **Data Parsing:** `nlohmann::json` (for project metadata and API handling)
+* **Networking:** SFML Network (UDP Sockets for hand tracker communication)
 
-## Author
+---
 
-Ahmad Arnaoute
+## Building and Compiling (Linux/WSL2)
+
+Ensure you have a C++17 compatible compiler, CMake, and SFML installed on your system.
+
+```bash
+sudo apt update
+sudo apt install build-essential cmake libsfml-dev
+
+cd wisdom_park
+
+mkdir build
+cd build
+cmake ..
+make
+
+./WisdomPark
+```
+
+*(Note for Windows users: You can build using Visual Studio/MSVC or MinGW, provided SFML 2.6.x is correctly linked in your CMake configuration).*
+
+---
+
+## Default Keybinds
+
+Wisdom Park features a fully customizable Keybind Manager. You can rebind these at any time via the Settings or by pressing `ESC` in the workspace.
+
+* **B** - Brush Tool
+* **P** - Pencil Tool
+* **E** - Eraser Tool
+* **F** - Fill Tool
+* **M** - Select (Lasso) Tool
+* **Space** - Play/Pause Animation
+* **Left/Right Arrows** - Previous/Next Frame
+* **Ctrl + Z** - Undo
+* **Ctrl + Y** - Redo
+* **Middle/Right Mouse Button** - Pan Canvas
+* **Scroll Wheel** - Zoom Canvas
+
+---
+
+## Credits
+**Lead Developer & Architect:** Ahmad Arnaoute (AtodDev)  
+**Education:** Universitatea Politehnica Bucuresti, Facultatea de Automatica si Calculatoare 
+**License:** Commercial
