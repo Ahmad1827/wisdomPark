@@ -214,6 +214,7 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
                 canvas.setLayerProperties(f, l, lName, lVis, lLock, lOpac, static_cast<BlendMode>(lBlend));
                 if (lPers && f > 0) canvas.toggleLayerPersistence(f, l);
                 for (int t = 0; t < lTag; ++t) canvas.cycleLayerColorTag(f, l);
+                canvas.getFrame(f)->layers[l].texture->setSmooth(false);
             }
 
             if (!canvas.getFrameReadOnly(f)->layers[l].persistent || f == 0) {

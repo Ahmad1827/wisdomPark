@@ -149,44 +149,32 @@ void Canvas::initCustom(int width, int height) {
     }
     canvasSprite.setTexture(canvasTexture);
 
-    float cScale = 700.f / canvasSprite.getLocalBounds().height;
-    canvasSprite.setScale(cScale, cScale);
+    float maxViewportHeight = 700.f;
+    float maxViewportWidth = 1400.f;
+
+    float aspectCanvas = static_cast<float>(canvasLogicalSize.x) / static_cast<float>(canvasLogicalSize.y);
+
+    float targetHeight = maxViewportHeight;
+    float targetWidth = targetHeight * aspectCanvas;
+
+    if (targetWidth > maxViewportWidth) {
+        targetWidth = maxViewportWidth;
+        targetHeight = targetWidth / aspectCanvas;
+    }
+
+    canvasSprite.setScale(targetWidth / canvasSprite.getLocalBounds().width, targetHeight / canvasSprite.getLocalBounds().height);
     canvasSprite.setOrigin(canvasSprite.getLocalBounds().width / 2.f, canvasSprite.getLocalBounds().height / 2.f);
-    canvasSprite.setPosition(1920.f / 2.f, deskSprite.getPosition().y - (379.f / 2.f) - (700.f / 2.f) + 120.f);
+    canvasSprite.setPosition(1920.f / 2.f, deskSprite.getPosition().y - (379.f / 2.f) - (targetHeight / 2.f) + 120.f);
 
     sf::FloatRect cBounds = canvasSprite.getGlobalBounds();
-    float frameOffsetX = cBounds.width * 0.055f;
-    float frameOffsetYTop = cBounds.height * 0.055f;
-    float frameOffsetYBot = cBounds.height * 0.055f;
-
-    drawArea = sf::FloatRect(
-        cBounds.left + frameOffsetX,
-        cBounds.top + frameOffsetYTop,
-        cBounds.width - (frameOffsetX * 2.0f),
-        cBounds.height - frameOffsetYTop - frameOffsetYBot
-    );
-
-    for (auto& frame : frames) {
-        for (auto& layer : frame.layers) {
-            if (layer.texture->getSize().x != canvasLogicalSize.x || layer.texture->getSize().y != canvasLogicalSize.y) {
-                layer.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
-                layer.texture->clear(sf::Color::Transparent);
-            }
-            if (isPixelMode) {
-                layer.texture->setSmooth(false);
-            }
-            else {
-                layer.texture->setSmooth(true);
-            }
-        }
-    }
+    drawArea = cBounds;
 
     frames.clear();
     frames.emplace_back();
     for (auto& l : frames[0].layers) {
         l.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
         l.texture->clear(sf::Color::Transparent);
-        if (isPixelMode) l.texture->setSmooth(false);
+        l.texture->setSmooth(false);
     }
 
     undoHistory.clear();
@@ -1049,7 +1037,6 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
 
 void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states) {
     window.draw(deskSprite, states);
-    window.draw(canvasSprite, states);
 
     sf::Vector2f texScale(drawArea.width / static_cast<float>(canvasLogicalSize.x), drawArea.height / static_cast<float>(canvasLogicalSize.y));
     sf::Transform innerTransform = states.transform;
@@ -1057,6 +1044,76 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     innerTransform.scale(texScale);
     sf::RenderStates innerStates = states;
     innerStates.transform = innerTransform;
+
+    const float frameThickness = 16.f;
+    sf::Color frameColor(45, 35, 25);
+    sf::Color shadowColor(20, 15, 10);
+
+    sf::Texture tTopLeft, tTop, tTopRight, tLeft, tRight, tBotLeft, tBottom, tBotRight;
+    bool hasPngs = tTopLeft.loadFromFile("assets/textures/frame/top_left.png") &&
+        tTop.loadFromFile("assets/textures/frame/top.png") &&
+        tTopRight.loadFromFile("assets/textures/frame/top_right.png") &&
+        tLeft.loadFromFile("assets/textures/frame/left.png") &&
+        tRight.loadFromFile("assets/textures/frame/right.png") &&
+        tBotLeft.loadFromFile("assets/textures/frame/bottom_left.png") &&
+        tBottom.loadFromFile("assets/textures/frame/bottom.png") &&
+        tBotRight.loadFromFile("assets/textures/frame/bottom_right.png");
+
+    if (hasPngs) {
+        tTop.setRepeated(true);
+        tLeft.setRepeated(true);
+        tRight.setRepeated(true);
+        tBottom.setRepeated(true);
+
+        float tw = static_cast<float>(tLeft.getSize().x);
+        float th = static_cast<float>(tTop.getSize().y);
+
+        sf::Sprite sTopLeft(tTopLeft), sTop(tTop), sTopRight(tTopRight), sLeft(tLeft), sRight(tRight), sBotLeft(tBotLeft), sBottom(tBottom), sBotRight(tBotRight);
+
+        sTopLeft.setPosition(-tw, -th);
+        sTop.setPosition(0.f, -th); sTop.setTextureRect(sf::IntRect(0, 0, canvasLogicalSize.x, th));
+        sTopRight.setPosition(canvasLogicalSize.x, -th);
+
+        sLeft.setPosition(-tw, 0.f); sLeft.setTextureRect(sf::IntRect(0, 0, tw, canvasLogicalSize.y));
+        sRight.setPosition(canvasLogicalSize.x, 0.f); sRight.setTextureRect(sf::IntRect(0, 0, tw, canvasLogicalSize.y));
+
+        sBotLeft.setPosition(-tw, canvasLogicalSize.y);
+        sBottom.setPosition(0.f, canvasLogicalSize.y); sBottom.setTextureRect(sf::IntRect(0, 0, canvasLogicalSize.x, th));
+        sBotRight.setPosition(canvasLogicalSize.x, canvasLogicalSize.y);
+
+        window.draw(sTopLeft, innerStates); window.draw(sTop, innerStates); window.draw(sTopRight, innerStates);
+        window.draw(sLeft, innerStates); window.draw(sRight, innerStates);
+        window.draw(sBotLeft, innerStates); window.draw(sBottom, innerStates); window.draw(sBotRight, innerStates);
+    }
+    else {
+        sf::RectangleShape topEdge({ static_cast<float>(canvasLogicalSize.x) + 2 * frameThickness, frameThickness });
+        topEdge.setPosition(-frameThickness, -frameThickness);
+        topEdge.setFillColor(frameColor);
+
+        sf::RectangleShape bottomEdge({ static_cast<float>(canvasLogicalSize.x) + 2 * frameThickness, frameThickness });
+        bottomEdge.setPosition(-frameThickness, static_cast<float>(canvasLogicalSize.y));
+        bottomEdge.setFillColor(frameColor);
+
+        sf::RectangleShape leftEdge({ frameThickness, static_cast<float>(canvasLogicalSize.y) });
+        leftEdge.setPosition(-frameThickness, 0.f);
+        leftEdge.setFillColor(frameColor);
+
+        sf::RectangleShape rightEdge({ frameThickness, static_cast<float>(canvasLogicalSize.y) });
+        rightEdge.setPosition(static_cast<float>(canvasLogicalSize.x), 0.f);
+        rightEdge.setFillColor(frameColor);
+
+        sf::RectangleShape innerShadow({ static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y) });
+        innerShadow.setPosition(0.f, 0.f);
+        innerShadow.setFillColor(sf::Color::Transparent);
+        innerShadow.setOutlineThickness(1.5f);
+        innerShadow.setOutlineColor(shadowColor);
+
+        window.draw(topEdge, innerStates);
+        window.draw(bottomEdge, innerStates);
+        window.draw(leftEdge, innerStates);
+        window.draw(rightEdge, innerStates);
+        window.draw(innerShadow, innerStates);
+    }
 
     sf::RectangleShape bg(sf::Vector2f(canvasLogicalSize.x, canvasLogicalSize.y));
     bg.setFillColor(sf::Color::White);
