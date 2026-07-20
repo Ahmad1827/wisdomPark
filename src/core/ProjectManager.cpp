@@ -174,6 +174,7 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
     if (std::getline(file, line)) outIsPixelMode = (line == "1");
     file.close();
 
+    canvas.setPixelMode(outIsPixelMode);
     canvas.initCustom(width, height);
     canvas.clearAllFrames();
     canvas.setOnionSkin(onionOn, onionP, onionN);
@@ -236,7 +237,9 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
 bool ProjectManager::deleteProject(const std::string& name) {
     std::string projPath = projectsDir + "/" + name + ".wpk";
     if (fs::exists(projPath)) {
-        return fs::remove_all(projPath) > 0;
+        std::error_code ec;
+        fs::remove_all(projPath, ec);
+        return !ec;
     }
     return false;
 }

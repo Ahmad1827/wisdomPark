@@ -4,35 +4,28 @@
 #include <string>
 #include "../../core/ProjectManager.h"
 
-struct ProjectCard {
-    sf::RectangleShape background;
-    sf::Sprite thumbnail;
-    sf::Text nameText;
-    sf::Text detailText;
-    ProjectMetadata meta;
-    bool isHovered = false;
-};
-
 class ProjectBrowser {
 private:
-    sf::RectangleShape overlay;
-    sf::RectangleShape modalBg;
+    ProjectManager* pm;
     sf::Font font;
-    sf::Text title;
+    std::vector<ProjectMetadata> projects;
 
-    sf::RectangleShape newProjectBtn;
-    sf::Text newProjectText;
+    bool showDeleteConfirm;
+    std::string projectToDelete;
+    sf::RectangleShape confirmBg;
+    sf::Text confirmTitle;
+    sf::Text confirmWarning;
+    sf::RectangleShape confirmBtn;
+    sf::Text confirmText;
+    sf::RectangleShape cancelBtn;
+    sf::Text cancelText;
 
-    std::vector<ProjectCard> cards;
-    ProjectManager* projManager;
+    void refreshList();
 
 public:
     ProjectBrowser();
-    void init(ProjectManager* pm);
-    void refresh();
-
+    void init(ProjectManager* projectManager);
     void updateHover(sf::Vector2f mousePos);
     std::string handleClick(sf::Vector2f mousePos, ProjectMetadata& outMeta);
-
     void draw(sf::RenderWindow& window);
 };

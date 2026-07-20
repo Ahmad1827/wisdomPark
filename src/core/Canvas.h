@@ -111,16 +111,7 @@ private:
     std::vector<sf::Vector2i> getBresenhamPoints(int x0, int y0, int x1, int y1);
     void drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx);
 
-    // Converts a desired on-screen handle-grab radius (in screen pixels) into
-    // the equivalent radius in canvas-logical-pixel space, accounting for
-    // both the canvas-to-world scale and the current view zoom - without
-    // this, an 8px hit radius would feel tiny on a huge canvas at low zoom
-    // and enormous on a small pixel-art canvas at high zoom.
     float computeHandleHitRadius() const;
-
-    // True if the currently active layer for the given frame is an imported
-    // image layer - used to relax canvas-bounds clamping during move/resize
-    // so images can be dragged out for reference.
     bool isImageResourceActive(int currentFrame) const;
 
 public:
@@ -221,9 +212,6 @@ public:
 
     void importImageToActiveLayer(const std::string& filepath, int currentFrame);
 
-    // Free-transform (resize by dragging corners). Only meaningful while a
-    // selection is floating; call enterTransformMode() after making/loading
-    // a selection to show the corner handles.
     void enterTransformMode(int currentFrame);
     void applyTransform(int currentFrame);
     void cancelTransform();

@@ -5,12 +5,16 @@
 #include <stack>
 #include <queue>
 
+const int DEFAULT_NORMAL_W = 1280;
+const int DEFAULT_NORMAL_H = 720;
+const int DEFAULT_PIXEL_W = 64;
+const int DEFAULT_PIXEL_H = 64;
+
 Layer::Layer(std::string n) : name(n), visible(true), locked(false), opacity(1.0f), blendMode(BlendMode::Normal), persistent(false), colorTag(0), isImageResource(false) {
     texture = std::make_shared<sf::RenderTexture>();
-    texture->create(1920, 1080);
+    texture->create(1, 1);
     texture->clear(sf::Color::Transparent);
     texture->setSmooth(false);
-    texture->display();
 }
 
 Layer::Layer(const Layer& other) : name(other.name), visible(other.visible), locked(other.locked), opacity(other.opacity), blendMode(other.blendMode), persistent(other.persistent), colorTag(other.colorTag), isImageResource(other.isImageResource) {
@@ -19,13 +23,16 @@ Layer::Layer(const Layer& other) : name(other.name), visible(other.visible), loc
     }
     else {
         texture = std::make_shared<sf::RenderTexture>();
-        texture->create(1920, 1080);
-        texture->clear(sf::Color::Transparent);
-        texture->setSmooth(false);
         if (other.texture) {
+            texture->create(other.texture->getSize().x, other.texture->getSize().y);
+            texture->clear(sf::Color::Transparent);
+            texture->setSmooth(other.texture->isSmooth());
             sf::Sprite spr(other.texture->getTexture());
             texture->draw(spr, sf::RenderStates(sf::BlendNone));
             texture->display();
+        }
+        else {
+            texture->create(1, 1);
         }
     }
     if (other.staticTexture) {
@@ -49,14 +56,17 @@ Layer& Layer::operator=(const Layer& other) {
         else {
             if (!texture) {
                 texture = std::make_shared<sf::RenderTexture>();
-                texture->create(1920, 1080);
-                texture->setSmooth(false);
             }
-            texture->clear(sf::Color::Transparent);
             if (other.texture) {
+                texture->create(other.texture->getSize().x, other.texture->getSize().y);
+                texture->setSmooth(other.texture->isSmooth());
+                texture->clear(sf::Color::Transparent);
                 sf::Sprite spr(other.texture->getTexture());
                 texture->draw(spr, sf::RenderStates(sf::BlendNone));
                 texture->display();
+            }
+            else {
+                texture->create(1, 1);
             }
         }
         if (other.staticTexture) {
@@ -115,13 +125,16 @@ Canvas::Canvas() : isDrawing(false), startPos(0.f, 0.f), lastPos(0.f, 0.f), last
 activeTool(ToolType::Brush), primaryColor(sf::Color::Black), secondaryColor(sf::Color::White),
 fillTolerance(0.f), fillContiguous(true),
 activeLayer(1), onionSkinEnabled(true), onionSkinPrevOpacity(89.25f), onionSkinNextOpacity(89.25f), onionSkinPrevCount(1), onionSkinNextCount(1),
-viewScale(1.0f), targetScale(1.0f), canvasLogicalSize(1920, 1080), zoomMultiplier(1.0f), panOffset(0.f, 0.f),
+viewScale(1.0f), targetScale(1.0f), canvasLogicalSize(DEFAULT_NORMAL_W, DEFAULT_NORMAL_H), zoomMultiplier(1.0f), panOffset(0.f, 0.f),
 isPixelMode(false), pixelBrushSize(1), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false), pixelPerfectEnabled(false), isDirty(false),
 transformMode(TransformState::None), pendingTransform(false), currentRotation(0.0f), currentScale(1.0f, 1.0f) {
     brushEngine.initDefaultPresets();
 }
 
-void Canvas::init() { initCustom(1920, 1080); }
+void Canvas::init() {
+    if (isPixelMode) initCustom(DEFAULT_PIXEL_W, DEFAULT_PIXEL_H);
+    else initCustom(DEFAULT_NORMAL_W, DEFAULT_NORMAL_H);
+}
 
 void Canvas::initCustom(int width, int height) {
     canvasLogicalSize = sf::Vector2u(static_cast<unsigned int>(width), static_cast<unsigned int>(height));
@@ -170,9 +183,12 @@ void Canvas::initCustom(int width, int height) {
 
     frames.clear();
     frames.emplace_back();
-    if (isPixelMode) {
-        for (auto& l : frames[0].layers) l.texture->setSmooth(false);
+    for (auto& l : frames[0].layers) {
+        l.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+        l.texture->clear(sf::Color::Transparent);
+        if (isPixelMode) l.texture->setSmooth(false);
     }
+
     undoHistory.clear();
     redoHistory.clear();
     selection.clearSelection();
@@ -273,7 +289,10 @@ void Canvas::duplicateFrame(int index) {
 }
 
 void Canvas::deleteFrame(int index) { if (frames.size() > 1 && index >= 0 && index < static_cast<int>(frames.size())) { saveUndoState(); frames.erase(frames.begin() + index); } }
-void Canvas::clearAllFrames() { saveUndoState(); frames.clear(); frames.emplace_back(); }
+void Canvas::clearAllFrames() {
+    saveUndoState(); frames.clear(); frames.emplace_back();
+    for (auto& l : frames[0].layers) { l.texture->create(canvasLogicalSize.x, canvasLogicalSize.y); l.texture->clear(sf::Color::Transparent); }
+}
 
 void Canvas::addLayer(int frameIndex, const std::string& name) {
     if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size())) {
@@ -493,9 +512,6 @@ void Canvas::commitSelection(int currentFrame) {
         saveUndoState();
         selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
     }
-    // Leaving a selection also exits any pending free-transform, so the
-    // resize handles never linger after the selection they belonged to
-    // has been baked into the layer or discarded.
     transformMode = TransformState::None;
     pendingTransform = false;
 }
@@ -802,11 +818,6 @@ void Canvas::drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int 
 }
 
 float Canvas::computeHandleHitRadius() const {
-    // Desired grab radius on screen, converted into canvas-logical-pixel
-    // space. drawArea.width/canvasLogicalSize.x is the world-space size of
-    // one logical pixel; viewScale is the current zoom. Dividing the desired
-    // screen radius by (that world size * viewScale) yields a radius that
-    // feels the same on screen regardless of canvas resolution or zoom.
     float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
     float denom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
     return 14.0f / denom;
@@ -840,8 +851,6 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             sf::Color drawCol = primaryColor;
 
             if (activeTool == ToolType::Select) {
-                // Corner handles take priority over move/lasso hit-testing
-                // while a free-transform is pending.
                 if (pendingTransform && selection.getState() == SelectionState::Floating) {
                     if (selection.startResize(localPos, computeHandleHitRadius())) {
                         return;
@@ -946,10 +955,6 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     if (activeTool == ToolType::Fill) return;
 
     if (activeTool == ToolType::Select) {
-        // "Reference" behavior: an imported image layer is allowed to be
-        // moved/resized outside the canvas bounds (e.g. to keep it visible
-        // off to the side as a drawing reference). Regular painted
-        // selections always stay clamped to the canvas.
         bool allowOutside = isImageResourceActive(currentFrame);
 
         if (selection.isResizing()) {
@@ -1053,6 +1058,10 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     sf::RenderStates innerStates = states;
     innerStates.transform = innerTransform;
 
+    sf::RectangleShape bg(sf::Vector2f(canvasLogicalSize.x, canvasLogicalSize.y));
+    bg.setFillColor(sf::Color::White);
+    window.draw(bg, innerStates);
+
     if (isPixelMode) {
         float tileSize = 4.0f;
         int cols = static_cast<int>(std::ceil(canvasLogicalSize.x / tileSize));
@@ -1139,8 +1148,6 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         }
     }
 
-    // Handles should read at a consistent screen size regardless of zoom or
-    // canvas resolution - same reasoning as computeHandleHitRadius().
     float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
     float handleDenom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
     selection.setHandleVisualSize(10.0f / handleDenom);
@@ -1277,14 +1284,10 @@ void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFr
 
         sf::Vector2u texSize = tex->getSize();
 
-        // Scale the image down (never up) to fit within the canvas, preserving
-        // aspect ratio. Without this, importing a normal-resolution image into
-        // a small pixel-art canvas leaves it wildly oversized and spilling far
-        // past the canvas bounds.
         float maxW = static_cast<float>(canvasLogicalSize.x) * 0.9f;
         float maxH = static_cast<float>(canvasLogicalSize.y) * 0.9f;
         float scale = std::min(maxW / static_cast<float>(texSize.x), maxH / static_cast<float>(texSize.y));
-        scale = std::min(scale, 1.0f); // never upscale a smaller image
+        scale = std::min(scale, 1.0f);
 
         sf::Sprite importSprite(*tex);
         importSprite.setScale(scale, scale);
@@ -1315,9 +1318,6 @@ void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFr
 void Canvas::enterTransformMode(int currentFrame) {
     if (!selection.isActive() || frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
-    // Resize operates on the floating sprite representation - if the
-    // selection is still just a drawn lasso ("Selected"), extract it first
-    // (same step other selection actions like flip/duplicate already do).
     if (selection.getState() == SelectionState::Selected) {
         saveUndoState();
         selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);

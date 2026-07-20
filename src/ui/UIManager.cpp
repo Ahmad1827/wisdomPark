@@ -761,23 +761,20 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
     if (newProjectModal.getIsOpen()) {
         std::string res = newProjectModal.handleEvent(event, window);
-        if (res == "create_normal") {
-            activeProjectName = "New_Project_" + std::to_string(static_cast<long long>(std::time(nullptr)));
+        if (res == "create") {
+            activeProjectName = newProjectModal.getProjectName();
+            if (activeProjectName.empty()) {
+                activeProjectName = (newProjectModal.getIsPixelMode() ? "Pixel_Art_" : "New_Project_") + std::to_string(static_cast<long long>(std::time(nullptr)));
+            }
             activeProjectPath = "";
-            canvas.setPixelMode(false);
-            pm.createNewProject(activeProjectName, 1920, 1080, 12, false, canvas);
+            canvas.setPixelMode(newProjectModal.getIsPixelMode());
+            pm.createNewProject(activeProjectName, newProjectModal.getWidth(), newProjectModal.getHeight(), 12, newProjectModal.getIsPixelMode(), canvas);
             canvas.clearIsDirty();
             currentState = AppState::Painting;
-            showMessage("Created Normal Project", sf::Color::Green);
+            showMessage("Created Project: " + std::to_string(newProjectModal.getWidth()) + "x" + std::to_string(newProjectModal.getHeight()), sf::Color::Green);
         }
-        else if (res == "create_pixel") {
-            activeProjectName = "Pixel_Art_" + std::to_string(static_cast<long long>(std::time(nullptr)));
-            activeProjectPath = "";
-            canvas.setPixelMode(true);
-            pm.createNewProject(activeProjectName, 64, 64, 12, true, canvas);
-            canvas.clearIsDirty();
-            currentState = AppState::Painting;
-            showMessage("Created Pixel Art Project", sf::Color::Green);
+        else if (res == "cancel") {
+            newProjectModal.close();
         }
         return;
     }
@@ -836,30 +833,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                     by += 80.f;
                 }
-
-                float ry = 280.f;
-                for (int i = 0; i < 4; ++i) {
-                    sf::FloatRect rBounds(900.f, ry, 800.f, 100.f);
-                    if (rBounds.contains(mousePos)) {
-                        std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
-                        if (!file.empty()) {
-                            activeProjectPath = file;
-                            activeProjectName = std::filesystem::path(file).stem().string();
-                            int loadedFps = 12;
-                            bool isPix = false;
-                            if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
-                                timeline.setFrame(0);
-                                canvas.setPixelMode(isPix);
-                                canvas.clearIsDirty();
-                                currentState = AppState::Painting;
-                                showMessage("Loaded Native Project", sf::Color::Green);
-                            }
-                            else showMessage("Failed to load native project.", sf::Color::Red);
-                        }
-                        return;
-                    }
-                    ry += 125.f;
-                }
             }
             else if (currentMenuState == MenuState::Projects) {
                 sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
@@ -878,7 +851,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     bool isPix = false;
                     if (pm.loadProject(meta.path, canvas, loadedFps, isPix)) {
                         timeline.setFrame(0);
-                        canvas.setPixelMode(isPix);
                         canvas.clearIsDirty();
                         currentState = AppState::Painting;
                         showMessage("Loaded Project: " + meta.name, sf::Color::Green);
@@ -894,7 +866,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         bool isPix = false;
                         if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
                             timeline.setFrame(0);
-                            canvas.setPixelMode(isPix);
                             canvas.clearIsDirty();
                             currentState = AppState::Painting;
                             showMessage("Loaded Native Project", sf::Color::Green);
@@ -1534,7 +1505,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         lastRightState = isRightPinching;
         lastZoomState = isZoomPinching;
     }
-    
+
     sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
 
     if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);

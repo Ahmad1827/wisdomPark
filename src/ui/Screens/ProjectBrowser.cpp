@@ -1,125 +1,178 @@
 #include "ProjectBrowser.h"
 
-ProjectBrowser::ProjectBrowser() : projManager(nullptr) {}
+ProjectBrowser::ProjectBrowser() : pm(nullptr), showDeleteConfirm(false) {}
 
-void ProjectBrowser::init(ProjectManager* pm) {
-    projManager = pm;
+void ProjectBrowser::init(ProjectManager* projectManager) {
+    pm = projectManager;
     font.loadFromFile("assets/font.otf");
 
-    overlay.setSize(sf::Vector2f(1920.f, 1080.f));
-    overlay.setFillColor(sf::Color(0, 0, 0, 200));
+    confirmBg.setSize(sf::Vector2f(500.f, 250.f));
+    confirmBg.setOrigin(250.f, 125.f);
+    confirmBg.setPosition(1920.f / 2.f, 1080.f / 2.f);
+    confirmBg.setFillColor(sf::Color(30, 30, 35, 255));
+    confirmBg.setOutlineThickness(2.f);
+    confirmBg.setOutlineColor(sf::Color(150, 50, 50));
 
-    modalBg.setSize(sf::Vector2f(1200.f, 800.f));
-    modalBg.setPosition(1920.f / 2.f - 600.f, 1080.f / 2.f - 400.f);
-    modalBg.setFillColor(sf::Color(20, 20, 24, 255));
-    modalBg.setOutlineThickness(1.f);
-    modalBg.setOutlineColor(sf::Color(100, 100, 110, 100));
+    confirmTitle.setFont(font);
+    confirmTitle.setCharacterSize(22);
+    confirmTitle.setFillColor(sf::Color::White);
 
-    title.setFont(font);
-    title.setString("Recent Projects");
-    title.setCharacterSize(36);
-    title.setFillColor(sf::Color::White);
-    title.setPosition(modalBg.getPosition().x + 50.f, modalBg.getPosition().y + 40.f);
+    confirmWarning.setFont(font);
+    confirmWarning.setString("This action cannot be undone.");
+    confirmWarning.setCharacterSize(16);
+    confirmWarning.setFillColor(sf::Color(200, 100, 100));
 
-    newProjectBtn.setSize(sf::Vector2f(200.f, 50.f));
-    newProjectBtn.setPosition(modalBg.getPosition().x + 950.f, modalBg.getPosition().y + 40.f);
-    newProjectBtn.setFillColor(sf::Color(0, 122, 204));
+    confirmBtn.setSize(sf::Vector2f(120.f, 40.f));
+    confirmBtn.setFillColor(sf::Color(180, 50, 50));
+    confirmText.setFont(font);
+    confirmText.setString("Delete");
+    confirmText.setCharacterSize(18);
+    confirmText.setFillColor(sf::Color::White);
 
-    newProjectText.setFont(font);
-    newProjectText.setString("+ New Project");
-    newProjectText.setCharacterSize(20);
-    newProjectText.setFillColor(sf::Color::White);
-    newProjectText.setPosition(newProjectBtn.getPosition().x + 25.f, newProjectBtn.getPosition().y + 12.f);
+    cancelBtn.setSize(sf::Vector2f(120.f, 40.f));
+    cancelBtn.setFillColor(sf::Color(80, 80, 90));
+    cancelText.setFont(font);
+    cancelText.setString("Cancel");
+    cancelText.setCharacterSize(18);
+    cancelText.setFillColor(sf::Color::White);
 
-    refresh();
+    refreshList();
 }
 
-void ProjectBrowser::refresh() {
-    cards.clear();
-    if (!projManager) return;
-
-    auto metas = projManager->getRecentProjects();
-
-    float startX = modalBg.getPosition().x + 50.f;
-    float startY = modalBg.getPosition().y + 120.f;
-    float x = startX;
-    float y = startY;
-
-    for (const auto& meta : metas) {
-        ProjectCard card;
-        card.meta = meta;
-        card.background.setSize(sf::Vector2f(250.f, 220.f));
-        card.background.setPosition(x, y);
-        card.background.setFillColor(sf::Color(30, 30, 35));
-
-        if (meta.thumbnail.getSize().x > 0) {
-            card.thumbnail.setTexture(meta.thumbnail);
-            float scale = 230.f / std::max(static_cast<float>(meta.thumbnail.getSize().x), static_cast<float>(meta.thumbnail.getSize().y));
-            card.thumbnail.setScale(scale, scale);
-            card.thumbnail.setPosition(x + 10.f, y + 10.f);
-        }
-
-        card.nameText.setFont(font);
-        card.nameText.setString(meta.name);
-        card.nameText.setCharacterSize(18);
-        card.nameText.setFillColor(sf::Color::White);
-        card.nameText.setPosition(x + 10.f, y + 170.f);
-
-        card.detailText.setFont(font);
-        card.detailText.setString(meta.lastModified + " | " + std::to_string(meta.frameCount) + " frames");
-        card.detailText.setCharacterSize(12);
-        card.detailText.setFillColor(sf::Color(150, 150, 150));
-        card.detailText.setPosition(x + 10.f, y + 195.f);
-
-        cards.push_back(card);
-
-        x += 280.f;
-        if (x > modalBg.getPosition().x + 1000.f) {
-            x = startX;
-            y += 250.f;
-        }
-    }
+void ProjectBrowser::refreshList() {
+    if (pm) projects = pm->getRecentProjects();
 }
 
 void ProjectBrowser::updateHover(sf::Vector2f mousePos) {
-    for (auto& card : cards) {
-        card.isHovered = card.background.getGlobalBounds().contains(mousePos);
-        card.background.setFillColor(card.isHovered ? sf::Color(45, 45, 55) : sf::Color(30, 30, 35));
-    }
-
-    if (newProjectBtn.getGlobalBounds().contains(mousePos)) {
-        newProjectBtn.setFillColor(sf::Color(0, 142, 224));
-    }
-    else {
-        newProjectBtn.setFillColor(sf::Color(0, 122, 204));
-    }
-}
-
-void ProjectBrowser::draw(sf::RenderWindow& window) {
-    window.draw(overlay);
-    window.draw(modalBg);
-    window.draw(title);
-    window.draw(newProjectBtn);
-    window.draw(newProjectText);
-
-    for (const auto& card : cards) {
-        window.draw(card.background);
-        if (card.meta.thumbnail.getSize().x > 0) window.draw(card.thumbnail);
-        window.draw(card.nameText);
-        window.draw(card.detailText);
+    if (showDeleteConfirm) {
+        confirmBtn.setFillColor(confirmBtn.getGlobalBounds().contains(mousePos) ? sf::Color(220, 70, 70) : sf::Color(180, 50, 50));
+        cancelBtn.setFillColor(cancelBtn.getGlobalBounds().contains(mousePos) ? sf::Color(100, 100, 110) : sf::Color(80, 80, 90));
     }
 }
 
 std::string ProjectBrowser::handleClick(sf::Vector2f mousePos, ProjectMetadata& outMeta) {
-    if (newProjectBtn.getGlobalBounds().contains(mousePos)) {
-        return "new_project";
+    if (showDeleteConfirm) {
+        if (cancelBtn.getGlobalBounds().contains(mousePos)) {
+            showDeleteConfirm = false;
+        }
+        else if (confirmBtn.getGlobalBounds().contains(mousePos)) {
+            if (pm) {
+                pm->deleteProject(projectToDelete);
+                refreshList();
+            }
+            showDeleteConfirm = false;
+        }
+        return "";
     }
 
-    for (const auto& card : cards) {
-        if (card.background.getGlobalBounds().contains(mousePos)) {
-            outMeta = card.meta;
+    float rx = 900.f;
+    float ry = 280.f;
+
+    for (size_t i = 0; i < projects.size(); ++i) {
+        sf::FloatRect cardBounds(rx, ry, 800.f, 100.f);
+        sf::FloatRect delBounds(rx + 730.f, ry + 30.f, 40.f, 40.f);
+
+        if (delBounds.contains(mousePos)) {
+            projectToDelete = projects[i].name;
+            showDeleteConfirm = true;
+
+            confirmTitle.setString("Delete project '" + projectToDelete + "'?");
+            sf::FloatRect tb = confirmTitle.getLocalBounds();
+            confirmTitle.setOrigin(tb.width / 2.f, tb.height / 2.f);
+            confirmTitle.setPosition(1920.f / 2.f, 1080.f / 2.f - 60.f);
+
+            sf::FloatRect wb = confirmWarning.getLocalBounds();
+            confirmWarning.setOrigin(wb.width / 2.f, wb.height / 2.f);
+            confirmWarning.setPosition(1920.f / 2.f, 1080.f / 2.f - 20.f);
+
+            confirmBtn.setPosition(1920.f / 2.f + 20.f, 1080.f / 2.f + 40.f);
+            confirmText.setPosition(confirmBtn.getPosition().x + 30.f, confirmBtn.getPosition().y + 8.f);
+
+            cancelBtn.setPosition(1920.f / 2.f - 140.f, 1080.f / 2.f + 40.f);
+            cancelText.setPosition(cancelBtn.getPosition().x + 30.f, cancelBtn.getPosition().y + 8.f);
+            return "";
+        }
+
+        if (cardBounds.contains(mousePos)) {
+            outMeta = projects[i];
             return "load_project";
         }
+        ry += 125.f;
     }
+
+    if (sf::FloatRect(rx, 200.f, 150.f, 40.f).contains(mousePos)) {
+        return "open_native";
+    }
+
     return "";
+}
+
+void ProjectBrowser::draw(sf::RenderWindow& window) {
+    sf::Text recTitle("Recent Projects", font, 24);
+    recTitle.setFillColor(sf::Color::White);
+    recTitle.setPosition(900.f, 200.f);
+    window.draw(recTitle);
+
+    sf::RectangleShape line(sf::Vector2f(800.f, 2.f));
+    line.setPosition(900.f, 240.f);
+    line.setFillColor(sf::Color(255, 255, 255, 40));
+    window.draw(line);
+
+    float rx = 900.f;
+    float ry = 280.f;
+
+    for (const auto& meta : projects) {
+        sf::RectangleShape card(sf::Vector2f(800.f, 100.f));
+        card.setPosition(rx, ry);
+        card.setFillColor(sf::Color(25, 28, 35, 190));
+        card.setOutlineThickness(1.5f);
+        card.setOutlineColor(sf::Color(100, 100, 120));
+        window.draw(card);
+
+        sf::RectangleShape thumb(sf::Vector2f(140.f, 80.f));
+        thumb.setPosition(rx + 10.f, ry + 10.f);
+        thumb.setFillColor(sf::Color(15, 15, 20));
+        if (meta.thumbnail.getSize().x > 0) {
+            thumb.setTexture(&meta.thumbnail);
+        }
+        window.draw(thumb);
+
+        sf::Text pName(meta.name, font, 24);
+        pName.setFillColor(sf::Color(255, 200, 100));
+        pName.setPosition(rx + 170.f, ry + 15.f);
+        window.draw(pName);
+
+        std::string typeStr = meta.isPixelMode ? "Pixel Art" : "Normal";
+        std::string details = typeStr + "  |  " + std::to_string(meta.width) + "x" + std::to_string(meta.height) + "  |  Modified: " + meta.lastModified;
+        sf::Text pDet(details, font, 14);
+        pDet.setFillColor(sf::Color(180, 180, 180));
+        pDet.setPosition(rx + 170.f, ry + 55.f);
+        window.draw(pDet);
+
+        sf::RectangleShape delBtn(sf::Vector2f(40.f, 40.f));
+        delBtn.setPosition(rx + 730.f, ry + 30.f);
+        delBtn.setFillColor(sf::Color(150, 40, 40));
+        window.draw(delBtn);
+
+        sf::Text xText("X", font, 20);
+        xText.setFillColor(sf::Color::White);
+        xText.setPosition(delBtn.getPosition().x + 13.f, delBtn.getPosition().y + 8.f);
+        window.draw(xText);
+
+        ry += 125.f;
+    }
+
+    if (showDeleteConfirm) {
+        sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
+        overlay.setFillColor(sf::Color(0, 0, 0, 180));
+        window.draw(overlay);
+
+        window.draw(confirmBg);
+        window.draw(confirmTitle);
+        window.draw(confirmWarning);
+        window.draw(confirmBtn);
+        window.draw(confirmText);
+        window.draw(cancelBtn);
+        window.draw(cancelText);
+    }
 }
