@@ -36,6 +36,36 @@ void ProjectBrowser::init(ProjectManager* projectManager) {
     cancelText.setCharacterSize(18);
     cancelText.setFillColor(sf::Color::White);
 
+    // "+ New Project" - sits to the right of the "Recent Projects" title,
+    // same row (y=200, matching the old invisible open-file hitbox height).
+    newProjectBtn.setSize(sf::Vector2f(180.f, 40.f));
+    newProjectBtn.setPosition(1520.f, 200.f);
+    newProjectBtn.setFillColor(sf::Color(50, 150, 220));
+
+    newProjectText.setFont(font);
+    newProjectText.setString("+ New Project");
+    newProjectText.setCharacterSize(16);
+    newProjectText.setFillColor(sf::Color::White);
+    sf::FloatRect npb = newProjectText.getLocalBounds();
+    newProjectText.setOrigin(npb.left + npb.width / 2.f, npb.top + npb.height / 2.f);
+    newProjectText.setPosition(newProjectBtn.getPosition().x + newProjectBtn.getSize().x / 2.f,
+        newProjectBtn.getPosition().y + newProjectBtn.getSize().y / 2.f);
+
+    // "Open File" - loads a .wpk from anywhere on disk via the native file
+    // dialog, next to the New Project button.
+    openFileBtn.setSize(sf::Vector2f(150.f, 40.f));
+    openFileBtn.setPosition(1350.f, 200.f);
+    openFileBtn.setFillColor(sf::Color(60, 60, 70));
+
+    openFileText.setFont(font);
+    openFileText.setString("Open File");
+    openFileText.setCharacterSize(16);
+    openFileText.setFillColor(sf::Color::White);
+    sf::FloatRect ofb = openFileText.getLocalBounds();
+    openFileText.setOrigin(ofb.left + ofb.width / 2.f, ofb.top + ofb.height / 2.f);
+    openFileText.setPosition(openFileBtn.getPosition().x + openFileBtn.getSize().x / 2.f,
+        openFileBtn.getPosition().y + openFileBtn.getSize().y / 2.f);
+
     refreshList();
 }
 
@@ -47,7 +77,11 @@ void ProjectBrowser::updateHover(sf::Vector2f mousePos) {
     if (showDeleteConfirm) {
         confirmBtn.setFillColor(confirmBtn.getGlobalBounds().contains(mousePos) ? sf::Color(220, 70, 70) : sf::Color(180, 50, 50));
         cancelBtn.setFillColor(cancelBtn.getGlobalBounds().contains(mousePos) ? sf::Color(100, 100, 110) : sf::Color(80, 80, 90));
+        return;
     }
+
+    newProjectBtn.setFillColor(newProjectBtn.getGlobalBounds().contains(mousePos) ? sf::Color(70, 170, 240) : sf::Color(50, 150, 220));
+    openFileBtn.setFillColor(openFileBtn.getGlobalBounds().contains(mousePos) ? sf::Color(80, 80, 90) : sf::Color(60, 60, 70));
 }
 
 std::string ProjectBrowser::handleClick(sf::Vector2f mousePos, ProjectMetadata& outMeta) {
@@ -63,6 +97,13 @@ std::string ProjectBrowser::handleClick(sf::Vector2f mousePos, ProjectMetadata& 
             showDeleteConfirm = false;
         }
         return "";
+    }
+
+    if (newProjectBtn.getGlobalBounds().contains(mousePos)) {
+        return "new_project";
+    }
+    if (openFileBtn.getGlobalBounds().contains(mousePos)) {
+        return "open_native";
     }
 
     float rx = 900.f;
@@ -100,10 +141,6 @@ std::string ProjectBrowser::handleClick(sf::Vector2f mousePos, ProjectMetadata& 
         ry += 125.f;
     }
 
-    if (sf::FloatRect(rx, 200.f, 150.f, 40.f).contains(mousePos)) {
-        return "open_native";
-    }
-
     return "";
 }
 
@@ -112,6 +149,11 @@ void ProjectBrowser::draw(sf::RenderWindow& window) {
     recTitle.setFillColor(sf::Color::White);
     recTitle.setPosition(900.f, 200.f);
     window.draw(recTitle);
+
+    window.draw(newProjectBtn);
+    window.draw(newProjectText);
+    window.draw(openFileBtn);
+    window.draw(openFileText);
 
     sf::RectangleShape line(sf::Vector2f(800.f, 2.f));
     line.setPosition(900.f, 240.f);
