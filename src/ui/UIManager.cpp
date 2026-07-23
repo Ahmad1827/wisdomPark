@@ -1009,13 +1009,25 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             m_debugUseSpriteStudio = !m_debugUseSpriteStudio;
 
             if (m_debugUseSpriteStudio) {
-                // Create and initialize Sprite Sheet Studio
                 m_activeTool = std::make_unique<SpriteSheetStudioTool>();
                 m_activeTool->Initialize();
-                m_activeTool->SetBounds(sf::FloatRect(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
+
+                // Calculate available workspace space inside Wisdom Park
+                float availLeft = std::max(0.0f, static_cast<float>(leftToolbar.getPanelRightEdge()));
+                float edgeL = static_cast<float>(layerPanel.getCurrentX());
+                float edgeC = static_cast<float>(colorPalettePanel.getCurrentX());
+                float edgeP = static_cast<float>(rightProperties.getCurrentX());
+                float availRight = std::min(1920.0f, std::min(edgeL, std::min(edgeC, edgeP)));
+
+                float availTop = 0.0f;
+                float availBottom = std::min(1080.0f, static_cast<float>(bottomTimeline.getPanelTopEdge()));
+                float availWidth = std::max(0.0f, availRight - availLeft);
+                float availHeight = std::max(0.0f, availBottom - availTop);
+
+                sf::FloatRect availableSpace(availLeft, availTop, availWidth, availHeight);
+                m_activeTool->SetBounds(availableSpace);
             }
             else {
-                // Destroy it and return to Native Canvas
                 m_activeTool.reset();
             }
 
@@ -1740,10 +1752,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             }
         }
 
-        // Stop rendering Wisdom Park UI elements when Sprite Sheet Studio is active
-        if (m_debugUseSpriteStudio) {
-            return;
-        }
 
         aiHelper.draw(window);
 
@@ -1810,4 +1818,11 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             window.draw(warnCancelText);
         }
     }
+}
+bool loadStudioFont(sf::Font& font) {
+    if (font.loadFromFile("Resources/font.ttf")) return true;
+    if (font.loadFromFile("../Resources/font.ttf")) return true;
+    if (font.loadFromFile("../../Resources/font.ttf")) return true;
+    if (font.loadFromFile("C:/Windows/Fonts/arial.ttf")) return true;
+    return false;
 }

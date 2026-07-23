@@ -5,10 +5,6 @@ void SpriteSheetStudioTool::Initialize() {
 }
 
 void SpriteSheetStudioTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
-    if (event.type == sf::Event::Resized) {
-        SetBounds(sf::FloatRect(0, 0, static_cast<float>(event.size.width), static_cast<float>(event.size.height)));
-    }
-
     m_panel.HandleEvent(event, window);
 }
 
@@ -18,6 +14,13 @@ void SpriteSheetStudioTool::Update(float deltaTime, const sf::RenderWindow& wind
 
 void SpriteSheetStudioTool::Render(sf::RenderWindow& window) {
     window.setView(window.getDefaultView());
+
+    // Fill background strictly within the designated bounds
+    sf::RectangleShape panelBg(sf::Vector2f(m_bounds.width, m_bounds.height));
+    panelBg.setPosition(m_bounds.left, m_bounds.top);
+    panelBg.setFillColor(sf::Color(18, 18, 22));
+    window.draw(panelBg);
+
     m_panel.Render(window);
 }
 
