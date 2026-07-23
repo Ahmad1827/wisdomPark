@@ -12,6 +12,7 @@
 #include <fstream>
 #include <sstream>
 #include <windows.h>
+#include "../tools/CanvasTool.h"
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -22,7 +23,7 @@ static sf::Text loadingText;
 static sf::CircleShape loadingSpinner;
 static sf::RectangleShape loadingCancelBtn;
 static sf::Text loadingCancelText;
-UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isPanning(false), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(false), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0) {}
+UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(false), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0) {}
 
 void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     projManager = pm;
@@ -1025,12 +1026,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (event.type == sf::Event::MouseButtonPressed) {
-            if (event.mouseButton.button == sf::Mouse::Middle || event.mouseButton.button == sf::Mouse::Right) {
-                isPanning = true;
-                lastPanMousePos = mousePos;
-                return;
-            }
-
             if (event.mouseButton.button == sf::Mouse::Left) {
                 if (topBackBtn.getGlobalBounds().contains(mousePos)) {
                     if (canvas.getIsDirty()) showUnsavedWarning = true;
@@ -1395,40 +1390,24 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                 }
 
-                if (!isPanning) {
-                    canvas.handleMousePressed(logicalMousePos, event.mouseButton.button == sf::Mouse::Right, timeline.getCurrentFrame());
-                }
+                canvas.handleMousePressed(logicalMousePos, event.mouseButton.button == sf::Mouse::Right, timeline.getCurrentFrame());
             }
 
-            if (event.type == sf::Event::MouseButtonReleased) {
-                if (isDraggingSizeSlider && event.mouseButton.button == sf::Mouse::Left) { isDraggingSizeSlider = false; return; }
-                if (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle) { isPanning = false; return; }
-
-                if (!isPanning) {
-                    canvas.handleMouseReleased(logicalMousePos, timeline.getCurrentFrame());
-                    if (canvas.getActiveTool() != ToolType::Select && canvas.getDrawArea().contains(logicalMousePos)) {
-                        sf::Image img = canvas.getActiveRenderTexture(timeline.getCurrentFrame())->getTexture().copyToImage();
-                        timeline.getFrameData(timeline.getCurrentFrame()).thumbnail = img;
-                    }
-                }
+            if (event.type == sf::Event::MouseMoved && isDraggingSizeSlider) {
+                float localY = mousePos.y - sizeSliderBg.getPosition().y;
+                float percent = 1.0f - std::clamp(localY / sizeSliderBg.getSize().y, 0.0f, 1.0f);
+                if (canvas.getPixelMode()) canvas.setPixelBrushSize(1 + static_cast<int>(percent * 31.0f));
+                else canvas.setBrushSize(1.0f + (percent * 99.0f));
+                return; // Do not forward to active tool while dragging UI slider
+            }
+            if (event.type == sf::Event::MouseButtonReleased && isDraggingSizeSlider && event.mouseButton.button == sf::Mouse::Left) {
+                isDraggingSizeSlider = false;
+                return; 
             }
 
-            if (event.type == sf::Event::MouseMoved) {
-                if (isDraggingSizeSlider) {
-                    float localY = mousePos.y - sizeSliderBg.getPosition().y;
-                    float percent = 1.0f - std::clamp(localY / sizeSliderBg.getSize().y, 0.0f, 1.0f);
-                    if (canvas.getPixelMode()) canvas.setPixelBrushSize(1 + static_cast<int>(percent * 31.0f));
-                    else canvas.setBrushSize(1.0f + (percent * 99.0f));
-                }
-
-                if (isPanning) {
-                    canvas.pan(mousePos - lastPanMousePos);
-                    lastPanMousePos = mousePos;
-                }
-
-                if (!isPanning && !isDraggingSizeSlider) {
-                    canvas.handleMouseMoved(logicalMousePos, mousePos, timeline.getCurrentFrame());
-                }
+            // Route all workspace events directly to the active embedded tool
+            if (m_activeTool) {
+                m_activeTool->HandleEvent(event, window);
             }
         }
     }
@@ -1638,7 +1617,14 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         float availHeight = std::max(0.0f, availBottom - availTop);
 
         sf::FloatRect availableSpace(availLeft, availTop, availWidth, availHeight);
-        canvas.updateTransform(dt, availableSpace);
+
+        if (!m_activeTool) {
+            m_activeTool = std::make_unique<CanvasTool>(canvas, timeline, isLightingMode);
+            m_activeTool->Initialize();
+        }
+
+        m_activeTool->SetBounds(availableSpace);
+        m_activeTool->Update(dt, window);
 
         leftToolbar.updateHover(mousePos);
         bottomTimeline.updateHover(mousePos);
@@ -1710,17 +1696,13 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         rightProperties.syncState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), timeline.getFps());
 
-        sf::RenderStates canvasStates;
-        canvasStates.transform = canvas.getTransform();
+        if (m_activeTool) {
+            m_activeTool->Render(window);
 
-        canvas.draw(window, timeline.getCurrentFrame(), timeline.isPlaying(), canvasStates);
-
-        if (isLightingMode) {
-            sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
-            sf::Vector2f logicalSunPos = canvas.getInverseTransform().transformPoint(mousePos);
-            std::vector<sf::FloatRect> bounds; std::vector<std::string> cats;
-            for (const auto& item : aiHelper.getHistory()) { bounds.push_back(item.bounds); cats.push_back(item.category); }
-            canvas.drawShadows(window, logicalSunPos, bounds, cats, canvasStates);
+            // Static cast or helper check for CanvasTool shadows
+            if (auto* canvasTool = dynamic_cast<CanvasTool*>(m_activeTool.get())) {
+                canvasTool->RenderShadows(window, aiHelper);
+            }
         }
 
         aiHelper.draw(window);

@@ -23,6 +23,8 @@
 #include "AudioPanel.h"
 #include <SFML/Network.hpp>
 #include <chrono>
+#include "../core/ITool.h"
+#include <memory>
 
 enum class MenuState {
     Main,
@@ -98,8 +100,8 @@ private:
     sf::Text promptDisplay;
     std::string currentPrompt;
 
-    bool isPanning;
-    sf::Vector2f lastPanMousePos;
+  /*  bool isPanning;
+    sf::Vector2f lastPanMousePos;*/
 
     sf::RectangleShape toolBg;
     sf::RectangleShape sizeSliderBg;
@@ -161,7 +163,7 @@ private:
     void drawGlassPanel(sf::RenderWindow& window, sf::FloatRect bounds, float hoverScale = 1.0f);
 
     bool triggerSave(Canvas& canvas, Timeline& timeline);
-
+    std::unique_ptr<ITool> m_activeTool;
 public:
     UIManager();
     void init(ProjectManager* pm, Canvas* baseCanvas);
