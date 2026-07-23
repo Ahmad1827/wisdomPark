@@ -113,13 +113,13 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\sfml\SFML-2.6.2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\UI\Include;\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\Core\Include;C:\sfml\SFML-2.6.2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\sfml\SFML-2.6.2\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>sfml-graphics-d.lib;sfml-window-d.lib;sfml-system-d.lib;sfml-audio-d.lib;sfml-network-d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\build_win\UI\Debug;\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\build_win\Core\Debug;C:\sfml\SFML-2.6.2\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>sfml-graphics-d.lib;sfml-window-d.lib;sfml-system-d.lib;sfml-audio-d.lib;sfml-network-d.lib;SpriteSheetStudioUI.lib;StudioCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -163,6 +163,7 @@
     <ClCompile Include="src\core\ColorManager.cpp" />
     <ClCompile Include="src\core\FrameRenderer.cpp" />
     <ClCompile Include="src\tools\CanvasTool.cpp" />
+    <ClCompile Include="src\tools\SpriteSheetStudioTool.cpp" />
     <ClCompile Include="src\ui\KeybindSettingsPanel.cpp" />
     <ClCompile Include="src\core\Timeline.cpp" />
     <ClCompile Include="src\main.cpp" />
@@ -199,6 +200,7 @@
     <ClInclude Include="src\core\ITool.h" />
     <ClInclude Include="src\core\NativeDialogs.h" />
     <ClInclude Include="src\tools\CanvasTool.h" />
+    <ClInclude Include="src\tools\SpriteSheetStudioTool.h" />
     <ClInclude Include="src\ui\AudioPanel.h" />
     <ClInclude Include="src\ui\AIPanel.h" />
     <ClInclude Include="src\ui\AIReviewModal.h" />

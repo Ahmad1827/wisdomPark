@@ -13,6 +13,7 @@
 #include <sstream>
 #include <windows.h>
 #include "../tools/CanvasTool.h"
+#include "../tools/SpriteSheetStudioTool.h"
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -23,7 +24,7 @@ static sf::Text loadingText;
 static sf::CircleShape loadingSpinner;
 static sf::RectangleShape loadingCancelBtn;
 static sf::Text loadingCancelText;
-UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(false), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0) {}
+UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(false), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0), m_debugUseSpriteStudio(false) {}
 
 void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     projManager = pm;
@@ -692,7 +693,6 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
 }
 
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
-
     if (AIManager::getInstance().isProcessingAsync()) {
         auto killAiProcess = [&]() {
             AIManager::getInstance().abortTask();
@@ -1004,6 +1004,31 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
     }
     else if (currentState == AppState::Painting) {
+
+        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F8) {
+            m_debugUseSpriteStudio = !m_debugUseSpriteStudio;
+
+            if (m_debugUseSpriteStudio) {
+                // Create and initialize Sprite Sheet Studio
+                m_activeTool = std::make_unique<SpriteSheetStudioTool>();
+                m_activeTool->Initialize();
+                m_activeTool->SetBounds(sf::FloatRect(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
+            }
+            else {
+                // Destroy it and return to Native Canvas
+                m_activeTool.reset();
+            }
+
+            showMessage(m_debugUseSpriteStudio ? "Debug: Embedded Sprite Sheet Studio" : "Debug: Native Canvas Workspace", sf::Color::Yellow);
+            return;
+        }
+
+        if (m_debugUseSpriteStudio) {
+            if (m_activeTool) {
+                m_activeTool->HandleEvent(event, window);
+            }
+            return;
+        }
 
         if (g_aiPanel.getIsVisible()) {
             if (g_aiPanel.handleEvent(event, mousePos)) {
@@ -1398,14 +1423,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 float percent = 1.0f - std::clamp(localY / sizeSliderBg.getSize().y, 0.0f, 1.0f);
                 if (canvas.getPixelMode()) canvas.setPixelBrushSize(1 + static_cast<int>(percent * 31.0f));
                 else canvas.setBrushSize(1.0f + (percent * 99.0f));
-                return; // Do not forward to active tool while dragging UI slider
+                return;
             }
             if (event.type == sf::Event::MouseButtonReleased && isDraggingSizeSlider && event.mouseButton.button == sf::Mouse::Left) {
                 isDraggingSizeSlider = false;
-                return; 
+                return;
             }
 
-            // Route all workspace events directly to the active embedded tool
             if (m_activeTool) {
                 m_activeTool->HandleEvent(event, window);
             }
@@ -1414,6 +1438,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 }
 
 void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
+    if (m_debugUseSpriteStudio) {
+        if (m_activeTool) {
+            m_activeTool->Update(dt, window);
+        }
+        return; // Early return stops side panels from detecting mouse hover!
+    }
     char buffer[1024];
     std::size_t received;
     sf::IpAddress sender;
@@ -1619,7 +1649,12 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         sf::FloatRect availableSpace(availLeft, availTop, availWidth, availHeight);
 
         if (!m_activeTool) {
-            m_activeTool = std::make_unique<CanvasTool>(canvas, timeline, isLightingMode);
+            if (m_debugUseSpriteStudio) {
+                m_activeTool = std::make_unique<SpriteSheetStudioTool>();
+            }
+            else {
+                m_activeTool = std::make_unique<CanvasTool>(canvas, timeline, isLightingMode);
+            }
             m_activeTool->Initialize();
         }
 
@@ -1703,6 +1738,11 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             if (auto* canvasTool = dynamic_cast<CanvasTool*>(m_activeTool.get())) {
                 canvasTool->RenderShadows(window, aiHelper);
             }
+        }
+
+        // Stop rendering Wisdom Park UI elements when Sprite Sheet Studio is active
+        if (m_debugUseSpriteStudio) {
+            return;
         }
 
         aiHelper.draw(window);

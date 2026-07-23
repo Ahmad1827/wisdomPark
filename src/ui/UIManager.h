@@ -53,6 +53,8 @@ struct LightRay {
 
 class UIManager {
 private:
+    std::unique_ptr<ITool> m_activeTool;
+    bool m_debugUseSpriteStudio;
     int lastLeftState = 0;
     int lastRightState = 0;
     int lastZoomState = 0;
@@ -163,7 +165,6 @@ private:
     void drawGlassPanel(sf::RenderWindow& window, sf::FloatRect bounds, float hoverScale = 1.0f);
 
     bool triggerSave(Canvas& canvas, Timeline& timeline);
-    std::unique_ptr<ITool> m_activeTool;
 public:
     UIManager();
     void init(ProjectManager* pm, Canvas* baseCanvas);

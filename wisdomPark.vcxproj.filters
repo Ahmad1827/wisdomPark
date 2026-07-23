@@ -123,6 +123,9 @@
     <ClCompile Include="src\tools\CanvasTool.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\tools\SpriteSheetStudioTool.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\ai\AIHelper.h">
@@ -234,6 +237,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\tools\CanvasTool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\tools\SpriteSheetStudioTool.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
