@@ -5,27 +5,30 @@
 #include "core/Canvas.h"
 #include "core/Timeline.h"
 #include "core/ProjectManager.h"
-#include "ui/UIManager.h"
 #include "ai/AIHelper.h"
+#include "ui/UIManager.h"
 
 class Application {
-private:
-    sf::RenderWindow window;
-    AppState currentState;
-    AppSettings appSettings;
-
-    ProjectManager projectManager;
-    Canvas canvas;
-    Timeline timeline;
-    UIManager uiManager;
-    AIHelper aiHelper;
-    sf::Clock frameClock;
-
-    void processEvents();
-    void update(float dt);
-    void render();
-
 public:
     Application();
     void run();
+
+private:
+    void processEvents();
+    void update(float dt);
+    void render();
+    void applyVideoMode(bool fullscreen);
+
+    sf::RenderWindow window;
+    sf::Clock frameClock;
+    AppState currentState;
+    AppSettings appSettings;
+
+    Canvas canvas;
+    Timeline timeline;
+    ProjectManager projectManager;
+    AIHelper aiHelper;
+    UIManager uiManager;
+
+    bool currentFullscreenState;
 };

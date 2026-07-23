@@ -1212,8 +1212,9 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     selection.draw(window, innerStates);
 
+    // FIX: Map mouse pixels to windowed coords!
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
-    sf::Vector2f currentRawMousePos(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
+    sf::Vector2f currentRawMousePos = window.mapPixelToCoords(mousePosI);
 
     sf::Vector2f logicalPos = getInverseTransform().transformPoint(currentRawMousePos);
     bool currentlyHovering = drawArea.contains(logicalPos);

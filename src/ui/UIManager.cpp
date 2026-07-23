@@ -725,7 +725,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         return;
     }
 
-    sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
+    // FIX 1: Mouse Mapping Coordinates applied here
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
+    sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
     sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
 
     if (showUnsavedWarning) {
@@ -1012,20 +1014,15 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 m_activeTool = std::make_unique<SpriteSheetStudioTool>();
                 m_activeTool->Initialize();
 
-                // Calculate available workspace space inside Wisdom Park
-                float availLeft = std::max(0.0f, static_cast<float>(leftToolbar.getPanelRightEdge()));
-                float edgeL = static_cast<float>(layerPanel.getCurrentX());
-                float edgeC = static_cast<float>(colorPalettePanel.getCurrentX());
-                float edgeP = static_cast<float>(rightProperties.getCurrentX());
-                float availRight = std::min(1920.0f, std::min(edgeL, std::min(edgeC, edgeP)));
-
-                float availTop = 0.0f;
-                float availBottom = std::min(1080.0f, static_cast<float>(bottomTimeline.getPanelTopEdge()));
-                float availWidth = std::max(0.0f, availRight - availLeft);
-                float availHeight = std::max(0.0f, availBottom - availTop);
-
-                sf::FloatRect availableSpace(availLeft, availTop, availWidth, availHeight);
+                sf::FloatRect availableSpace(0.f, 0.f, 1920.f, 1080.f);
                 m_activeTool->SetBounds(availableSpace);
+
+                // Push a fake resize event to force the tool's right and bottom panels into place!
+                sf::Event resizeFix;
+                resizeFix.type = sf::Event::Resized;
+                resizeFix.size.width = 1920;
+                resizeFix.size.height = 1080;
+                m_activeTool->HandleEvent(resizeFix, window);
             }
             else {
                 m_activeTool.reset();
@@ -1527,7 +1524,9 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         lastZoomState = isZoomPinching;
     }
 
-    sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
+    // FIX 1: Mouse Mapping Coordinates applied here too!
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
+    sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
 
     if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);
     if (exportModal.getIsOpen()) exportModal.updateHover(mousePos);
@@ -1752,6 +1751,10 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             }
         }
 
+        // FIX 2: Stop rendering the rest of Wisdom Park's UI when Sprite Sheet Studio is active!
+        if (m_debugUseSpriteStudio) {
+            return;
+        }
 
         aiHelper.draw(window);
 
