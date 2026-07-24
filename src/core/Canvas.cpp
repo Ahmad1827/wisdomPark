@@ -207,8 +207,39 @@ void Canvas::initCustom(int width, int height) {
 }
 
 void Canvas::zoom(float delta) {
+    // If we haven't captured the window yet, just do a normal center-zoom
+    if (!g_activeWindow) {
+        zoomMultiplier *= (1.0f + delta * 0.1f);
+        zoomMultiplier = std::max(0.1f, std::min(zoomMultiplier, 50.0f));
+        return;
+    }
+
+    float oldZoom = zoomMultiplier;
+
+    // Calculate new zoom
     zoomMultiplier *= (1.0f + delta * 0.1f);
     zoomMultiplier = std::max(0.1f, std::min(zoomMultiplier, 50.0f));
+
+    // If we hit the min/max zoom limit, stop here so panning doesn't drift
+    if (oldZoom == zoomMultiplier) return;
+
+    float ratio = zoomMultiplier / oldZoom;
+
+    // 1. Get raw mouse screen pixels
+    sf::Vector2i mousePosI = sf::Mouse::getPosition(*g_activeWindow);
+    sf::Vector2f mousePos(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
+
+    // 2. Get the base center of the window 
+    // (This exactly matches spaceCX and spaceCY in your updateTransform)
+    sf::Vector2f screenCenter(
+        static_cast<float>(g_activeWindow->getSize().x) / 2.0f,
+        static_cast<float>(g_activeWindow->getSize().y) / 2.0f
+    );
+
+    // 3. The perfect offset formula: 
+    // Shifts panOffset to keep the logical point exactly under the mouse pointer
+    panOffset.x = (mousePos.x - screenCenter.x) - ratio * (mousePos.x - screenCenter.x - panOffset.x);
+    panOffset.y = (mousePos.y - screenCenter.y) - ratio * (mousePos.y - screenCenter.y - panOffset.y);
 }
 
 void Canvas::pan(sf::Vector2f delta) {
