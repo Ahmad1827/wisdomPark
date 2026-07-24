@@ -1,97 +1,127 @@
 ﻿# Wisdom Park Studio
 
-**Wisdom Park** is a high-performance, custom-built 2D animation and pixel art studio written in C++ and powered by SFML. Designed for professional workflows, it bridges the gap between traditional frame-by-frame animation, retro pixel-perfect art, and modern AI-assisted generation.
+**Wisdom Park Studio** is a high-performance, custom-built 2D animation and pixel art studio written in C++17 and powered by SFML 2.6.x. Designed for professional workflows, it bridges the gap between traditional frame-by-frame animation, retro pixel-perfect art, procedural texture generation, and modern AI-assisted creation.
 
 ---
 
 ## Core Features
 
 ### Canvas & Drawing Engine
-* **Dynamic Canvas Resolutions:** Create projects ranging from 16x16 pixel art sprites to 4K HD illustrations, with accurate memory allocation to ensure optimal performance.
+* **Dynamic Canvas Resolutions:** Create projects ranging from 16x16 pixel art sprites to 4K HD illustrations, with optimized render texture allocations for fluid frame rates.
 * **Dual Rendering Modes:**
-  * *Normal Mode:* Smooth, anti-aliased brush strokes.
-  * *Pixel Art Mode:* Hard-edged rendering with zero blurring, 1:1 grid snapping, and visual tile-wrapping support for seamless textures.
-* **Pixel Perfect Algorithm:** Real-time stroke cleanup algorithm that removes L-shaped corner pixels for flawless retro line art.
-* **Advanced Selection (Lasso):** Draw custom selection bounds, drag, flip horizontally/vertically, duplicate, crop, and perform free-transform (scaling) on selected pixel data.
-* **Flood Fill:** Queue-based contiguous or global color replacement with adjustable tolerance.
+  * *Normal Mode:* Smooth, anti-aliased brush strokes with customizable preset engine logic.
+  * *Pixel Art Mode:* Hard-edged rendering with zero blurring, 1:1 grid snapping, configurable grid overlays, and visual tile-wrapping support for seamless repeating textures.
+* **Pixel Perfect Engine:** Real-time stroke cleanup algorithm that eliminates double-thick diagonals and L-shaped corner artifacts during fast-brush drawing.
+* **Advanced Selection System:** Freehand lasso selection tool supporting dragging, horizontal/vertical flipping, duplicating, cropping, erasing, and scaling via interactive transform handles.
+* **Flood Fill:** Queue-based contiguous or global color replacement with adjustable tolerance math.
+
+### Symmetry & Dithering Tools
+* **Symmetry Manager:** Real-time symmetry drawing supporting vertical, horizontal, dual-axis, and multi-segment radial guides (2–32 segments) with a movable center axis.
+* **Dithering Engine:** Built-in ordered dither algorithms (including Bayer 2x2, 4x4, 8x8, and checkerboard patterns) with adjustable density for classic retro shading.
 
 ### Animation & Timeline
-* **Frame-by-Frame Timeline:** Add, duplicate, delete, and rearrange frames with real-time playback and adjustable FPS.
-* **Advanced Onion Skinning:** View previous and next frames simultaneously. Fully configurable frame counts and opacity fading.
-* **Audio Sync:** Built-in audio panel to scan and playback audio files perfectly synced to your animation timeline.
+* **Frame-by-Frame Timeline:** Add, duplicate, delete, and reorder frames with real-time playback and adjustable FPS.
+* **Advanced Onion Skinning:** Simultaneous view of previous and next frames with independent frame count limits, fade curves, and opacity blending.
+* **Audio Sync Engine:** Dedicated audio panel to scan local directories, load sound tracks, and sync playback with exact animation frame timing.
 
-### Layer Management
-* **Infinite Layers:** Add, duplicate, delete, and merge (Down / Visible) layers.
-* **Layer Properties:** Visibility toggles, edit-locking, opacity control, and Blend Modes (Normal, Multiply, Additive, Screen, Overlay).
-* **Persistent Layers:** Lock a layer (e.g., a static background) so it remains persistent across all animation frames without needing to copy memory.
-* **Image Importing:** Dynamically import PNG/JPG reference images directly into the active layer with automatic bounding-box scaling.
+### Layer Architecture
+* **Infinite Layers:** Full stack control with add, duplicate, delete, reorder, merge down, and merge visible options.
+* **Layer Properties:** Per-layer visibility, locking, color tags, opacity sliders, and blend modes (*Normal, Multiply, Additive, Screen, Overlay*).
+* **Persistent Layers:** Designate static layers (e.g., backgrounds) to persist automatically across all timeline frames without memory duplication.
+* **Reference & Asset Import:** Directly import PNG/JPG/BMP/WebP images into active layers with automatic proportion scaling and placement selection.
 
-### AI & Generative Tools
-* **Async AI Generation:** Highlight a selection, enter a prompt via the integrated terminal or AI Panel, and asynchronously generate new art or modify existing pixels.
-* **Context-Aware Themes:** Generate assets based on specific architectural parameters (Structure, Clutter, Custom, Wave Function Collapse).
-* **Review Modal:** Preview AI-generated results in a pop-up modal before committing or rejecting the changes to your canvas.
+### AI & Generative Workflows
+* **Async AI Generation:** Highlight region selections and invoke local or cloud-based generative AI tasks asynchronously without locking the UI loop.
+* **Context-Aware Themes:** Prompt parameters customized for structural design, environmental clutter, custom rulesets, or Wave Function Collapse (WFC).
+* **Interactive AI Review Modal:** Compare side-by-side visual diffs before choosing to accept (replace or add as new layer) or reject AI-generated outputs.
 
-### ✋ Hardware Input Integration
-* **Hand Tracking Camera Controls:** Built-in UDP socket listener that receives real-time coordinate data from an external Python/OpenCV hand-tracking script.
-* **Gesture Actions:** Control the mouse, left/right click via finger pinches, and zoom the canvas using a two-finger vertical/horizontal pinch-and-drag.
+### Hardware Input & Motion Controls
+* **Hand Tracking Camera Listener:** Non-blocking UDP socket integration (Port 5005) listening for real-time normalized coordinate streams from external OpenCV/Python motion tracking modules.
+* **Gesture Navigation:** Translate hand pinch gestures into real-time cursor movement, left/right clicks, and canvas zooming.
+
+### Workspace & Viewport Dynamics
+* **Intuitive Zoom-to-Cursor:** Natural viewport scaling anchored precisely under the active mouse pointer.
+* **Flexible Display Modes:** Toggle between Windowed, Fullscreen, and Borderless Windowed modes on the fly.
+* **Collapsible UI Panels:** Animated left toolbar, right properties, color palettes, and layer inspectors with individual panel pinning.
 
 ### Project Management (.wpk)
-* **Custom File Format:** Saves projects as `.wpk` directories containing JSON metadata, serialized timeline/layer data, and individual layer PNGs.
-* **Project Browser:** Visual start menu with thumbnails, resolution stats, last-modified dates, and safe deletion.
-* **Exporting:** Flatten frames and export them as standard PNG files or full sprite sheets.
+* **Custom Project Package:** Saves studio files in the `.wpk` format containing structured JSON metadata, timeline parameters, and uncompressed layer PNG channels.
+* **Project Browser:** Visual main menu with real-time thumbnail previews, metadata statistics, and native OS file dialog fallback.
+* **Sprite Sheet Studio:** Built-in export pipeline to flatten animation frames into custom tileable sprite sheets or single PNG images.
 
 ---
 
-## Tech Stack & Dependencies
+## Tech Stack & Architecture
 
-* **Language:** C++17
-* **Graphics & Windowing:** SFML 2.6.x (Simple and Fast Multimedia Library)
-* **Data Parsing:** `nlohmann::json` (for project metadata and API handling)
-* **Networking:** SFML Network (UDP Sockets for hand tracker communication)
+* **Language Standard:** C++17
+* **Graphics & Viewport:** SFML 2.6.x (Simple and Fast Multimedia Library)
+* **Data Serializer:** `nlohmann::json`
+* **Network Protocol:** SFML Network (UDP Sockets for hand-tracking tracking events)
+* **UI Framework:** Modular Custom GUI Architecture (`CanvasTool`, `LeftToolbar`, `LayerPanel`, `PalettePanel`, `KeybindManager`)
 
 ---
 
-## Building and Compiling (Linux/WSL2)
+## Building and Compiling
 
-Ensure you have a C++17 compatible compiler, CMake, and SFML installed on your system.
+### Linux / WSL2
+
+Ensure you have a C++17 compatible compiler, CMake, and SFML 2.6 development libraries installed:
 
 ```bash
+# Install dependencies
 sudo apt update
 sudo apt install build-essential cmake libsfml-dev
 
+# Clone repository and enter project directory
 cd wisdom_park
 
+# Build executable
 mkdir build
 cd build
 cmake ..
-make
+make -j$(nproc)
 
+# Run application
 ./WisdomPark
 ```
 
-*(Note for Windows users: You can build using Visual Studio/MSVC or MinGW, provided SFML 2.6.x is correctly linked in your CMake configuration).*
+### Windows (MSVC / Visual Studio)
+
+1. Open the project folder in Visual Studio or generate a solution using CMake:
+   ```cmd
+   mkdir build
+   cd build
+   cmake -G "Visual Studio 17 2022" ..
+   ```
+2. Build the solution (`WisdomPark.sln`) in `Release` configuration.
+3. Ensure the required SFML `.dll` files (`sfml-graphics-2.dll`, `sfml-window-2.dll`, `sfml-system-2.dll`, `sfml-network-2.dll`, `sfml-audio-2.dll`) and `assets/` directory are located adjacent to the generated `WisdomPark.exe`.
 
 ---
 
-## Default Keybinds
+## Default Shortcuts & Controls
 
-Wisdom Park features a fully customizable Keybind Manager. You can rebind these at any time via the Settings or by pressing `ESC` in the workspace.
+All keybinds are fully reconfigurable via the built-in **Keybind Manager** (`ESC` in workspace or via Settings).
 
-* **B** - Brush Tool
-* **P** - Pencil Tool
-* **E** - Eraser Tool
-* **F** - Fill Tool
-* **M** - Select (Lasso) Tool
-* **Space** - Play/Pause Animation
-* **Left/Right Arrows** - Previous/Next Frame
-* **Ctrl + Z** - Undo
-* **Ctrl + Y** - Redo
-* **Middle/Right Mouse Button** - Pan Canvas
-* **Scroll Wheel** - Zoom Canvas
+| Action | Shortcut |
+| :--- | :--- |
+| **Brush Tool** | `B` |
+| **Pencil Tool** | `P` |
+| **Eraser Tool** | `E` |
+| **Fill Bucket** | `F` |
+| **Lasso Select** | `M` |
+| **Play / Pause Timeline** | `Space` |
+| **Previous / Next Frame** | `Left Arrow` / `Right Arrow` |
+| **Undo / Redo** | `Ctrl + Z` / `Ctrl + Y` |
+| **Save Project** | `Ctrl + S` |
+| **Export PNG / Sheet** | `Ctrl + E` |
+| **Pan Canvas** | `Middle Mouse` or `Right Mouse Drag` |
+| **Zoom Canvas** | `Mouse Wheel` |
+| **Embedded Studio Debug** | `F8` |
 
 ---
 
-## Credits
-**Lead Developer & Architect:** Ahmad Arnaoute (AtodDev)  
-**Education:** Universitatea Politehnica Bucuresti, Facultatea de Automatica si Calculatoare 
-**License:** Commercial
+## Credits & License
+
+* **Lead Developer & Architect:** Ahmad Arnaoute (AtodDev)
+* **Education:** Universitatea Politehnica București, Facultatea de Automatică și Calculatoare
+* **License:** Commercial
