@@ -5,6 +5,7 @@
 #include <memory>
 #include "SelectionManager.h"
 #include "BrushManager.h"
+#include "FrameRenderer.h"
 
 enum class ToolType { Brush, Pencil, Eraser, Fill, Select };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
@@ -41,6 +42,7 @@ struct Frame {
 
 class Canvas {
 private:
+    FrameRenderer frameRenderer;
     sf::Vector2u canvasLogicalSize;
     std::vector<Frame> frames;
 
