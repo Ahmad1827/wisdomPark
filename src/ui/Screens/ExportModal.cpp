@@ -150,7 +150,9 @@ void ExportModal::updateHover(sf::Vector2f mousePos) {
 void ExportModal::handleEvent(const sf::Event& event, sf::RenderWindow& window) {
     if (!isOpen) return;
 
-    sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
+    // FIX: Map mouse pixels to windowed coords
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
+    sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
 
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
         if (closeBtn.getGlobalBounds().contains(mousePos)) {
@@ -183,7 +185,6 @@ void ExportModal::handleEvent(const sf::Event& event, sf::RenderWindow& window) 
         else if (exportSheetBtn.getGlobalBounds().contains(mousePos)) {
             std::string file = NativeDialogs::saveFileDialog("PNG Files\0*.png\0", "png", "spritesheet.png");
             if (!file.empty()) {
-                // Fixed column width parameter simulation (placeholder 10)
                 ExportManager::exportSpriteSheet(*linkedCanvas, file, 10, transparentBg, autoCrop);
                 close();
             }

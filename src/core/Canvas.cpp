@@ -1074,8 +1074,8 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     }
 }
 
-void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states) {
-    g_activeWindow = &window; // Save the reference so the mouse intercepts work!
+ void Canvas::draw(sf::RenderWindow & window, int currentFrame, bool isPlaying, const sf::RenderStates & states) {
+    g_activeWindow = &window; 
 
     window.draw(deskSprite, states);
 
@@ -1085,6 +1085,11 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     innerTransform.scale(texScale);
     sf::RenderStates innerStates = states;
     innerStates.transform = innerTransform;
+
+    sf::Transform frameTransform = states.transform;
+    frameTransform.translate(drawArea.left, drawArea.top);
+    sf::RenderStates frameStates = states;
+    frameStates.transform = frameTransform;
 
     const float frameThickness = 16.f;
     sf::Color frameColor(45, 35, 25);
@@ -1109,51 +1114,66 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         float tw = static_cast<float>(tLeft.getSize().x);
         float th = static_cast<float>(tTop.getSize().y);
 
+
+        float dw = drawArea.width;
+        float dh = drawArea.height;
+
         sf::Sprite sTopLeft(tTopLeft), sTop(tTop), sTopRight(tTopRight), sLeft(tLeft), sRight(tRight), sBotLeft(tBotLeft), sBottom(tBottom), sBotRight(tBotRight);
 
         sTopLeft.setPosition(-tw, -th);
-        sTop.setPosition(0.f, -th); sTop.setTextureRect(sf::IntRect(0, 0, canvasLogicalSize.x, th));
-        sTopRight.setPosition(canvasLogicalSize.x, -th);
+        sTop.setPosition(0.f, -th);
+        sTop.setTextureRect(sf::IntRect(0, 0, static_cast<int>(dw), static_cast<int>(th)));
 
-        sLeft.setPosition(-tw, 0.f); sLeft.setTextureRect(sf::IntRect(0, 0, tw, canvasLogicalSize.y));
-        sRight.setPosition(canvasLogicalSize.x, 0.f); sRight.setTextureRect(sf::IntRect(0, 0, tw, canvasLogicalSize.y));
+        sTopRight.setPosition(dw, -th);
 
-        sBotLeft.setPosition(-tw, canvasLogicalSize.y);
-        sBottom.setPosition(0.f, canvasLogicalSize.y); sBottom.setTextureRect(sf::IntRect(0, 0, canvasLogicalSize.x, th));
-        sBotRight.setPosition(canvasLogicalSize.x, canvasLogicalSize.y);
+        sLeft.setPosition(-tw, 0.f);
+        sLeft.setTextureRect(sf::IntRect(0, 0, static_cast<int>(tw), static_cast<int>(dh)));
 
-        window.draw(sTopLeft, innerStates); window.draw(sTop, innerStates); window.draw(sTopRight, innerStates);
-        window.draw(sLeft, innerStates); window.draw(sRight, innerStates);
-        window.draw(sBotLeft, innerStates); window.draw(sBottom, innerStates); window.draw(sBotRight, innerStates);
+        sRight.setPosition(dw, 0.f);
+        sRight.setTextureRect(sf::IntRect(0, 0, static_cast<int>(tw), static_cast<int>(dh)));
+
+        sBotLeft.setPosition(-tw, dh);
+
+        sBottom.setPosition(0.f, dh);
+        sBottom.setTextureRect(sf::IntRect(0, 0, static_cast<int>(dw), static_cast<int>(th)));
+
+        sBotRight.setPosition(dw, dh);
+
+        window.draw(sTopLeft, frameStates); window.draw(sTop, frameStates); window.draw(sTopRight, frameStates);
+        window.draw(sLeft, frameStates); window.draw(sRight, frameStates);
+        window.draw(sBotLeft, frameStates); window.draw(sBottom, frameStates); window.draw(sBotRight, frameStates);
     }
     else {
-        sf::RectangleShape topEdge({ static_cast<float>(canvasLogicalSize.x) + 2 * frameThickness, frameThickness });
+        float dw = drawArea.width;
+        float dh = drawArea.height;
+
+        sf::RectangleShape topEdge({ dw + 2 * frameThickness, frameThickness });
         topEdge.setPosition(-frameThickness, -frameThickness);
         topEdge.setFillColor(frameColor);
 
-        sf::RectangleShape bottomEdge({ static_cast<float>(canvasLogicalSize.x) + 2 * frameThickness, frameThickness });
-        bottomEdge.setPosition(-frameThickness, static_cast<float>(canvasLogicalSize.y));
+        sf::RectangleShape bottomEdge({ dw + 2 * frameThickness, frameThickness });
+        bottomEdge.setPosition(-frameThickness, dh);
         bottomEdge.setFillColor(frameColor);
 
-        sf::RectangleShape leftEdge({ frameThickness, static_cast<float>(canvasLogicalSize.y) });
+        sf::RectangleShape leftEdge({ frameThickness, dh });
         leftEdge.setPosition(-frameThickness, 0.f);
         leftEdge.setFillColor(frameColor);
 
-        sf::RectangleShape rightEdge({ frameThickness, static_cast<float>(canvasLogicalSize.y) });
-        rightEdge.setPosition(static_cast<float>(canvasLogicalSize.x), 0.f);
+        sf::RectangleShape rightEdge({ frameThickness, dh });
+        rightEdge.setPosition(dw, 0.f);
         rightEdge.setFillColor(frameColor);
 
-        sf::RectangleShape innerShadow({ static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y) });
+        sf::RectangleShape innerShadow({ dw, dh });
         innerShadow.setPosition(0.f, 0.f);
         innerShadow.setFillColor(sf::Color::Transparent);
         innerShadow.setOutlineThickness(1.5f);
         innerShadow.setOutlineColor(shadowColor);
 
-        window.draw(topEdge, innerStates);
-        window.draw(bottomEdge, innerStates);
-        window.draw(leftEdge, innerStates);
-        window.draw(rightEdge, innerStates);
-        window.draw(innerShadow, innerStates);
+        window.draw(topEdge, frameStates);
+        window.draw(bottomEdge, frameStates);
+        window.draw(leftEdge, frameStates);
+        window.draw(rightEdge, frameStates);
+        window.draw(innerShadow, frameStates);
     }
 
     sf::RectangleShape bg(sf::Vector2f(canvasLogicalSize.x, canvasLogicalSize.y));
@@ -1286,6 +1306,8 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         }
     }
 }
+
+
 
 void Canvas::drawShadows(sf::RenderWindow& window, sf::Vector2f logicalSunPos, const std::vector<sf::FloatRect>& items, const std::vector<std::string>& categories, const sf::RenderStates& states) {
     for (size_t i = 0; i < items.size(); ++i) {

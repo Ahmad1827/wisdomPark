@@ -140,7 +140,10 @@ std::string NewProjectModal::handleEvent(const sf::Event& event, sf::RenderWindo
     if (!isOpen) return "";
 
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
+
+        // FIX: Map mouse pixels to windowed coords
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
+        sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
 
         if (closeBtn.getGlobalBounds().contains(mousePos)) { close(); return "cancel"; }
         if (createBtn.getGlobalBounds().contains(mousePos)) {
