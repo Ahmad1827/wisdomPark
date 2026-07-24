@@ -24,6 +24,7 @@ static sf::Text loadingText;
 static sf::CircleShape loadingSpinner;
 static sf::RectangleShape loadingCancelBtn;
 static sf::Text loadingCancelText;
+
 UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(false), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0), m_debugUseSpriteStudio(false) {}
 
 void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
@@ -725,7 +726,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         return;
     }
 
-    // FIX 1: Mouse Mapping Coordinates applied here
     sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
     sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
@@ -1423,6 +1423,24 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             if (!file.empty()) { canvas.importImageToActiveLayer(file, timeline.getCurrentFrame()); showMessage("Image Imported", sf::Color::Green); }
                         }
                         else if (leftAction == "audio_panel") audioPanel.toggle();
+                        else if (leftAction == "sym_vert") {
+                            static bool symVert = false;
+                            symVert = !symVert;
+                            canvas.getSymmetryManager().setMode(symVert ? SymmetryMode::Vertical : SymmetryMode::None);
+                            canvas.getSymmetryManager().setCenter(sf::Vector2f(canvas.getCanvasSize().x / 2.f, canvas.getCanvasSize().y / 2.f));
+                            showMessage(symVert ? "Vertical Symmetry Enabled" : "Symmetry Disabled", sf::Color::Green);
+                        }
+                        else if (leftAction == "sym_horiz") {
+                            static bool symHoriz = false;
+                            symHoriz = !symHoriz;
+                            canvas.getSymmetryManager().setMode(symHoriz ? SymmetryMode::Horizontal : SymmetryMode::None);
+                            canvas.getSymmetryManager().setCenter(sf::Vector2f(canvas.getCanvasSize().x / 2.f, canvas.getCanvasSize().y / 2.f));
+                            showMessage(symHoriz ? "Horizontal Symmetry Enabled" : "Symmetry Disabled", sf::Color::Green);
+                        }
+                        else if (leftAction == "dither_toggle") {
+                            canvas.toggleDithering();
+                            showMessage("Dithering Toggled", sf::Color::Green);
+                        }
                         return;
                     }
                 }
@@ -1454,7 +1472,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         if (m_activeTool) {
             m_activeTool->Update(dt, window);
         }
-        return; // Early return stops side panels from detecting mouse hover!
+        return;
     }
     char buffer[1024];
     std::size_t received;
@@ -1527,7 +1545,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         lastZoomState = isZoomPinching;
     }
 
-    // FIX 1: Mouse Mapping Coordinates applied here too!
     sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
 
@@ -1748,13 +1765,11 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         if (m_activeTool) {
             m_activeTool->Render(window);
 
-            // Static cast or helper check for CanvasTool shadows
             if (auto* canvasTool = dynamic_cast<CanvasTool*>(m_activeTool.get())) {
                 canvasTool->RenderShadows(window, aiHelper);
             }
         }
 
-        // FIX 2: Stop rendering the rest of Wisdom Park's UI when Sprite Sheet Studio is active!
         if (m_debugUseSpriteStudio) {
             return;
         }
@@ -1825,6 +1840,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         }
     }
 }
+
 bool loadStudioFont(sf::Font& font) {
     if (font.loadFromFile("Resources/font.ttf")) return true;
     if (font.loadFromFile("../Resources/font.ttf")) return true;
