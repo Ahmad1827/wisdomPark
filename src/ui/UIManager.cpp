@@ -1014,14 +1014,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 m_activeTool = std::make_unique<SpriteSheetStudioTool>();
                 m_activeTool->Initialize();
 
-                sf::FloatRect availableSpace(0.f, 0.f, 1920.f, 1080.f);
-                m_activeTool->SetBounds(availableSpace);
+                sf::FloatRect physicalSpace(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y));
+                m_activeTool->SetBounds(physicalSpace);
 
-                // Push a fake resize event to force the tool's right and bottom panels into place!
                 sf::Event resizeFix;
                 resizeFix.type = sf::Event::Resized;
-                resizeFix.size.width = 1920;
-                resizeFix.size.height = 1080;
+                resizeFix.size.width = window.getSize().x;
+                resizeFix.size.height = window.getSize().y;
                 m_activeTool->HandleEvent(resizeFix, window);
             }
             else {
@@ -1034,6 +1033,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
         if (m_debugUseSpriteStudio) {
             if (m_activeTool) {
+                if (event.type == sf::Event::Resized) {
+                    sf::FloatRect physicalSpace(0.f, 0.f, static_cast<float>(event.size.width), static_cast<float>(event.size.height));
+                    m_activeTool->SetBounds(physicalSpace);
+                }
                 m_activeTool->HandleEvent(event, window);
             }
             return;

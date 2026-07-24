@@ -5,6 +5,9 @@
 #include <stack>
 #include <queue>
 
+// FIX: Global pointer to grab the window coordinates directly without relying on other files
+static const sf::RenderWindow* g_activeWindow = nullptr;
+
 const int DEFAULT_NORMAL_W = 1280;
 const int DEFAULT_NORMAL_H = 720;
 const int DEFAULT_PIXEL_W = 64;
@@ -817,8 +820,15 @@ bool Canvas::isImageResourceActive(int currentFrame) const {
     return frames[currentFrame].layers[activeLayer].isImageResource;
 }
 
+// FIX: Intercept the mouse directly so we don't rely on outside events missing the scale!
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+
+    if (g_activeWindow) {
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(*g_activeWindow);
+        sf::Vector2f mappedPos = g_activeWindow->mapPixelToCoords(pixelPos);
+        logicalPos = getInverseTransform().transformPoint(mappedPos);
+    }
 
     if (rightClick) {
         return;
@@ -913,6 +923,12 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 }
 
 void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
+    if (g_activeWindow) {
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(*g_activeWindow);
+        sf::Vector2f mappedPos = g_activeWindow->mapPixelToCoords(pixelPos);
+        logicalPos = getInverseTransform().transformPoint(mappedPos);
+    }
+
     if (activeTool == ToolType::Select) {
         if (selection.getState() == SelectionState::Drawing) {
             selection.endLasso();
@@ -926,6 +942,13 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
 }
 
 void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int currentFrame) {
+    if (g_activeWindow) {
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(*g_activeWindow);
+        sf::Vector2f mappedPos = g_activeWindow->mapPixelToCoords(pixelPos);
+        logicalPos = getInverseTransform().transformPoint(mappedPos);
+        rawPos = mappedPos;
+    }
+
     isHoveringCanvas = drawArea.contains(logicalPos);
     rawMousePos = rawPos;
 
@@ -1036,6 +1059,8 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
 }
 
 void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states) {
+    g_activeWindow = &window; // Save the reference so the mouse intercepts work!
+
     window.draw(deskSprite, states);
 
     sf::Vector2f texScale(drawArea.width / static_cast<float>(canvasLogicalSize.x), drawArea.height / static_cast<float>(canvasLogicalSize.y));
@@ -1212,7 +1237,6 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     selection.draw(window, innerStates);
 
-    // FIX: Map mouse pixels to windowed coords!
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f currentRawMousePos = window.mapPixelToCoords(mousePosI);
 
