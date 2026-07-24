@@ -55,6 +55,9 @@ void LeftToolbar::init() {
     makeBtn("ai_gen", "AI Gen", startY + gap * 5, true);
     makeBtn("import_img", "Image", startY + gap * 6);
     makeBtn("audio_panel", "Audio", startY + gap * 7);
+    makeBtn("sym_vert", "Sym Y", startY + gap * 8);
+    makeBtn("sym_horiz", "Sym X", startY + gap * 9);
+    makeBtn("dither_toggle", "Dither", startY + gap * 10);
 
     auto makeActionBtn = [&](std::string id, std::string text) {
         ToolItem btn;
@@ -158,7 +161,7 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
             tool.rect.setFillColor(sf::Color(255, 255, 255, 2));
             tool.label.setFillColor(sf::Color(100, 100, 100));
         }
-        else if (tool.id == activeToolId && tool.id != "audio_panel" && tool.id != "import_img") {
+        else if (tool.id == activeToolId && tool.id != "audio_panel" && tool.id != "import_img" && tool.id != "sym_vert" && tool.id != "sym_horiz" && tool.id != "dither_toggle") {
             tool.rect.setFillColor(sf::Color(0, 122, 204, 180));
             tool.label.setFillColor(sf::Color::White);
         }
@@ -208,7 +211,7 @@ std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured,
     for (const auto& tool : tools) {
         if (tool.rect.getGlobalBounds().contains(mousePos)) {
             if (tool.isAiTool && !isAIConfigured) return "ai_disabled";
-            if (tool.id != "import_img" && tool.id != "audio_panel") {
+            if (tool.id != "import_img" && tool.id != "audio_panel" && tool.id != "sym_vert" && tool.id != "sym_horiz" && tool.id != "dither_toggle") {
                 activeToolId = tool.id;
             }
             return tool.id;

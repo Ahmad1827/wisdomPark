@@ -6,6 +6,8 @@
 #include "SelectionManager.h"
 #include "BrushManager.h"
 #include "FrameRenderer.h"
+#include "SymmetryManager.h"
+#include "DitherManager.h"
 
 enum class ToolType { Brush, Pencil, Eraser, Fill, Select };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
@@ -42,6 +44,10 @@ struct Frame {
 
 class Canvas {
 private:
+    SymmetryManager symmetryManager;
+    DitherManager ditherManager;
+    bool useDithering = false;
+
     FrameRenderer frameRenderer;
     sf::Vector2u canvasLogicalSize;
     std::vector<Frame> frames;
@@ -220,4 +226,8 @@ public:
     void applyTransform(int currentFrame);
     void cancelTransform();
     bool isTransforming() const;
+
+    SymmetryManager& getSymmetryManager() { return symmetryManager; }
+    DitherManager& getDitherManager() { return ditherManager; }
+    void toggleDithering() { useDithering = !useDithering; }
 };

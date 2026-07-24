@@ -162,6 +162,8 @@
     <ClCompile Include="src\core\NativeDialogs.cpp" />
     <ClCompile Include="src\core\ColorManager.cpp" />
     <ClCompile Include="src\core\FrameRenderer.cpp" />
+    <ClCompile Include="src\core\DitherManager.cpp" />
+    <ClCompile Include="src\core\SymmetryManager.cpp" />
     <ClCompile Include="src\tools\CanvasTool.cpp" />
     <ClCompile Include="src\tools\SpriteSheetStudioTool.cpp" />
     <ClCompile Include="src\ui\KeybindSettingsPanel.cpp" />
@@ -197,6 +199,8 @@
     <ClInclude Include="src\core\FillManager.h" />
     <ClInclude Include="src\core\ColorManager.h" />
     <ClInclude Include="src\core\FrameRenderer.h" />
+    <ClInclude Include="src\core\DitherManager.h" />
+    <ClInclude Include="src\core\SymmetryManager.h" />
     <ClInclude Include="src\core\ITool.h" />
     <ClInclude Include="src\core\NativeDialogs.h" />
     <ClInclude Include="src\tools\CanvasTool.h" />

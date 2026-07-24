@@ -207,7 +207,6 @@ void Canvas::initCustom(int width, int height) {
 }
 
 void Canvas::zoom(float delta) {
-    // If we haven't captured the window yet, just do a normal center-zoom
     if (!g_activeWindow) {
         zoomMultiplier *= (1.0f + delta * 0.1f);
         zoomMultiplier = std::max(0.1f, std::min(zoomMultiplier, 50.0f));
@@ -216,28 +215,21 @@ void Canvas::zoom(float delta) {
 
     float oldZoom = zoomMultiplier;
 
-    // Calculate new zoom
     zoomMultiplier *= (1.0f + delta * 0.1f);
     zoomMultiplier = std::max(0.1f, std::min(zoomMultiplier, 50.0f));
 
-    // If we hit the min/max zoom limit, stop here so panning doesn't drift
     if (oldZoom == zoomMultiplier) return;
 
     float ratio = zoomMultiplier / oldZoom;
 
-    // 1. Get raw mouse screen pixels
     sf::Vector2i mousePosI = sf::Mouse::getPosition(*g_activeWindow);
     sf::Vector2f mousePos(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
 
-    // 2. Get the base center of the window 
-    // (This exactly matches spaceCX and spaceCY in your updateTransform)
     sf::Vector2f screenCenter(
         static_cast<float>(g_activeWindow->getSize().x) / 2.0f,
         static_cast<float>(g_activeWindow->getSize().y) / 2.0f
     );
 
-    // 3. The perfect offset formula: 
-    // Shifts panOffset to keep the logical point exactly under the mouse pointer
     panOffset.x = (mousePos.x - screenCenter.x) - ratio * (mousePos.x - screenCenter.x - panOffset.x);
     panOffset.y = (mousePos.y - screenCenter.y) - ratio * (mousePos.y - screenCenter.y - panOffset.y);
 }
@@ -802,37 +794,48 @@ void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf
     }
 }
 
+// FIX: drawPixelExact now routes through SymmetryManager and DitherManager.
+// Your Bresenham and Pixel Perfect logic in handleMouseMoved calls this, so they gain symmetry and dithering for free!
 void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
-    if (x < 0 || y < 0 || x >= static_cast<int>(canvasLogicalSize.x) || y >= static_cast<int>(canvasLogicalSize.y)) return;
+    if (useDithering && !ditherManager.shouldDrawPixel(x, y)) return;
 
     sf::RenderTexture* target = getActiveRenderTexture(frameIdx);
     if (!target) return;
 
-    sf::RectangleShape px(sf::Vector2f(static_cast<float>(pixelBrushSize), static_cast<float>(pixelBrushSize)));
-    px.setFillColor(c);
-
-    float tx = static_cast<float>(x) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
-    float ty = static_cast<float>(y) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
-    px.setPosition(tx, ty);
-
     sf::RenderStates states;
     if (activeTool == ToolType::Eraser || c == sf::Color::Transparent) states.blendMode = sf::BlendNone;
 
-    target->draw(px, states);
+    auto points = symmetryManager.getSymmetricPoints(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)));
 
-    if (tileModeX) {
-        px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty); target->draw(px, states);
-        px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty); target->draw(px, states);
-    }
-    if (tileModeY) {
-        px.setPosition(tx, ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
-        px.setPosition(tx, ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
-    }
-    if (tileModeX && tileModeY) {
-        px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
-        px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
-        px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
-        px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+    for (auto pt : points) {
+        int ix = static_cast<int>(std::round(pt.x));
+        int iy = static_cast<int>(std::round(pt.y));
+
+        if (ix < 0 || iy < 0 || ix >= static_cast<int>(canvasLogicalSize.x) || iy >= static_cast<int>(canvasLogicalSize.y)) continue;
+
+        sf::RectangleShape px(sf::Vector2f(static_cast<float>(pixelBrushSize), static_cast<float>(pixelBrushSize)));
+        px.setFillColor(c);
+
+        float tx = static_cast<float>(ix) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
+        float ty = static_cast<float>(iy) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
+        px.setPosition(tx, ty);
+
+        target->draw(px, states);
+
+        if (tileModeX) {
+            px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty); target->draw(px, states);
+            px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty); target->draw(px, states);
+        }
+        if (tileModeY) {
+            px.setPosition(tx, ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+            px.setPosition(tx, ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+        }
+        if (tileModeX && tileModeY) {
+            px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+            px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+            px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+            px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+        }
     }
 }
 
@@ -870,7 +873,6 @@ bool Canvas::isImageResourceActive(int currentFrame) const {
     return frames[currentFrame].layers[activeLayer].isImageResource;
 }
 
-// FIX: Intercept the mouse directly so we don't rely on outside events missing the scale!
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
@@ -1262,6 +1264,9 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             }
             window.draw(lines, innerStates);
         }
+
+        // FIX: Draw Symmetry Guides
+        symmetryManager.drawGuides(window, innerStates, sf::FloatRect(0, 0, static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y)), viewScale);
     }
 
     if (!isPlaying && onionSkinEnabled) {
