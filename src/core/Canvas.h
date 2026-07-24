@@ -102,6 +102,8 @@ private:
 
     sf::Image layerSnapshot;
     std::vector<sf::Vector2i> activeStroke;
+    sf::Texture frameTex[8];
+    bool hasFrameAssets;
 
     bool colorMatches(const sf::Color& a, const sf::Color& b) const;
     void executeGlobalFill(sf::Color targetColor, sf::Color replacementColor, sf::Image& image);

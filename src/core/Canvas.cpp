@@ -185,6 +185,22 @@ void Canvas::initCustom(int width, int height) {
     selection.clearSelection();
     resetView();
     isDirty = false;
+
+    hasFrameAssets = frameTex[0].loadFromFile("assets/css.png") &&
+        frameTex[1].loadFromFile("assets/sus.png") &&
+        frameTex[2].loadFromFile("assets/cds.png") &&
+        frameTex[3].loadFromFile("assets/stg.png") &&
+        frameTex[4].loadFromFile("assets/dr.png") &&
+        frameTex[5].loadFromFile("assets/csj.png") &&
+        frameTex[6].loadFromFile("assets/jos.png") &&
+        frameTex[7].loadFromFile("assets/cdj.png");
+
+    if (hasFrameAssets) {
+        frameTex[1].setRepeated(true);
+        frameTex[3].setRepeated(true);
+        frameTex[4].setRepeated(true);
+        frameTex[6].setRepeated(true);
+    }
 }
 
 void Canvas::zoom(float delta) {
