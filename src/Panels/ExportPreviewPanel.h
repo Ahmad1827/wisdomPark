@@ -13,8 +13,11 @@ public:
     ExportPreviewPanel();
     bool InitializeFont(const std::string& customPath);
     void Activate(const StudioCore::StudioEngineFacade& engine);
+    void Deactivate() { m_isActive = false; }
     bool HandleEvent(const sf::Event& event, const sf::RenderWindow& window, const StudioCore::StudioEngineFacade& engine);
     void Render(sf::RenderWindow& window);
+
+    bool IsActive() const { return m_isActive; }
 
 private:
     sf::Font m_font;

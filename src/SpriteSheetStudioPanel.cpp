@@ -156,7 +156,6 @@ void SpriteSheetStudioPanel::LoadImage(const std::string& filePath) {
 void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
     if (!m_isActive) return;
 
-    // 1. KEYBOARD SHORTCUTS
     if (event.type == sf::Event::KeyPressed) {
         bool isShift = sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift);
         bool isControl = sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl);
@@ -210,7 +209,6 @@ void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::Rende
         }
     }
 
-    // 2. RIGHT CLICK CONTEXT MENU ON SPRITES (Restored from MainApplicationWindow)
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Right) {
         sf::Vector2i pixelPos(event.mouseButton.x, event.mouseButton.y);
         sf::Vector2f worldPos = m_viewport.MapPixelToWorld(pixelPos, window);
@@ -267,26 +265,36 @@ void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::Rende
     if (!m_isExportMode) {
         if (m_toolbar.HandleEvent(event, window, m_engine)) return;
     } else {
-        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) m_isExportMode = false;
-        else m_exportPreview.HandleEvent(event, window, m_engine);
+        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+            m_exportPreview.Deactivate();
+            m_isExportMode = false;
+        } else {
+            m_exportPreview.HandleEvent(event, window, m_engine);
+            if (!m_exportPreview.IsActive()) {
+                m_isExportMode = false;
+            }
+        }
         return;
     }
 
-    // 3. ANIMATION PANEL PROCESSED BEFORE VIEWPORT
-    // (Ensures Timeline & Animation list receive clicks and read GetSelectedSpriteIds() 
-    // BEFORE PreviewViewport clears the selection!)
     if (m_animationPanel) {
         m_animationPanel->HandleEvent(event, window, m_engine, m_viewport);
     }
 
-    // 4. VIEWPORT HANDLING
     m_viewport.HandleEvent(event, window, m_engine);
 }
 
 void SpriteSheetStudioPanel::Update(float deltaTime, const sf::RenderWindow& window) {
     if (!m_isActive) return;
 
-    if (!m_isExportMode && !m_isWizardMode) {
+    if (m_isExportMode) {
+        if (!m_exportPreview.IsActive()) {
+            m_isExportMode = false;
+        }
+        return;
+    }
+
+    if (!m_isWizardMode) {
         m_engine.Update(deltaTime);
         m_viewport.Update(deltaTime);
 
@@ -323,9 +331,10 @@ void SpriteSheetStudioPanel::Render(sf::RenderWindow& window) {
     sf::View panelView(m_bounds);
     window.setView(panelView);
 
-    if (m_isExportMode) {
+    if (m_isExportMode && m_exportPreview.IsActive()) {
         m_exportPreview.Render(window);
     } else {
+        m_isExportMode = false;
         m_viewport.Render(window, m_engine);
         if (!m_isUIHidden && m_animationPanel) m_animationPanel->Render(window, m_engine);
         m_toolbar.Render(window);
