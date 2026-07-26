@@ -198,9 +198,7 @@ void AnimationPanel::HandleEvent(const sf::Event& event, const sf::RenderWindow&
 void AnimationPanel::Render(sf::RenderWindow& window, const StudioCore::StudioEngineFacade& engine) {
     if (!engine.IsProjectActive() || !m_hasFont) return;
     
-    sf::Vector2u winSize = window.getSize();
-    sf::View uiView(sf::FloatRect(0.f, 0.f, static_cast<float>(winSize.x), static_cast<float>(winSize.y)));
-    window.setView(uiView);
+    window.setView(window.getDefaultView());
 
     float timelineHeight = 160.0f;
     float rightPanelWidth = 300.0f;

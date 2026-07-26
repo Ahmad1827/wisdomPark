@@ -397,9 +397,7 @@ void PreviewViewport::Render(sf::RenderWindow& window, const StudioCore::StudioE
 
     m_selection.Render(window, m_currentZoom);
 
-    sf::Vector2u winSize = window.getSize();
-    sf::View uiView(sf::FloatRect(0.f, 0.f, static_cast<float>(winSize.x), static_cast<float>(winSize.y)));
-    window.setView(uiView);
+    window.setView(window.getDefaultView());
 
     StudioUI::JobProgressInfo jobInfo;
     jobInfo.isRunning = engine.IsDetectionRunning();
@@ -448,7 +446,7 @@ void PreviewViewport::Render(sf::RenderWindow& window, const StudioCore::StudioE
     m_overlay.RenderInspector(window, inspector);
     
     if (!m_hasValidTexture) {
-        window.setView(uiView);
+        window.setView(window.getDefaultView());
         m_overlay.RenderEmptyState(window);
     }
     

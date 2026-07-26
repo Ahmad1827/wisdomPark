@@ -328,9 +328,7 @@ void SpriteSheetStudioPanel::SetBounds(const sf::FloatRect& bounds) {
 void SpriteSheetStudioPanel::Render(sf::RenderWindow& window) {
     if (!m_isActive) return;
 
-    sf::Vector2u winSize = window.getSize();
-    sf::View uiView(sf::FloatRect(0.f, 0.f, static_cast<float>(winSize.x), static_cast<float>(winSize.y)));
-    window.setView(uiView);
+    window.setView(window.getDefaultView());
 
     if (m_isExportMode && m_exportPreview.IsActive()) {
         m_exportPreview.Render(window);
@@ -339,7 +337,7 @@ void SpriteSheetStudioPanel::Render(sf::RenderWindow& window) {
         
         m_viewport.Render(window, m_engine);
         
-        window.setView(uiView); 
+        window.setView(window.getDefaultView());
         
         if (!m_isUIHidden && m_animationPanel) {
             m_animationPanel->Render(window, m_engine);
