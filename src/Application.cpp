@@ -1,7 +1,7 @@
 #include "Application.h"
 
 Application::Application()
-    : window(sf::VideoMode(1920, 1080), "Wisdom Park", sf::Style::Default),
+    : window(sf::VideoMode(1600, 900), "Wisdom Park Studio", sf::Style::Default),
     currentState(AppState::Welcome),
     currentFullscreenState(false) {
     window.setFramerateLimit(60);
