@@ -8,7 +8,6 @@ void WorkspaceEnvironment::InitializeFont(const std::string& fontPath) {
     
     m_statusBarBg.setFillColor(Theme::PanelBackground);
     m_statusBarTopBorder.setFillColor(Theme::BorderColor);
-    m_statusBarTopBorder.setSize({1280.0f, Theme::BorderThickness});
 
     m_statusText.setFont(m_font);
     m_statusText.setCharacterSize(11);
@@ -16,7 +15,6 @@ void WorkspaceEnvironment::InitializeFont(const std::string& fontPath) {
 }
 
 void WorkspaceEnvironment::UpdateStatusBar(float zoom, sf::Vector2f mousePos, int totalSprites, int selectedCount, const std::string& statusText) {
-    // Format: Ready | Zoom 100% | Mouse 235,421 | Sprites 58 | Selected 3 | Autosaved
     std::string statusStr = statusText + 
                             "  |  Zoom " + std::to_string(static_cast<int>(zoom * 100)) + "%" +
                             "  |  Mouse " + std::to_string(static_cast<int>(mousePos.x)) + "," + std::to_string(static_cast<int>(mousePos.y)) +
@@ -69,12 +67,7 @@ void WorkspaceEnvironment::HideContextMenu() {
     m_menuItems.clear();
 }
 
-void WorkspaceEnvironment::SetBounds(const sf::FloatRect& bounds) {
-    m_bounds = bounds;
-}
-
 void WorkspaceEnvironment::Render(sf::RenderWindow& window) {
-    // 1. Render Status Bar at the bottom using bounds math
     float yPos = m_bounds.top + m_bounds.height - Theme::StatusBarHeight;
 
     m_statusBarBg.setPosition(m_bounds.left, yPos);
@@ -89,7 +82,6 @@ void WorkspaceEnvironment::Render(sf::RenderWindow& window) {
     window.draw(m_statusBarTopBorder);
     window.draw(m_statusText);
 
-    // 2. Render Context Menu if active
     if (m_showContextMenu) {
         float itemHeight = 24.0f;
         float menuWidth = 140.0f;
@@ -122,4 +114,4 @@ void WorkspaceEnvironment::Render(sf::RenderWindow& window) {
         }
     }
 }
-} // namespace StudioUI
+}

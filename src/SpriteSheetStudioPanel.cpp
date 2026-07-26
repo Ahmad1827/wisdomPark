@@ -19,7 +19,6 @@ enum class DialogMode {
 static std::string openWindowsFileDialog(DialogMode mode) {
     char currentDir[MAX_PATH];
     GetCurrentDirectoryA(MAX_PATH, currentDir);
-
     OPENFILENAMEA ofn;
     char szFile[MAX_PATH] = { 0 };
     ZeroMemory(&ofn, sizeof(ofn));
@@ -27,19 +26,15 @@ static std::string openWindowsFileDialog(DialogMode mode) {
     ofn.hwndOwner = NULL;
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = sizeof(szFile);
-
     const char imageFilter[] = "Image Files (*.png;*.jpg;*.jpeg)\0*.png;*.jpg;*.jpeg\0All Files (*.*)\0*.*\0\0";
     const char combinedFilter[] = "All Supported Files (*.png;*.jpg;*.jpeg;*.sps)\0*.png;*.jpg;*.jpeg;*.sps\0Image Files (*.png;*.jpg;*.jpeg)\0*.png;*.jpg;*.jpeg\0Sprite Sheet Studio (*.sps)\0*.sps\0All Files (*.*)\0*.*\0\0";
-
     ofn.lpstrFilter = (mode == DialogMode::CombinedOpen) ? combinedFilter : imageFilter;
     ofn.nFilterIndex = 1;
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
-
     std::string result = "";
     if (GetOpenFileNameA(&ofn)) {
         result = std::string(ofn.lpstrFile);
     }
-
     SetCurrentDirectoryA(currentDir);
     return result;
 }
@@ -47,7 +42,6 @@ static std::string openWindowsFileDialog(DialogMode mode) {
 static std::string saveWindowsFileDialog(const char* defaultName = "project.sps") {
     char currentDir[MAX_PATH];
     GetCurrentDirectoryA(MAX_PATH, currentDir);
-
     OPENFILENAMEA ofn;
     char szFile[MAX_PATH] = { 0 };
     strcpy_s(szFile, defaultName);
@@ -56,17 +50,14 @@ static std::string saveWindowsFileDialog(const char* defaultName = "project.sps"
     ofn.hwndOwner = NULL;
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = sizeof(szFile);
-
     const char saveFilter[] = "Sprite Sheet Studio (*.sps)\0*.sps\0All Files (*.*)\0*.*\0\0";
     ofn.lpstrFilter = saveFilter;
     ofn.nFilterIndex = 1;
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
-
     std::string result = "";
     if (GetSaveFileNameA(&ofn)) {
         result = std::string(ofn.lpstrFile);
     }
-
     SetCurrentDirectoryA(currentDir);
     return result;
 }
@@ -84,11 +75,9 @@ void SpriteSheetStudioPanel::Initialize() {
     m_engine.Initialize();
     m_engine.CreateProject();
     m_viewport.Initialize();
-
     if (!m_engine.IsAutoAlignEnabled()) {
         m_engine.ToggleAutoAlign();
     }
-
     m_toolbar.Initialize("Resources/font.ttf",
         [this]() {
 #if defined(_WIN32)
@@ -139,7 +128,6 @@ void SpriteSheetStudioPanel::Initialize() {
             }
         }
     );
-
     m_animationPanel->InitializeFont("Resources/font.ttf");
     m_exportPreview.InitializeFont("Resources/font.ttf");
     m_animBuilderPanel.InitializeFont("Resources/font.ttf");
@@ -156,6 +144,9 @@ void SpriteSheetStudioPanel::LoadImage(const std::string& filePath) {
 void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
     if (!m_isActive) return;
 
+    sf::FloatRect currentBounds(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y));
+    SetBounds(currentBounds);
+
     if (event.type == sf::Event::KeyPressed) {
         bool isShift = sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift);
         bool isControl = sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl);
@@ -168,12 +159,10 @@ void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::Rende
                 return;
             }
         }
-
         if (isControl) {
             if (event.key.code == sf::Keyboard::Z) { m_engine.Undo(); m_viewport.RefreshTexture(m_engine); return; }
             if (event.key.code == sf::Keyboard::Y) { m_engine.Redo(); m_viewport.RefreshTexture(m_engine); return; }
             if (event.key.code == sf::Keyboard::E) { m_isExportMode = true; m_exportPreview.Activate(m_engine); return; }
-            
             if (event.key.code == sf::Keyboard::L) {
 #if defined(_WIN32)
                 std::string path = openWindowsFileDialog(DialogMode::CombinedOpen);
@@ -190,7 +179,6 @@ void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::Rende
                 }
                 return;
             }
-            
             if (event.key.code == sf::Keyboard::S) {
 #if defined(_WIN32)
                 std::string path = saveWindowsFileDialog("project.sps");
@@ -201,7 +189,6 @@ void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::Rende
                 return;
             }
         }
-
         if (event.key.code == sf::Keyboard::A) {
             m_engine.ToggleAutoAlign();
             m_viewport.RefreshTexture(m_engine);
@@ -212,16 +199,12 @@ void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::Rende
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Right) {
         sf::Vector2i pixelPos(event.mouseButton.x, event.mouseButton.y);
         sf::Vector2f worldPos = m_viewport.MapPixelToWorld(pixelPos, window);
-
         std::string targetSpriteId = "";
-
         if (m_engine.IsProjectActive() && m_engine.GetCurrentProject()) {
             auto sprites = m_engine.GetCurrentProject()->GetSprites();
-            
             for (auto it = sprites.rbegin(); it != sprites.rend(); ++it) {
                 auto sprite = *it;
                 if (!sprite) continue;
-
                 auto rect = sprite->GetSourceRect();
                 sf::FloatRect bounds(rect.x, rect.y, rect.width, rect.height);
                 if (bounds.contains(worldPos)) {
@@ -230,7 +213,6 @@ void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::Rende
                 }
             }
         }
-
         if (!targetSpriteId.empty()) {
             std::vector<StudioUI::ContextMenuItem> items = {
                 {"Delete Sprite", [this, targetSpriteId]() {
@@ -254,14 +236,12 @@ void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::Rende
     }
 
     if (m_workspace.HandleEvent(event, window)) return;
-
     if (m_isWizardMode) {
         bool exitWizard = false;
         m_animBuilderPanel.HandleEvent(event, window, m_engine, exitWizard);
         if (exitWizard) m_isWizardMode = false;
         return;
     }
-
     if (!m_isExportMode) {
         if (m_toolbar.HandleEvent(event, window, m_engine)) return;
     } else {
@@ -276,16 +256,17 @@ void SpriteSheetStudioPanel::HandleEvent(const sf::Event& event, const sf::Rende
         }
         return;
     }
-
     if (m_animationPanel) {
         m_animationPanel->HandleEvent(event, window, m_engine, m_viewport);
     }
-
     m_viewport.HandleEvent(event, window, m_engine);
 }
 
 void SpriteSheetStudioPanel::Update(float deltaTime, const sf::RenderWindow& window) {
     if (!m_isActive) return;
+
+    sf::FloatRect currentBounds(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y));
+    SetBounds(currentBounds);
 
     if (m_isExportMode) {
         if (!m_exportPreview.IsActive()) {
@@ -293,22 +274,18 @@ void SpriteSheetStudioPanel::Update(float deltaTime, const sf::RenderWindow& win
         }
         return;
     }
-
     if (!m_isWizardMode) {
         m_engine.Update(deltaTime);
         m_viewport.Update(deltaTime);
-
         m_autoSaveTimer += deltaTime;
         if (m_autoSaveTimer >= 300.0f) {
             if (m_engine.IsProjectActive()) m_engine.SaveProject("autosave_backup.sps");
             m_autoSaveTimer = 0.0f;
         }
-
         sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
         sf::Vector2f worldPos = window.mapPixelToCoords(pixelPos);
         int totalSprites = (m_engine.IsProjectActive() && m_engine.GetCurrentProject())
                             ? static_cast<int>(m_engine.GetCurrentProject()->GetSprites().size()) : 0;
-
         m_workspace.UpdateStatusBar(1.0f, worldPos, totalSprites, 0, "Ready");
     }
 }
@@ -318,8 +295,7 @@ void SpriteSheetStudioPanel::SetBounds(const sf::FloatRect& bounds) {
     m_toolbar.SetBounds(bounds);
     m_viewport.SetBounds(bounds);
     m_workspace.SetBounds(bounds);
-    m_animBuilderPanel.SetBounds(bounds);
-    m_exportPreview.SetBounds(bounds); 
+    
     if (m_animationPanel) {
         m_animationPanel->SetBounds(bounds);
     }
@@ -328,19 +304,18 @@ void SpriteSheetStudioPanel::SetBounds(const sf::FloatRect& bounds) {
 void SpriteSheetStudioPanel::Render(sf::RenderWindow& window) {
     if (!m_isActive) return;
 
-    sf::Vector2u winSize = window.getSize();
-    sf::View uiView(sf::FloatRect(0.f, 0.f, static_cast<float>(winSize.x), static_cast<float>(winSize.y)));
+    sf::FloatRect currentBounds(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y));
+    SetBounds(currentBounds);
+
+    sf::View uiView(currentBounds);
     window.setView(uiView);
 
     if (m_isExportMode && m_exportPreview.IsActive()) {
         m_exportPreview.Render(window);
     } else {
         m_isExportMode = false;
-        
         m_viewport.Render(window, m_engine);
-        
         window.setView(uiView); 
-        
         if (!m_isUIHidden && m_animationPanel) {
             m_animationPanel->Render(window, m_engine);
         }

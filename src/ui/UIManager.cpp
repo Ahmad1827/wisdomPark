@@ -1025,6 +1025,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
             else {
                 m_activeTool.reset();
+                // crucial: reset view back to logical for Wisdom Park
+                sf::View logicalView(sf::FloatRect(0.f, 0.f, 1920.f, 1080.f));
+                window.setView(logicalView);
             }
 
             showMessage(m_debugUseSpriteStudio ? "Debug: Embedded Sprite Sheet Studio" : "Debug: Native Canvas Workspace", sf::Color::Yellow);
@@ -1033,10 +1036,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
         if (m_debugUseSpriteStudio) {
             if (m_activeTool) {
-                if (event.type == sf::Event::Resized) {
-                    sf::FloatRect physicalSpace(0.f, 0.f, static_cast<float>(event.size.width), static_cast<float>(event.size.height));
-                    m_activeTool->SetBounds(physicalSpace);
-                }
+                // Intercept the view before handling the event so the tool's mouse calculations match!
+                sf::View physicalView(sf::FloatRect(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
+                window.setView(physicalView);
+
+                sf::FloatRect physicalSpace(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y));
+                m_activeTool->SetBounds(physicalSpace);
                 m_activeTool->HandleEvent(event, window);
             }
             return;
@@ -1470,6 +1475,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
     if (m_debugUseSpriteStudio) {
         if (m_activeTool) {
+            sf::FloatRect physicalSpace(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y));
+            m_activeTool->SetBounds(physicalSpace);
             m_activeTool->Update(dt, window);
         }
         return;
@@ -1760,6 +1767,22 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
     }
     else if (currentState == AppState::Painting) {
 
+        if (m_debugUseSpriteStudio) {
+            // Force the 1:1 physical viewport exactly when the tool renders
+            sf::View physicalView(sf::FloatRect(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
+            window.setView(physicalView);
+
+            // Block out the Wisdom Park background
+            sf::RectangleShape solidBg(sf::Vector2f(window.getSize().x, window.getSize().y));
+            solidBg.setFillColor(sf::Color(18, 18, 22));
+            window.draw(solidBg);
+
+            if (m_activeTool) {
+                m_activeTool->Render(window);
+            }
+            return;
+        }
+
         rightProperties.syncState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), timeline.getFps());
 
         if (m_activeTool) {
@@ -1768,10 +1791,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             if (auto* canvasTool = dynamic_cast<CanvasTool*>(m_activeTool.get())) {
                 canvasTool->RenderShadows(window, aiHelper);
             }
-        }
-
-        if (m_debugUseSpriteStudio) {
-            return;
         }
 
         aiHelper.draw(window);

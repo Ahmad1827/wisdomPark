@@ -8,7 +8,7 @@ namespace StudioCore {
     class StudioEngineFacade;
 }
 
-class PreviewViewport; // Forward declaration
+class PreviewViewport;
 
 namespace StudioUI {
 
@@ -18,7 +18,7 @@ public:
     bool InitializeFont(const std::string& customPath);
     void HandleEvent(const sf::Event& event, const sf::RenderWindow& window, StudioCore::StudioEngineFacade& engine, PreviewViewport& viewport);
     void Render(sf::RenderWindow& window, const StudioCore::StudioEngineFacade& engine);
-    void SetBounds(const sf::FloatRect& bounds) { m_bounds = bounds; }
+    void SetBounds(const sf::FloatRect& bounds);
 
 private:
     sf::Font m_font;
