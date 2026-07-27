@@ -1,6 +1,6 @@
 #pragma once
 #include "../core/ITool.h"
-#include "../SpriteSheetStudioPanel.h"
+#include "../SpriteEngine/UI/include/SpriteSheetStudioPanel.h"
 
 class SpriteSheetStudioTool : public ITool {
 private:

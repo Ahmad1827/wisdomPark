@@ -1,36 +1,41 @@
 #include <SFML/Graphics.hpp>
-#include "SpriteSheetStudioPanel.h"
+#include "ui/UIManager.h"
+#include "core/ProjectManager.h"
+#include "core/Canvas.h"
+#include "core/Timeline.h"
+#include "ai/AIHelper.h"
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode(1280, 720), "Wisdom Park Asset Tools — Sprite Sheet Studio");
+    sf::RenderWindow window(sf::VideoMode(1920, 1080), "Wisdom Park", sf::Style::Default);
     window.setFramerateLimit(60);
 
-    StudioUI::SpriteSheetStudioPanel editorPanel;
-    editorPanel.Initialize();
+    ProjectManager pm;
+    Canvas canvas;
+    Timeline timeline;
+    AIHelper aiHelper;
+    UIManager uiManager;
 
+    uiManager.init(&pm, &canvas);
+
+    AppState currentState = AppState::Welcome;
+    AppSettings settings;
     sf::Clock clock;
 
     while (window.isOpen()) {
-        float deltaTime = clock.restart().asSeconds();
+        float dt = clock.restart().asSeconds();
         sf::Event event;
 
         while (window.pollEvent(event)) {
             if (event.type == sf::Event::Closed) {
                 window.close();
             }
-            if (event.type == sf::Event::Resized) {
-                sf::FloatRect visibleArea(0, 0, event.size.width, event.size.height);
-                window.setView(sf::View(visibleArea));
-                editorPanel.SetBounds(visibleArea);
-            }
-
-            editorPanel.HandleEvent(event, window);
+            uiManager.handleEvent(event, window, currentState, settings, canvas, timeline, aiHelper, pm);
         }
 
-        editorPanel.Update(deltaTime, window);
+        uiManager.update(window, currentState, settings, dt, canvas, timeline);
 
-        window.clear();
-        editorPanel.Render(window);
+        window.clear(sf::Color(15, 15, 20));
+        uiManager.draw(window, currentState, canvas, aiHelper, timeline);
         window.display();
     }
 
