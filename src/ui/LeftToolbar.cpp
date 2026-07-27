@@ -33,43 +33,38 @@ void LeftToolbar::init() {
         btn.id = id;
         btn.isAiTool = aiTool;
         btn.rect.setSize(sf::Vector2f(width - 20.f, 40.f));
-
         btn.label.setFont(font);
         btn.label.setString(text);
         btn.label.setCharacterSize(11);
-
         sf::FloatRect tRect = btn.label.getLocalBounds();
         btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
-
         tools.push_back(btn);
         };
 
     float startY = 60.f;
-    float gap = 50.f;
+    float gap = 45.f;
 
     makeBtn("brush", "Brush", startY);
     makeBtn("pencil", "Pencil", startY + gap * 1);
     makeBtn("eraser", "Erase", startY + gap * 2);
     makeBtn("fill", "Bucket", startY + gap * 3);
     makeBtn("select", "Select", startY + gap * 4);
-    makeBtn("symmetry", "Symmetry", startY + gap * 5);
-    makeBtn("ai_gen", "AI Gen", startY + gap * 6, true);
-    makeBtn("import_img", "Image", startY + gap * 7);
-    makeBtn("audio_panel", "Audio", startY + gap * 8);
-    makeBtn("dither_toggle", "Dither", startY + gap * 9);
+    makeBtn("shapes", "Shapes", startY + gap * 5);
+    makeBtn("symmetry", "Symmetry", startY + gap * 6);
+    makeBtn("ai_gen", "AI Gen", startY + gap * 7, true);
+    makeBtn("import_img", "Image", startY + gap * 8);
+    makeBtn("audio_panel", "Audio", startY + gap * 9);
+    makeBtn("dither_toggle", "Dither", startY + gap * 10);
 
     auto makeActionBtn = [&](std::string id, std::string text) {
         ToolItem btn;
         btn.id = id;
         btn.rect.setSize(sf::Vector2f(width - 20.f, 30.f));
-
         btn.label.setFont(font);
         btn.label.setString(text);
         btn.label.setCharacterSize(10);
-
         sf::FloatRect tRect = btn.label.getLocalBounds();
         btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
-
         selectionActions.push_back(btn);
         };
 
@@ -82,18 +77,11 @@ void LeftToolbar::init() {
 }
 
 void LeftToolbar::update(float dt, bool focusMode) {
-    if (focusMode) {
-        targetX = -width;
-    }
-    else {
-        if (state == PanelState::Pinned || state == PanelState::Visible) targetX = 0.f;
-        else targetX = -width;
-    }
+    if (focusMode) targetX = -width;
+    else targetX = (state == PanelState::Pinned || state == PanelState::Visible) ? 0.f : -width;
 
     currentX += (targetX - currentX) * 15.0f * dt;
-
     background.setPosition(currentX, 0.f);
-
     handleBg.setPosition(currentX + width, 500.f);
     handleLabel.setPosition(currentX + width + 6.f, 530.f);
 
@@ -115,7 +103,7 @@ void LeftToolbar::update(float dt, bool focusMode) {
     for (auto& tool : tools) {
         tool.rect.setPosition(currentX + 10.f, startY);
         tool.label.setPosition(currentX + (width / 2.f), startY + 20.f);
-        startY += 50.f;
+        startY += 45.f;
     }
 
     startY += 10.f;
@@ -133,13 +121,8 @@ void LeftToolbar::updateHover(sf::Vector2f mousePos) {
     if (state == PanelState::Hidden && inHandle) state = PanelState::Visible;
     else if (state == PanelState::Visible && !inPanel && !inHandle) state = PanelState::Hidden;
 
-    for (auto& tool : tools) {
-        tool.isHovered = tool.rect.getGlobalBounds().contains(mousePos);
-    }
-
-    for (auto& act : selectionActions) {
-        act.isHovered = act.rect.getGlobalBounds().contains(mousePos);
-    }
+    for (auto& tool : tools) tool.isHovered = tool.rect.getGlobalBounds().contains(mousePos);
+    for (auto& act : selectionActions) act.isHovered = act.rect.getGlobalBounds().contains(mousePos);
 }
 
 void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSelection) {
@@ -165,12 +148,8 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
             tool.label.setFillColor(sf::Color::White);
         }
         else {
-            if (tool.id == "audio_panel") {
-                tool.rect.setFillColor(tool.isHovered ? sf::Color(100, 50, 150, 200) : sf::Color(80, 40, 120, 150));
-            }
-            else {
-                tool.rect.setFillColor(tool.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));
-            }
+            if (tool.id == "audio_panel") tool.rect.setFillColor(tool.isHovered ? sf::Color(100, 50, 150, 200) : sf::Color(80, 40, 120, 150));
+            else tool.rect.setFillColor(tool.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));
             tool.label.setFillColor(sf::Color(220, 220, 225));
         }
 
@@ -180,15 +159,9 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
 
     if (hasSelection) {
         for (auto& act : selectionActions) {
-            if (act.id == "erase_sel") {
-                act.rect.setFillColor(act.isHovered ? sf::Color(200, 50, 50, 150) : sf::Color(150, 40, 40, 100));
-            }
-            else if (act.id == "resize_sel") {
-                act.rect.setFillColor(act.isHovered ? sf::Color(0, 200, 100, 150) : sf::Color(0, 150, 80, 100));
-            }
-            else {
-                act.rect.setFillColor(act.isHovered ? sf::Color(0, 191, 255, 150) : sf::Color(0, 122, 204, 100));
-            }
+            if (act.id == "erase_sel") act.rect.setFillColor(act.isHovered ? sf::Color(200, 50, 50, 150) : sf::Color(150, 40, 40, 100));
+            else if (act.id == "resize_sel") act.rect.setFillColor(act.isHovered ? sf::Color(0, 200, 100, 150) : sf::Color(0, 150, 80, 100));
+            else act.rect.setFillColor(act.isHovered ? sf::Color(0, 191, 255, 150) : sf::Color(0, 122, 204, 100));
             act.label.setFillColor(sf::Color::White);
             window.draw(act.rect);
             window.draw(act.label);

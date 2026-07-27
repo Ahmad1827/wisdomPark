@@ -163,6 +163,8 @@
     <ClCompile Include="src\core\ColorManager.cpp" />
     <ClCompile Include="src\core\FrameRenderer.cpp" />
     <ClCompile Include="src\core\DitherManager.cpp" />
+    <ClCompile Include="src\core\ShapeSystem.cpp" />
+    <ClCompile Include="src\tools\ShapeTool.cpp" />
     <ClCompile Include="src\core\SymmetryManager.cpp" />
     <ClCompile Include="src\SpriteEngine\Core\Source\Commands\AdjustBaselineCommand.cpp" />
     <ClCompile Include="src\SpriteEngine\Core\Source\Commands\AnimationCommands.cpp" />
@@ -243,6 +245,8 @@
     <ClInclude Include="src\core\ColorManager.h" />
     <ClInclude Include="src\core\FrameRenderer.h" />
     <ClInclude Include="src\core\DitherManager.h" />
+    <ClInclude Include="src\tools\ShapeTool.h" />
+    <ClInclude Include="src\core\ShapeSystem.h" />
     <ClInclude Include="src\core\SymmetryManager.h" />
     <ClInclude Include="src\core\ITool.h" />
     <ClInclude Include="src\core\NativeDialogs.h" />

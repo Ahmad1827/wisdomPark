@@ -14,6 +14,7 @@
 #include <windows.h>
 #include "../tools/CanvasTool.h"
 #include "../tools/SpriteSheetStudioTool.h"
+#include "../tools/ShapeTool.h"
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -1025,7 +1026,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
             else {
                 m_activeTool.reset();
-                // crucial: reset view back to logical for Wisdom Park
                 sf::View logicalView(sf::FloatRect(0.f, 0.f, 1920.f, 1080.f));
                 window.setView(logicalView);
             }
@@ -1036,7 +1036,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
         if (m_debugUseSpriteStudio) {
             if (m_activeTool) {
-                // Intercept the view before handling the event so the tool's mouse calculations match!
                 sf::View physicalView(sf::FloatRect(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
                 window.setView(physicalView);
 
@@ -1434,6 +1433,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             leftToolbar.setActiveTool("symmetry");
                             showMessage("Symmetry Tool: Drag to draw the mirror axis", sf::Color::Green);
                         }
+                        else if (leftAction == "shapes") {
+                            canvas.commitSelection(timeline.getCurrentFrame());
+                            canvas.setActiveTool(ToolType::Shapes);
+                            leftToolbar.setActiveTool("shapes");
+                            showMessage("Shapes Tool Activated", sf::Color::Green);
+                        }
                         else if (leftAction == "dither_toggle") {
                             canvas.toggleDithering();
                             showMessage("Dithering Toggled", sf::Color::Green);
@@ -1678,8 +1683,14 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
         sf::FloatRect availableSpace(availLeft, availTop, availWidth, availHeight);
 
-        if (!m_activeTool) {
-            if (m_debugUseSpriteStudio) {
+        bool needsShapeTool = (canvas.getActiveTool() == ToolType::Shapes);
+        bool hasShapeTool = dynamic_cast<ShapeTool*>(m_activeTool.get()) != nullptr;
+
+        if (!m_activeTool || (needsShapeTool && !hasShapeTool) || (!needsShapeTool && hasShapeTool && !m_debugUseSpriteStudio)) {
+            if (needsShapeTool) {
+                m_activeTool = std::make_unique<ShapeTool>(canvas, timeline);
+            }
+            else if (m_debugUseSpriteStudio) {
                 m_activeTool = std::make_unique<SpriteSheetStudioTool>();
             }
             else {
@@ -1760,11 +1771,9 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
     else if (currentState == AppState::Painting) {
 
         if (m_debugUseSpriteStudio) {
-            // Force the 1:1 physical viewport exactly when the tool renders
             sf::View physicalView(sf::FloatRect(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
             window.setView(physicalView);
 
-            // Block out the Wisdom Park background
             sf::RectangleShape solidBg(sf::Vector2f(window.getSize().x, window.getSize().y));
             solidBg.setFillColor(sf::Color(18, 18, 22));
             window.draw(solidBg);
