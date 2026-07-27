@@ -2,19 +2,24 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 
-enum class SymmetryMode { None, Horizontal, Vertical, Both, Radial };
-
 class SymmetryManager {
 public:
     SymmetryManager();
-    void setMode(SymmetryMode mode);
-    void setCenter(sf::Vector2f center);
-    void setRadialSegments(int segments);
+
+    void setEndpoints(sf::Vector2f start, sf::Vector2f end);
+    void updateVectors();
     std::vector<sf::Vector2f> getSymmetricPoints(sf::Vector2f point);
     void drawGuides(sf::RenderWindow& window, const sf::RenderStates& states, const sf::FloatRect& drawArea, float scale);
 
-private:
-    SymmetryMode currentMode;
-    sf::Vector2f centerPoint;
-    int radialSegments;
+    sf::Vector2f startPoint;
+    sf::Vector2f endPoint;
+    sf::Vector2f direction;
+    sf::Vector2f normal;
+
+    bool enabled;
+    bool visible;
+    bool snapToPixel;
+    bool snapTo45;
+    sf::Color guideColor;
+    float guideThickness;
 };

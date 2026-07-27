@@ -1428,19 +1428,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             if (!file.empty()) { canvas.importImageToActiveLayer(file, timeline.getCurrentFrame()); showMessage("Image Imported", sf::Color::Green); }
                         }
                         else if (leftAction == "audio_panel") audioPanel.toggle();
-                        else if (leftAction == "sym_vert") {
-                            static bool symVert = false;
-                            symVert = !symVert;
-                            canvas.getSymmetryManager().setMode(symVert ? SymmetryMode::Vertical : SymmetryMode::None);
-                            canvas.getSymmetryManager().setCenter(sf::Vector2f(canvas.getCanvasSize().x / 2.f, canvas.getCanvasSize().y / 2.f));
-                            showMessage(symVert ? "Vertical Symmetry Enabled" : "Symmetry Disabled", sf::Color::Green);
-                        }
-                        else if (leftAction == "sym_horiz") {
-                            static bool symHoriz = false;
-                            symHoriz = !symHoriz;
-                            canvas.getSymmetryManager().setMode(symHoriz ? SymmetryMode::Horizontal : SymmetryMode::None);
-                            canvas.getSymmetryManager().setCenter(sf::Vector2f(canvas.getCanvasSize().x / 2.f, canvas.getCanvasSize().y / 2.f));
-                            showMessage(symHoriz ? "Horizontal Symmetry Enabled" : "Symmetry Disabled", sf::Color::Green);
+                        else if (leftAction == "symmetry") {
+                            canvas.commitSelection(timeline.getCurrentFrame());
+                            canvas.setActiveTool(ToolType::Symmetry);
+                            leftToolbar.setActiveTool("symmetry");
+                            showMessage("Symmetry Tool: Drag to draw the mirror axis", sf::Color::Green);
                         }
                         else if (leftAction == "dither_toggle") {
                             canvas.toggleDithering();

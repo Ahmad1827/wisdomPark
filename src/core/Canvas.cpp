@@ -794,8 +794,6 @@ void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf
     }
 }
 
-// FIX: drawPixelExact now routes through SymmetryManager and DitherManager.
-// Your Bresenham and Pixel Perfect logic in handleMouseMoved calls this, so they gain symmetry and dithering for free!
 void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
     if (useDithering && !ditherManager.shouldDrawPixel(x, y)) return;
 
@@ -900,6 +898,16 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
             sf::Color drawCol = primaryColor;
 
+            // FIX: Symmetry Tool Start Logic
+            if (activeTool == ToolType::Symmetry) {
+                isDrawing = true;
+                startPos = localPos;
+                lastPos = localPos;
+                symmetryManager.enabled = true;
+                symmetryManager.setEndpoints(localPos, localPos);
+                return;
+            }
+
             if (activeTool == ToolType::Select) {
                 if (pendingTransform && selection.getState() == SelectionState::Floating) {
                     if (selection.startResize(localPos, computeHandleHitRadius())) {
@@ -981,6 +989,12 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
         logicalPos = getInverseTransform().transformPoint(mappedPos);
     }
 
+    // FIX: Symmetry Tool End Logic
+    if (activeTool == ToolType::Symmetry) {
+        isDrawing = false;
+        return;
+    }
+
     if (activeTool == ToolType::Select) {
         if (selection.getState() == SelectionState::Drawing) {
             selection.endLasso();
@@ -1016,6 +1030,26 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     lastHoverLocalPos = localPos;
 
     if (activeTool == ToolType::Fill) return;
+
+    // FIX: Symmetry Placement Drag Logic
+    if (activeTool == ToolType::Symmetry) {
+        if (isDrawing) {
+            sf::Vector2f endPos = localPos;
+
+            // BONUS: Shift key 45-degree snapping
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) {
+                sf::Vector2f diff = endPos - startPos;
+                float angle = std::atan2(diff.y, diff.x);
+                float snappedAngle = std::round(angle / (3.14159265f / 4.f)) * (3.14159265f / 4.f);
+                float length = std::sqrt(diff.x * diff.x + diff.y * diff.y);
+                endPos.x = startPos.x + length * std::cos(snappedAngle);
+                endPos.y = startPos.y + length * std::sin(snappedAngle);
+            }
+
+            symmetryManager.setEndpoints(startPos, endPos);
+        }
+        return;
+    }
 
     if (activeTool == ToolType::Select) {
         bool allowOutside = isImageResourceActive(currentFrame);
