@@ -9,7 +9,7 @@
 #include "SymmetryManager.h"
 #include "DitherManager.h"
 
-enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes };
+enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 enum class TransformState { None, Scaling };
 
@@ -229,5 +229,6 @@ public:
 
     SymmetryManager& getSymmetryManager() { return symmetryManager; }
     DitherManager& getDitherManager() { return ditherManager; }
+    SelectionManager& getSelectionManager() { return selection; }
     void toggleDithering() { useDithering = !useDithering; }
 };

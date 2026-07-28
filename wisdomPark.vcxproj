@@ -210,6 +210,7 @@
     <ClCompile Include="src\SpriteEngine\UI\Source\Rendering\SpriteGizmoRenderer.cpp" />
     <ClCompile Include="src\SpriteEngine\UI\Source\SpriteSheetStudioPanel.cpp" />
     <ClCompile Include="src\tools\CanvasTool.cpp" />
+    <ClCompile Include="src\tools\MagicWandTool.cpp" />
     <ClCompile Include="src\tools\SpriteSheetStudioTool.cpp" />
     <ClCompile Include="src\ui\KeybindSettingsPanel.cpp" />
     <ClCompile Include="src\core\Timeline.cpp" />
@@ -245,6 +246,7 @@
     <ClInclude Include="src\core\ColorManager.h" />
     <ClInclude Include="src\core\FrameRenderer.h" />
     <ClInclude Include="src\core\DitherManager.h" />
+    <ClInclude Include="src\tools\MagicWandTool.h" />
     <ClInclude Include="src\tools\ShapeTool.h" />
     <ClInclude Include="src\core\ShapeSystem.h" />
     <ClInclude Include="src\core\SymmetryManager.h" />

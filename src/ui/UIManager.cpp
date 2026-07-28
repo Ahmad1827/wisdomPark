@@ -15,6 +15,7 @@
 #include "../tools/CanvasTool.h"
 #include "../tools/SpriteSheetStudioTool.h"
 #include "../tools/ShapeTool.h"
+#include "../tools/MagicWandTool.h"
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -1406,7 +1407,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         return;
                     }
 
-                    bool hasActiveSel = (canvas.getActiveTool() == ToolType::Select);
+                    bool hasActiveSel = (canvas.getActiveTool() == ToolType::Select || canvas.getActiveTool() == ToolType::MagicWand);
                     std::string leftAction = leftToolbar.handleClick(mousePos, AIManager::getInstance().isAIEnabled(), hasActiveSel);
                     if (!leftAction.empty()) {
                         if (leftAction == "ai_disabled") showMessage("Enable AI in Settings.", sf::Color::Red);
@@ -1415,6 +1416,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         else if (leftAction == "eraser") canvas.setActiveTool(ToolType::Eraser);
                         else if (leftAction == "fill") canvas.setActiveTool(ToolType::Fill);
                         else if (leftAction == "select") canvas.setActiveTool(ToolType::Select);
+                        else if (leftAction == "magic_wand") {
+                            canvas.commitSelection(timeline.getCurrentFrame());
+                            canvas.setActiveTool(ToolType::MagicWand);
+                            leftToolbar.setActiveTool("magic_wand");
+                            showMessage("Magic Wand Selected", sf::Color::Green);
+                        }
                         else if (leftAction == "ai_gen") g_aiPanel.toggle();
                         else if (leftAction == "flip_h") canvas.flipSelectionHorizontal(timeline.getCurrentFrame());
                         else if (leftAction == "flip_v") canvas.flipSelectionVertical(timeline.getCurrentFrame());
@@ -1684,11 +1691,16 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         sf::FloatRect availableSpace(availLeft, availTop, availWidth, availHeight);
 
         bool needsShapeTool = (canvas.getActiveTool() == ToolType::Shapes);
+        bool needsWandTool = (canvas.getActiveTool() == ToolType::MagicWand);
         bool hasShapeTool = dynamic_cast<ShapeTool*>(m_activeTool.get()) != nullptr;
+        bool hasWandTool = dynamic_cast<MagicWandTool*>(m_activeTool.get()) != nullptr;
 
-        if (!m_activeTool || (needsShapeTool && !hasShapeTool) || (!needsShapeTool && hasShapeTool && !m_debugUseSpriteStudio)) {
+        if (!m_activeTool || (needsShapeTool && !hasShapeTool) || (needsWandTool && !hasWandTool) || (!needsShapeTool && !needsWandTool && (hasShapeTool || hasWandTool) && !m_debugUseSpriteStudio)) {
             if (needsShapeTool) {
                 m_activeTool = std::make_unique<ShapeTool>(canvas, timeline);
+            }
+            else if (needsWandTool) {
+                m_activeTool = std::make_unique<MagicWandTool>(canvas, timeline);
             }
             else if (m_debugUseSpriteStudio) {
                 m_activeTool = std::make_unique<SpriteSheetStudioTool>();
