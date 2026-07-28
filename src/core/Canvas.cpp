@@ -5,7 +5,6 @@
 #include <stack>
 #include <queue>
 
-// FIX: Global pointer to grab the window coordinates directly without relying on other files
 static const sf::RenderWindow* g_activeWindow = nullptr;
 
 const int DEFAULT_NORMAL_W = 1280;
@@ -712,6 +711,9 @@ void Canvas::executeGlobalFill(sf::Color targetColor, sf::Color replacementColor
     for (unsigned int y = 0; y < h; ++y) {
         size_t rowStart = (static_cast<size_t>(y) * fullW) * 4;
         for (unsigned int x = 0; x < w; ++x) {
+            // Fill Selection Masking Integration
+            if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) continue;
+
             size_t idx = rowStart + static_cast<size_t>(x) * 4;
             sf::Color px(pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3]);
             if (colorMatches(px, targetColor)) {
@@ -726,6 +728,9 @@ void Canvas::executeGlobalFill(sf::Color targetColor, sf::Color replacementColor
 
 void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image) {
     if (colorMatches(targetColor, replacementColor)) return;
+
+    // Reject fill instantly if clicking completely outside active selection bounds
+    if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(startPoint.x), static_cast<float>(startPoint.y)))) return;
 
     int w = static_cast<int>(std::min(image.getSize().x, canvasLogicalSize.x));
     int h = static_cast<int>(std::min(image.getSize().y, canvasLogicalSize.y));
@@ -742,6 +747,11 @@ void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf
 
     if (!colorMatches(getPx(startPoint.x, startPoint.y), targetColor)) return;
 
+    auto canFill = [&](int x, int y) {
+        if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) return false;
+        return colorMatches(getPx(x, y), targetColor);
+        };
+
     auto setPx = [&](int x, int y, sf::Color c) {
         size_t idx = (static_cast<size_t>(y) * fullW + static_cast<size_t>(x)) * 4;
         pixels[idx] = c.r; pixels[idx + 1] = c.g; pixels[idx + 2] = c.b; pixels[idx + 3] = c.a;
@@ -757,7 +767,7 @@ void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf
         int x = p.x;
         int y = p.y;
 
-        while (x >= 0 && colorMatches(getPx(x, y), targetColor)) {
+        while (x >= 0 && canFill(x, y)) {
             x--;
         }
         x++;
@@ -765,11 +775,11 @@ void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf
         bool spanAbove = false;
         bool spanBelow = false;
 
-        while (x < w && colorMatches(getPx(x, y), targetColor)) {
+        while (x < w && canFill(x, y)) {
             setPx(x, y, replacementColor);
 
             if (y > 0) {
-                bool match = colorMatches(getPx(x, y - 1), targetColor);
+                bool match = canFill(x, y - 1);
                 if (!spanAbove && match) {
                     stack.push_back(sf::Vector2i(x, y - 1));
                     spanAbove = true;
@@ -780,7 +790,7 @@ void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf
             }
 
             if (y < h - 1) {
-                bool match = colorMatches(getPx(x, y + 1), targetColor);
+                bool match = canFill(x, y + 1);
                 if (!spanBelow && match) {
                     stack.push_back(sf::Vector2i(x, y + 1));
                     spanBelow = true;
@@ -806,6 +816,9 @@ void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
     auto points = symmetryManager.getSymmetricPoints(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)));
 
     for (auto pt : points) {
+        // Brush & Eraser Selection Masking Integration
+        if (selection.isActive() && !selection.isPointInsideSelection(pt)) continue;
+
         int ix = static_cast<int>(std::round(pt.x));
         int iy = static_cast<int>(std::round(pt.y));
 
@@ -898,7 +911,6 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
             sf::Color drawCol = primaryColor;
 
-            // FIX: Symmetry Tool Start Logic
             if (activeTool == ToolType::Symmetry) {
                 isDrawing = true;
                 startPos = localPos;
@@ -929,8 +941,11 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 return;
             }
 
-            if (selection.isActive()) {
-                commitSelection(currentFrame);
+            if (activeTool == ToolType::MagicWand) {
+                return;
+            }
+
+            if (selection.isActive() && activeTool != ToolType::Fill && activeTool != ToolType::Shapes) {
             }
 
             if (activeTool == ToolType::Fill) {
@@ -989,7 +1004,6 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
         logicalPos = getInverseTransform().transformPoint(mappedPos);
     }
 
-    // FIX: Symmetry Tool End Logic
     if (activeTool == ToolType::Symmetry) {
         isDrawing = false;
         return;
@@ -1031,12 +1045,9 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
 
     if (activeTool == ToolType::Fill) return;
 
-    // FIX: Symmetry Placement Drag Logic
     if (activeTool == ToolType::Symmetry) {
         if (isDrawing) {
             sf::Vector2f endPos = localPos;
-
-            // BONUS: Shift key 45-degree snapping
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) {
                 sf::Vector2f diff = endPos - startPos;
                 float angle = std::atan2(diff.y, diff.x);
@@ -1045,7 +1056,6 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                 endPos.x = startPos.x + length * std::cos(snappedAngle);
                 endPos.y = startPos.y + length * std::sin(snappedAngle);
             }
-
             symmetryManager.setEndpoints(startPos, endPos);
         }
         return;
@@ -1299,7 +1309,6 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             window.draw(lines, innerStates);
         }
 
-        // FIX: Draw Symmetry Guides
         symmetryManager.drawGuides(window, innerStates, sf::FloatRect(0, 0, static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y)), viewScale);
     }
 
@@ -1390,8 +1399,6 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     }
 }
 
-
-
 void Canvas::drawShadows(sf::RenderWindow& window, sf::Vector2f logicalSunPos, const std::vector<sf::FloatRect>& items, const std::vector<std::string>& categories, const sf::RenderStates& states) {
     for (size_t i = 0; i < items.size(); ++i) {
         bool isClutter = (categories[i] == "healing" || categories[i] == "status-cures" || categories[i] == "vitamins" || categories[i] == "clutter");
@@ -1450,7 +1457,6 @@ void Canvas::setPixelBrushSize(int size) { pixelBrushSize = size; }
 int Canvas::getPixelBrushSize() const { return pixelBrushSize; }
 bool Canvas::getIsDirty() const { return isDirty; }
 void Canvas::clearIsDirty() { isDirty = false; }
-
 
 void Canvas::cyclePixelBrushSize() {
     if (pixelBrushSize == 1) pixelBrushSize = 2;

@@ -32,19 +32,14 @@ private:
     bool m_antiAlias;
     int m_feather;
 
-    sf::Vector2i m_lastHoverPos;
-    std::vector<std::vector<sf::Vector2f>> m_previewContours;
-
     float getPerceptualDistance(sf::Color c1, sf::Color c2);
     void growMask(std::vector<bool>& mask, int w, int h, int amount);
-    void shrinkMask(std::vector<bool>& mask, int w, int h, int amount);
     std::vector<bool> extractSelectionMask(sf::Vector2i startPos);
     std::vector<std::vector<sf::Vector2f>> generateContours(const std::vector<bool>& mask, int w, int h);
     void smoothContours(std::vector<std::vector<sf::Vector2f>>& contours);
     std::vector<sf::Vector2f> bridgeContours(const std::vector<std::vector<sf::Vector2f>>& contours);
 
     void applyWandSelection(const std::vector<bool>& newMask);
-    void updatePreview(sf::Vector2i pos);
     void drawPropertiesPanel(sf::RenderWindow& window);
 
     bool m_isPanning;

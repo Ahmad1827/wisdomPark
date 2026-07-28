@@ -3,9 +3,9 @@
 #include <cmath>
 
 MagicWandTool::MagicWandTool(Canvas& canvas, Timeline& timeline)
-    : m_canvas(canvas), m_timeline(timeline), m_tolerance(32), m_blendMode(SelectionBlendMode::Replace),
+    : m_canvas(canvas), m_timeline(timeline), m_tolerance(10), m_blendMode(SelectionBlendMode::Replace),
     m_contiguous(true), m_sampleAllLayers(false), m_antiAlias(false), m_feather(0),
-    m_lastHoverPos(-1, -1), m_isPanning(false) {
+    m_isPanning(false) {
 }
 
 void MagicWandTool::Initialize() {
@@ -41,25 +41,6 @@ void MagicWandTool::growMask(std::vector<bool>& mask, int w, int h, int amount) 
                     if (x < w - 1) temp[y * w + (x + 1)] = true;
                     if (y > 0) temp[(y - 1) * w + x] = true;
                     if (y < h - 1) temp[(y + 1) * w + x] = true;
-                }
-            }
-        }
-        mask = temp;
-    }
-}
-
-void MagicWandTool::shrinkMask(std::vector<bool>& mask, int w, int h, int amount) {
-    if (amount <= 0) return;
-    for (int i = 0; i < amount; ++i) {
-        std::vector<bool> temp = mask;
-        for (int y = 0; y < h; ++y) {
-            for (int x = 0; x < w; ++x) {
-                if (mask[y * w + x]) {
-                    if (x == 0 || x == w - 1 || y == 0 || y == h - 1 ||
-                        !mask[y * w + (x - 1)] || !mask[y * w + (x + 1)] ||
-                        !mask[(y - 1) * w + x] || !mask[(y + 1) * w + x]) {
-                        temp[y * w + x] = false;
-                    }
                 }
             }
         }
@@ -254,17 +235,6 @@ void MagicWandTool::applyWandSelection(const std::vector<bool>& newMask) {
     }
 }
 
-void MagicWandTool::updatePreview(sf::Vector2i pos) {
-    if (pos == m_lastHoverPos) return;
-    m_lastHoverPos = pos;
-    m_previewContours.clear();
-
-    auto mask = extractSelectionMask(pos);
-    if (m_feather > 0) growMask(mask, m_canvas.getCanvasSize().x, m_canvas.getCanvasSize().y, m_feather);
-    m_previewContours = generateContours(mask, m_canvas.getCanvasSize().x, m_canvas.getCanvasSize().y);
-    if (m_antiAlias && !m_canvas.getPixelMode()) smoothContours(m_previewContours);
-}
-
 void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
@@ -288,11 +258,11 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
                 if (mousePos.x < m_panelBg.getPosition().x + 110) m_feather = std::max(0, m_feather - 1);
                 else m_feather = std::min(50, m_feather + 1);
             }
-            m_lastHoverPos = sf::Vector2i(-1, -1);
         }
         return;
     }
 
+    // Unrestricted Camera Navigation - Panning
     if (event.type == sf::Event::MouseButtonPressed && (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle)) {
         m_isPanning = true;
         m_lastPanPos = mousePos;
@@ -316,18 +286,10 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
         static_cast<int>((viewPos.y - m_canvas.getDrawArea().top) * scaleY));
 
     if (m_canvas.getDrawArea().contains(viewPos)) {
-        if (event.type == sf::Event::MouseMoved) {
-            updatePreview(logicalPos);
-        }
-        else if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
             auto mask = extractSelectionMask(logicalPos);
             applyWandSelection(mask);
-            m_previewContours.clear();
         }
-    }
-    else {
-        m_previewContours.clear();
-        m_lastHoverPos = sf::Vector2i(-1, -1);
     }
 }
 
@@ -336,29 +298,9 @@ void MagicWandTool::Update(float deltaTime, const sf::RenderWindow& window) {
 }
 
 void MagicWandTool::Render(sf::RenderWindow& window) {
-    m_canvas.draw(window, m_timeline.getCurrentFrame(), m_timeline.isPlaying(), sf::RenderStates::Default);
-
-    if (!m_previewContours.empty()) {
-        sf::Transform innerTransform;
-        innerTransform.translate(std::round(m_canvas.getDrawArea().left), std::round(m_canvas.getDrawArea().top));
-        float scaleX = m_canvas.getDrawArea().width / static_cast<float>(m_canvas.getCanvasSize().x);
-        float scaleY = m_canvas.getDrawArea().height / static_cast<float>(m_canvas.getCanvasSize().y);
-        innerTransform.scale(scaleX, scaleY);
-
-        sf::RenderStates states;
-        states.transform = m_canvas.getTransform() * innerTransform;
-
-        for (const auto& contour : m_previewContours) {
-            sf::VertexArray lines(sf::LineStrip, contour.size() + 1);
-            for (size_t i = 0; i < contour.size(); ++i) {
-                lines[i].position = contour[i];
-                lines[i].color = sf::Color::Cyan;
-            }
-            lines[contour.size()].position = contour[0];
-            lines[contour.size()].color = sf::Color::Cyan;
-            window.draw(lines, states);
-        }
-    }
+    sf::RenderStates canvasStates;
+    canvasStates.transform = m_canvas.getTransform();
+    m_canvas.draw(window, m_timeline.getCurrentFrame(), m_timeline.isPlaying(), canvasStates);
 
     drawPropertiesPanel(window);
 }
