@@ -4,12 +4,13 @@
 
 MagicWandTool::MagicWandTool(Canvas& canvas, Timeline& timeline)
     : m_canvas(canvas), m_timeline(timeline), m_tolerance(10),
-    m_contiguous(true), m_sampleAllLayers(false), m_isPanning(false) {
+    m_contiguous(true), m_sampleAllLayers(false), m_requestColorPanelOpen(false) {
+    m_lastPrimaryColor = canvas.getPrimaryColor();
 }
 
 void MagicWandTool::Initialize() {
     m_font.loadFromFile("assets/font.otf");
-    m_panelBg.setSize(sf::Vector2f(220.f, 180.f));
+    m_panelBg.setSize(sf::Vector2f(220.f, 210.f));
     m_panelBg.setFillColor(sf::Color(25, 25, 30, 240));
     m_panelBg.setOutlineThickness(1.f);
     m_panelBg.setOutlineColor(sf::Color(100, 100, 110));
@@ -20,8 +21,10 @@ void MagicWandTool::SetBounds(const sf::FloatRect& bounds) {
     m_panelBg.setPosition(bounds.left + 110.f, bounds.top + 60.f);
 }
 
+bool MagicWandTool::wantsColorPanelOpen() const { return m_requestColorPanelOpen; }
+void MagicWandTool::clearColorPanelRequest() { m_requestColorPanelOpen = false; }
+
 float MagicWandTool::getPerceptualDistance(sf::Color c1, sf::Color c2) {
-    // Fixed: Properly isolates alpha! Black and Transparent are no longer identical.
     float r = std::abs(static_cast<float>(c1.r) - static_cast<float>(c2.r));
     float g = std::abs(static_cast<float>(c1.g) - static_cast<float>(c2.g));
     float b = std::abs(static_cast<float>(c1.b) - static_cast<float>(c2.b));
@@ -91,25 +94,10 @@ std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
     return mask;
 }
 
-std::vector<sf::Vector2f> MagicWandTool::traceBoundary(const std::vector<bool>& mask, int w, int h) {
-    sf::Vector2i startNode(-1, -1);
-
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
-            if (mask[y * w + x]) {
-                startNode = { x, y };
-                break;
-            }
-        }
-        if (startNode.x != -1) break;
-    }
-
-    if (startNode.x == -1) return {};
-
+std::vector<sf::Vector2f> MagicWandTool::traceBoundary(const std::vector<bool>& mask, int w, int h, sf::Vector2i startNode) {
     std::vector<sf::Vector2f> poly;
     sf::Vector2i curr = startNode;
     int dir = 0;
-
     sf::Vector2i start_curr = curr;
     int start_dir = dir;
 
@@ -154,7 +142,9 @@ std::vector<sf::Vector2f> MagicWandTool::traceBoundary(const std::vector<bool>& 
 
     } while (curr != start_curr || dir != start_dir);
 
-    poly.push_back(sf::Vector2f(static_cast<float>(curr.x), static_cast<float>(curr.y)));
+    if (!poly.empty()) {
+        poly.push_back(poly.front());
+    }
     return poly;
 }
 
@@ -164,8 +154,13 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
 
     if (m_panelBg.getGlobalBounds().contains(mousePos)) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            float y = mousePos.y - m_panelBg.getPosition().y;
 
+            if (m_colorBoxRect.contains(mousePos)) {
+                m_requestColorPanelOpen = true;
+                return;
+            }
+
+            float y = mousePos.y - m_panelBg.getPosition().y;
             if (y > 40 && y < 70) {
                 if (mousePos.x < m_panelBg.getPosition().x + 110) m_tolerance = std::max(0, m_tolerance - 5);
                 else m_tolerance = std::min(255, m_tolerance + 5);
@@ -173,24 +168,6 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
             else if (y > 80 && y < 110) m_contiguous = !m_contiguous;
             else if (y > 120 && y < 150) m_sampleAllLayers = !m_sampleAllLayers;
         }
-        return;
-    }
-
-    // Completely fixed camera panning (uses raw screen pixels)
-    if (event.type == sf::Event::MouseButtonPressed && (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle)) {
-        m_isPanning = true;
-        m_lastPanPos = sf::Vector2f(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
-        return;
-    }
-    if (event.type == sf::Event::MouseButtonReleased && (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle)) {
-        m_isPanning = false;
-        return;
-    }
-    if (event.type == sf::Event::MouseMoved && m_isPanning) {
-        sf::Vector2f currentPanPos(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
-        sf::Vector2f delta = currentPanPos - m_lastPanPos;
-        m_canvas.pan(delta);
-        m_lastPanPos = currentPanPos;
         return;
     }
 
@@ -204,18 +181,66 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
 
     if (m_canvas.getDrawArea().contains(viewPos)) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            auto mask = extractSelectionMask(logicalPos);
-            auto poly = traceBoundary(mask, m_canvas.getCanvasSize().x, m_canvas.getCanvasSize().y);
 
-            if (!poly.empty()) {
+            auto mask = extractSelectionMask(logicalPos);
+            int w = m_canvas.getCanvasSize().x;
+            int h = m_canvas.getCanvasSize().y;
+
+            std::vector<std::vector<sf::Vector2f>> polygons;
+            std::vector<bool> visited(w * h, false);
+
+            for (int y = 0; y < h; ++y) {
+                for (int x = 0; x < w; ++x) {
+                    if (mask[y * w + x] && !visited[y * w + x]) {
+
+                        std::queue<sf::Vector2i> q;
+                        q.push({ x, y });
+                        visited[y * w + x] = true;
+                        while (!q.empty()) {
+                            sf::Vector2i p = q.front(); q.pop();
+                            sf::Vector2i n[4] = { {p.x + 1, p.y}, {p.x - 1, p.y}, {p.x, p.y + 1}, {p.x, p.y - 1} };
+                            for (auto& i : n) {
+                                if (i.x >= 0 && i.x < w && i.y >= 0 && i.y < h) {
+                                    if (mask[i.y * w + i.x] && !visited[i.y * w + i.x]) {
+                                        visited[i.y * w + i.x] = true;
+                                        q.push(i);
+                                    }
+                                }
+                            }
+                        }
+
+                        auto poly = traceBoundary(mask, w, h, { x, y });
+                        if (!poly.empty()) polygons.push_back(poly);
+                    }
+                }
+            }
+
+            if (!polygons.empty()) {
+                std::vector<sf::Vector2f> unified;
+                for (const auto& poly : polygons) {
+                    if (unified.empty()) {
+                        unified = poly;
+                    }
+                    else {
+                        unified.push_back(unified.back());
+                        unified.push_back(poly.front());
+                        unified.insert(unified.end(), poly.begin(), poly.end());
+                        unified.push_back(poly.front());
+                        unified.push_back(unified[unified.size() - poly.size() - 3]);
+                    }
+                }
+
                 m_canvas.commitSelection(m_timeline.getCurrentFrame());
                 m_canvas.getSelectionManager().clearSelection();
-
-                m_canvas.getSelectionManager().startLasso(poly[0], m_canvas.getCanvasSize());
-                for (size_t i = 1; i < poly.size(); ++i) {
-                    m_canvas.getSelectionManager().addLassoPoint(poly[i], m_canvas.getCanvasSize());
+                m_canvas.getSelectionManager().startLasso(unified[0], m_canvas.getCanvasSize());
+                for (size_t i = 1; i < unified.size(); ++i) {
+                    m_canvas.getSelectionManager().addLassoPoint(unified[i], m_canvas.getCanvasSize());
                 }
                 m_canvas.getSelectionManager().endLasso();
+            }
+            else {
+                m_canvas.commitSelection(m_timeline.getCurrentFrame());
+                m_canvas.getSelectionManager().clearSelection();
             }
         }
     }
@@ -223,13 +248,35 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
 
 void MagicWandTool::Update(float deltaTime, const sf::RenderWindow& window) {
     m_canvas.updateTransform(deltaTime, m_bounds);
+
+    sf::Color currentPrimary = m_canvas.getPrimaryColor();
+    if (currentPrimary != m_lastPrimaryColor) {
+        if (m_canvas.getSelectionManager().isActive()) {
+            auto* tex = m_canvas.getActiveRenderTexture(m_timeline.getCurrentFrame());
+            if (tex) {
+                m_canvas.saveUndoState();
+                sf::Image img = tex->getTexture().copyToImage();
+                unsigned int w = std::min(img.getSize().x, m_canvas.getCanvasSize().x);
+                unsigned int h = std::min(img.getSize().y, m_canvas.getCanvasSize().y);
+                for (unsigned int y = 0; y < h; ++y) {
+                    for (unsigned int x = 0; x < w; ++x) {
+                        if (m_canvas.getSelectionManager().isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
+                            img.setPixel(x, y, currentPrimary);
+                        }
+                    }
+                }
+                sf::Texture newTex; newTex.loadFromImage(img);
+                tex->clear(sf::Color::Transparent);
+                tex->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
+                tex->display();
+            }
+        }
+        m_lastPrimaryColor = currentPrimary;
+    }
 }
 
 void MagicWandTool::Render(sf::RenderWindow& window) {
-    sf::RenderStates canvasStates;
-    canvasStates.transform = m_canvas.getTransform();
-    m_canvas.draw(window, m_timeline.getCurrentFrame(), m_timeline.isPlaying(), canvasStates);
-
+    m_canvas.draw(window, m_timeline.getCurrentFrame(), m_timeline.isPlaying(), sf::RenderStates::Default);
     drawPropertiesPanel(window);
 }
 
@@ -262,4 +309,18 @@ void MagicWandTool::drawPropertiesPanel(sf::RenderWindow& window) {
     sampT.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
     sampT.setFillColor(sf::Color(200, 200, 200));
     window.draw(sampT);
+
+    y += 40.f;
+    sf::Text fillTxt("Change Into:", m_font, 12);
+    fillTxt.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
+    fillTxt.setFillColor(sf::Color(200, 200, 200));
+    window.draw(fillTxt);
+
+    m_colorBoxRect = sf::FloatRect(m_panelBg.getPosition().x + 110.f, y, 40.f, 24.f);
+    sf::RectangleShape colorBox(sf::Vector2f(m_colorBoxRect.width, m_colorBoxRect.height));
+    colorBox.setPosition(m_colorBoxRect.left, m_colorBoxRect.top);
+    colorBox.setFillColor(m_canvas.getPrimaryColor());
+    colorBox.setOutlineThickness(1.f);
+    colorBox.setOutlineColor(sf::Color(200, 200, 200));
+    window.draw(colorBox);
 }

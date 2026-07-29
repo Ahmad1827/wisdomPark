@@ -14,6 +14,9 @@ public:
     void Render(sf::RenderWindow& window) override;
     void SetBounds(const sf::FloatRect& bounds) override;
 
+    bool wantsColorPanelOpen() const;
+    void clearColorPanelRequest();
+
 private:
     Canvas& m_canvas;
     Timeline& m_timeline;
@@ -26,12 +29,13 @@ private:
     bool m_contiguous;
     bool m_sampleAllLayers;
 
-    bool m_isPanning;
-    sf::Vector2f m_lastPanPos;
+    sf::Color m_lastPrimaryColor;
+    sf::FloatRect m_colorBoxRect;
+    bool m_requestColorPanelOpen;
 
     float getPerceptualDistance(sf::Color c1, sf::Color c2);
     std::vector<bool> extractSelectionMask(sf::Vector2i startPos);
-    std::vector<sf::Vector2f> traceBoundary(const std::vector<bool>& mask, int w, int h);
+    std::vector<sf::Vector2f> traceBoundary(const std::vector<bool>& mask, int w, int h, sf::Vector2i startNode);
 
     void drawPropertiesPanel(sf::RenderWindow& window);
 };
