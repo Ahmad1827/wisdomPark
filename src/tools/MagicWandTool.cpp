@@ -149,28 +149,14 @@ std::vector<sf::Vector2f> MagicWandTool::traceBoundary(const std::vector<bool>& 
     return poly;
 }
 
-std::vector<sf::Vector2f> MagicWandTool::bridgeContours(const std::vector<std::vector<sf::Vector2f>>& contours) {
-    std::vector<sf::Vector2f> unified;
-    if (contours.empty()) return unified;
-
-    unified = contours[0];
-    for (size_t i = 1; i < contours.size(); ++i) {
-        const auto& poly = contours[i];
-        if (poly.empty()) continue;
-
-        sf::Vector2f bridgeStart = unified.back();
-        sf::Vector2f bridgeEnd = poly.front();
-
-        unified.push_back(bridgeStart);
-        unified.push_back(bridgeEnd);
-        unified.insert(unified.end(), poly.begin(), poly.end());
-        unified.push_back(bridgeEnd);
-        unified.push_back(bridgeStart);
-    }
-    return unified;
-}
-
 void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
+    if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Delete) {
+        if (m_canvas.getSelectionManager().isActive()) {
+            m_canvas.fillSelection(sf::Color::Transparent, m_timeline.getCurrentFrame());
+        }
+        return;
+    }
+
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
@@ -259,7 +245,20 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
             }
 
             if (!polygons.empty()) {
-                std::vector<sf::Vector2f> unified = bridgeContours(polygons);
+                std::vector<sf::Vector2f> unified;
+
+                // Pure sequential bridging to completely eliminate the starburst glitch
+                for (size_t i = 0; i < polygons.size(); ++i) {
+                    unified.insert(unified.end(), polygons[i].begin(), polygons[i].end());
+                    unified.push_back(polygons[i].front());
+                    if (i + 1 < polygons.size()) {
+                        unified.push_back(polygons[i + 1].front());
+                    }
+                }
+                // Backtrack the exact path to make the bridges mathematically cancel out
+                for (int i = static_cast<int>(polygons.size()) - 2; i >= 0; --i) {
+                    unified.push_back(polygons[i].front());
+                }
 
                 m_canvas.commitSelection(m_timeline.getCurrentFrame());
                 m_canvas.getSelectionManager().clearSelection();
@@ -284,24 +283,7 @@ void MagicWandTool::Update(float deltaTime, const sf::RenderWindow& window) {
     sf::Color currentPrimary = m_canvas.getPrimaryColor();
     if (currentPrimary != m_lastPrimaryColor) {
         if (m_canvas.getSelectionManager().isActive()) {
-            auto* tex = m_canvas.getActiveRenderTexture(m_timeline.getCurrentFrame());
-            if (tex) {
-                m_canvas.saveUndoState();
-                sf::Image img = tex->getTexture().copyToImage();
-                unsigned int w = std::min(img.getSize().x, m_canvas.getCanvasSize().x);
-                unsigned int h = std::min(img.getSize().y, m_canvas.getCanvasSize().y);
-                for (unsigned int y = 0; y < h; ++y) {
-                    for (unsigned int x = 0; x < w; ++x) {
-                        if (m_canvas.getSelectionManager().isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
-                            img.setPixel(x, y, currentPrimary);
-                        }
-                    }
-                }
-                sf::Texture newTex; newTex.loadFromImage(img);
-                tex->clear(sf::Color::Transparent);
-                tex->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
-                tex->display();
-            }
+            m_canvas.fillSelection(currentPrimary, m_timeline.getCurrentFrame());
         }
         m_lastPrimaryColor = currentPrimary;
     }

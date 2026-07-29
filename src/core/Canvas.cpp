@@ -568,6 +568,26 @@ void Canvas::deleteSelection(int currentFrame) {
     pendingTransform = false;
 }
 
+void Canvas::fillSelection(sf::Color color, int currentFrame) {
+    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && selection.isActive()) {
+        saveUndoState();
+        sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
+        unsigned int w = std::min(img.getSize().x, canvasLogicalSize.x);
+        unsigned int h = std::min(img.getSize().y, canvasLogicalSize.y);
+        for (unsigned int y = 0; y < h; ++y) {
+            for (unsigned int x = 0; x < w; ++x) {
+                if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
+                    img.setPixel(x, y, color);
+                }
+            }
+        }
+        sf::Texture newTex; newTex.loadFromImage(img);
+        frames[currentFrame].layers[activeLayer].texture->clear(sf::Color::Transparent);
+        frames[currentFrame].layers[activeLayer].texture->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
+        frames[currentFrame].layers[activeLayer].texture->display();
+    }
+}
+
 void Canvas::flipSelectionHorizontal(int currentFrame) {
     if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && selection.isActive()) {
         if (selection.getState() == SelectionState::Selected) {

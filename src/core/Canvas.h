@@ -216,7 +216,7 @@ public:
     void toggleTileMode();
     void togglePixelPerfect();
     bool isPixelPerfectEnabled() const;
-
+    void fillSelection(sf::Color color, int currentFrame);
     bool getIsDirty() const;
     void clearIsDirty();
 
