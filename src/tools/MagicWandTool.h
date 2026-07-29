@@ -29,6 +29,9 @@ private:
     bool m_contiguous;
     bool m_sampleAllLayers;
 
+    bool m_isPanning;
+    sf::Vector2f m_lastPanPos;
+
     sf::Color m_lastPrimaryColor;
     sf::FloatRect m_colorBoxRect;
     bool m_requestColorPanelOpen;

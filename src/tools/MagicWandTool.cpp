@@ -4,7 +4,7 @@
 
 MagicWandTool::MagicWandTool(Canvas& canvas, Timeline& timeline)
     : m_canvas(canvas), m_timeline(timeline), m_tolerance(10),
-    m_contiguous(true), m_sampleAllLayers(false), m_requestColorPanelOpen(false) {
+    m_contiguous(true), m_sampleAllLayers(false), m_isPanning(false), m_requestColorPanelOpen(false) {
     m_lastPrimaryColor = canvas.getPrimaryColor();
 }
 
@@ -98,6 +98,7 @@ std::vector<sf::Vector2f> MagicWandTool::traceBoundary(const std::vector<bool>& 
     std::vector<sf::Vector2f> poly;
     sf::Vector2i curr = startNode;
     int dir = 0;
+
     sf::Vector2i start_curr = curr;
     int start_dir = dir;
 
@@ -171,6 +172,25 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
         return;
     }
 
+    // --- RESTORED EXACT PANNING LOGIC ---
+    if (event.type == sf::Event::MouseButtonPressed && (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle)) {
+        m_isPanning = true;
+        m_lastPanPos = sf::Vector2f(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
+        return;
+    }
+    if (event.type == sf::Event::MouseButtonReleased && (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle)) {
+        m_isPanning = false;
+        return;
+    }
+    if (event.type == sf::Event::MouseMoved && m_isPanning) {
+        sf::Vector2f currentPanPos(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
+        sf::Vector2f delta = currentPanPos - m_lastPanPos;
+        m_canvas.pan(delta);
+        m_lastPanPos = currentPanPos;
+        return;
+    }
+    // ------------------------------------
+
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button != sf::Mouse::Left) return;
 
     sf::Vector2f viewPos = m_canvas.getInverseTransform().transformPoint(mousePos);
@@ -189,6 +209,7 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
             std::vector<std::vector<sf::Vector2f>> polygons;
             std::vector<bool> visited(w * h, false);
 
+            // Multi-Island Separation Logic
             for (int y = 0; y < h; ++y) {
                 for (int x = 0; x < w; ++x) {
                     if (mask[y * w + x] && !visited[y * w + x]) {
@@ -276,7 +297,10 @@ void MagicWandTool::Update(float deltaTime, const sf::RenderWindow& window) {
 }
 
 void MagicWandTool::Render(sf::RenderWindow& window) {
-    m_canvas.draw(window, m_timeline.getCurrentFrame(), m_timeline.isPlaying(), sf::RenderStates::Default);
+    sf::RenderStates canvasStates;
+    canvasStates.transform = m_canvas.getTransform();
+    m_canvas.draw(window, m_timeline.getCurrentFrame(), m_timeline.isPlaying(), canvasStates);
+
     drawPropertiesPanel(window);
 }
 
