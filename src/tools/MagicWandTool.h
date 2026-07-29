@@ -4,9 +4,6 @@
 #include "../core/ITool.h"
 #include <vector>
 #include <queue>
-#include <map>
-
-enum class SelectionBlendMode { Replace, Add, Subtract, Intersect };
 
 class MagicWandTool : public ITool {
 public:
@@ -26,22 +23,15 @@ private:
     sf::Font m_font;
 
     int m_tolerance;
-    SelectionBlendMode m_blendMode;
     bool m_contiguous;
     bool m_sampleAllLayers;
-    bool m_antiAlias;
-    int m_feather;
-
-    float getPerceptualDistance(sf::Color c1, sf::Color c2);
-    void growMask(std::vector<bool>& mask, int w, int h, int amount);
-    std::vector<bool> extractSelectionMask(sf::Vector2i startPos);
-    std::vector<std::vector<sf::Vector2f>> generateContours(const std::vector<bool>& mask, int w, int h);
-    void smoothContours(std::vector<std::vector<sf::Vector2f>>& contours);
-    std::vector<sf::Vector2f> bridgeContours(const std::vector<std::vector<sf::Vector2f>>& contours);
-
-    void applyWandSelection(const std::vector<bool>& newMask);
-    void drawPropertiesPanel(sf::RenderWindow& window);
 
     bool m_isPanning;
     sf::Vector2f m_lastPanPos;
+
+    float getPerceptualDistance(sf::Color c1, sf::Color c2);
+    std::vector<bool> extractSelectionMask(sf::Vector2i startPos);
+    std::vector<sf::Vector2f> traceBoundary(const std::vector<bool>& mask, int w, int h);
+
+    void drawPropertiesPanel(sf::RenderWindow& window);
 };

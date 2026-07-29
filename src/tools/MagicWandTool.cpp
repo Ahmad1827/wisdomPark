@@ -3,14 +3,13 @@
 #include <cmath>
 
 MagicWandTool::MagicWandTool(Canvas& canvas, Timeline& timeline)
-    : m_canvas(canvas), m_timeline(timeline), m_tolerance(10), m_blendMode(SelectionBlendMode::Replace),
-    m_contiguous(true), m_sampleAllLayers(false), m_antiAlias(false), m_feather(0),
-    m_isPanning(false) {
+    : m_canvas(canvas), m_timeline(timeline), m_tolerance(10),
+    m_contiguous(true), m_sampleAllLayers(false), m_isPanning(false) {
 }
 
 void MagicWandTool::Initialize() {
     m_font.loadFromFile("assets/font.otf");
-    m_panelBg.setSize(sf::Vector2f(220.f, 380.f));
+    m_panelBg.setSize(sf::Vector2f(220.f, 180.f));
     m_panelBg.setFillColor(sf::Color(25, 25, 30, 240));
     m_panelBg.setOutlineThickness(1.f);
     m_panelBg.setOutlineColor(sf::Color(100, 100, 110));
@@ -22,30 +21,12 @@ void MagicWandTool::SetBounds(const sf::FloatRect& bounds) {
 }
 
 float MagicWandTool::getPerceptualDistance(sf::Color c1, sf::Color c2) {
-    long rmean = ((long)c1.r + (long)c2.r) / 2;
-    long r = (long)c1.r - (long)c2.r;
-    long g = (long)c1.g - (long)c2.g;
-    long b = (long)c1.b - (long)c2.b;
-    float distSq = (((512 + rmean) * r * r) >> 8) + 4 * g * g + (((767 - rmean) * b * b) >> 8);
-    return std::sqrt(distSq) / 765.0f * 255.0f;
-}
-
-void MagicWandTool::growMask(std::vector<bool>& mask, int w, int h, int amount) {
-    if (amount <= 0) return;
-    for (int i = 0; i < amount; ++i) {
-        std::vector<bool> temp = mask;
-        for (int y = 0; y < h; ++y) {
-            for (int x = 0; x < w; ++x) {
-                if (mask[y * w + x]) {
-                    if (x > 0) temp[y * w + (x - 1)] = true;
-                    if (x < w - 1) temp[y * w + (x + 1)] = true;
-                    if (y > 0) temp[(y - 1) * w + x] = true;
-                    if (y < h - 1) temp[(y + 1) * w + x] = true;
-                }
-            }
-        }
-        mask = temp;
-    }
+    // Fixed: Properly isolates alpha! Black and Transparent are no longer identical.
+    float r = std::abs(static_cast<float>(c1.r) - static_cast<float>(c2.r));
+    float g = std::abs(static_cast<float>(c1.g) - static_cast<float>(c2.g));
+    float b = std::abs(static_cast<float>(c1.b) - static_cast<float>(c2.b));
+    float a = std::abs(static_cast<float>(c1.a) - static_cast<float>(c2.a));
+    return std::max({ r, g, b, a });
 }
 
 std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
@@ -110,129 +91,71 @@ std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
     return mask;
 }
 
-std::vector<std::vector<sf::Vector2f>> MagicWandTool::generateContours(const std::vector<bool>& mask, int w, int h) {
-    struct Edge { sf::Vector2i p1, p2; };
-    std::vector<Edge> edges;
+std::vector<sf::Vector2f> MagicWandTool::traceBoundary(const std::vector<bool>& mask, int w, int h) {
+    sf::Vector2i startNode(-1, -1);
 
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             if (mask[y * w + x]) {
-                if (y == 0 || !mask[(y - 1) * w + x]) edges.push_back({ {x, y}, {x + 1, y} });
-                if (y == h - 1 || !mask[(y + 1) * w + x]) edges.push_back({ {x + 1, y + 1}, {x, y + 1} });
-                if (x == 0 || !mask[y * w + (x - 1)]) edges.push_back({ {x, y + 1}, {x, y} });
-                if (x == w - 1 || !mask[y * w + (x + 1)]) edges.push_back({ {x + 1, y}, {x + 1, y + 1} });
+                startNode = { x, y };
+                break;
             }
         }
+        if (startNode.x != -1) break;
     }
 
-    std::map<std::pair<int, int>, std::vector<sf::Vector2i>> edgeMap;
-    for (auto& e : edges) {
-        edgeMap[{e.p1.x, e.p1.y}].push_back(e.p2);
-    }
+    if (startNode.x == -1) return {};
 
-    std::vector<std::vector<sf::Vector2f>> contours;
-    while (!edgeMap.empty()) {
-        auto it = edgeMap.begin();
-        sf::Vector2i start = { it->first.first, it->first.second };
-        sf::Vector2i curr = start;
+    std::vector<sf::Vector2f> poly;
+    sf::Vector2i curr = startNode;
+    int dir = 0;
 
-        std::vector<sf::Vector2f> contour;
-        while (true) {
-            contour.push_back(sf::Vector2f(static_cast<float>(curr.x), static_cast<float>(curr.y)));
+    sf::Vector2i start_curr = curr;
+    int start_dir = dir;
 
-            auto nextIt = edgeMap.find({ curr.x, curr.y });
-            if (nextIt == edgeMap.end() || nextIt->second.empty()) break;
+    auto getMask = [&](int px, int py) {
+        if (px < 0 || px >= w || py < 0 || py >= h) return false;
+        return (bool)mask[py * w + px];
+        };
 
-            sf::Vector2i next = nextIt->second.back();
-            nextIt->second.pop_back();
-            if (nextIt->second.empty()) edgeMap.erase(nextIt);
+    do {
+        poly.push_back(sf::Vector2f(static_cast<float>(curr.x), static_cast<float>(curr.y)));
 
-            curr = next;
-            if (curr == start) break;
+        int left_px = 0, left_py = 0, right_px = 0, right_py = 0;
+        if (dir == 0) { right_px = curr.x; right_py = curr.y;   left_px = curr.x; left_py = curr.y - 1; }
+        else if (dir == 1) { right_px = curr.x - 1; right_py = curr.y; left_px = curr.x; left_py = curr.y; }
+        else if (dir == 2) { right_px = curr.x - 1; right_py = curr.y - 1; left_px = curr.x - 1; left_py = curr.y; }
+        else if (dir == 3) { right_px = curr.x; right_py = curr.y - 1; left_px = curr.x - 1; left_py = curr.y - 1; }
+
+        bool valL = getMask(left_px, left_py);
+        bool valR = getMask(right_px, right_py);
+
+        bool moved = false;
+        if (valL) {
+            dir = (dir + 3) % 4;
+            moved = true;
         }
-
-        if (contour.size() > 2) {
-            contours.push_back(contour);
-        }
-    }
-
-    return contours;
-}
-
-void MagicWandTool::smoothContours(std::vector<std::vector<sf::Vector2f>>& contours) {
-    for (auto& contour : contours) {
-        std::vector<sf::Vector2f> smoothed;
-        for (size_t i = 0; i < contour.size(); ++i) {
-            sf::Vector2f p0 = contour[(i == 0) ? contour.size() - 1 : i - 1];
-            sf::Vector2f p1 = contour[i];
-            sf::Vector2f p2 = contour[(i + 1) % contour.size()];
-            smoothed.push_back(p0 * 0.25f + p1 * 0.5f + p2 * 0.25f);
-        }
-        contour = smoothed;
-    }
-}
-
-std::vector<sf::Vector2f> MagicWandTool::bridgeContours(const std::vector<std::vector<sf::Vector2f>>& contours) {
-    std::vector<sf::Vector2f> unified;
-    if (contours.empty()) return unified;
-
-    for (const auto& poly : contours) {
-        if (unified.empty()) {
-            unified = poly;
+        else if (valR) {
+            moved = true;
         }
         else {
-            unified.push_back(unified.back());
-            unified.push_back(poly.front());
-            unified.insert(unified.end(), poly.begin(), poly.end());
-            unified.push_back(poly.front());
-            unified.push_back(unified[unified.size() - poly.size() - 3]);
+            dir = (dir + 1) % 4;
+            moved = false;
         }
-    }
-    return unified;
-}
 
-void MagicWandTool::applyWandSelection(const std::vector<bool>& newMask) {
-    int w = m_canvas.getCanvasSize().x;
-    int h = m_canvas.getCanvasSize().y;
-
-    std::vector<bool> globalMask(w * h, false);
-    if (m_blendMode != SelectionBlendMode::Replace) {
-        for (int y = 0; y < h; ++y) {
-            for (int x = 0; x < w; ++x) {
-                globalMask[y * w + x] = m_canvas.getSelectionManager().isPointInsideSelection(sf::Vector2f(x, y));
-            }
+        if (moved) {
+            if (dir == 0) curr.x++;
+            else if (dir == 1) curr.y++;
+            else if (dir == 2) curr.x--;
+            else if (dir == 3) curr.y--;
         }
-    }
 
-    for (int i = 0; i < w * h; ++i) {
-        if (m_blendMode == SelectionBlendMode::Replace) globalMask[i] = newMask[i];
-        else if (m_blendMode == SelectionBlendMode::Add) globalMask[i] = globalMask[i] || newMask[i];
-        else if (m_blendMode == SelectionBlendMode::Subtract) globalMask[i] = globalMask[i] && !newMask[i];
-        else if (m_blendMode == SelectionBlendMode::Intersect) globalMask[i] = globalMask[i] && newMask[i];
-    }
+        if (poly.size() > static_cast<size_t>(w * h * 4)) break;
 
-    if (m_feather > 0) {
-        growMask(globalMask, w, h, m_feather);
-    }
+    } while (curr != start_curr || dir != start_dir);
 
-    auto contours = generateContours(globalMask, w, h);
-
-    if (m_antiAlias && !m_canvas.getPixelMode()) {
-        smoothContours(contours);
-        smoothContours(contours);
-    }
-
-    m_canvas.commitSelection(m_timeline.getCurrentFrame());
-    m_canvas.getSelectionManager().clearSelection();
-
-    auto unified = bridgeContours(contours);
-    if (!unified.empty()) {
-        m_canvas.getSelectionManager().startLasso(unified[0], sf::Vector2u(w, h));
-        for (size_t i = 1; i < unified.size(); ++i) {
-            m_canvas.getSelectionManager().addLassoPoint(unified[i], sf::Vector2u(w, h));
-        }
-        m_canvas.getSelectionManager().endLasso();
-    }
+    poly.push_back(sf::Vector2f(static_cast<float>(curr.x), static_cast<float>(curr.y)));
+    return poly;
 }
 
 void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
@@ -243,29 +166,20 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
             float y = mousePos.y - m_panelBg.getPosition().y;
 
-            if (y > 40 && y < 70) m_blendMode = SelectionBlendMode::Replace;
-            else if (y > 70 && y < 100) m_blendMode = SelectionBlendMode::Add;
-            else if (y > 100 && y < 130) m_blendMode = SelectionBlendMode::Subtract;
-            else if (y > 130 && y < 160) m_blendMode = SelectionBlendMode::Intersect;
-
-            else if (y > 170 && y < 190) m_tolerance = std::max(0, m_tolerance - 5);
-            else if (y > 190 && y < 210) m_tolerance = std::min(255, m_tolerance + 5);
-
-            else if (y > 220 && y < 250) m_contiguous = !m_contiguous;
-            else if (y > 250 && y < 280) m_sampleAllLayers = !m_sampleAllLayers;
-            else if (y > 280 && y < 310) m_antiAlias = !m_antiAlias;
-            else if (y > 310 && y < 340) {
-                if (mousePos.x < m_panelBg.getPosition().x + 110) m_feather = std::max(0, m_feather - 1);
-                else m_feather = std::min(50, m_feather + 1);
+            if (y > 40 && y < 70) {
+                if (mousePos.x < m_panelBg.getPosition().x + 110) m_tolerance = std::max(0, m_tolerance - 5);
+                else m_tolerance = std::min(255, m_tolerance + 5);
             }
+            else if (y > 80 && y < 110) m_contiguous = !m_contiguous;
+            else if (y > 120 && y < 150) m_sampleAllLayers = !m_sampleAllLayers;
         }
         return;
     }
 
-    // Unrestricted Camera Navigation - Panning
+    // Completely fixed camera panning (uses raw screen pixels)
     if (event.type == sf::Event::MouseButtonPressed && (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle)) {
         m_isPanning = true;
-        m_lastPanPos = mousePos;
+        m_lastPanPos = sf::Vector2f(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
         return;
     }
     if (event.type == sf::Event::MouseButtonReleased && (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle)) {
@@ -273,11 +187,14 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
         return;
     }
     if (event.type == sf::Event::MouseMoved && m_isPanning) {
-        sf::Vector2f delta = mousePos - m_lastPanPos;
+        sf::Vector2f currentPanPos(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
+        sf::Vector2f delta = currentPanPos - m_lastPanPos;
         m_canvas.pan(delta);
-        m_lastPanPos = mousePos;
+        m_lastPanPos = currentPanPos;
         return;
     }
+
+    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button != sf::Mouse::Left) return;
 
     sf::Vector2f viewPos = m_canvas.getInverseTransform().transformPoint(mousePos);
     float scaleX = static_cast<float>(m_canvas.getCanvasSize().x) / m_canvas.getDrawArea().width;
@@ -288,7 +205,18 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
     if (m_canvas.getDrawArea().contains(viewPos)) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
             auto mask = extractSelectionMask(logicalPos);
-            applyWandSelection(mask);
+            auto poly = traceBoundary(mask, m_canvas.getCanvasSize().x, m_canvas.getCanvasSize().y);
+
+            if (!poly.empty()) {
+                m_canvas.commitSelection(m_timeline.getCurrentFrame());
+                m_canvas.getSelectionManager().clearSelection();
+
+                m_canvas.getSelectionManager().startLasso(poly[0], m_canvas.getCanvasSize());
+                for (size_t i = 1; i < poly.size(); ++i) {
+                    m_canvas.getSelectionManager().addLassoPoint(poly[i], m_canvas.getCanvasSize());
+                }
+                m_canvas.getSelectionManager().endLasso();
+            }
         }
     }
 }
@@ -313,32 +241,7 @@ void MagicWandTool::drawPropertiesPanel(sf::RenderWindow& window) {
     title.setFillColor(sf::Color(255, 200, 100));
     window.draw(title);
 
-    std::vector<std::pair<std::string, SelectionBlendMode>> modes = {
-        {"Replace Selection", SelectionBlendMode::Replace},
-        {"Add to Selection", SelectionBlendMode::Add},
-        {"Subtract Selection", SelectionBlendMode::Subtract},
-        {"Intersect Selection", SelectionBlendMode::Intersect}
-    };
-
     float y = m_panelBg.getPosition().y + 40.f;
-    for (const auto& m : modes) {
-        sf::Text t(m.first, m_font, 12);
-        t.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
-        if (m_blendMode == m.second) {
-            sf::RectangleShape activeBg(sf::Vector2f(180.f, 24.f));
-            activeBg.setPosition(m_panelBg.getPosition().x + 10.f, y);
-            activeBg.setFillColor(sf::Color(0, 122, 204, 180));
-            window.draw(activeBg);
-            t.setFillColor(sf::Color::White);
-        }
-        else {
-            t.setFillColor(sf::Color(200, 200, 200));
-        }
-        window.draw(t);
-        y += 30.f;
-    }
-
-    y += 10.f;
     sf::Text tol("Tolerance: " + std::to_string(m_tolerance), m_font, 12);
     tol.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
     tol.setFillColor(sf::Color::White);
@@ -348,31 +251,15 @@ void MagicWandTool::drawPropertiesPanel(sf::RenderWindow& window) {
     sf::Text tPlus("[+]", m_font, 14); tPlus.setPosition(m_panelBg.getPosition().x + 160.f, y + 3.f); tPlus.setFillColor(sf::Color(50, 200, 50));
     window.draw(tMinus); window.draw(tPlus);
 
-    y += 30.f;
+    y += 40.f;
     sf::Text contT("Contiguous: " + std::string(m_contiguous ? "ON" : "OFF"), m_font, 12);
     contT.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
     contT.setFillColor(m_contiguous ? sf::Color::Green : sf::Color::Red);
     window.draw(contT);
 
-    y += 30.f;
+    y += 40.f;
     sf::Text sampT("Sample: " + std::string(m_sampleAllLayers ? "All Layers" : "Current"), m_font, 12);
     sampT.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
     sampT.setFillColor(sf::Color(200, 200, 200));
     window.draw(sampT);
-
-    y += 30.f;
-    sf::Text aaT("Anti-Alias: " + std::string(m_antiAlias ? "ON" : "OFF"), m_font, 12);
-    aaT.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
-    aaT.setFillColor(m_antiAlias ? sf::Color::Green : sf::Color::Red);
-    window.draw(aaT);
-
-    y += 30.f;
-    sf::Text feathT("Feather/Grow: " + std::string(m_feather > 0 ? "+" : "") + std::to_string(m_feather), m_font, 12);
-    feathT.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
-    feathT.setFillColor(sf::Color::White);
-    window.draw(feathT);
-
-    sf::Text fMinus("[-]", m_font, 14); fMinus.setPosition(m_panelBg.getPosition().x + 130.f, y + 3.f); fMinus.setFillColor(sf::Color(200, 50, 50));
-    sf::Text fPlus("[+]", m_font, 14); fPlus.setPosition(m_panelBg.getPosition().x + 160.f, y + 3.f); fPlus.setFillColor(sf::Color(50, 200, 50));
-    window.draw(fMinus); window.draw(fPlus);
 }
