@@ -39,6 +39,7 @@ private:
     float getPerceptualDistance(sf::Color c1, sf::Color c2);
     std::vector<bool> extractSelectionMask(sf::Vector2i startPos);
     std::vector<sf::Vector2f> traceBoundary(const std::vector<bool>& mask, int w, int h, sf::Vector2i startNode);
+    std::vector<sf::Vector2f> bridgeContours(const std::vector<std::vector<sf::Vector2f>>& contours);
 
     void drawPropertiesPanel(sf::RenderWindow& window);
 };

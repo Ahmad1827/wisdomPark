@@ -149,6 +149,27 @@ std::vector<sf::Vector2f> MagicWandTool::traceBoundary(const std::vector<bool>& 
     return poly;
 }
 
+std::vector<sf::Vector2f> MagicWandTool::bridgeContours(const std::vector<std::vector<sf::Vector2f>>& contours) {
+    std::vector<sf::Vector2f> unified;
+    if (contours.empty()) return unified;
+
+    unified = contours[0];
+    for (size_t i = 1; i < contours.size(); ++i) {
+        const auto& poly = contours[i];
+        if (poly.empty()) continue;
+
+        sf::Vector2f bridgeStart = unified.back();
+        sf::Vector2f bridgeEnd = poly.front();
+
+        unified.push_back(bridgeStart);
+        unified.push_back(bridgeEnd);
+        unified.insert(unified.end(), poly.begin(), poly.end());
+        unified.push_back(bridgeEnd);
+        unified.push_back(bridgeStart);
+    }
+    return unified;
+}
+
 void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
@@ -162,6 +183,7 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
             }
 
             float y = mousePos.y - m_panelBg.getPosition().y;
+
             if (y > 40 && y < 70) {
                 if (mousePos.x < m_panelBg.getPosition().x + 110) m_tolerance = std::max(0, m_tolerance - 5);
                 else m_tolerance = std::min(255, m_tolerance + 5);
@@ -172,7 +194,6 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
         return;
     }
 
-    // --- RESTORED EXACT PANNING LOGIC ---
     if (event.type == sf::Event::MouseButtonPressed && (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle)) {
         m_isPanning = true;
         m_lastPanPos = sf::Vector2f(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
@@ -189,7 +210,6 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
         m_lastPanPos = currentPanPos;
         return;
     }
-    // ------------------------------------
 
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button != sf::Mouse::Left) return;
 
@@ -201,7 +221,6 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
 
     if (m_canvas.getDrawArea().contains(viewPos)) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-
             auto mask = extractSelectionMask(logicalPos);
             int w = m_canvas.getCanvasSize().x;
             int h = m_canvas.getCanvasSize().y;
@@ -209,14 +228,16 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
             std::vector<std::vector<sf::Vector2f>> polygons;
             std::vector<bool> visited(w * h, false);
 
-            // Multi-Island Separation Logic
             for (int y = 0; y < h; ++y) {
                 for (int x = 0; x < w; ++x) {
                     if (mask[y * w + x] && !visited[y * w + x]) {
 
+                        std::vector<bool> islandMask(w * h, false);
                         std::queue<sf::Vector2i> q;
                         q.push({ x, y });
                         visited[y * w + x] = true;
+                        islandMask[y * w + x] = true;
+
                         while (!q.empty()) {
                             sf::Vector2i p = q.front(); q.pop();
                             sf::Vector2i n[4] = { {p.x + 1, p.y}, {p.x - 1, p.y}, {p.x, p.y + 1}, {p.x, p.y - 1} };
@@ -224,35 +245,25 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
                                 if (i.x >= 0 && i.x < w && i.y >= 0 && i.y < h) {
                                     if (mask[i.y * w + i.x] && !visited[i.y * w + i.x]) {
                                         visited[i.y * w + i.x] = true;
+                                        islandMask[i.y * w + i.x] = true;
                                         q.push(i);
                                     }
                                 }
                             }
                         }
 
-                        auto poly = traceBoundary(mask, w, h, { x, y });
+                        auto poly = traceBoundary(islandMask, w, h, { x, y });
                         if (!poly.empty()) polygons.push_back(poly);
                     }
                 }
             }
 
             if (!polygons.empty()) {
-                std::vector<sf::Vector2f> unified;
-                for (const auto& poly : polygons) {
-                    if (unified.empty()) {
-                        unified = poly;
-                    }
-                    else {
-                        unified.push_back(unified.back());
-                        unified.push_back(poly.front());
-                        unified.insert(unified.end(), poly.begin(), poly.end());
-                        unified.push_back(poly.front());
-                        unified.push_back(unified[unified.size() - poly.size() - 3]);
-                    }
-                }
+                std::vector<sf::Vector2f> unified = bridgeContours(polygons);
 
                 m_canvas.commitSelection(m_timeline.getCurrentFrame());
                 m_canvas.getSelectionManager().clearSelection();
+
                 m_canvas.getSelectionManager().startLasso(unified[0], m_canvas.getCanvasSize());
                 for (size_t i = 1; i < unified.size(); ++i) {
                     m_canvas.getSelectionManager().addLassoPoint(unified[i], m_canvas.getCanvasSize());
