@@ -2,64 +2,116 @@
 
 TopMenuBar::TopMenuBar() {}
 
-void TopMenuBar::init() {
-    font.loadFromFile("assets/font.otf");
+void TopMenuBar::init(float windowWidth) {
+    m_font.loadFromFile("assets/font.otf");
 
-    background.setSize(sf::Vector2f(1920.f, 40.f));
-    background.setPosition(0.f, 0.f);
-    background.setFillColor(sf::Color(25, 25, 28, 240));
+    float barWidth = 480.f;
+    float barHeight = 32.f;
+    float startX = (windowWidth - barWidth) / 2.f;
+    float startY = 8.f;
 
-    auto makeMenu = [&](std::string id, std::string text, float x) {
-        MenuButton btn;
-        btn.id = id;
-        btn.rect.setSize(sf::Vector2f(100.f, 40.f));
-        btn.rect.setPosition(x, 0.f);
+    m_background.setSize(sf::Vector2f(barWidth, barHeight));
+    m_background.setPosition(startX, startY);
+    m_background.setFillColor(sf::Color(110, 75, 45));
+    m_background.setOutlineThickness(2.f);
+    m_background.setOutlineColor(sf::Color(65, 40, 25));
 
-        btn.label.setFont(font);
-        btn.label.setString(text);
-        btn.label.setCharacterSize(16);
+    m_leftCap.setRadius(barHeight / 2.f);
+    m_leftCap.setPosition(startX - m_leftCap.getRadius(), startY);
+    m_leftCap.setFillColor(sf::Color(110, 75, 45));
+    m_leftCap.setOutlineThickness(2.f);
+    m_leftCap.setOutlineColor(sf::Color(65, 40, 25));
 
-        sf::FloatRect tRect = btn.label.getLocalBounds();
-        btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
-        btn.label.setPosition(btn.rect.getPosition().x + 50.f, btn.rect.getPosition().y + 20.f);
+    m_rightCap.setRadius(barHeight / 2.f);
+    m_rightCap.setPosition(startX + barWidth - m_rightCap.getRadius(), startY);
+    m_rightCap.setFillColor(sf::Color(110, 75, 45));
+    m_rightCap.setOutlineThickness(2.f);
+    m_rightCap.setOutlineColor(sf::Color(65, 40, 25));
 
-        buttons.push_back(btn);
-        };
+    m_buttons.clear();
+    std::vector<std::pair<std::string, std::string>> btnData = {
+        {"file", "File"},
+        {"brushes", "Brushes"},
+        {"colors", "Colors"},
+        {"layers", "Layers"},
+        {"save", "Save"}
+    };
 
-    makeMenu("file", "File", 0.f);
-    makeMenu("edit", "Edit", 100.f);
-    makeMenu("view", "View", 200.f);
-    makeMenu("window", "Window", 300.f);
-    makeMenu("settings", "Settings", 400.f);
-    makeMenu("ai", "AI", 500.f);
-}
-
-void TopMenuBar::updateHover(sf::Vector2f mousePos) {
-    for (auto& btn : buttons) {
-        btn.isHovered = btn.rect.getGlobalBounds().contains(mousePos);
+    float currentX = startX + 15.f;
+    for (const auto& data : btnData) {
+        TopMenuButton btn;
+        btn.id = data.first;
+        btn.label = data.second;
+        btn.bounds = sf::FloatRect(currentX, startY, 90.f, barHeight);
+        m_buttons.push_back(btn);
+        currentX += 90.f;
     }
 }
 
-void TopMenuBar::draw(sf::RenderWindow& window, bool isAIConfigured) {
-    window.draw(background);
-    for (auto& btn : buttons) {
-        if (btn.id == "ai" && !isAIConfigured) {
-            btn.rect.setFillColor(sf::Color::Transparent);
-            btn.label.setFillColor(sf::Color(100, 100, 100));
-        }
-        else {
-            btn.rect.setFillColor(btn.isHovered ? sf::Color(60, 60, 65) : sf::Color::Transparent);
-            btn.label.setFillColor(sf::Color::White);
-        }
-        window.draw(btn.rect);
-        window.draw(btn.label);
+void TopMenuBar::resize(float windowWidth) {
+    float barWidth = 480.f;
+    float startX = (windowWidth - barWidth) / 2.f;
+    float startY = 8.f;
+
+    m_background.setPosition(startX, startY);
+    m_leftCap.setPosition(startX - m_leftCap.getRadius(), startY);
+    m_rightCap.setPosition(startX + barWidth - m_rightCap.getRadius(), startY);
+
+    float currentX = startX + 15.f;
+    for (auto& btn : m_buttons) {
+        btn.bounds.left = currentX;
+        currentX += 90.f;
     }
 }
 
-std::string TopMenuBar::handleClick(sf::Vector2f mousePos) {
-    for (const auto& btn : buttons) {
-        if (btn.rect.getGlobalBounds().contains(mousePos)) {
-            return btn.id;
+void TopMenuBar::update(sf::Vector2f mousePos) {
+    for (auto& btn : m_buttons) {
+        btn.isHovered = btn.bounds.contains(mousePos);
+    }
+}
+
+void TopMenuBar::draw(sf::RenderWindow& window) {
+    window.draw(m_background);
+    window.draw(m_leftCap);
+    window.draw(m_rightCap);
+
+    sf::RectangleShape coverLeft(sf::Vector2f(4.f, m_background.getSize().y - 4.f));
+    coverLeft.setPosition(m_background.getPosition().x, m_background.getPosition().y + 2.f);
+    coverLeft.setFillColor(sf::Color(110, 75, 45));
+    window.draw(coverLeft);
+
+    sf::RectangleShape coverRight(sf::Vector2f(4.f, m_background.getSize().y - 4.f));
+    coverRight.setPosition(m_background.getPosition().x + m_background.getSize().x - 4.f, m_background.getPosition().y + 2.f);
+    coverRight.setFillColor(sf::Color(110, 75, 45));
+    window.draw(coverRight);
+
+    for (const auto& btn : m_buttons) {
+        if (btn.isHovered) {
+            sf::RectangleShape hoverBg(sf::Vector2f(btn.bounds.width - 10.f, btn.bounds.height - 8.f));
+            hoverBg.setPosition(btn.bounds.left + 5.f, btn.bounds.top + 4.f);
+            hoverBg.setFillColor(sf::Color(255, 255, 255, 30));
+            hoverBg.setOutlineThickness(1.f);
+            hoverBg.setOutlineColor(sf::Color(255, 255, 255, 50));
+            window.draw(hoverBg);
+        }
+
+        sf::Text text(btn.label, m_font, 14);
+        sf::FloatRect tBounds = text.getLocalBounds();
+        text.setPosition(
+            btn.bounds.left + (btn.bounds.width - tBounds.width) / 2.f,
+            btn.bounds.top + (btn.bounds.height - text.getCharacterSize()) / 2.f - 2.f
+        );
+        text.setFillColor(sf::Color(240, 220, 180));
+        window.draw(text);
+    }
+}
+
+std::string TopMenuBar::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
+    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        for (const auto& btn : m_buttons) {
+            if (btn.bounds.contains(mousePos)) {
+                return btn.id;
+            }
         }
     }
     return "";

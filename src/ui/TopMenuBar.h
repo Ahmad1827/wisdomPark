@@ -1,25 +1,28 @@
 #pragma once
 #include <SFML/Graphics.hpp>
-#include <vector>
 #include <string>
+#include <vector>
 
-struct MenuButton {
-    sf::RectangleShape rect;
-    sf::Text label;
+struct TopMenuButton {
     std::string id;
+    std::string label;
+    sf::FloatRect bounds;
     bool isHovered = false;
 };
 
 class TopMenuBar {
-private:
-    sf::RectangleShape background;
-    std::vector<MenuButton> buttons;
-    sf::Font font;
-
 public:
     TopMenuBar();
-    void init();
-    void updateHover(sf::Vector2f mousePos);
-    void draw(sf::RenderWindow& window, bool isAIConfigured);
-    std::string handleClick(sf::Vector2f mousePos);
+    void init(float windowWidth);
+    void update(sf::Vector2f mousePos);
+    void draw(sf::RenderWindow& window);
+    std::string handleEvent(const sf::Event& event, sf::Vector2f mousePos);
+    void resize(float windowWidth);
+
+private:
+    sf::RectangleShape m_background;
+    sf::CircleShape m_leftCap;
+    sf::CircleShape m_rightCap;
+    sf::Font m_font;
+    std::vector<TopMenuButton> m_buttons;
 };

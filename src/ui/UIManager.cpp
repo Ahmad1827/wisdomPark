@@ -212,7 +212,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     loadingCancelText.setFillColor(sf::Color::White);
     loadingCancelText.setOrigin(loadingCancelText.getLocalBounds().width / 2.f, loadingCancelText.getLocalBounds().height / 2.f);
     loadingCancelText.setPosition(960.f, 607.f);
-
+    m_topMenuBar.init(static_cast<float>(window.getSize().x));
     m_perspectiveManager.init();
     m_perspectivePanel.init(&m_perspectiveManager);
     m_textManager.init();
@@ -1426,6 +1426,28 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
 
                     bool hasActiveSel = (canvas.getActiveTool() == ToolType::Select || canvas.getActiveTool() == ToolType::MagicWand);
+                    if (event.type == sf::Event::Resized) {
+                        m_topMenuBar.resize(static_cast<float>(event.size.width));
+                    }
+
+                    std::string topMenuAction = m_topMenuBar.handleEvent(event, mousePos);
+                    if (!topMenuAction.empty()) {
+                        if (topMenuAction == "colors") {
+                            sf::Vector2f handleCenter(window.getSize().x / 2.f, 50.f);
+                            colorPalettePanel.updateHover(handleCenter, true);
+                        }
+                        else if (topMenuAction == "save") {
+                            saveProject();
+                        }
+                        else if (topMenuAction == "layers") {
+                            layerPanel.toggle();
+                        }
+                        else if (topMenuAction == "brushes") {
+                            leftToolbar.setActiveTool("brush");
+                            canvas.setActiveTool(ToolType::Brush);
+                        }
+                        return;
+                    }
                     std::string leftAction = leftToolbar.handleClick(mousePos, AIManager::getInstance().isAIEnabled(), hasActiveSel);
                     if (!leftAction.empty()) {
                         if (leftAction == "ai_disabled") showMessage("Enable AI in Settings.", sf::Color::Red);
@@ -1595,7 +1617,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
     sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
-
+    m_topMenuBar.update(mousePos);
     if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);
     if (exportModal.getIsOpen()) exportModal.updateHover(mousePos);
     if (newProjectModal.getIsOpen()) newProjectModal.updateHover(mousePos);
@@ -1937,6 +1959,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             window.draw(warnCancelBtn);
             window.draw(warnCancelText);
         }
+        m_topMenuBar.draw(window);
     }
 }
 

@@ -29,6 +29,7 @@
 #include <chrono>
 #include "../core/ITool.h"
 #include <memory>
+#include "../ui/TopMenuBar.h"
 
 enum class MenuState {
     Main,
@@ -57,6 +58,7 @@ struct LightRay {
 
 class UIManager {
 private:
+    TopMenuBar m_topMenuBar;
     TextManager m_textManager;
     TextPanel m_textPanel;
     std::unique_ptr<ITool> m_activeTool;
