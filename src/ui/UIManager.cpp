@@ -212,7 +212,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     loadingCancelText.setFillColor(sf::Color::White);
     loadingCancelText.setOrigin(loadingCancelText.getLocalBounds().width / 2.f, loadingCancelText.getLocalBounds().height / 2.f);
     loadingCancelText.setPosition(960.f, 607.f);
-    m_topMenuBar.init(static_cast<float>(window.getSize().x));
+    m_topMenuBar.init(1280.f);
     m_perspectiveManager.init();
     m_perspectivePanel.init(&m_perspectiveManager);
     m_textManager.init();
