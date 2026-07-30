@@ -1433,18 +1433,19 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     std::string topMenuAction = m_topMenuBar.handleEvent(event, mousePos);
                     if (!topMenuAction.empty()) {
                         if (topMenuAction == "colors") {
-                            sf::Vector2f handleCenter(window.getSize().x / 2.f, 50.f);
+                            sf::Vector2f handleCenter(static_cast<float>(window.getSize().x) / 2.f, 50.f);
                             colorPalettePanel.updateHover(handleCenter, true);
                         }
                         else if (topMenuAction == "save") {
-                            saveProject();
+                            showMessage("Save Project (Top Menu)", sf::Color::Green);
                         }
                         else if (topMenuAction == "layers") {
-                            layerPanel.toggle();
+                            showMessage("Layers Panel (Top Menu)", sf::Color::Cyan);
                         }
                         else if (topMenuAction == "brushes") {
                             leftToolbar.setActiveTool("brush");
                             canvas.setActiveTool(ToolType::Brush);
+                            showMessage("Brush Tool Activated", sf::Color::Green);
                         }
                         return;
                     }
