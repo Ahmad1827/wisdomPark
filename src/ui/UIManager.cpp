@@ -214,6 +214,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     m_perspectiveManager.init();
     m_perspectivePanel.init(&m_perspectiveManager);
+    baseCanvas->setPerspectiveManager(&m_perspectiveManager);
 
     initStartMenu();
 }

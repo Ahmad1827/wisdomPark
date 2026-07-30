@@ -1101,11 +1101,22 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
 
         sf::Color drawCol = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : primaryColor;
 
+        // --- PERSPECTIVE SNAP LOGIC ---
+        sf::Vector2f targetPos = localPos;
+        if (m_perspectiveManager && m_perspectiveManager->getActiveConfig() && m_perspectiveManager->getActiveConfig()->guideSettings.brushSnap) {
+            if (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser) {
+                int activeVPIndex;
+                // Mathematically lock the target position to the nearest perspective ray
+                targetPos = PerspectiveSnapper::snapLine(startPos, localPos, *m_perspectiveManager->getActiveConfig(), activeVPIndex);
+            }
+        }
+        // ------------------------------
+
         if (isPixelMode) {
             sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
 
             if (pixelPerfectEnabled && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser) && pixelBrushSize == 1) {
-                auto pts = getBresenhamPoints(static_cast<int>(lastPos.x), static_cast<int>(lastPos.y), static_cast<int>(localPos.x), static_cast<int>(localPos.y));
+                auto pts = getBresenhamPoints(static_cast<int>(lastPos.x), static_cast<int>(lastPos.y), static_cast<int>(targetPos.x), static_cast<int>(targetPos.y));
                 for (size_t i = 1; i < pts.size(); ++i) activeStroke.push_back(pts[i]);
 
                 std::vector<sf::Vector2i> filtered;
@@ -1135,7 +1146,7 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                 targetTex->display();
             }
             else {
-                drawBresenhamLine(static_cast<int>(lastPos.x), static_cast<int>(lastPos.y), static_cast<int>(localPos.x), static_cast<int>(localPos.y), drawCol, currentFrame);
+                drawBresenhamLine(static_cast<int>(lastPos.x), static_cast<int>(lastPos.y), static_cast<int>(targetPos.x), static_cast<int>(targetPos.y), drawCol, currentFrame);
                 targetTex->display();
             }
         }
@@ -1145,28 +1156,28 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                 sf::RenderStates rs(sf::BlendNone);
                 float currentEraserSize = brushEngine.getActivePreset().size;
 
-                float length = std::sqrt((localPos.x - lastPos.x) * (localPos.x - lastPos.x) + (localPos.y - lastPos.y) * (localPos.y - lastPos.y));
+                float length = std::sqrt((targetPos.x - lastPos.x) * (targetPos.x - lastPos.x) + (targetPos.y - lastPos.y) * (targetPos.y - lastPos.y));
                 sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
                 line.setOrigin(0.0f, currentEraserSize / 2.f);
                 line.setPosition(lastPos);
-                line.setRotation(std::atan2(localPos.y - lastPos.y, localPos.x - lastPos.x) * 180.f / 3.14159265f);
+                line.setRotation(std::atan2(targetPos.y - lastPos.y, targetPos.x - lastPos.x) * 180.f / 3.14159265f);
                 line.setFillColor(drawCol);
 
                 sf::CircleShape circle(currentEraserSize / 2.f);
                 circle.setOrigin(currentEraserSize / 2.f, currentEraserSize / 2.f);
-                circle.setPosition(localPos);
+                circle.setPosition(targetPos);
                 circle.setFillColor(drawCol);
 
                 targetTex->draw(line, rs);
                 targetTex->draw(circle, rs);
             }
             else {
-                brushEngine.paintStroke(targetTex, localPos, drawCol, 1.0f);
+                brushEngine.paintStroke(targetTex, targetPos, drawCol, 1.0f);
             }
             targetTex->display();
         }
 
-        lastPos = localPos;
+        lastPos = targetPos; // Update lastPos to the snapped position
 
         if (!isHoveringCanvas) {
             isDrawing = false;

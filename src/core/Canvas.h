@@ -8,6 +8,7 @@
 #include "FrameRenderer.h"
 #include "SymmetryManager.h"
 #include "DitherManager.h"
+#include "../core/PerspectiveSystem.h"
 
 enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
@@ -44,6 +45,7 @@ struct Frame {
 
 class Canvas {
 private:
+    PerspectiveManager* m_perspectiveManager = nullptr;
     SymmetryManager symmetryManager;
     DitherManager ditherManager;
     bool useDithering = false;
@@ -147,6 +149,8 @@ public:
     Frame* getFrame(int index);
     const Frame* getFrameReadOnly(int index) const;
     sf::RenderTexture* getActiveRenderTexture(int currentFrame);
+
+    void setPerspectiveManager(PerspectiveManager* pm) { m_perspectiveManager = pm; }
 
     void addLayer(int frameIndex, const std::string& name = "Layer");
     void deleteLayer(int frameIndex, int layerIndex);
