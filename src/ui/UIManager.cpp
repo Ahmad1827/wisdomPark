@@ -1427,7 +1427,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
                     bool hasActiveSel = (canvas.getActiveTool() == ToolType::Select || canvas.getActiveTool() == ToolType::MagicWand);
                     if (event.type == sf::Event::Resized) {
-                        m_topMenuBar.resize(static_cast<float>(event.size.width));
+                        
                     }
 
                     std::string topMenuAction = m_topMenuBar.handleEvent(event, mousePos, static_cast<float>(window.getSize().x));
