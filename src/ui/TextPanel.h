@@ -8,7 +8,7 @@ public:
     void init(TextManager* tm);
     void update(float dt);
     void draw(sf::RenderWindow& window);
-    void handleEvent(const sf::Event& event, sf::Vector2f mousePos);
+    bool handleEvent(const sf::Event& event, sf::Vector2f mousePos);
 
 private:
     TextManager* m_tm;

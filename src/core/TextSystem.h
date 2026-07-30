@@ -1,14 +1,15 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <SFML/System/String.hpp>
 #include <string>
 #include <vector>
 #include <map>
 
 struct TextObject {
     std::string id;
-    std::string text;
+    sf::String text;
     std::string fontName;
-    int size = 24;
+    int size = 16; // Increased from 8 to a readable default!
     bool bold = false;
     bool italic = false;
     bool underline = false;
@@ -35,7 +36,7 @@ struct TextObject {
     bool isEditing = false;
     int layerIndex = 0;
 
-    void render(sf::RenderTarget& target, bool isPixelMode) const;
+    void render(sf::RenderTarget& target, bool isPixelMode, sf::RenderStates states = sf::RenderStates::Default) const;
     sf::FloatRect getBounds() const;
 };
 
@@ -47,7 +48,7 @@ public:
     TextObject* getText(int frame, const std::string& id);
     TextObject* getEditingText();
     void clearEditingState();
-    void render(sf::RenderTarget& target, int frame, int layer, bool isPixelMode);
+    void render(sf::RenderTarget& target, int frame, int layer, bool isPixelMode, sf::RenderStates states, sf::Vector2u logicalSize);
     std::string hitTest(int frame, int layer, sf::Vector2f pos);
     void rasterizeText(int frame, int layer, const std::string& id, class Canvas& canvas);
 
@@ -59,4 +60,5 @@ public:
 private:
     std::map<int, std::vector<std::vector<TextObject>>> m_undoStack;
     std::map<int, std::vector<std::vector<TextObject>>> m_redoStack;
+    sf::RenderTexture m_renderTex;
 };

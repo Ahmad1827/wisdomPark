@@ -1106,218 +1106,220 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (event.type == sf::Event::KeyPressed) {
-            if (event.key.code == sf::Keyboard::Enter) {
-                isTypingPrompt = !isTypingPrompt;
-                if (isTypingPrompt) {
-                    currentPrompt = "";
-                    promptDisplay.setString("> _");
-                    showMessage("Legacy Terminal (Use AI Panel on the left)", sf::Color(0, 191, 255));
-                }
-            }
-
-            if (isTypingPrompt) return;
-
-            if (event.key.code == sf::Keyboard::Escape) {
-                currentMenuState = MenuState::Settings;
-                currentState = AppState::Welcome;
-            }
-
-            if (keybindManager.isActionTriggered("ui_settings", event)) keybindPanel.toggle();
-            if (keybindManager.isActionTriggered("export_png", event)) exportModal.open(canvas, timeline.getCurrentFrame());
-
-            if (keybindManager.isActionTriggered("proj_save", event)) {
-                if (triggerSave(canvas, timeline)) showMessage("Project Saved Successfully!", sf::Color::Green);
-                else showMessage("Error Saving Project!", sf::Color::Red);
-            }
-
-            if (keybindManager.isActionTriggered("proj_save_as", event)) {
-                std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
-                if (!file.empty()) {
-                    activeProjectPath = file;
-                    if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
-                        canvas.clearIsDirty();
-                        showMessage("Project Saved As Successfully!", sf::Color::Green);
+            if (m_textManager.getEditingText() == nullptr) {
+                if (event.key.code == sf::Keyboard::Numpad6) {
+                    isTypingPrompt = !isTypingPrompt;
+                    if (isTypingPrompt) {
+                        currentPrompt = "";
+                        promptDisplay.setString("> _");
+                        showMessage("Legacy Terminal (Use AI Panel on the left)", sf::Color(0, 191, 255));
                     }
+                }
+
+                if (isTypingPrompt) return;
+
+                if (event.key.code == sf::Keyboard::Escape) {
+                    currentMenuState = MenuState::Settings;
+                    currentState = AppState::Welcome;
+                }
+
+                if (keybindManager.isActionTriggered("ui_settings", event)) keybindPanel.toggle();
+                if (keybindManager.isActionTriggered("export_png", event)) exportModal.open(canvas, timeline.getCurrentFrame());
+
+                if (keybindManager.isActionTriggered("proj_save", event)) {
+                    if (triggerSave(canvas, timeline)) showMessage("Project Saved Successfully!", sf::Color::Green);
                     else showMessage("Error Saving Project!", sf::Color::Red);
                 }
-            }
 
-            if (keybindManager.isActionTriggered("proj_open", event)) {
-                std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
-                if (!file.empty()) {
-                    activeProjectPath = file;
-                    activeProjectName = std::filesystem::path(file).stem().string();
-                    int loadedFps = 12;
-                    bool isPix = false;
-                    if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
-                        timeline.setFrame(0);
-                        canvas.setPixelMode(isPix);
-                        canvas.clearIsDirty();
-                        showMessage("Loaded Native Project", sf::Color::Green);
-                    }
-                    else {
-                        showMessage("Failed to load native project.", sf::Color::Red);
+                if (keybindManager.isActionTriggered("proj_save_as", event)) {
+                    std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
+                    if (!file.empty()) {
+                        activeProjectPath = file;
+                        if (pm.saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
+                            canvas.clearIsDirty();
+                            showMessage("Project Saved As Successfully!", sf::Color::Green);
+                        }
+                        else showMessage("Error Saving Project!", sf::Color::Red);
                     }
                 }
-            }
 
-            if (keybindManager.isActionTriggered("proj_new", event)) newProjectModal.open();
-
-            if (keybindManager.isActionTriggered("time_next", event)) {
-                if (timeline.getCurrentFrame() < timeline.getFrameCount() - 1) {
-                    timeline.nextFrame();
-                }
-                else {
-                    bool isFrameEmpty = true;
-                    const Frame* curFrame = canvas.getFrameReadOnly(timeline.getCurrentFrame());
-                    if (curFrame) {
-                        for (const auto& layer : curFrame->layers) {
-                            sf::Image img = layer.texture->getTexture().copyToImage();
-                            const sf::Uint8* pixels = img.getPixelsPtr();
-                            size_t totalPixels = static_cast<size_t>(img.getSize().x) * static_cast<size_t>(img.getSize().y) * 4;
-                            for (size_t i = 3; i < totalPixels; i += 4) {
-                                if (pixels[i] > 0) {
-                                    isFrameEmpty = false;
-                                    break;
-                                }
-                            }
-                            if (!isFrameEmpty) break;
+                if (keybindManager.isActionTriggered("proj_open", event)) {
+                    std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
+                    if (!file.empty()) {
+                        activeProjectPath = file;
+                        activeProjectName = std::filesystem::path(file).stem().string();
+                        int loadedFps = 12;
+                        bool isPix = false;
+                        if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
+                            timeline.setFrame(0);
+                            canvas.setPixelMode(isPix);
+                            canvas.clearIsDirty();
+                            showMessage("Loaded Native Project", sf::Color::Green);
+                        }
+                        else {
+                            showMessage("Failed to load native project.", sf::Color::Red);
                         }
                     }
+                }
 
-                    if (isFrameEmpty) {
-                        if (showingText && uiText.getString() == sf::String("Current frame is empty. Press Right again to create another.") && textClock.getElapsedTime().asSeconds() < 2.0f) {
+                if (keybindManager.isActionTriggered("proj_new", event)) newProjectModal.open();
+
+                if (keybindManager.isActionTriggered("time_next", event)) {
+                    if (timeline.getCurrentFrame() < timeline.getFrameCount() - 1) {
+                        timeline.nextFrame();
+                    }
+                    else {
+                        bool isFrameEmpty = true;
+                        const Frame* curFrame = canvas.getFrameReadOnly(timeline.getCurrentFrame());
+                        if (curFrame) {
+                            for (const auto& layer : curFrame->layers) {
+                                sf::Image img = layer.texture->getTexture().copyToImage();
+                                const sf::Uint8* pixels = img.getPixelsPtr();
+                                size_t totalPixels = static_cast<size_t>(img.getSize().x) * static_cast<size_t>(img.getSize().y) * 4;
+                                for (size_t i = 3; i < totalPixels; i += 4) {
+                                    if (pixels[i] > 0) {
+                                        isFrameEmpty = false;
+                                        break;
+                                    }
+                                }
+                                if (!isFrameEmpty) break;
+                            }
+                        }
+
+                        if (isFrameEmpty) {
+                            if (showingText && uiText.getString() == sf::String("Current frame is empty. Press Right again to create another.") && textClock.getElapsedTime().asSeconds() < 2.0f) {
+                                canvas.addFrame(timeline.getCurrentFrame());
+                                timeline.addFrameAfter(timeline.getCurrentFrame());
+                                timeline.nextFrame();
+                                showingText = false;
+                            }
+                            else showMessage("Current frame is empty. Press Right again to create another.", sf::Color::Yellow);
+                        }
+                        else {
                             canvas.addFrame(timeline.getCurrentFrame());
                             timeline.addFrameAfter(timeline.getCurrentFrame());
                             timeline.nextFrame();
-                            showingText = false;
                         }
-                        else showMessage("Current frame is empty. Press Right again to create another.", sf::Color::Yellow);
+                    }
+                }
+
+                if (keybindManager.isActionTriggered("time_prev", event)) {
+                    if (timeline.getCurrentFrame() > 0) {
+                        timeline.prevFrame();
                     }
                     else {
-                        canvas.addFrame(timeline.getCurrentFrame());
-                        timeline.addFrameAfter(timeline.getCurrentFrame());
-                        timeline.nextFrame();
-                    }
-                }
-            }
-
-            if (keybindManager.isActionTriggered("time_prev", event)) {
-                if (timeline.getCurrentFrame() > 0) {
-                    timeline.prevFrame();
-                }
-                else {
-                    bool isFrameEmpty = true;
-                    const Frame* curFrame = canvas.getFrameReadOnly(timeline.getCurrentFrame());
-                    if (curFrame) {
-                        for (const auto& layer : curFrame->layers) {
-                            sf::Image img = layer.texture->getTexture().copyToImage();
-                            const sf::Uint8* pixels = img.getPixelsPtr();
-                            size_t totalPixels = static_cast<size_t>(img.getSize().x) * static_cast<size_t>(img.getSize().y) * 4;
-                            for (size_t i = 3; i < totalPixels; i += 4) {
-                                if (pixels[i] > 0) {
-                                    isFrameEmpty = false;
-                                    break;
+                        bool isFrameEmpty = true;
+                        const Frame* curFrame = canvas.getFrameReadOnly(timeline.getCurrentFrame());
+                        if (curFrame) {
+                            for (const auto& layer : curFrame->layers) {
+                                sf::Image img = layer.texture->getTexture().copyToImage();
+                                const sf::Uint8* pixels = img.getPixelsPtr();
+                                size_t totalPixels = static_cast<size_t>(img.getSize().x) * static_cast<size_t>(img.getSize().y) * 4;
+                                for (size_t i = 3; i < totalPixels; i += 4) {
+                                    if (pixels[i] > 0) {
+                                        isFrameEmpty = false;
+                                        break;
+                                    }
                                 }
+                                if (!isFrameEmpty) break;
                             }
-                            if (!isFrameEmpty) break;
                         }
-                    }
 
-                    if (isFrameEmpty) {
-                        if (showingText && uiText.getString() == sf::String("Current frame is empty. Press Left again to create another.") && textClock.getElapsedTime().asSeconds() < 2.0f) {
+                        if (isFrameEmpty) {
+                            if (showingText && uiText.getString() == sf::String("Current frame is empty. Press Left again to create another.") && textClock.getElapsedTime().asSeconds() < 2.0f) {
+                                canvas.addFrame(-1);
+                                timeline.addFrameAfter(-1);
+                                timeline.setFrame(0);
+                                showingText = false;
+                            }
+                            else showMessage("Current frame is empty. Press Left again to create another.", sf::Color::Yellow);
+                        }
+                        else {
                             canvas.addFrame(-1);
                             timeline.addFrameAfter(-1);
                             timeline.setFrame(0);
-                            showingText = false;
                         }
-                        else showMessage("Current frame is empty. Press Left again to create another.", sf::Color::Yellow);
-                    }
-                    else {
-                        canvas.addFrame(-1);
-                        timeline.addFrameAfter(-1);
-                        timeline.setFrame(0);
                     }
                 }
-            }
 
-            if (keybindManager.isActionTriggered("time_play", event)) timeline.togglePlayback();
-            if (keybindManager.isActionTriggered("time_start", event)) timeline.setFrame(0);
-            if (keybindManager.isActionTriggered("time_end", event)) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
+                if (keybindManager.isActionTriggered("time_play", event)) timeline.togglePlayback();
+                if (keybindManager.isActionTriggered("time_start", event)) timeline.setFrame(0);
+                if (keybindManager.isActionTriggered("time_end", event)) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
 
-            if (keybindManager.isActionTriggered("time_add", event)) {
-                canvas.addFrame(timeline.getCurrentFrame());
-                timeline.addFrameAfter(timeline.getCurrentFrame());
-                timeline.nextFrame();
-            }
-            if (keybindManager.isActionTriggered("time_del", event)) {
-                if (canvas.getFrameCount() > 1) {
-                    int cur = timeline.getCurrentFrame();
-                    canvas.deleteFrame(cur);
-                    timeline.deleteFrame(cur);
-                    if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) {
-                        timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
+                if (keybindManager.isActionTriggered("time_add", event)) {
+                    canvas.addFrame(timeline.getCurrentFrame());
+                    timeline.addFrameAfter(timeline.getCurrentFrame());
+                    timeline.nextFrame();
+                }
+                if (keybindManager.isActionTriggered("time_del", event)) {
+                    if (canvas.getFrameCount() > 1) {
+                        int cur = timeline.getCurrentFrame();
+                        canvas.deleteFrame(cur);
+                        timeline.deleteFrame(cur);
+                        if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) {
+                            timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
+                        }
                     }
                 }
-            }
 
-            if (keybindManager.isActionTriggered("layer_new", event)) canvas.addLayer(timeline.getCurrentFrame(), "New Layer");
-            if (keybindManager.isActionTriggered("layer_dup", event)) canvas.duplicateLayer(timeline.getCurrentFrame(), canvas.getActiveLayer());
-            if (keybindManager.isActionTriggered("layer_del", event)) canvas.deleteLayer(timeline.getCurrentFrame(), canvas.getActiveLayer());
-            if (keybindManager.isActionTriggered("layer_merge_down", event)) canvas.mergeDown(timeline.getCurrentFrame());
-            if (keybindManager.isActionTriggered("layer_merge_vis", event)) canvas.mergeVisible(timeline.getCurrentFrame());
+                if (keybindManager.isActionTriggered("layer_new", event)) canvas.addLayer(timeline.getCurrentFrame(), "New Layer");
+                if (keybindManager.isActionTriggered("layer_dup", event)) canvas.duplicateLayer(timeline.getCurrentFrame(), canvas.getActiveLayer());
+                if (keybindManager.isActionTriggered("layer_del", event)) canvas.deleteLayer(timeline.getCurrentFrame(), canvas.getActiveLayer());
+                if (keybindManager.isActionTriggered("layer_merge_down", event)) canvas.mergeDown(timeline.getCurrentFrame());
+                if (keybindManager.isActionTriggered("layer_merge_vis", event)) canvas.mergeVisible(timeline.getCurrentFrame());
 
-            if (keybindManager.isActionTriggered("edit_del_sel", event)) {
-                if (canvas.getActiveTool() == ToolType::Select) canvas.deleteSelection(timeline.getCurrentFrame());
-            }
-            if (keybindManager.isActionTriggered("edit_deselect", event)) {
-                canvas.commitSelection(timeline.getCurrentFrame());
-                canvas.setActiveTool(ToolType::Brush);
-            }
-
-            if (keybindManager.isActionTriggered("edit_copy", event)) canvas.copySelection();
-            if (keybindManager.isActionTriggered("edit_paste", event)) canvas.pasteSelection(timeline.getCurrentFrame());
-            if (keybindManager.isActionTriggered("edit_dup_sel", event)) canvas.duplicateSelection(timeline.getCurrentFrame());
-
-            if (canvas.getActiveTool() == ToolType::Select) {
-                if (keybindManager.isActionTriggered("sel_flip_h", event)) canvas.flipSelectionHorizontal(timeline.getCurrentFrame());
-                if (keybindManager.isActionTriggered("sel_flip_v", event)) canvas.flipSelectionVertical(timeline.getCurrentFrame());
-            }
-
-            if (canvas.getPixelMode()) {
-                if (keybindManager.isActionTriggered("tool_brush", event)) {
-                    canvas.cyclePixelBrushSize();
-                    showMessage("Brush Size: " + std::to_string(canvas.getPixelBrushSize()) + "px", sf::Color::Green);
+                if (keybindManager.isActionTriggered("edit_del_sel", event)) {
+                    if (canvas.getActiveTool() == ToolType::Select) canvas.deleteSelection(timeline.getCurrentFrame());
                 }
-                if (keybindManager.isActionTriggered("view_grid", event)) { canvas.togglePixelGrid(); }
-                if (keybindManager.isActionTriggered("tool_move", event)) { canvas.toggleTileMode(); }
-                if (keybindManager.isActionTriggered("layer_vis", event)) { canvas.resetView(); showMessage("View Reset", sf::Color::Green); }
-                if (keybindManager.isActionTriggered("tool_eraser", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Eraser); leftToolbar.setActiveTool("eraser"); }
-                if (keybindManager.isActionTriggered("tool_pencil", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Pencil); leftToolbar.setActiveTool("pencil"); }
-            }
-            else {
-                if (keybindManager.isActionTriggered("tool_brush", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Brush); leftToolbar.setActiveTool("brush"); }
-                if (keybindManager.isActionTriggered("tool_pencil", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Pencil); leftToolbar.setActiveTool("pencil"); }
-                if (keybindManager.isActionTriggered("tool_eraser", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Eraser); leftToolbar.setActiveTool("eraser"); }
-                if (keybindManager.isActionTriggered("tool_fill", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Fill); leftToolbar.setActiveTool("fill"); }
-                if (keybindManager.isActionTriggered("tool_select", event)) { canvas.setActiveTool(ToolType::Select); leftToolbar.setActiveTool("select"); }
-            }
+                if (keybindManager.isActionTriggered("edit_deselect", event)) {
+                    canvas.commitSelection(timeline.getCurrentFrame());
+                    canvas.setActiveTool(ToolType::Brush);
+                }
 
-            if (keybindManager.isActionTriggered("edit_undo", event)) canvas.undo();
-            if (keybindManager.isActionTriggered("edit_redo", event)) canvas.redo();
+                if (keybindManager.isActionTriggered("edit_copy", event)) canvas.copySelection();
+                if (keybindManager.isActionTriggered("edit_paste", event)) canvas.pasteSelection(timeline.getCurrentFrame());
+                if (keybindManager.isActionTriggered("edit_dup_sel", event)) canvas.duplicateSelection(timeline.getCurrentFrame());
 
-            if (keybindManager.isActionTriggered("tool_eyedropper", event)) {
-                if (canvas.getDrawArea().contains(logicalMousePos)) {
-                    sf::Image flat = ExportManager::flattenFrame(canvas, timeline.getCurrentFrame());
-                    sf::Vector2f texScale(static_cast<float>(canvas.getCanvasSize().x) / canvas.getDrawArea().width, static_cast<float>(canvas.getCanvasSize().y) / canvas.getDrawArea().height);
-                    int px = static_cast<int>((logicalMousePos.x - canvas.getDrawArea().left) * texScale.x);
-                    int py = static_cast<int>((logicalMousePos.y - canvas.getDrawArea().top) * texScale.y);
-                    if (px >= 0 && px < static_cast<int>(flat.getSize().x) && py >= 0 && py < static_cast<int>(flat.getSize().y)) {
-                        sf::Color picked = flat.getPixel(px, py);
-                        canvas.setPrimaryColor(picked);
-                        colorPalettePanel.setColors(picked, canvas.getSecondaryColor());
-                        colorPalettePanel.getColorManager().addRecentColor(picked);
-                        showMessage("Color Picked", sf::Color::Green);
+                if (canvas.getActiveTool() == ToolType::Select) {
+                    if (keybindManager.isActionTriggered("sel_flip_h", event)) canvas.flipSelectionHorizontal(timeline.getCurrentFrame());
+                    if (keybindManager.isActionTriggered("sel_flip_v", event)) canvas.flipSelectionVertical(timeline.getCurrentFrame());
+                }
+
+                if (canvas.getPixelMode()) {
+                    if (keybindManager.isActionTriggered("tool_brush", event)) {
+                        canvas.cyclePixelBrushSize();
+                        showMessage("Brush Size: " + std::to_string(canvas.getPixelBrushSize()) + "px", sf::Color::Green);
+                    }
+                    if (keybindManager.isActionTriggered("view_grid", event)) { canvas.togglePixelGrid(); }
+                    if (keybindManager.isActionTriggered("tool_move", event)) { canvas.toggleTileMode(); }
+                    if (keybindManager.isActionTriggered("layer_vis", event)) { canvas.resetView(); showMessage("View Reset", sf::Color::Green); }
+                    if (keybindManager.isActionTriggered("tool_eraser", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Eraser); leftToolbar.setActiveTool("eraser"); }
+                    if (keybindManager.isActionTriggered("tool_pencil", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Pencil); leftToolbar.setActiveTool("pencil"); }
+                }
+                else {
+                    if (keybindManager.isActionTriggered("tool_brush", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Brush); leftToolbar.setActiveTool("brush"); }
+                    if (keybindManager.isActionTriggered("tool_pencil", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Pencil); leftToolbar.setActiveTool("pencil"); }
+                    if (keybindManager.isActionTriggered("tool_eraser", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Eraser); leftToolbar.setActiveTool("eraser"); }
+                    if (keybindManager.isActionTriggered("tool_fill", event)) { canvas.commitSelection(timeline.getCurrentFrame()); canvas.setActiveTool(ToolType::Fill); leftToolbar.setActiveTool("fill"); }
+                    if (keybindManager.isActionTriggered("tool_select", event)) { canvas.setActiveTool(ToolType::Select); leftToolbar.setActiveTool("select"); }
+                }
+
+                if (keybindManager.isActionTriggered("edit_undo", event)) canvas.undo();
+                if (keybindManager.isActionTriggered("edit_redo", event)) canvas.redo();
+
+                if (keybindManager.isActionTriggered("tool_eyedropper", event)) {
+                    if (canvas.getDrawArea().contains(logicalMousePos)) {
+                        sf::Image flat = ExportManager::flattenFrame(canvas, timeline.getCurrentFrame());
+                        sf::Vector2f texScale(static_cast<float>(canvas.getCanvasSize().x) / canvas.getDrawArea().width, static_cast<float>(canvas.getCanvasSize().y) / canvas.getDrawArea().height);
+                        int px = static_cast<int>((logicalMousePos.x - canvas.getDrawArea().left) * texScale.x);
+                        int py = static_cast<int>((logicalMousePos.y - canvas.getDrawArea().top) * texScale.y);
+                        if (px >= 0 && px < static_cast<int>(flat.getSize().x) && py >= 0 && py < static_cast<int>(flat.getSize().y)) {
+                            sf::Color picked = flat.getPixel(px, py);
+                            canvas.setPrimaryColor(picked);
+                            colorPalettePanel.setColors(picked, canvas.getSecondaryColor());
+                            colorPalettePanel.getColorManager().addRecentColor(picked);
+                            showMessage("Color Picked", sf::Color::Green);
+                        }
                     }
                 }
             }
@@ -1330,7 +1332,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 m_perspectivePanel.handleEvent(event, mousePos, canvas.getCanvasSize());
             }
             if (canvas.getActiveTool() == ToolType::Text) {
-                m_textPanel.handleEvent(event, mousePos);
+                if (m_textPanel.handleEvent(event, mousePos)) return;
             }
             if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
 

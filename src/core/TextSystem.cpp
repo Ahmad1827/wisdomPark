@@ -13,10 +13,13 @@ std::string generateUUID() {
     return res;
 }
 
-void TextObject::render(sf::RenderTarget& target, bool isPixelMode) const {
-    if (text.empty()) return;
+void TextObject::render(sf::RenderTarget& target, bool isPixelMode, sf::RenderStates states) const {
     sf::Font* font = FontManager::getInstance().getFont(fontName);
-    if (!font) return;
+    if (!font) {
+        auto names = FontManager::getInstance().getFontNames();
+        if (!names.empty()) font = FontManager::getInstance().getFont(names[0]);
+        if (!font) return;
+    }
 
     if (isPixelMode) {
         const_cast<sf::Texture&>(font->getTexture(size)).setSmooth(false);
@@ -25,7 +28,7 @@ void TextObject::render(sf::RenderTarget& target, bool isPixelMode) const {
         const_cast<sf::Texture&>(font->getTexture(size)).setSmooth(true);
     }
 
-    sf::Text sfText(text, *font, size);
+    sf::Text sfText(text.isEmpty() ? " " : text, *font, size);
     sf::Uint32 style = sf::Text::Regular;
     if (bold) style |= sf::Text::Bold;
     if (italic) style |= sf::Text::Italic;
@@ -49,17 +52,19 @@ void TextObject::render(sf::RenderTarget& target, bool isPixelMode) const {
 
     sf::FloatRect bounds = sfText.getLocalBounds();
     sf::Vector2f origin(0.f, 0.f);
-    if (alignH == 1) origin.x = bounds.width / 2.f;
-    else if (alignH == 2) origin.x = bounds.width;
-    if (alignV == 1) origin.y = bounds.height / 2.f;
-    else if (alignV == 2) origin.y = bounds.height;
+    if (!text.isEmpty()) {
+        if (alignH == 1) origin.x = bounds.width / 2.f;
+        else if (alignH == 2) origin.x = bounds.width;
+        if (alignV == 1) origin.y = bounds.height / 2.f;
+        else if (alignV == 2) origin.y = bounds.height;
+    }
     sfText.setOrigin(origin);
 
     sfText.setPosition(isPixelMode ? sf::Vector2f(std::round(position.x), std::round(position.y)) : position);
     sfText.setRotation(rotation);
     sfText.setScale(scale);
 
-    if (box) {
+    if (box && !text.isEmpty()) {
         sf::RectangleShape bg(sf::Vector2f(bounds.width + boxPadding * 2.f, bounds.height + boxPadding * 2.f));
         bg.setOrigin(origin + sf::Vector2f(boxPadding, boxPadding));
         bg.setPosition(sfText.getPosition());
@@ -68,29 +73,45 @@ void TextObject::render(sf::RenderTarget& target, bool isPixelMode) const {
         sf::Color bColor = boxColor;
         bColor.a = static_cast<sf::Uint8>((bColor.a / 255.f) * finalColor.a);
         bg.setFillColor(bColor);
-        target.draw(bg);
+        target.draw(bg, states);
     }
 
-    if (shadow) {
+    if (shadow && !text.isEmpty()) {
         sf::Text shText = sfText;
         sf::Color shColor = shadowColor;
         shColor.a = static_cast<sf::Uint8>((shColor.a / 255.f) * finalColor.a);
         shText.setFillColor(shColor);
         shText.setOutlineThickness(0.f);
         shText.move(shadowOffsetX, shadowOffsetY);
-        target.draw(shText);
+        target.draw(shText, states);
     }
 
-    target.draw(sfText);
+    if (!text.isEmpty()) {
+        target.draw(sfText, states);
+    }
 
     if (isEditing) {
-        sf::RectangleShape cursor(sf::Vector2f(2.f, size));
-        cursor.setFillColor(sf::Color::White);
-        sf::Vector2f curPos = sfText.findCharacterPos(text.length());
-        cursor.setPosition(curPos);
-        cursor.setRotation(rotation);
-        cursor.setScale(scale);
-        target.draw(cursor);
+        static sf::Clock blinkClock;
+        if (blinkClock.getElapsedTime().asMilliseconds() % 1000 < 500) {
+            float cursorHeight = std::max(2.0f, static_cast<float>(size) * 0.8f);
+            sf::RectangleShape cursor(sf::Vector2f(1.f, cursorHeight));
+            cursor.setFillColor(finalColor);
+
+            sf::Vector2f curPos;
+            if (text.isEmpty()) {
+                curPos = sfText.getPosition();
+                curPos.y += (static_cast<float>(size) - cursorHeight) / 2.0f;
+            }
+            else {
+                curPos = sfText.findCharacterPos(text.getSize());
+                curPos.y += (static_cast<float>(size) - cursorHeight) / 2.0f;
+            }
+
+            cursor.setPosition(curPos);
+            cursor.setRotation(rotation);
+            cursor.setScale(scale);
+            target.draw(cursor, states);
+        }
     }
 }
 
@@ -153,13 +174,32 @@ void TextManager::clearEditingState() {
     }
 }
 
-void TextManager::render(sf::RenderTarget& target, int frame, int layer, bool isPixelMode) {
+void TextManager::render(sf::RenderTarget& target, int frame, int layer, bool isPixelMode, sf::RenderStates states, sf::Vector2u logicalSize) {
+    // GPU Optimization: Early exit if layer has no text to prevent context switch stalls!
+    bool hasText = false;
     auto it = m_frameTexts.find(frame);
     if (it != m_frameTexts.end()) {
         for (const auto& o : it->second) {
-            if (o.layerIndex == layer) o.render(target, isPixelMode);
+            if (o.layerIndex == layer) {
+                hasText = true;
+                break;
+            }
         }
     }
+    if (!hasText) return;
+
+    if (m_renderTex.getSize() != logicalSize) {
+        m_renderTex.create(logicalSize.x, logicalSize.y);
+    }
+    m_renderTex.clear(sf::Color::Transparent);
+
+    for (const auto& o : it->second) {
+        if (o.layerIndex == layer) o.render(m_renderTex, isPixelMode);
+    }
+
+    m_renderTex.display();
+    sf::Sprite spr(m_renderTex.getTexture());
+    target.draw(spr, states);
 }
 
 std::string TextManager::hitTest(int frame, int layer, sf::Vector2f pos) {

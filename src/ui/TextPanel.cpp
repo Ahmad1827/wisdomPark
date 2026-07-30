@@ -76,9 +76,12 @@ void TextPanel::draw(sf::RenderWindow& window) {
     }
 }
 
-void TextPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
+bool TextPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        if (!m_background.getGlobalBounds().contains(mousePos)) return;
+        if (!m_background.getGlobalBounds().contains(mousePos)) {
+            if (m_fontDropdownOpen) m_fontDropdownOpen = false;
+            return false;
+        }
 
         float bx = m_background.getPosition().x;
         float y = m_background.getPosition().y + 40.f;
@@ -86,9 +89,12 @@ void TextPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
         if (sf::FloatRect(bx + 10.f, y, 115.f, 25.f).contains(mousePos)) {
             std::string path = NativeDialogs::openFileDialog("Font Files\0*.ttf;*.otf\0");
             if (!path.empty()) FontManager::getInstance().importFont(path);
-            return;
+            return true;
         }
-        if (sf::FloatRect(bx + 135.f, y, 115.f, 25.f).contains(mousePos)) m_fontDropdownOpen = !m_fontDropdownOpen;
+        if (sf::FloatRect(bx + 135.f, y, 115.f, 25.f).contains(mousePos)) {
+            m_fontDropdownOpen = !m_fontDropdownOpen;
+            return true;
+        }
         y += 35.f;
 
         TextObject* activeText = m_tm->getEditingText();
@@ -99,7 +105,7 @@ void TextPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
                 if (sf::FloatRect(bx + 10.f, y, 240.f, 20.f).contains(mousePos)) {
                     if (activeText) activeText->fontName = name;
                     m_fontDropdownOpen = false;
-                    return;
+                    return true;
                 }
                 y += 22.f;
             }
@@ -107,21 +113,25 @@ void TextPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
         }
 
         if (activeText) {
-            if (sf::FloatRect(bx + 10.f, y, 60.f, 25.f).contains(mousePos)) activeText->size = std::max(8, activeText->size - 2);
-            if (sf::FloatRect(bx + 195.f, y, 55.f, 25.f).contains(mousePos)) activeText->size = std::min(512, activeText->size + 2);
+            if (sf::FloatRect(bx + 10.f, y, 60.f, 25.f).contains(mousePos)) { activeText->size = std::max(8, activeText->size - 2); return true; }
+            if (sf::FloatRect(bx + 195.f, y, 55.f, 25.f).contains(mousePos)) { activeText->size = std::min(512, activeText->size + 2); return true; }
             y += 35.f;
 
-            if (sf::FloatRect(bx + 10.f, y, 55.f, 25.f).contains(mousePos)) activeText->bold = !activeText->bold;
-            if (sf::FloatRect(bx + 70.f, y, 55.f, 25.f).contains(mousePos)) activeText->italic = !activeText->italic;
-            if (sf::FloatRect(bx + 130.f, y, 55.f, 25.f).contains(mousePos)) activeText->underline = !activeText->underline;
-            if (sf::FloatRect(bx + 190.f, y, 60.f, 25.f).contains(mousePos)) activeText->strikethrough = !activeText->strikethrough;
+            if (sf::FloatRect(bx + 10.f, y, 55.f, 25.f).contains(mousePos)) { activeText->bold = !activeText->bold; return true; }
+            if (sf::FloatRect(bx + 70.f, y, 55.f, 25.f).contains(mousePos)) { activeText->italic = !activeText->italic; return true; }
+            if (sf::FloatRect(bx + 130.f, y, 55.f, 25.f).contains(mousePos)) { activeText->underline = !activeText->underline; return true; }
+            if (sf::FloatRect(bx + 190.f, y, 60.f, 25.f).contains(mousePos)) { activeText->strikethrough = !activeText->strikethrough; return true; }
             y += 35.f;
 
-            if (sf::FloatRect(bx + 10.f, y, 115.f, 25.f).contains(mousePos)) activeText->outline = !activeText->outline;
-            if (sf::FloatRect(bx + 135.f, y, 115.f, 25.f).contains(mousePos)) activeText->shadow = !activeText->shadow;
+            if (sf::FloatRect(bx + 10.f, y, 115.f, 25.f).contains(mousePos)) { activeText->outline = !activeText->outline; return true; }
+            if (sf::FloatRect(bx + 135.f, y, 115.f, 25.f).contains(mousePos)) { activeText->shadow = !activeText->shadow; return true; }
             y += 35.f;
 
-            if (sf::FloatRect(bx + 10.f, y, 240.f, 25.f).contains(mousePos)) activeText->box = !activeText->box;
+            if (sf::FloatRect(bx + 10.f, y, 240.f, 25.f).contains(mousePos)) { activeText->box = !activeText->box; return true; }
         }
+
+        // Consume the click so the Canvas doesn't process it and drop focus
+        return true;
     }
+    return false;
 }

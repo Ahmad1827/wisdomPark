@@ -1,5 +1,6 @@
 #include "TextTool.h"
 #include "../core/FontManager.h"
+#include <iostream>
 
 TextTool::TextTool(Canvas& canvas, Timeline& timeline, TextManager& tm)
     : m_canvas(canvas), m_timeline(timeline), m_tm(tm), m_isPanning(false) {}
@@ -34,24 +35,21 @@ void TextTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& windo
     TextObject* editingText = m_tm.getEditingText();
 
     if (event.type == sf::Event::TextEntered && editingText) {
-        if (event.text.unicode == '\b' && !editingText->text.empty()) {
-            m_tm.saveUndoState(m_timeline.getCurrentFrame());
-            editingText->text.pop_back();
+        if (event.text.unicode == '\b') {
+            if (!editingText->text.isEmpty()) {
+                m_tm.saveUndoState(m_timeline.getCurrentFrame());
+                editingText->text.erase(editingText->text.getSize() - 1, 1);
+            }
         }
         else if (event.text.unicode >= 32 && event.text.unicode != 127) {
             m_tm.saveUndoState(m_timeline.getCurrentFrame());
-            editingText->text += static_cast<char>(event.text.unicode);
+            editingText->text += event.text.unicode;
         }
         return;
     }
 
     if (event.type == sf::Event::KeyPressed && editingText) {
-        if (event.key.code == sf::Keyboard::Enter && !sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
-            m_tm.saveUndoState(m_timeline.getCurrentFrame());
-            editingText->text += '\n';
-            return;
-        }
-        if (event.key.code == sf::Keyboard::Enter && sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
+        if (event.key.code == sf::Keyboard::Enter) {
             m_tm.clearEditingState();
             return;
         }
@@ -61,14 +59,26 @@ void TextTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& windo
         }
     }
 
-    sf::Vector2f viewPos = m_canvas.getInverseTransform().transformPoint(mousePos);
-    float scaleX = static_cast<float>(m_canvas.getCanvasSize().x) / m_canvas.getDrawArea().width;
-    float scaleY = static_cast<float>(m_canvas.getCanvasSize().y) / m_canvas.getDrawArea().height;
-    sf::Vector2f logicalPos((viewPos.x - m_canvas.getDrawArea().left) * scaleX, (viewPos.y - m_canvas.getDrawArea().top) * scaleY);
+    sf::Vector2f logicalPos = m_canvas.getInverseTransform().transformPoint(mousePos);
 
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        if (m_canvas.getDrawArea().contains(viewPos)) {
-            std::string hitId = m_tm.hitTest(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), logicalPos);
+
+        float scaleX = static_cast<float>(m_canvas.getCanvasSize().x) / m_canvas.getDrawArea().width;
+        float scaleY = static_cast<float>(m_canvas.getCanvasSize().y) / m_canvas.getDrawArea().height;
+
+        sf::Vector2f trueCanvasPos;
+        trueCanvasPos.x = (logicalPos.x - m_canvas.getDrawArea().left) * scaleX;
+        trueCanvasPos.y = (logicalPos.y - m_canvas.getDrawArea().top) * scaleY;
+
+        if (trueCanvasPos.x < 0 || trueCanvasPos.x > m_canvas.getCanvasSize().x ||
+            trueCanvasPos.y < 0 || trueCanvasPos.y > m_canvas.getCanvasSize().y) {
+            m_tm.clearEditingState();
+            return;
+        }
+
+        if (m_canvas.getDrawArea().contains(logicalPos)) {
+            std::string hitId = m_tm.hitTest(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), trueCanvasPos);
+
             if (!hitId.empty()) {
                 m_tm.clearEditingState();
                 TextObject* hit = m_tm.getText(m_timeline.getCurrentFrame(), hitId);
@@ -76,7 +86,7 @@ void TextTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& windo
             }
             else {
                 m_tm.clearEditingState();
-                m_tm.createText(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), logicalPos);
+                m_tm.createText(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), trueCanvasPos);
             }
         }
     }

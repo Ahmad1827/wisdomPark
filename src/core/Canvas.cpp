@@ -4,6 +4,7 @@
 #include <iostream>
 #include <stack>
 #include <queue>
+#include "TextSystem.h"
 
 static const sf::RenderWindow* g_activeWindow = nullptr;
 
@@ -1385,9 +1386,27 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                 sf::RenderStates layerStates = innerStates;
                 layerStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
                 window.draw(spr, layerStates);
+
+                if (m_textManager) {
+                    m_textManager->render(window, currentFrame, static_cast<int>(i), isPixelMode, layerStates, canvasLogicalSize);
+                }
             }
         }
     }
+
+    /*
+    if (tileModeEnabled && isPixelMode) {
+        sf::Sprite baseSpr(frames[currentFrame].layers[activeLayer].texture->getTexture());
+        for (int x = -1; x <= 1; ++x) {
+            for (int y = -1; y <= 1; ++y) {
+                if (x == 0 && y == 0) continue;
+                sf::Sprite tileSpr = baseSpr;
+                tileSpr.setPosition(x * static_cast<float>(canvasLogicalSize.x), y * static_cast<float>(canvasLogicalSize.y));
+                window.draw(tileSpr, innerStates);
+            }
+        }
+    }
+    */
 
     float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
     float handleDenom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
