@@ -3,6 +3,8 @@
 #include <string>
 #include <map>
 #include <vector>
+#include "../core/PerspectiveSystem.h"
+#include "../ui/PerspectivePanel.h"
 #include "../core/AppState.h"
 #include "../core/SettingsManager.h"
 #include "../core/ProjectManager.h"
@@ -71,6 +73,9 @@ private:
     bool isLightingMode;
     int promptQuantity;
     bool focusMode;
+
+    PerspectiveManager m_perspectiveManager;
+    PerspectivePanel m_perspectivePanel;
 
     ProjectManager* projManager;
     std::string activeProjectName;

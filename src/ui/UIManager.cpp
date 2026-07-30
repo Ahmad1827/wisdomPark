@@ -16,6 +16,7 @@
 #include "../tools/SpriteSheetStudioTool.h"
 #include "../tools/ShapeTool.h"
 #include "../tools/MagicWandTool.h"
+#include "../tools/PerspectiveTool.h"
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -125,6 +126,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     warnOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
     warnOverlay.setFillColor(sf::Color(0, 0, 0, 180));
 
+
     warnBox.setSize(sf::Vector2f(600.f, 250.f));
     warnBox.setOrigin(300.f, 125.f);
     warnBox.setPosition(960.f, 540.f);
@@ -209,6 +211,9 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     loadingCancelText.setFillColor(sf::Color::White);
     loadingCancelText.setOrigin(loadingCancelText.getLocalBounds().width / 2.f, loadingCancelText.getLocalBounds().height / 2.f);
     loadingCancelText.setPosition(960.f, 607.f);
+
+    m_perspectiveManager.init();
+    m_perspectivePanel.init(&m_perspectiveManager);
 
     initStartMenu();
 }
@@ -1316,6 +1321,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         if (!timeline.isPlaying() && !keybindPanel.isVisible() && !exportModal.getIsOpen() && !newProjectModal.getIsOpen() && !audioPanel.getIsVisible() && !g_aiPanel.getIsVisible() && !g_aiReviewModal.getIsOpen()) {
 
             if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
+            if (canvas.getActiveTool() == ToolType::Perspective) {
+                m_perspectivePanel.handleEvent(event, mousePos, canvas.getCanvasSize());
+            }
             if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
 
             if (event.type == sf::Event::MouseMoved) {
@@ -1421,6 +1429,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             canvas.setActiveTool(ToolType::MagicWand);
                             leftToolbar.setActiveTool("magic_wand");
                             showMessage("Magic Wand Selected", sf::Color::Green);
+                        }
+                        else if (leftAction == "perspective") {
+                            canvas.commitSelection(timeline.getCurrentFrame());
+                            canvas.setActiveTool(ToolType::Perspective);
+                            leftToolbar.setActiveTool("perspective");
+                            showMessage("Perspective Tool Activated", sf::Color::Green);
                         }
                         else if (leftAction == "ai_gen") g_aiPanel.toggle();
                         else if (leftAction == "flip_h") canvas.flipSelectionHorizontal(timeline.getCurrentFrame());
@@ -1692,15 +1706,21 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
         bool needsShapeTool = (canvas.getActiveTool() == ToolType::Shapes);
         bool needsWandTool = (canvas.getActiveTool() == ToolType::MagicWand);
+        bool needsPerspectiveTool = (canvas.getActiveTool() == ToolType::Perspective);
+
         bool hasShapeTool = dynamic_cast<ShapeTool*>(m_activeTool.get()) != nullptr;
         bool hasWandTool = dynamic_cast<MagicWandTool*>(m_activeTool.get()) != nullptr;
+        bool hasPerspectiveTool = dynamic_cast<PerspectiveTool*>(m_activeTool.get()) != nullptr;
 
-        if (!m_activeTool || (needsShapeTool && !hasShapeTool) || (needsWandTool && !hasWandTool) || (!needsShapeTool && !needsWandTool && (hasShapeTool || hasWandTool) && !m_debugUseSpriteStudio)) {
+        if (!m_activeTool || (needsShapeTool && !hasShapeTool) || (needsWandTool && !hasWandTool) || (needsPerspectiveTool && !hasPerspectiveTool) || (!needsShapeTool && !needsWandTool && !needsPerspectiveTool && (hasShapeTool || hasWandTool || hasPerspectiveTool) && !m_debugUseSpriteStudio)) {
             if (needsShapeTool) {
                 m_activeTool = std::make_unique<ShapeTool>(canvas, timeline);
             }
             else if (needsWandTool) {
                 m_activeTool = std::make_unique<MagicWandTool>(canvas, timeline);
+            }
+            else if (needsPerspectiveTool) {
+                m_activeTool = std::make_unique<PerspectiveTool>(canvas, timeline, m_perspectiveManager);
             }
             else if (m_debugUseSpriteStudio) {
                 m_activeTool = std::make_unique<SpriteSheetStudioTool>();
@@ -1819,6 +1839,9 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         layerPanel.draw(window, canvas, timeline.getCurrentFrame());
         colorPalettePanel.draw(window);
         rightProperties.draw(window);
+        if (canvas.getActiveTool() == ToolType::Perspective) {
+            m_perspectivePanel.draw(window);
+        }
 
         window.draw(toolBg);
         window.draw(sizeLabelText);
