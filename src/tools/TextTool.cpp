@@ -3,7 +3,9 @@
 #include <iostream>
 
 TextTool::TextTool(Canvas& canvas, Timeline& timeline, TextManager& tm)
-    : m_canvas(canvas), m_timeline(timeline), m_tm(tm), m_isPanning(false) {}
+    : m_canvas(canvas), m_timeline(timeline), m_tm(tm), m_isPanning(false) {
+    m_lastPrimaryColor = m_canvas.getPrimaryColor();
+}
 
 void TextTool::Initialize() {
     FontManager::getInstance().loadDefaultFonts();
@@ -94,6 +96,16 @@ void TextTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& windo
 
 void TextTool::Update(float deltaTime, const sf::RenderWindow& window) {
     m_canvas.updateTransform(deltaTime, m_bounds);
+
+    sf::Color currentPrimary = m_canvas.getPrimaryColor();
+    if (currentPrimary != m_lastPrimaryColor) {
+        TextObject* editingText = m_tm.getEditingText();
+        if (editingText) {
+            m_tm.saveUndoState(m_timeline.getCurrentFrame());
+            editingText->color = currentPrimary;
+        }
+        m_lastPrimaryColor = currentPrimary;
+    }
 }
 
 void TextTool::Render(sf::RenderWindow& window) {

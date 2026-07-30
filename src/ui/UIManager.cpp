@@ -1765,6 +1765,13 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 wand->clearColorPanelRequest();
             }
         }
+        if (canvas.getActiveTool() == ToolType::Text) {
+            if (m_textPanel.wantsColorPanelOpen()) {
+                sf::Vector2f handleCenter = colorPalettePanel.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
+                colorPalettePanel.updateHover(handleCenter, true); // smoothly opens the color panel
+                m_textPanel.clearColorPanelRequest();
+            }
+        }
         m_activeTool->SetBounds(availableSpace);
         m_activeTool->Update(dt, window);
 

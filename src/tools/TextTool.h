@@ -20,4 +20,5 @@ private:
     sf::FloatRect m_bounds;
     bool m_isPanning;
     sf::Vector2f m_lastPanPos;
+    sf::Color m_lastPrimaryColor; // Tracks the global color for live updates
 };

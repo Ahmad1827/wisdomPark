@@ -73,6 +73,21 @@ void TextPanel::draw(sf::RenderWindow& window) {
         y += 35.f;
 
         drawToggle(window, sf::FloatRect(m_background.getPosition().x + 10.f, y, 240.f, 25.f), "Background Box", activeText->box);
+        y += 35.f;
+
+        // Draw the color preview box
+        sf::Text fillTxt("Text Color:", m_font, 12);
+        fillTxt.setPosition(m_background.getPosition().x + 10.f, y + 5.f);
+        fillTxt.setFillColor(sf::Color(200, 200, 200));
+        window.draw(fillTxt);
+
+        m_colorBoxRect = sf::FloatRect(m_background.getPosition().x + 110.f, y, 140.f, 24.f);
+        sf::RectangleShape colorBox(sf::Vector2f(m_colorBoxRect.width, m_colorBoxRect.height));
+        colorBox.setPosition(m_colorBoxRect.left, m_colorBoxRect.top);
+        colorBox.setFillColor(activeText->color);
+        colorBox.setOutlineThickness(1.f);
+        colorBox.setOutlineColor(sf::Color(200, 200, 200));
+        window.draw(colorBox);
     }
 }
 
@@ -128,9 +143,14 @@ bool TextPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
             y += 35.f;
 
             if (sf::FloatRect(bx + 10.f, y, 240.f, 25.f).contains(mousePos)) { activeText->box = !activeText->box; return true; }
-        }
+            y += 35.f;
 
-        // Consume the click so the Canvas doesn't process it and drop focus
+            // Check if the user clicks the color box!
+            if (m_colorBoxRect.contains(mousePos)) {
+                m_requestColorPanelOpen = true;
+                return true;
+            }
+        }
         return true;
     }
     return false;
