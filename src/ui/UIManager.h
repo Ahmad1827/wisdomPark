@@ -3,6 +3,8 @@
 #include <string>
 #include <map>
 #include <vector>
+#include "../core/TextSystem.h"
+#include "../ui/TextPanel.h"
 #include "../core/PerspectiveSystem.h"
 #include "../ui/PerspectivePanel.h"
 #include "../core/AppState.h"
@@ -55,6 +57,8 @@ struct LightRay {
 
 class UIManager {
 private:
+    TextManager m_textManager;
+    TextPanel m_textPanel;
     std::unique_ptr<ITool> m_activeTool;
     bool m_debugUseSpriteStudio;
     int lastLeftState = 0;

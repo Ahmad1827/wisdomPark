@@ -48,15 +48,16 @@ void LeftToolbar::init() {
     makeBtn("pencil", "Pencil", startY + gap * 1);
     makeBtn("eraser", "Erase", startY + gap * 2);
     makeBtn("fill", "Bucket", startY + gap * 3);
-    makeBtn("select", "Select", startY + gap * 4);
-    makeBtn("magic_wand", "Wand", startY + gap * 5);
-    makeBtn("shapes", "Shapes", startY + gap * 6);
-    makeBtn("symmetry", "Symmetry", startY + gap * 7);
-    makeBtn("perspective", "Perspective", startY + gap * 8);
-    makeBtn("ai_gen", "AI Gen", startY + gap * 9, true);
-    makeBtn("import_img", "Image", startY + gap * 10);
-    makeBtn("audio_panel", "Audio", startY + gap * 11);
-    makeBtn("dither_toggle", "Dither", startY + gap * 12);
+    makeBtn("text", "Text", startY + gap * 4);
+    makeBtn("select", "Select", startY + gap * 5);
+    makeBtn("magic_wand", "Wand", startY + gap * 6);
+    makeBtn("shapes", "Shapes", startY + gap * 7);
+    makeBtn("symmetry", "Symmetry", startY + gap * 8);
+    makeBtn("perspective", "Perspective", startY + gap * 9);
+    makeBtn("ai_gen", "AI Gen", startY + gap * 10, true);
+    makeBtn("import_img", "Image", startY + gap * 11);
+    makeBtn("audio_panel", "Audio", startY + gap * 12);
+    makeBtn("dither_toggle", "Dither", startY + gap * 13);
 
     auto makeActionBtn = [&](std::string id, std::string text) {
         ToolItem btn;
@@ -76,6 +77,7 @@ void LeftToolbar::init() {
     makeActionBtn("resize_sel", "Resize");
     makeActionBtn("erase_sel", "Erase");
     makeActionBtn("del_sel", "Deselect");
+    makeActionBtn("rasterize", "Rasterize");
 }
 
 void LeftToolbar::update(float dt, bool focusMode) {

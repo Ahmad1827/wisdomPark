@@ -17,6 +17,7 @@
 #include "../tools/ShapeTool.h"
 #include "../tools/MagicWandTool.h"
 #include "../tools/PerspectiveTool.h"
+#include "../tools/TextTool.h"
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -214,7 +215,10 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     m_perspectiveManager.init();
     m_perspectivePanel.init(&m_perspectiveManager);
+    m_textManager.init();
+    m_textPanel.init(&m_textManager);
     baseCanvas->setPerspectiveManager(&m_perspectiveManager);
+    baseCanvas->setTextManager(&m_textManager);
 
     initStartMenu();
 }
@@ -1325,6 +1329,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (canvas.getActiveTool() == ToolType::Perspective) {
                 m_perspectivePanel.handleEvent(event, mousePos, canvas.getCanvasSize());
             }
+            if (canvas.getActiveTool() == ToolType::Text) {
+                m_textPanel.handleEvent(event, mousePos);
+            }
             if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
 
             if (event.type == sf::Event::MouseMoved) {
@@ -1464,6 +1471,19 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         else if (leftAction == "dither_toggle") {
                             canvas.toggleDithering();
                             showMessage("Dithering Toggled", sf::Color::Green);
+                        }
+                        else if (leftAction == "text") {
+                            canvas.commitSelection(timeline.getCurrentFrame());
+                            canvas.setActiveTool(ToolType::Text);
+                            leftToolbar.setActiveTool("text");
+                            showMessage("Text Tool Activated", sf::Color::Green);
+                        }
+                        else if (leftAction == "rasterize") {
+                            TextObject* t = m_textManager.getEditingText();
+                            if (t) {
+                                m_textManager.rasterizeText(timeline.getCurrentFrame(), canvas.getActiveLayer(), t->id, canvas);
+                                showMessage("Text Rasterized", sf::Color::Green);
+                            }
                         }
                         return;
                     }
@@ -1708,12 +1728,14 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         bool needsShapeTool = (canvas.getActiveTool() == ToolType::Shapes);
         bool needsWandTool = (canvas.getActiveTool() == ToolType::MagicWand);
         bool needsPerspectiveTool = (canvas.getActiveTool() == ToolType::Perspective);
+        bool needsTextTool = (canvas.getActiveTool() == ToolType::Text);
 
         bool hasShapeTool = dynamic_cast<ShapeTool*>(m_activeTool.get()) != nullptr;
         bool hasWandTool = dynamic_cast<MagicWandTool*>(m_activeTool.get()) != nullptr;
         bool hasPerspectiveTool = dynamic_cast<PerspectiveTool*>(m_activeTool.get()) != nullptr;
+        bool hasTextTool = dynamic_cast<TextTool*>(m_activeTool.get()) != nullptr;
 
-        if (!m_activeTool || (needsShapeTool && !hasShapeTool) || (needsWandTool && !hasWandTool) || (needsPerspectiveTool && !hasPerspectiveTool) || (!needsShapeTool && !needsWandTool && !needsPerspectiveTool && (hasShapeTool || hasWandTool || hasPerspectiveTool) && !m_debugUseSpriteStudio)) {
+        if (!m_activeTool || (needsShapeTool && !hasShapeTool) || (needsWandTool && !hasWandTool) || (needsPerspectiveTool && !hasPerspectiveTool) || (needsTextTool && !hasTextTool) || (!needsShapeTool && !needsWandTool && !needsPerspectiveTool && !needsTextTool && (hasShapeTool || hasWandTool || hasPerspectiveTool || hasTextTool) && !m_debugUseSpriteStudio)) {
             if (needsShapeTool) {
                 m_activeTool = std::make_unique<ShapeTool>(canvas, timeline);
             }
@@ -1722,6 +1744,9 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             }
             else if (needsPerspectiveTool) {
                 m_activeTool = std::make_unique<PerspectiveTool>(canvas, timeline, m_perspectiveManager);
+            }
+            else if (needsTextTool) {
+                m_activeTool = std::make_unique<TextTool>(canvas, timeline, m_textManager);
             }
             else if (m_debugUseSpriteStudio) {
                 m_activeTool = std::make_unique<SpriteSheetStudioTool>();
@@ -1842,6 +1867,9 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         rightProperties.draw(window);
         if (canvas.getActiveTool() == ToolType::Perspective) {
             m_perspectivePanel.draw(window);
+        }
+        if (canvas.getActiveTool() == ToolType::Text) {
+            m_textPanel.draw(window);
         }
 
         window.draw(toolBg);

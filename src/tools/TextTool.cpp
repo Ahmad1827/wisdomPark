@@ -1,4 +1,5 @@
 #include "TextTool.h"
+#include "../core/FontManager.h"
 
 TextTool::TextTool(Canvas& canvas, Timeline& timeline, TextManager& tm)
     : m_canvas(canvas), m_timeline(timeline), m_tm(tm), m_isPanning(false) {}

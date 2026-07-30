@@ -10,7 +10,7 @@
 #include "DitherManager.h"
 #include "../core/PerspectiveSystem.h"
 
-enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective };
+enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text }; 
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 enum class TransformState { None, Scaling };
 
@@ -49,6 +49,8 @@ private:
     SymmetryManager symmetryManager;
     DitherManager ditherManager;
     bool useDithering = false;
+
+    class TextManager* m_textManager = nullptr;
 
     FrameRenderer frameRenderer;
     sf::Vector2u canvasLogicalSize;
@@ -136,6 +138,9 @@ public:
     sf::Transform getInverseTransform() const;
     sf::FloatRect getDrawArea() const;
     sf::Vector2u getCanvasSize() const;
+
+    void setTextManager(class TextManager* tm) { m_textManager = tm; }
+    class TextManager* getTextManager() { return m_textManager; }
 
     void zoom(float delta);
     void pan(sf::Vector2f delta);
