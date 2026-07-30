@@ -212,7 +212,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     loadingCancelText.setFillColor(sf::Color::White);
     loadingCancelText.setOrigin(loadingCancelText.getLocalBounds().width / 2.f, loadingCancelText.getLocalBounds().height / 2.f);
     loadingCancelText.setPosition(960.f, 607.f);
-    m_topMenuBar.init(1280.f);
+    m_topMenuBar.init();
     m_perspectiveManager.init();
     m_perspectivePanel.init(&m_perspectiveManager);
     m_textManager.init();
@@ -1430,7 +1430,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         m_topMenuBar.resize(static_cast<float>(event.size.width));
                     }
 
-                    std::string topMenuAction = m_topMenuBar.handleEvent(event, mousePos);
+                    std::string topMenuAction = m_topMenuBar.handleEvent(event, mousePos, static_cast<float>(window.getSize().x));
                     if (!topMenuAction.empty()) {
                         if (topMenuAction == "colors") {
                             sf::Vector2f handleCenter(static_cast<float>(window.getSize().x) / 2.f, 50.f);
@@ -1446,6 +1446,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             leftToolbar.setActiveTool("brush");
                             canvas.setActiveTool(ToolType::Brush);
                             showMessage("Brush Tool Activated", sf::Color::Green);
+                        }
+                        else if (topMenuAction == "back") {
+                            // Put your actual back button exit code here!
+                            showMessage("Back Button Pressed!", sf::Color::Yellow);
                         }
                         return;
                     }
@@ -1618,7 +1622,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
     sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
-    m_topMenuBar.update(mousePos);
+    m_topMenuBar.update(mousePos, static_cast<float>(window.getSize().x));
     if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);
     if (exportModal.getIsOpen()) exportModal.updateHover(mousePos);
     if (newProjectModal.getIsOpen()) newProjectModal.updateHover(mousePos);

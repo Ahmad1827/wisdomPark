@@ -2,34 +2,24 @@
 
 TopMenuBar::TopMenuBar() {}
 
-void TopMenuBar::init(float windowWidth) {
+void TopMenuBar::init() {
     m_font.loadFromFile("assets/font.otf");
 
-    float barWidth = 480.f;
-    float barHeight = 32.f;
-    float startX = (windowWidth - barWidth) / 2.f;
-    float startY = 8.f;
-
-    m_background.setSize(sf::Vector2f(barWidth, barHeight));
-    m_background.setPosition(startX, startY);
     m_background.setFillColor(sf::Color(110, 75, 45));
     m_background.setOutlineThickness(2.f);
     m_background.setOutlineColor(sf::Color(65, 40, 25));
 
-    m_leftCap.setRadius(barHeight / 2.f);
-    m_leftCap.setPosition(startX - m_leftCap.getRadius(), startY);
     m_leftCap.setFillColor(sf::Color(110, 75, 45));
     m_leftCap.setOutlineThickness(2.f);
     m_leftCap.setOutlineColor(sf::Color(65, 40, 25));
 
-    m_rightCap.setRadius(barHeight / 2.f);
-    m_rightCap.setPosition(startX + barWidth - m_rightCap.getRadius(), startY);
     m_rightCap.setFillColor(sf::Color(110, 75, 45));
     m_rightCap.setOutlineThickness(2.f);
     m_rightCap.setOutlineColor(sf::Color(65, 40, 25));
 
     m_buttons.clear();
     std::vector<std::pair<std::string, std::string>> btnData = {
+        {"back", "Back"},
         {"file", "File"},
         {"brushes", "Brushes"},
         {"colors", "Colors"},
@@ -37,37 +27,54 @@ void TopMenuBar::init(float windowWidth) {
         {"save", "Save"}
     };
 
-    float currentX = startX + 15.f;
     for (const auto& data : btnData) {
         TopMenuButton btn;
         btn.id = data.first;
         btn.label = data.second;
-        btn.bounds = sf::FloatRect(currentX, startY, 90.f, barHeight);
         m_buttons.push_back(btn);
-        currentX += 90.f;
     }
 }
 
-void TopMenuBar::resize(float windowWidth) {
-    float barWidth = 480.f;
+void TopMenuBar::updatePositions(float windowWidth) {
+    float barHeight = 32.f;
+    float btnWidth = 90.f;
+    float barWidth = m_buttons.size() * btnWidth + 30.f;
     float startX = (windowWidth - barWidth) / 2.f;
     float startY = 8.f;
 
+    m_background.setSize(sf::Vector2f(barWidth, barHeight));
     m_background.setPosition(startX, startY);
+
+    m_leftCap.setRadius(barHeight / 2.f);
     m_leftCap.setPosition(startX - m_leftCap.getRadius(), startY);
+
+    m_rightCap.setRadius(barHeight / 2.f);
     m_rightCap.setPosition(startX + barWidth - m_rightCap.getRadius(), startY);
 
     float currentX = startX + 15.f;
     for (auto& btn : m_buttons) {
-        btn.bounds.left = currentX;
-        currentX += 90.f;
+        btn.bounds = sf::FloatRect(currentX, startY, btnWidth, barHeight);
+        currentX += btnWidth;
     }
 }
 
-void TopMenuBar::update(sf::Vector2f mousePos) {
+void TopMenuBar::update(sf::Vector2f mousePos, float windowWidth) {
+    updatePositions(windowWidth);
     for (auto& btn : m_buttons) {
         btn.isHovered = btn.bounds.contains(mousePos);
     }
+}
+
+std::string TopMenuBar::handleEvent(const sf::Event& event, sf::Vector2f mousePos, float windowWidth) {
+    updatePositions(windowWidth);
+    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        for (const auto& btn : m_buttons) {
+            if (btn.bounds.contains(mousePos)) {
+                return btn.id;
+            }
+        }
+    }
+    return "";
 }
 
 void TopMenuBar::draw(sf::RenderWindow& window) {
@@ -104,15 +111,4 @@ void TopMenuBar::draw(sf::RenderWindow& window) {
         text.setFillColor(sf::Color(240, 220, 180));
         window.draw(text);
     }
-}
-
-std::string TopMenuBar::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
-    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        for (const auto& btn : m_buttons) {
-            if (btn.bounds.contains(mousePos)) {
-                return btn.id;
-            }
-        }
-    }
-    return "";
 }
