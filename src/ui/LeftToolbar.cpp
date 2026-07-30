@@ -52,10 +52,11 @@ void LeftToolbar::init() {
     makeBtn("magic_wand", "Wand", startY + gap * 5);
     makeBtn("shapes", "Shapes", startY + gap * 6);
     makeBtn("symmetry", "Symmetry", startY + gap * 7);
-    makeBtn("ai_gen", "AI Gen", startY + gap * 8, true);
-    makeBtn("import_img", "Image", startY + gap * 9);
-    makeBtn("audio_panel", "Audio", startY + gap * 10);
-    makeBtn("dither_toggle", "Dither", startY + gap * 11);
+    makeBtn("perspective", "Perspective", startY + gap * 8);
+    makeBtn("ai_gen", "AI Gen", startY + gap * 9, true);
+    makeBtn("import_img", "Image", startY + gap * 10);
+    makeBtn("audio_panel", "Audio", startY + gap * 11);
+    makeBtn("dither_toggle", "Dither", startY + gap * 12);
 
     auto makeActionBtn = [&](std::string id, std::string text) {
         ToolItem btn;

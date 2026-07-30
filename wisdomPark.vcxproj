@@ -164,6 +164,7 @@
     <ClCompile Include="src\core\FrameRenderer.cpp" />
     <ClCompile Include="src\core\DitherManager.cpp" />
     <ClCompile Include="src\core\ShapeSystem.cpp" />
+    <ClCompile Include="src\core\PerspectiveSystem.cpp" />
     <ClCompile Include="src\tools\ShapeTool.cpp" />
     <ClCompile Include="src\core\SymmetryManager.cpp" />
     <ClCompile Include="src\SpriteEngine\Core\Source\Commands\AdjustBaselineCommand.cpp" />
@@ -211,6 +212,7 @@
     <ClCompile Include="src\SpriteEngine\UI\Source\SpriteSheetStudioPanel.cpp" />
     <ClCompile Include="src\tools\CanvasTool.cpp" />
     <ClCompile Include="src\tools\MagicWandTool.cpp" />
+    <ClCompile Include="src\tools\PerspectiveTool.cpp" />
     <ClCompile Include="src\tools\SpriteSheetStudioTool.cpp" />
     <ClCompile Include="src\ui\KeybindSettingsPanel.cpp" />
     <ClCompile Include="src\core\Timeline.cpp" />
@@ -228,6 +230,7 @@
     <ClCompile Include="src\ui\AudioPanel.cpp" />
     <ClCompile Include="src\ui\AIPanel.cpp" />
     <ClCompile Include="src\ui\AIReviewModal.cpp" />
+    <ClCompile Include="src\ui\PerspectivePanel.cpp" />
     <ClCompile Include="src\ui\TopMenuBar.cpp" />
     <ClCompile Include="src\ui\UIManager.cpp" />
   </ItemGroup>
@@ -246,6 +249,8 @@
     <ClInclude Include="src\core\ColorManager.h" />
     <ClInclude Include="src\core\FrameRenderer.h" />
     <ClInclude Include="src\core\DitherManager.h" />
+    <ClInclude Include="src\core\PerspectiveSystem.h" />
+    <ClInclude Include="src\tools\PerspectiveTool.h" />
     <ClInclude Include="src\tools\MagicWandTool.h" />
     <ClInclude Include="src\tools\ShapeTool.h" />
     <ClInclude Include="src\core\ShapeSystem.h" />
@@ -315,6 +320,7 @@
     <ClInclude Include="src\ui\AudioPanel.h" />
     <ClInclude Include="src\ui\AIPanel.h" />
     <ClInclude Include="src\ui\AIReviewModal.h" />
+    <ClInclude Include="src\ui\PerspectivePanel.h" />
     <ClInclude Include="src\ui\KeybindSettingsPanel.h" />
     <ClInclude Include="src\core\KeybindManager.h" />
     <ClInclude Include="src\core\SelectionManager.h" />
