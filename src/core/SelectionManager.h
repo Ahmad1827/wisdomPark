@@ -38,6 +38,7 @@ private:
     void calculateBoundingBox();
     void clampToCanvas(sf::Vector2u canvasSize, bool skip = false);
     sf::Vector2f clipboardPos;
+    int pasteCount = 0;
 
 public:
     SelectionManager();

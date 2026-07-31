@@ -264,6 +264,7 @@ void SelectionManager::copy(sf::RenderTexture* layerTexture) {
         clipboardTexture = floatingTexture;
         clipboardPos = floatingSprite.getPosition() - floatingSprite.getOrigin();
         hasClipboard = true;
+        pasteCount = 0; // Reset offset on fresh copy
     }
     else if (state == SelectionState::Selected && layerTexture) {
         int w = static_cast<int>(boundingBox.width);
@@ -278,7 +279,7 @@ void SelectionManager::copy(sf::RenderTexture* layerTexture) {
             for (int x = 0; x < w; ++x) {
                 sf::Vector2f globalPt(boundingBox.left + x, boundingBox.top + y);
                 if (isInsidePolygon(globalPt, pathPoints)) {
-                    if (globalPt.x >= 0 && globalPt.x < sourceImg.getSize().x && globalPt.y >= 0 && globalPt.y < sourceImg.getSize().y) {
+                    if (globalPt.x >= 0 && globalPt.x < static_cast<float>(sourceImg.getSize().x) && globalPt.y >= 0 && globalPt.y < static_cast<float>(sourceImg.getSize().y)) {
                         tempImg.setPixel(x, y, sourceImg.getPixel(static_cast<unsigned int>(globalPt.x), static_cast<unsigned int>(globalPt.y)));
                     }
                 }
@@ -288,6 +289,7 @@ void SelectionManager::copy(sf::RenderTexture* layerTexture) {
         clipboardTexture.loadFromImage(tempImg);
         clipboardPos = sf::Vector2f(boundingBox.left, boundingBox.top);
         hasClipboard = true;
+        pasteCount = 0; // Reset offset on fresh copy
     }
 }
 
@@ -299,10 +301,16 @@ void SelectionManager::paste(sf::Vector2u canvasSize) {
     int w = static_cast<int>(floatingTexture.getSize().x);
     int h = static_cast<int>(floatingTexture.getSize().y);
 
-    // Set origin strictly to top-left and use copied coordinates to prevent jumping
+    // Increment paste count to cascade offsets diagonally
+    pasteCount++;
+    sf::Vector2f offset(pasteCount * 20.f, pasteCount * 20.f);
+
     floatingSprite.setOrigin(0.f, 0.f);
-    floatingSprite.setPosition(clipboardPos);
+    floatingSprite.setPosition(clipboardPos + offset);
     floatingSprite.setScale(1.f, 1.f);
+
+    // Prevent the offset from eventually pushing the object entirely off-canvas
+    clampToCanvas(canvasSize, false);
 
     localPoints.clear();
     localPoints.push_back(sf::Vector2f(0.f, 0.f));

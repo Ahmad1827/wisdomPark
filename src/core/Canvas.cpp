@@ -623,8 +623,6 @@ void Canvas::duplicateSelection(int currentFrame) {
         addLayer(currentFrame, frames[currentFrame].layers[activeLayer].name + " Duplicate");
         selection.paste(canvasLogicalSize);
 
-        selection.moveFloating(sf::Vector2f(20.f, 20.f), canvasLogicalSize);
-
         setActiveTool(ToolType::Select);
     }
 }
@@ -1642,29 +1640,46 @@ bool Canvas::isTransforming() const {
 void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
-    sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
     int sx = static_cast<int>(pos.x);
     int sy = static_cast<int>(pos.y);
 
-    if (sx < 0 || sy < 0 || sx >= static_cast<int>(img.getSize().x) || sy >= static_cast<int>(img.getSize().y)) return;
+    int targetLayerIndex = -1;
+    sf::Image targetImg;
 
-    // If the user clicks empty space, simply clear the selection
-    if (img.getPixel(sx, sy).a == 0) {
+    // Search from the top layer downwards to find the highest Z-coordinate object clicked
+    for (int i = static_cast<int>(frames[currentFrame].layers.size()) - 1; i >= 0; --i) {
+        if (!frames[currentFrame].layers[i].visible || frames[currentFrame].layers[i].locked) continue;
+
+        sf::Image tempImg = frames[currentFrame].layers[i].texture->getTexture().copyToImage();
+        if (sx >= 0 && sy >= 0 && sx < static_cast<int>(tempImg.getSize().x) && sy < static_cast<int>(tempImg.getSize().y)) {
+            if (tempImg.getPixel(sx, sy).a > 0) {
+                targetLayerIndex = i;
+                targetImg = tempImg;
+                break;
+            }
+        }
+    }
+
+    // If clicking completely empty space on all layers, just clear the selection
+    if (targetLayerIndex == -1) {
         selection.clearSelection();
         return;
     }
+
+    // Automatically switch to the layer containing the clicked object
+    activeLayer = targetLayerIndex;
 
     int minX = sx, maxX = sx, minY = sy, maxY = sy;
     std::vector<sf::Vector2i> stack;
     stack.push_back(sf::Vector2i(sx, sy));
 
-    int w = img.getSize().x;
-    int h = img.getSize().y;
+    int w = targetImg.getSize().x;
+    int h = targetImg.getSize().y;
 
     std::vector<bool> visited(w * h, false);
     visited[sy * w + sx] = true;
 
-    // Flood fill to find the boundaries of the continuous non-transparent object
+    // Flood fill to find the boundaries of the non-transparent object on the newly swapped layer
     while (!stack.empty()) {
         sf::Vector2i p = stack.back();
         stack.pop_back();
@@ -1686,7 +1701,7 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
                 int idx = ny * w + nx;
                 if (!visited[idx]) {
                     visited[idx] = true;
-                    if (img.getPixel(nx, ny).a > 0) {
+                    if (targetImg.getPixel(nx, ny).a > 0) {
                         stack.push_back(sf::Vector2i(nx, ny));
                     }
                 }
@@ -1694,7 +1709,6 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
         }
     }
 
-    // Automatically draw a tight rectangular lasso exactly around the found object bounds!
     selection.startLasso(sf::Vector2f(static_cast<float>(minX), static_cast<float>(minY)), canvasLogicalSize);
     selection.addLassoPoint(sf::Vector2f(static_cast<float>(maxX + 1), static_cast<float>(minY)), canvasLogicalSize);
     selection.addLassoPoint(sf::Vector2f(static_cast<float>(maxX + 1), static_cast<float>(maxY + 1)), canvasLogicalSize);
