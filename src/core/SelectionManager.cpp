@@ -21,8 +21,16 @@ void SelectionManager::update(float dt) {
     }
 }
 
+void SelectionManager::drawPixels(sf::RenderWindow& window, const sf::RenderStates& baseStates) {
+    if (state == SelectionState::Floating) {
+        window.draw(floatingSprite, baseStates);
+    }
+}
+
 void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& baseStates) {
     if (state == SelectionState::Inactive) return;
+
+    const std::vector<sf::Vector2f>& pts = (state == SelectionState::Floating) ? localPoints : pathPoints;
 
     if (state == SelectionState::Floating) {
         window.draw(floatingSprite, baseStates);

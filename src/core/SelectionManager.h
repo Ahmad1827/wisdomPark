@@ -42,6 +42,7 @@ public:
     SelectionManager();
     void update(float dt);
     void draw(sf::RenderWindow& window, const sf::RenderStates& baseStates);
+    void drawPixels(sf::RenderWindow& window, const sf::RenderStates& baseStates);
     void startLasso(sf::Vector2f pos, sf::Vector2u canvasSize);
     void addLassoPoint(sf::Vector2f pos, sf::Vector2u canvasSize);
     void endLasso();

@@ -963,6 +963,8 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             }
 
             if (activeTool == ToolType::MagicWand) {
+                commitSelection(currentFrame);
+                autoSelectObject(localPos, currentFrame);
                 return;
             }
 
@@ -1031,8 +1033,25 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     }
 
     if (activeTool == ToolType::Select) {
+        if (m_floatingSelection.isActive) {
+            m_floatingSelection.isDragging = false;
+        }
         if (selection.getState() == SelectionState::Drawing) {
             selection.endLasso();
+
+            // If the user clicked without dragging, the lasso fails to form and goes Inactive. 
+            // In this exact scenario, we trigger the auto-select on the clicked object!
+            if (selection.getState() == SelectionState::Inactive) {
+                float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
+                float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
+                sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
+
+                if (isPixelMode && pixelSnapEnabled) {
+                    localPos.x = std::floor(localPos.x);
+                    localPos.y = std::floor(localPos.y);
+                }
+                autoSelectObject(localPos, currentFrame);
+            }
         }
         else if (selection.getState() == SelectionState::Floating) {
             if (selection.isResizing()) selection.endResize();
@@ -1386,7 +1405,9 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                 sf::RenderStates layerStates = innerStates;
                 layerStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
                 window.draw(spr, layerStates);
-
+                if (static_cast<int>(i) == activeLayer) {
+                    selection.drawPixels(window, layerStates);
+                }
                 if (m_textManager) {
                     m_textManager->render(window, currentFrame, static_cast<int>(i), isPixelMode, layerStates, canvasLogicalSize);
                 }
@@ -1606,4 +1627,67 @@ void Canvas::cancelTransform() {
 
 bool Canvas::isTransforming() const {
     return pendingTransform;
+}
+
+void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
+    if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+
+    sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
+    int sx = static_cast<int>(pos.x);
+    int sy = static_cast<int>(pos.y);
+
+    if (sx < 0 || sy < 0 || sx >= static_cast<int>(img.getSize().x) || sy >= static_cast<int>(img.getSize().y)) return;
+
+    // If the user clicks empty space, simply clear the selection
+    if (img.getPixel(sx, sy).a == 0) {
+        selection.clearSelection();
+        return;
+    }
+
+    int minX = sx, maxX = sx, minY = sy, maxY = sy;
+    std::vector<sf::Vector2i> stack;
+    stack.push_back(sf::Vector2i(sx, sy));
+
+    int w = img.getSize().x;
+    int h = img.getSize().y;
+
+    std::vector<bool> visited(w * h, false);
+    visited[sy * w + sx] = true;
+
+    // Flood fill to find the boundaries of the continuous non-transparent object
+    while (!stack.empty()) {
+        sf::Vector2i p = stack.back();
+        stack.pop_back();
+
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+
+        sf::Vector2i neighbors[4] = {
+            {p.x - 1, p.y}, {p.x + 1, p.y},
+            {p.x, p.y - 1}, {p.x, p.y + 1}
+        };
+
+        for (int i = 0; i < 4; ++i) {
+            int nx = neighbors[i].x;
+            int ny = neighbors[i].y;
+            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                int idx = ny * w + nx;
+                if (!visited[idx]) {
+                    visited[idx] = true;
+                    if (img.getPixel(nx, ny).a > 0) {
+                        stack.push_back(sf::Vector2i(nx, ny));
+                    }
+                }
+            }
+        }
+    }
+
+    // Automatically draw a tight rectangular lasso exactly around the found object bounds!
+    selection.startLasso(sf::Vector2f(static_cast<float>(minX), static_cast<float>(minY)), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(static_cast<float>(maxX + 1), static_cast<float>(minY)), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(static_cast<float>(maxX + 1), static_cast<float>(maxY + 1)), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(static_cast<float>(minX), static_cast<float>(maxY + 1)), canvasLogicalSize);
+    selection.endLasso();
 }

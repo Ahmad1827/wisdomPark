@@ -138,7 +138,7 @@ public:
     sf::Transform getInverseTransform() const;
     sf::FloatRect getDrawArea() const;
     sf::Vector2u getCanvasSize() const;
-
+    void autoSelectObject(sf::Vector2f pos, int currentFrame);
     void setTextManager(class TextManager* tm) { m_textManager = tm; }
     class TextManager* getTextManager() { return m_textManager; }
 
