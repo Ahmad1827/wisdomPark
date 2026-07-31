@@ -180,7 +180,6 @@ public:
     int getOnionSkinNextCount() const;
 
     void commitSelection(int currentFrame);
-    void copySelection();
     void pasteSelection(int currentFrame);
     void deleteSelection(int currentFrame);
     void flipSelectionHorizontal(int currentFrame);
@@ -204,6 +203,7 @@ public:
     void undo();
     void redo();
 
+    void copySelection(int currentFrame);
     sf::RenderStates getSFMLBlendMode(BlendMode mode) const;
 
     void handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame);

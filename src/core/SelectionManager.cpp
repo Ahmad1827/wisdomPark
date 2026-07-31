@@ -198,7 +198,7 @@ void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool re
     floatingTexture.loadFromImage(extractImg);
     floatingSprite.setTexture(floatingTexture, true);
 
-    // Keep origin strictly top-left so it stays exactly where it was extracted
+    // Lock origin to 0,0 to fix the move/jump bug when detaching from layer
     floatingSprite.setOrigin(0.f, 0.f);
     floatingSprite.setPosition(boundingBox.left, boundingBox.top);
     floatingSprite.setScale(1.f, 1.f);
@@ -259,19 +259,34 @@ void SelectionManager::endDrag() {
     isDragging = false;
 }
 
-void SelectionManager::copy() {
+void SelectionManager::copy(sf::RenderTexture* layerTexture) {
     if (state == SelectionState::Floating) {
         clipboardTexture = floatingTexture;
+        clipboardPos = floatingSprite.getPosition() - floatingSprite.getOrigin();
         hasClipboard = true;
     }
-    else if (state == SelectionState::Selected) {
+    else if (state == SelectionState::Selected && layerTexture) {
         int w = static_cast<int>(boundingBox.width);
         int h = static_cast<int>(boundingBox.height);
         if (w <= 0 || h <= 0) return;
 
+        sf::Image sourceImg = layerTexture->getTexture().copyToImage();
         sf::Image tempImg;
         tempImg.create(static_cast<unsigned int>(w), static_cast<unsigned int>(h), sf::Color::Transparent);
+
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w; ++x) {
+                sf::Vector2f globalPt(boundingBox.left + x, boundingBox.top + y);
+                if (isInsidePolygon(globalPt, pathPoints)) {
+                    if (globalPt.x >= 0 && globalPt.x < sourceImg.getSize().x && globalPt.y >= 0 && globalPt.y < sourceImg.getSize().y) {
+                        tempImg.setPixel(x, y, sourceImg.getPixel(static_cast<unsigned int>(globalPt.x), static_cast<unsigned int>(globalPt.y)));
+                    }
+                }
+            }
+        }
+
         clipboardTexture.loadFromImage(tempImg);
+        clipboardPos = sf::Vector2f(boundingBox.left, boundingBox.top);
         hasClipboard = true;
     }
 }
@@ -284,9 +299,9 @@ void SelectionManager::paste(sf::Vector2u canvasSize) {
     int w = static_cast<int>(floatingTexture.getSize().x);
     int h = static_cast<int>(floatingTexture.getSize().y);
 
-    // Set origin to top-left to avoid coordinate drift when pasting
+    // Set origin strictly to top-left and use copied coordinates to prevent jumping
     floatingSprite.setOrigin(0.f, 0.f);
-    floatingSprite.setPosition(boundingBox.left, boundingBox.top);
+    floatingSprite.setPosition(clipboardPos);
     floatingSprite.setScale(1.f, 1.f);
 
     localPoints.clear();
@@ -460,3 +475,10 @@ void SelectionManager::endResize() {
 }
 
 bool SelectionManager::isResizing() const { return isResizingFlag; }
+
+void SelectionManager::moveFloating(sf::Vector2f offset, sf::Vector2u canvasSize) {
+    if (state == SelectionState::Floating) {
+        floatingSprite.move(offset);
+        clampToCanvas(canvasSize, false);
+    }
+}

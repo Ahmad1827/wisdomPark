@@ -1263,7 +1263,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     canvas.setActiveTool(ToolType::Brush);
                 }
 
-                if (keybindManager.isActionTriggered("edit_copy", event)) canvas.copySelection();
+                if (keybindManager.isActionTriggered("edit_copy", event)) canvas.copySelection(timeline.getCurrentFrame());
                 if (keybindManager.isActionTriggered("edit_paste", event)) canvas.pasteSelection(timeline.getCurrentFrame());
                 if (keybindManager.isActionTriggered("edit_dup_sel", event)) canvas.duplicateSelection(timeline.getCurrentFrame());
 

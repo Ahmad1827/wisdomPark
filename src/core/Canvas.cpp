@@ -549,13 +549,18 @@ void Canvas::commitSelection(int currentFrame) {
     pendingTransform = false;
 }
 
-void Canvas::copySelection() {
-    selection.copy();
+void Canvas::copySelection(int currentFrame) {
+    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
+        selection.copy(frames[currentFrame].layers[activeLayer].texture.get());
+    }
 }
 
 void Canvas::pasteSelection(int currentFrame) {
     commitSelection(currentFrame);
     saveUndoState();
+
+    addLayer(currentFrame, "Pasted Object");
+
     selection.paste(canvasLogicalSize);
     setActiveTool(ToolType::Select);
 }
@@ -612,7 +617,15 @@ void Canvas::flipSelectionVertical(int currentFrame) {
 void Canvas::duplicateSelection(int currentFrame) {
     if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && selection.isActive()) {
         saveUndoState();
-        selection.duplicate(frames[currentFrame].layers[activeLayer].texture.get(), canvasLogicalSize);
+        selection.copy(frames[currentFrame].layers[activeLayer].texture.get());
+        commitSelection(currentFrame);
+
+        addLayer(currentFrame, frames[currentFrame].layers[activeLayer].name + " Duplicate");
+        selection.paste(canvasLogicalSize);
+
+        selection.moveFloating(sf::Vector2f(20.f, 20.f), canvasLogicalSize);
+
+        setActiveTool(ToolType::Select);
     }
 }
 

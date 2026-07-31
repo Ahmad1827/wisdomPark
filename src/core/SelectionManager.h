@@ -37,6 +37,7 @@ private:
     bool isInsidePolygon(sf::Vector2f point, const std::vector<sf::Vector2f>& polygon) const;
     void calculateBoundingBox();
     void clampToCanvas(sf::Vector2u canvasSize, bool skip = false);
+    sf::Vector2f clipboardPos;
 
 public:
     SelectionManager();
@@ -54,7 +55,8 @@ public:
     void startDrag(sf::Vector2f pos);
     void drag(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas = false);
     void endDrag();
-    void copy();
+    void copy(sf::RenderTexture* layerTexture);
+    void moveFloating(sf::Vector2f offset, sf::Vector2u canvasSize);
     void paste(sf::Vector2u canvasSize);
     void deleteSelection(sf::RenderTexture* layerTexture);
     void flipHorizontal();
