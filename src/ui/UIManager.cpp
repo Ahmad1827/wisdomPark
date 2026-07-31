@@ -725,24 +725,35 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
     if (showUnsavedWarning) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            if (warnSaveBtn.getGlobalBounds().contains(mousePos)) {
+            float boxWidth = 450.f;
+            float boxHeight = 200.f;
+            float cx = (window.getSize().x - boxWidth) / 2.f;
+            float cy = (window.getSize().y - boxHeight) / 2.f;
+
+            sf::FloatRect saveBounds(cx + 30.f, cy + 120.f, 110.f, 40.f);
+            sf::FloatRect discardBounds(cx + 170.f, cy + 120.f, 110.f, 40.f);
+            sf::FloatRect cancelBounds(cx + 310.f, cy + 120.f, 110.f, 40.f);
+
+            if (saveBounds.contains(mousePos)) {
                 if (triggerSave(canvas, timeline)) {
                     showUnsavedWarning = false;
                     currentState = AppState::Welcome;
                     currentMenuState = MenuState::Main;
                 }
+                else {
+                    showMessage("Error Saving Project!", sf::Color::Red);
+                }
             }
-            else if (warnDiscardBtn.getGlobalBounds().contains(mousePos)) {
+            else if (discardBounds.contains(mousePos)) {
                 showUnsavedWarning = false;
-                canvas.clearIsDirty();
                 currentState = AppState::Welcome;
                 currentMenuState = MenuState::Main;
             }
-            else if (warnCancelBtn.getGlobalBounds().contains(mousePos)) {
+            else if (cancelBounds.contains(mousePos)) {
                 showUnsavedWarning = false;
             }
         }
-        return;
+        return; // Block all other UI interactions while warning is open!
     }
 
     if (keybindPanel.isVisible()) {
@@ -1915,15 +1926,73 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             window.draw(loadingCancelText);
         }
         if (showUnsavedWarning) {
-            window.draw(warnOverlay);
-            window.draw(warnBox);
+            // 1. Darken the background behind the warning
+            sf::RectangleShape overlay(sf::Vector2f(window.getSize().x, window.getSize().y));
+            overlay.setFillColor(sf::Color(0, 0, 0, 150));
+            window.draw(overlay);
+
+            // 2. Main Wooden Box
+            float boxWidth = 450.f;
+            float boxHeight = 200.f;
+            float cx = (window.getSize().x - boxWidth) / 2.f;
+            float cy = (window.getSize().y - boxHeight) / 2.f;
+
+            sf::RectangleShape warningBg(sf::Vector2f(boxWidth, boxHeight));
+            warningBg.setPosition(cx, cy);
+            warningBg.setFillColor(sf::Color(110, 75, 45)); // Main wood color
+            warningBg.setOutlineThickness(4.f);
+            warningBg.setOutlineColor(sf::Color(65, 40, 25)); // Dark wood border
+            window.draw(warningBg);
+
+            // Inner wood border detail
+            sf::RectangleShape innerBorder(sf::Vector2f(boxWidth - 12.f, boxHeight - 12.f));
+            innerBorder.setPosition(cx + 6.f, cy + 6.f);
+            innerBorder.setFillColor(sf::Color::Transparent);
+            innerBorder.setOutlineThickness(2.f);
+            innerBorder.setOutlineColor(sf::Color(90, 55, 30));
+            window.draw(innerBorder);
+
+            // 3. Warning Text
+            sf::Text warnTitle("UNSAVED CHANGES", font, 24);
+            warnTitle.setFillColor(sf::Color(255, 200, 100));
+            warnTitle.setPosition(cx + (boxWidth - warnTitle.getLocalBounds().width) / 2.f, cy + 20.f);
             window.draw(warnTitle);
-            window.draw(warnSaveBtn);
-            window.draw(warnSaveText);
-            window.draw(warnDiscardBtn);
-            window.draw(warnDiscardText);
-            window.draw(warnCancelBtn);
-            window.draw(warnCancelText);
+
+            sf::Text warnSub("Would you like to save before leaving?", font, 16);
+            warnSub.setFillColor(sf::Color(240, 220, 180));
+            warnSub.setPosition(cx + (boxWidth - warnSub.getLocalBounds().width) / 2.f, cy + 65.f);
+            window.draw(warnSub);
+
+            // 4. Calculate Button Hover States dynamically
+            sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
+            sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
+
+            sf::FloatRect saveBounds(cx + 30.f, cy + 120.f, 110.f, 40.f);
+            sf::FloatRect discardBounds(cx + 170.f, cy + 120.f, 110.f, 40.f);
+            sf::FloatRect cancelBounds(cx + 310.f, cy + 120.f, 110.f, 40.f);
+
+            auto drawWoodButton = [&](sf::FloatRect bounds, std::string textStr, sf::Color baseColor) {
+                bool hovered = bounds.contains(mousePos);
+                sf::RectangleShape btn(sf::Vector2f(bounds.width, bounds.height));
+                btn.setPosition(bounds.left, bounds.top);
+                btn.setFillColor(hovered ? sf::Color(baseColor.r + 30, baseColor.g + 30, baseColor.b + 30) : baseColor);
+                btn.setOutlineThickness(2.f);
+                btn.setOutlineColor(sf::Color(65, 40, 25));
+                window.draw(btn);
+
+                sf::Text btnText(textStr, font, 16);
+                btnText.setFillColor(sf::Color::White);
+                btnText.setPosition(
+                    bounds.left + (bounds.width - btnText.getLocalBounds().width) / 2.f,
+                    bounds.top + (bounds.height - 16.f) / 2.f - 2.f
+                );
+                window.draw(btnText);
+                };
+
+            // Draw the 3 buttons (Greenish wood for Save, Reddish wood for Discard, Standard for Cancel)
+            drawWoodButton(saveBounds, "Save", sf::Color(75, 110, 60));
+            drawWoodButton(discardBounds, "Discard", sf::Color(130, 60, 50));
+            drawWoodButton(cancelBounds, "Cancel", sf::Color(90, 60, 40));
         }
         m_topMenuBar.draw(window);
     }
