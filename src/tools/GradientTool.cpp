@@ -89,7 +89,7 @@ void GradientTool::updatePreview() {
     sf::Vector2u fullSize = m_canvas.getCanvasSize();
     sf::Vector2u previewSize = fullSize;
 
-    // Severely limit preview generation size to prevent CPU stall on huge canvases
+    // Limit preview generation size to prevent CPU stall on huge canvases
     unsigned int maxDim = m_canvas.getPixelMode() ? 256 : 256;
     float scaleX = 1.0f;
     float scaleY = 1.0f;
@@ -116,12 +116,10 @@ void GradientTool::updatePreview() {
     m_previewTexture.loadFromImage(img);
     m_previewSprite.setTexture(m_previewTexture, true);
 
-    // Map strictly to the visual canvas draw area to prevent alignment/scaling distortions
-    m_previewSprite.setPosition(m_canvas.getDrawArea().left, m_canvas.getDrawArea().top);
-    m_previewSprite.setScale(
-        m_canvas.getDrawArea().width / static_cast<float>(previewSize.x),
-        m_canvas.getDrawArea().height / static_cast<float>(previewSize.y)
-    );
+    // FIX: Lock the sprite strictly to logical canvas space (0,0) instead of the screen space,
+    // and scale it up based strictly on the internal resolution difference!
+    m_previewSprite.setPosition(0.f, 0.f);
+    m_previewSprite.setScale(scaleX, scaleY);
 }
 
 void GradientTool::applyGradient() {
