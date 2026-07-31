@@ -30,6 +30,9 @@
 #include "../core/ITool.h"
 #include <memory>
 #include "../ui/TopMenuBar.h"
+#include "../ui/GradientPanel.h"
+#include "../tools/GradientTool.h"
+#include "../core/GradientSystem.h"
 
 enum class MenuState {
     Main,
@@ -58,6 +61,8 @@ struct LightRay {
 
 class UIManager {
 private:
+    GradientConfig m_gradientConfig;
+    GradientPanel m_gradientPanel;
     TopMenuBar m_topMenuBar;
     TextManager m_textManager;
     TextPanel m_textPanel;

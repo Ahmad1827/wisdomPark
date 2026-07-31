@@ -58,6 +58,7 @@ void LeftToolbar::init() {
     makeBtn("import_img", "Image", startY + gap * 11);
     makeBtn("audio_panel", "Audio", startY + gap * 12);
     makeBtn("dither_toggle", "Dither", startY + gap * 13);
+    makeBtn("gradient", "Gradient", startY + gap * 14);
 
     auto makeActionBtn = [&](std::string id, std::string text) {
         ToolItem btn;

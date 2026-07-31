@@ -193,6 +193,8 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     loadingCancelText.setFillColor(sf::Color::White);
     loadingCancelText.setOrigin(loadingCancelText.getLocalBounds().width / 2.f, loadingCancelText.getLocalBounds().height / 2.f);
     loadingCancelText.setPosition(960.f, 607.f);
+    
+    m_gradientPanel.init(&m_gradientConfig);
     m_topMenuBar.init();
     m_perspectiveManager.init();
     m_perspectivePanel.init(&m_perspectiveManager);
@@ -753,7 +755,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 showUnsavedWarning = false;
             }
         }
-        return; // Block all other UI interactions while warning is open!
+        return;
     }
 
     if (keybindPanel.isVisible()) {
@@ -1069,8 +1071,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
 
-        
-
         if (event.type == sf::Event::TextEntered && isTypingPrompt) {
             if (event.text.unicode == '\b') {
                 if (!currentPrompt.empty()) currentPrompt.pop_back();
@@ -1097,6 +1097,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (event.key.code == sf::Keyboard::Escape) {
                     currentMenuState = MenuState::Settings;
                     currentState = AppState::Welcome;
+                }
+
+                if (event.key.code == sf::Keyboard::G) {
+                    canvas.commitSelection(timeline.getCurrentFrame());
+                    canvas.setActiveTool(ToolType::Gradient);
+                    leftToolbar.setActiveTool("gradient");
+                    showMessage("Gradient Tool Activated", sf::Color::Green);
                 }
 
                 if (keybindManager.isActionTriggered("ui_settings", event)) keybindPanel.toggle();
@@ -1304,11 +1311,18 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         if (!timeline.isPlaying() && !keybindPanel.isVisible() && !exportModal.getIsOpen() && !newProjectModal.getIsOpen() && !audioPanel.getIsVisible() && !g_aiPanel.getIsVisible() && !g_aiReviewModal.getIsOpen()) {
 
             if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
+
+            sf::Vector2f shiftedMousePos = mousePos;
+            shiftedMousePos.x -= leftToolbar.getPanelRightEdge();
+
             if (canvas.getActiveTool() == ToolType::Perspective) {
-                m_perspectivePanel.handleEvent(event, mousePos, canvas.getCanvasSize());
+                m_perspectivePanel.handleEvent(event, shiftedMousePos, canvas.getCanvasSize());
             }
             if (canvas.getActiveTool() == ToolType::Text) {
-                if (m_textPanel.handleEvent(event, mousePos)) return;
+                if (m_textPanel.handleEvent(event, shiftedMousePos)) return;
+            }
+            if (canvas.getActiveTool() == ToolType::Gradient) {
+                if (m_gradientPanel.handleEvent(event, shiftedMousePos)) return;
             }
             if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
 
@@ -1403,7 +1417,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
                     bool hasActiveSel = (canvas.getActiveTool() == ToolType::Select || canvas.getActiveTool() == ToolType::MagicWand);
                     if (event.type == sf::Event::Resized) {
-                        
+
                     }
 
                     std::string topMenuAction = m_topMenuBar.handleEvent(event, mousePos, static_cast<float>(window.getSize().x));
@@ -1486,6 +1500,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             canvas.setActiveTool(ToolType::Text);
                             leftToolbar.setActiveTool("text");
                             showMessage("Text Tool Activated", sf::Color::Green);
+                        }
+                        else if (leftAction == "gradient") {
+                            canvas.commitSelection(timeline.getCurrentFrame());
+                            canvas.setActiveTool(ToolType::Gradient);
+                            leftToolbar.setActiveTool("gradient");
+                            showMessage("Gradient Tool Activated", sf::Color::Green);
                         }
                         else if (leftAction == "rasterize") {
                             TextObject* t = m_textManager.getEditingText();
@@ -1738,13 +1758,15 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         bool needsWandTool = (canvas.getActiveTool() == ToolType::MagicWand);
         bool needsPerspectiveTool = (canvas.getActiveTool() == ToolType::Perspective);
         bool needsTextTool = (canvas.getActiveTool() == ToolType::Text);
+        bool needsGradientTool = (canvas.getActiveTool() == ToolType::Gradient);
 
         bool hasShapeTool = dynamic_cast<ShapeTool*>(m_activeTool.get()) != nullptr;
         bool hasWandTool = dynamic_cast<MagicWandTool*>(m_activeTool.get()) != nullptr;
         bool hasPerspectiveTool = dynamic_cast<PerspectiveTool*>(m_activeTool.get()) != nullptr;
         bool hasTextTool = dynamic_cast<TextTool*>(m_activeTool.get()) != nullptr;
+        bool hasGradientTool = dynamic_cast<GradientTool*>(m_activeTool.get()) != nullptr;
 
-        if (!m_activeTool || (needsShapeTool && !hasShapeTool) || (needsWandTool && !hasWandTool) || (needsPerspectiveTool && !hasPerspectiveTool) || (needsTextTool && !hasTextTool) || (!needsShapeTool && !needsWandTool && !needsPerspectiveTool && !needsTextTool && (hasShapeTool || hasWandTool || hasPerspectiveTool || hasTextTool) && !m_debugUseSpriteStudio)) {
+        if (!m_activeTool || (needsShapeTool && !hasShapeTool) || (needsWandTool && !hasWandTool) || (needsPerspectiveTool && !hasPerspectiveTool) || (needsTextTool && !hasTextTool) || (needsGradientTool && !hasGradientTool) || (!needsShapeTool && !needsWandTool && !needsPerspectiveTool && !needsTextTool && !needsGradientTool && (hasShapeTool || hasWandTool || hasPerspectiveTool || hasTextTool || hasGradientTool) && !m_debugUseSpriteStudio)) {
             if (needsShapeTool) {
                 m_activeTool = std::make_unique<ShapeTool>(canvas, timeline);
             }
@@ -1757,6 +1779,9 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             else if (needsTextTool) {
                 m_activeTool = std::make_unique<TextTool>(canvas, timeline, m_textManager);
             }
+            else if (needsGradientTool) {
+                m_activeTool = std::make_unique<GradientTool>(canvas, timeline, m_gradientConfig);
+            }
             else if (m_debugUseSpriteStudio) {
                 m_activeTool = std::make_unique<SpriteSheetStudioTool>();
             }
@@ -1768,15 +1793,23 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         if (auto* wand = dynamic_cast<MagicWandTool*>(m_activeTool.get())) {
             if (wand->wantsColorPanelOpen()) {
                 sf::Vector2f handleCenter = colorPalettePanel.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
-                colorPalettePanel.updateHover(handleCenter, true); // smoothly opens the color panel
+                colorPalettePanel.updateHover(handleCenter, true);
                 wand->clearColorPanelRequest();
             }
         }
         if (canvas.getActiveTool() == ToolType::Text) {
             if (m_textPanel.wantsColorPanelOpen()) {
                 sf::Vector2f handleCenter = colorPalettePanel.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
-                colorPalettePanel.updateHover(handleCenter, true); // smoothly opens the color panel
+                colorPalettePanel.updateHover(handleCenter, true);
                 m_textPanel.clearColorPanelRequest();
+            }
+        }
+        if (canvas.getActiveTool() == ToolType::Gradient) {
+            m_gradientPanel.setSelectedColor(canvas.getPrimaryColor());
+            if (m_gradientPanel.wantsColorPanelOpen()) {
+                sf::Vector2f handleCenter = colorPalettePanel.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
+                colorPalettePanel.updateHover(handleCenter, true);
+                m_gradientPanel.clearColorPanelRequest();
             }
         }
         m_activeTool->SetBounds(availableSpace);
@@ -1816,7 +1849,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             uiText.setFillColor(fc); uiText.setOutlineColor(oc);
         }
 
- 
+
 
         if (showUnsavedWarning) {
             if (warnSaveBtn.getGlobalBounds().contains(mousePos)) warnSaveBtn.setFillColor(sf::Color(70, 200, 70));
@@ -1877,12 +1910,23 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         layerPanel.draw(window, canvas, timeline.getCurrentFrame());
         colorPalettePanel.draw(window);
         rightProperties.draw(window);
+
+        sf::View originalView = window.getView();
+        sf::View shiftedView = originalView;
+        shiftedView.move(-leftToolbar.getPanelRightEdge(), 0.f);
+        window.setView(shiftedView);
+
         if (canvas.getActiveTool() == ToolType::Perspective) {
             m_perspectivePanel.draw(window);
         }
         if (canvas.getActiveTool() == ToolType::Text) {
             m_textPanel.draw(window);
         }
+        if (canvas.getActiveTool() == ToolType::Gradient) {
+            m_gradientPanel.draw(window);
+        }
+
+        window.setView(originalView);
 
         window.draw(toolBg);
         window.draw(sizeLabelText);
@@ -1903,7 +1947,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             window.draw(pixelPerfBtn);
             window.draw(pixelPerfText);
         }
-
 
         bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);
@@ -1926,12 +1969,10 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             window.draw(loadingCancelText);
         }
         if (showUnsavedWarning) {
-            // 1. Darken the background behind the warning
             sf::RectangleShape overlay(sf::Vector2f(window.getSize().x, window.getSize().y));
             overlay.setFillColor(sf::Color(0, 0, 0, 150));
             window.draw(overlay);
 
-            // 2. Main Wooden Box
             float boxWidth = 450.f;
             float boxHeight = 200.f;
             float cx = (window.getSize().x - boxWidth) / 2.f;
@@ -1939,12 +1980,11 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
             sf::RectangleShape warningBg(sf::Vector2f(boxWidth, boxHeight));
             warningBg.setPosition(cx, cy);
-            warningBg.setFillColor(sf::Color(110, 75, 45)); // Main wood color
+            warningBg.setFillColor(sf::Color(110, 75, 45));
             warningBg.setOutlineThickness(4.f);
-            warningBg.setOutlineColor(sf::Color(65, 40, 25)); // Dark wood border
+            warningBg.setOutlineColor(sf::Color(65, 40, 25));
             window.draw(warningBg);
 
-            // Inner wood border detail
             sf::RectangleShape innerBorder(sf::Vector2f(boxWidth - 12.f, boxHeight - 12.f));
             innerBorder.setPosition(cx + 6.f, cy + 6.f);
             innerBorder.setFillColor(sf::Color::Transparent);
@@ -1952,7 +1992,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             innerBorder.setOutlineColor(sf::Color(90, 55, 30));
             window.draw(innerBorder);
 
-            // 3. Warning Text
             sf::Text warnTitle("UNSAVED CHANGES", font, 24);
             warnTitle.setFillColor(sf::Color(255, 200, 100));
             warnTitle.setPosition(cx + (boxWidth - warnTitle.getLocalBounds().width) / 2.f, cy + 20.f);
@@ -1963,7 +2002,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             warnSub.setPosition(cx + (boxWidth - warnSub.getLocalBounds().width) / 2.f, cy + 65.f);
             window.draw(warnSub);
 
-            // 4. Calculate Button Hover States dynamically
             sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
             sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
@@ -1989,7 +2027,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
                 window.draw(btnText);
                 };
 
-            // Draw the 3 buttons (Greenish wood for Save, Reddish wood for Discard, Standard for Cancel)
             drawWoodButton(saveBounds, "Save", sf::Color(75, 110, 60));
             drawWoodButton(discardBounds, "Discard", sf::Color(130, 60, 50));
             drawWoodButton(cancelBounds, "Cancel", sf::Color(90, 60, 40));

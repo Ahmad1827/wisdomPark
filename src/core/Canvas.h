@@ -10,7 +10,7 @@
 #include "DitherManager.h"
 #include "../core/PerspectiveSystem.h"
 
-enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text }; 
+enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text, Gradient };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 enum class TransformState { None, Scaling };
 

@@ -291,6 +291,15 @@
     <ClCompile Include="src\ui\TextPanel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\GradientSystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tools\GradientTool.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ui\GradientPanel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\ai\AIHelper.h">
@@ -615,6 +624,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\TextPanel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\GradientSystem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\tools\GradientTool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ui\GradientPanel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
