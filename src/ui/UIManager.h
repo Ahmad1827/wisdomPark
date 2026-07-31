@@ -127,10 +127,6 @@ private:
     sf::Text pixelPerfText;
 
     bool showUnsavedWarning;
-    sf::RectangleShape topBackBtn;
-    sf::Text topBackText;
-    sf::RectangleShape topSaveBtn;
-    sf::Text topSaveText;
 
     sf::RectangleShape warnOverlay;
     sf::RectangleShape warnBox;

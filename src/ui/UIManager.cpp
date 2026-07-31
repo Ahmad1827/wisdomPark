@@ -104,25 +104,6 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     pixelPerfText.setCharacterSize(10);
     pixelPerfText.setFillColor(sf::Color::White);
 
-    topBackBtn.setSize(sf::Vector2f(80.f, 40.f));
-    topBackBtn.setFillColor(sf::Color(180, 50, 50, 200));
-    topBackBtn.setPosition(1920.f / 2.f - 110.f, 20.f);
-
-    topBackText.setFont(font);
-    topBackText.setString("BACK");
-    topBackText.setCharacterSize(18);
-    topBackText.setFillColor(sf::Color::White);
-    topBackText.setPosition(1920.f / 2.f - 95.f, 30.f);
-
-    topSaveBtn.setSize(sf::Vector2f(80.f, 40.f));
-    topSaveBtn.setFillColor(sf::Color(50, 180, 50, 200));
-    topSaveBtn.setPosition(1920.f / 2.f + 10.f, 20.f);
-
-    topSaveText.setFont(font);
-    topSaveText.setString("SAVE");
-    topSaveText.setCharacterSize(18);
-    topSaveText.setFillColor(sf::Color::White);
-    topSaveText.setPosition(1920.f / 2.f + 25.f, 30.f);
 
     warnOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
     warnOverlay.setFillColor(sf::Color(0, 0, 0, 180));
@@ -1077,23 +1058,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
 
-        if (event.type == sf::Event::MouseButtonPressed) {
-            if (event.mouseButton.button == sf::Mouse::Left) {
-                if (topBackBtn.getGlobalBounds().contains(mousePos)) {
-                    if (canvas.getIsDirty()) showUnsavedWarning = true;
-                    else {
-                        currentState = AppState::Welcome;
-                        currentMenuState = MenuState::Main;
-                    }
-                    return;
-                }
-                if (topSaveBtn.getGlobalBounds().contains(mousePos)) {
-                    if (triggerSave(canvas, timeline)) showMessage("Project Saved Successfully!", sf::Color::Green);
-                    else showMessage("Error Saving Project!", sf::Color::Red);
-                    return;
-                }
-            }
-        }
+        
 
         if (event.type == sf::Event::TextEntered && isTypingPrompt) {
             if (event.text.unicode == '\b') {
@@ -1437,7 +1402,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             colorPalettePanel.updateHover(handleCenter, true);
                         }
                         else if (topMenuAction == "save") {
-                            showMessage("Save Project (Top Menu)", sf::Color::Green);
+                            // ?? PASTE THE CODE FROM YOUR OLD GREEN SAVE BUTTON HERE:
+                            // Example: saveProject(); or ExportManager::save();
                         }
                         else if (topMenuAction == "layers") {
                             showMessage("Layers Panel (Top Menu)", sf::Color::Cyan);
@@ -1448,8 +1414,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             showMessage("Brush Tool Activated", sf::Color::Green);
                         }
                         else if (topMenuAction == "back") {
-                            // Put your actual back button exit code here!
-                            showMessage("Back Button Pressed!", sf::Color::Yellow);
+                            // ?? PASTE THE CODE FROM YOUR OLD RED BACK BUTTON HERE:
+                            // Example: currentAppState = AppState::MainMenu;
                         }
                         return;
                     }
@@ -1836,11 +1802,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             uiText.setFillColor(fc); uiText.setOutlineColor(oc);
         }
 
-        if (topBackBtn.getGlobalBounds().contains(mousePos)) topBackBtn.setFillColor(sf::Color(200, 70, 70, 200));
-        else topBackBtn.setFillColor(sf::Color(180, 50, 50, 200));
-
-        if (topSaveBtn.getGlobalBounds().contains(mousePos)) topSaveBtn.setFillColor(sf::Color(70, 200, 70, 200));
-        else topSaveBtn.setFillColor(sf::Color(50, 180, 50, 200));
+ 
 
         if (showUnsavedWarning) {
             if (warnSaveBtn.getGlobalBounds().contains(mousePos)) warnSaveBtn.setFillColor(sf::Color(70, 200, 70));
@@ -1928,10 +1890,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             window.draw(pixelPerfText);
         }
 
-        window.draw(topBackBtn);
-        window.draw(topBackText);
-        window.draw(topSaveBtn);
-        window.draw(topSaveText);
 
         bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);
