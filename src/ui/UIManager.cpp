@@ -1254,7 +1254,25 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (keybindManager.isActionTriggered("layer_del", event)) canvas.deleteLayer(timeline.getCurrentFrame(), canvas.getActiveLayer());
                 if (keybindManager.isActionTriggered("layer_merge_down", event)) canvas.mergeDown(timeline.getCurrentFrame());
                 if (keybindManager.isActionTriggered("layer_merge_vis", event)) canvas.mergeVisible(timeline.getCurrentFrame());
-
+                if (event.key.code == sf::Keyboard::PageUp) {
+                    int curL = canvas.getActiveLayer();
+                    if (curL < static_cast<int>(canvas.getFrameReadOnly(timeline.getCurrentFrame())->layers.size()) - 1) {
+                        canvas.moveLayer(timeline.getCurrentFrame(), curL, curL + 1);
+                        showMessage("Object Z-Coordinate +1 (Moved Up)", sf::Color::Cyan);
+                    }
+                }
+                if (event.key.code == sf::Keyboard::PageDown) {
+                    int curL = canvas.getActiveLayer();
+                    if (curL > 0) {
+                        canvas.moveLayer(timeline.getCurrentFrame(), curL, curL - 1);
+                        showMessage("Object Z-Coordinate -1 (Moved Down)", sf::Color::Cyan);
+                    }
+                }
+                if (event.key.code == sf::Keyboard::E && event.key.control) {
+                    canvas.commitSelection(timeline.getCurrentFrame());
+                    canvas.mergeDown(timeline.getCurrentFrame());
+                    showMessage("Merged Object Down", sf::Color::Green);
+                }
                 if (keybindManager.isActionTriggered("edit_del_sel", event)) {
                     if (canvas.getActiveTool() == ToolType::Select) canvas.deleteSelection(timeline.getCurrentFrame());
                 }
