@@ -199,8 +199,9 @@ void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool re
     floatingTexture.loadFromImage(extractImg);
     floatingSprite.setTexture(floatingTexture, true);
 
-    floatingSprite.setOrigin(static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f);
-    floatingSprite.setPosition(boundingBox.left + static_cast<float>(w) / 2.f, boundingBox.top + static_cast<float>(h) / 2.f);
+    // Keep origin strictly top-left so it stays exactly where it was extracted
+    floatingSprite.setOrigin(0.f, 0.f);
+    floatingSprite.setPosition(boundingBox.left, boundingBox.top);
     floatingSprite.setScale(1.f, 1.f);
 
     localPoints.clear();
@@ -283,8 +284,10 @@ void SelectionManager::paste(sf::Vector2u canvasSize) {
     floatingSprite.setTexture(floatingTexture, true);
     int w = static_cast<int>(floatingTexture.getSize().x);
     int h = static_cast<int>(floatingTexture.getSize().y);
-    floatingSprite.setOrigin(static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f);
-    floatingSprite.setPosition(static_cast<float>(canvasSize.x) / 2.f, static_cast<float>(canvasSize.y) / 2.f);
+
+    // Set origin to top-left to avoid coordinate drift when pasting
+    floatingSprite.setOrigin(0.f, 0.f);
+    floatingSprite.setPosition(boundingBox.left, boundingBox.top);
     floatingSprite.setScale(1.f, 1.f);
 
     localPoints.clear();
