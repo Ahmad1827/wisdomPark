@@ -1033,14 +1033,9 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     }
 
     if (activeTool == ToolType::Select) {
-        if (m_floatingSelection.isActive) {
-            m_floatingSelection.isDragging = false;
-        }
         if (selection.getState() == SelectionState::Drawing) {
             selection.endLasso();
 
-            // If the user clicked without dragging, the lasso fails to form and goes Inactive. 
-            // In this exact scenario, we trigger the auto-select on the clicked object!
             if (selection.getState() == SelectionState::Inactive) {
                 float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
                 float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
@@ -1405,9 +1400,11 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                 sf::RenderStates layerStates = innerStates;
                 layerStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
                 window.draw(spr, layerStates);
+
                 if (static_cast<int>(i) == activeLayer) {
                     selection.drawPixels(window, layerStates);
                 }
+
                 if (m_textManager) {
                     m_textManager->render(window, currentFrame, static_cast<int>(i), isPixelMode, layerStates, canvasLogicalSize);
                 }

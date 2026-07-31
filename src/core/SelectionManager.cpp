@@ -32,12 +32,6 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
 
     const std::vector<sf::Vector2f>& pts = (state == SelectionState::Floating) ? localPoints : pathPoints;
 
-    if (state == SelectionState::Floating) {
-        window.draw(floatingSprite, baseStates);
-    }
-
-    const std::vector<sf::Vector2f>& pts = (state == SelectionState::Floating) ? localPoints : pathPoints;
-
     if (pts.size() > 1) {
         sf::VertexArray ants(sf::LineStrip, pts.size());
         float dist = 0.f;
@@ -60,9 +54,6 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
         window.draw(ants, states);
     }
 
-    // Corner resize handles - already in world/canvas-space (from
-    // getHandlePositions), so draw with baseStates as-is, not multiplied by
-    // the floating sprite's transform like the dashed outline above.
     if (state == SelectionState::Floating && showHandles) {
         auto corners = getHandlePositions();
         for (const auto& c : corners) {

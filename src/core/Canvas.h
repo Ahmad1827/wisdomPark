@@ -240,4 +240,7 @@ public:
     DitherManager& getDitherManager() { return ditherManager; }
     SelectionManager& getSelectionManager() { return selection; }
     void toggleDithering() { useDithering = !useDithering; }
+
+    SelectionManager& getSelection() { return selection; }
+    const SelectionManager& getSelection() const { return selection; }
 };
