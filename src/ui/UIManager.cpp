@@ -1402,8 +1402,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             colorPalettePanel.updateHover(handleCenter, true);
                         }
                         else if (topMenuAction == "save") {
-                            // ?? PASTE THE CODE FROM YOUR OLD GREEN SAVE BUTTON HERE:
-                            // Example: saveProject(); or ExportManager::save();
+                            if (triggerSave(canvas, timeline)) showMessage("Project Saved Successfully!", sf::Color::Green);
+                            else showMessage("Error Saving Project!", sf::Color::Red);
                         }
                         else if (topMenuAction == "layers") {
                             showMessage("Layers Panel (Top Menu)", sf::Color::Cyan);
@@ -1414,8 +1414,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             showMessage("Brush Tool Activated", sf::Color::Green);
                         }
                         else if (topMenuAction == "back") {
-                            // ?? PASTE THE CODE FROM YOUR OLD RED BACK BUTTON HERE:
-                            // Example: currentAppState = AppState::MainMenu;
+                            if (canvas.getIsDirty()) showUnsavedWarning = true;
+                            else {
+                                currentState = AppState::Welcome;
+                                currentMenuState = MenuState::Main;
+                            }
                         }
                         return;
                     }
