@@ -86,10 +86,42 @@ void GradientTool::Update(float deltaTime, const sf::RenderWindow& window) {
 }
 
 void GradientTool::updatePreview() {
-    sf::Vector2u size = m_canvas.getCanvasSize();
-    sf::Image img = GradientSystem::generate(m_config, m_startPos, m_currentPos, size, m_canvas.getPixelMode(), nullptr);
+    sf::Vector2u fullSize = m_canvas.getCanvasSize();
+    sf::Vector2u previewSize = fullSize;
+
+    // Severely limit preview generation size to prevent CPU stall on huge canvases
+    unsigned int maxDim = m_canvas.getPixelMode() ? 256 : 256;
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
+
+    if (fullSize.x > maxDim || fullSize.y > maxDim) {
+        float ratio = std::min(static_cast<float>(maxDim) / fullSize.x, static_cast<float>(maxDim) / fullSize.y);
+        previewSize.x = static_cast<unsigned int>(fullSize.x * ratio);
+        previewSize.y = static_cast<unsigned int>(fullSize.y * ratio);
+
+        if (previewSize.x == 0) previewSize.x = 1;
+        if (previewSize.y == 0) previewSize.y = 1;
+
+        scaleX = static_cast<float>(fullSize.x) / previewSize.x;
+        scaleY = static_cast<float>(fullSize.y) / previewSize.y;
+    }
+
+    // Adjust origin targeting for preview scale
+    sf::Vector2f pStart = m_startPos;
+    sf::Vector2f pCurrent = m_currentPos;
+    pStart.x /= scaleX; pStart.y /= scaleY;
+    pCurrent.x /= scaleX; pCurrent.y /= scaleY;
+
+    sf::Image img = GradientSystem::generate(m_config, pStart, pCurrent, previewSize, m_canvas.getPixelMode(), nullptr);
     m_previewTexture.loadFromImage(img);
-    m_previewSprite.setTexture(m_previewTexture);
+    m_previewSprite.setTexture(m_previewTexture, true);
+
+    // Map strictly to the visual canvas draw area to prevent alignment/scaling distortions
+    m_previewSprite.setPosition(m_canvas.getDrawArea().left, m_canvas.getDrawArea().top);
+    m_previewSprite.setScale(
+        m_canvas.getDrawArea().width / static_cast<float>(previewSize.x),
+        m_canvas.getDrawArea().height / static_cast<float>(previewSize.y)
+    );
 }
 
 void GradientTool::applyGradient() {

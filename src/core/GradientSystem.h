@@ -40,14 +40,15 @@ struct GradientConfig {
     bool repeat = false;
     bool livePreview = true;
     bool snapToGrid = false;
-    std::vector<GradientStop> stops = { {0.0f, sf::Color::Black}, {1.0f, sf::Color::White} };
+    // Set default gradient to fade to Transparent so it doesn't overwrite existing canvas art!
+    std::vector<GradientStop> stops = { {0.0f, sf::Color::Black}, {1.0f, sf::Color(0, 0, 0, 0)} };
 };
 
 class GradientSystem {
 public:
     static sf::Color hsvToRgb(float h, float s, float v, sf::Uint8 a);
     static void rgbToHsv(const sf::Color& c, float& h, float& s, float& v);
-    static sf::Color interpolate(const GradientConfig& config, float t);
+    static sf::Color interpolate(const GradientConfig& config, float t, bool applyModifiers = true);
     static float calculateT(GradientType type, sf::Vector2f start, sf::Vector2f end, sf::Vector2f current);
     static float applyDither(float t, int x, int y, GradientDither dither);
     static sf::Image generate(const GradientConfig& config, sf::Vector2f start, sf::Vector2f end, sf::Vector2u size, bool isPixelMode, const sf::Image* selectionMask = nullptr);

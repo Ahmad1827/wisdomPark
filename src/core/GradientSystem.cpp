@@ -63,14 +63,19 @@ void GradientSystem::rgbToHsv(const sf::Color& c, float& h, float& s, float& v) 
     if (h < 0.0f) h += 360.0f;
 }
 
-sf::Color GradientSystem::interpolate(const GradientConfig& config, float t) {
+sf::Color GradientSystem::interpolate(const GradientConfig& config, float t, bool applyModifiers) {
     if (config.stops.empty()) return sf::Color::Transparent;
     if (config.stops.size() == 1) return config.stops[0].color;
 
-    if (config.reverse) t = 1.0f - t;
-    if (config.repeat) {
-        t = std::fmod(t, 1.0f);
-        if (t < 0.0f) t += 1.0f;
+    if (applyModifiers) {
+        if (config.reverse) t = 1.0f - t;
+        if (config.repeat) {
+            t = std::fmod(t, 1.0f);
+            if (t < 0.0f) t += 1.0f;
+        }
+        else {
+            t = std::clamp(t, 0.0f, 1.0f);
+        }
     }
     else {
         t = std::clamp(t, 0.0f, 1.0f);
@@ -81,7 +86,7 @@ sf::Color GradientSystem::interpolate(const GradientConfig& config, float t) {
     if (it == config.stops.end()) return std::prev(it)->color;
 
     auto prev = std::prev(it);
-    float factor = (t - prev->position) / (it->position - prev->position);
+    float factor = (it->position == prev->position) ? 0.0f : (t - prev->position) / (it->position - prev->position);
 
     if (config.interpolation == GradientInterpolation::Constant) {
         return factor < 0.5f ? prev->color : it->color;
@@ -189,18 +194,41 @@ float GradientSystem::applyDither(float t, int x, int y, GradientDither dither) 
 
 sf::Image GradientSystem::generate(const GradientConfig& config, sf::Vector2f start, sf::Vector2f end, sf::Vector2u size, bool isPixelMode, const sf::Image* selectionMask) {
     sf::Image img;
+    if (size.x == 0 || size.y == 0) return img;
     img.create(size.x, size.y, sf::Color::Transparent);
+
+    // High Performance Lookup Table (LUT) precomputes gradients to prevent freezing!
+    const int LUT_SIZE = 2048;
+    std::vector<sf::Color> lut(LUT_SIZE);
+    for (int i = 0; i < LUT_SIZE; ++i) {
+        float t = static_cast<float>(i) / (LUT_SIZE - 1);
+        lut[i] = interpolate(config, t, false);
+    }
 
     for (unsigned int y = 0; y < size.y; ++y) {
         for (unsigned int x = 0; x < size.x; ++x) {
             if (selectionMask && selectionMask->getPixel(x, y).a == 0) continue;
 
             float t = calculateT(config.type, start, end, sf::Vector2f(static_cast<float>(x), static_cast<float>(y)));
-            if (isPixelMode && config.dither != GradientDither::None) {
-                t = applyDither(t, x, y, config.dither);
+
+            if (config.reverse) t = 1.0f - t;
+            if (config.repeat) {
+                t = std::fmod(t, 1.0f);
+                if (t < 0.0f) t += 1.0f;
+            }
+            else {
+                t = std::clamp(t, 0.0f, 1.0f);
             }
 
-            sf::Color c = interpolate(config, t);
+            if (isPixelMode && config.dither != GradientDither::None) {
+                t = applyDither(t, x, y, config.dither);
+                t = std::clamp(t, 0.0f, 1.0f);
+            }
+
+            int lutIndex = static_cast<int>(t * (LUT_SIZE - 1));
+            lutIndex = std::clamp(lutIndex, 0, LUT_SIZE - 1);
+            sf::Color c = lut[lutIndex];
+
             if (c.a > 0) {
                 c.a = static_cast<sf::Uint8>((c.a / 255.0f) * (config.opacity / 100.0f) * 255.0f);
                 img.setPixel(x, y, c);
