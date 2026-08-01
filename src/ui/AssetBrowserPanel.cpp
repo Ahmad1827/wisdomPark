@@ -241,3 +241,10 @@ void AssetBrowserPanel::drawProperties(sf::RenderWindow& window) {
         window.draw(propTxt);
     }
 }
+
+void AssetBrowserPanel::triggerImport() {
+    std::string file = NativeDialogs::openFileDialog("Image Files\0*.png;*.jpg;*.jpeg;*.bmp;*.webp\0All Files\0*.*\0");
+    if (!file.empty()) {
+        assetManager.importAssets({ file });
+    }
+}
