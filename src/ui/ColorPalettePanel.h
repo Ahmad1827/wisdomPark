@@ -21,6 +21,11 @@ private:
     sf::RectangleShape primaryBox;
     sf::RectangleShape secondaryBox;
 
+    // Eyedropper Tool Elements
+    sf::RectangleShape eyedropperBtn;
+    sf::Text eyedropperLabel;
+    bool isEyedropperActive;
+
     sf::Image svImage;
     sf::Texture svTexture;
     sf::Sprite svSprite;
@@ -82,4 +87,8 @@ public:
     bool isPanelPinned() const;
     sf::FloatRect getHandleBounds() const;
     ColorManager& getColorManager();
+
+    // Eyedropper Getters/Setters
+    bool getIsEyedropperActive() const;
+    void setEyedropperActive(bool active);
 };

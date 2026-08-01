@@ -1085,6 +1085,25 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (g_aiPanel.handleEvent(event, mousePos)) {
                 if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
                     std::string action = g_aiPanel.handleClick(mousePos);
+                    if (colorPalettePanel.getIsEyedropperActive()) {
+                        if (canvas.getDrawArea().contains(logicalMousePos)) {
+                            sf::Image flat = ExportManager::flattenFrame(canvas, timeline.getCurrentFrame());
+                            sf::Vector2f texScale(static_cast<float>(canvas.getCanvasSize().x) / canvas.getDrawArea().width, static_cast<float>(canvas.getCanvasSize().y) / canvas.getDrawArea().height);
+                            int px = static_cast<int>((logicalMousePos.x - canvas.getDrawArea().left) * texScale.x);
+                            int py = static_cast<int>((logicalMousePos.y - canvas.getDrawArea().top) * texScale.y);
+
+                            if (px >= 0 && px < static_cast<int>(flat.getSize().x) && py >= 0 && py < static_cast<int>(flat.getSize().y)) {
+                                sf::Color picked = flat.getPixel(px, py);
+                                canvas.setPrimaryColor(picked);
+                                colorPalettePanel.setColors(picked, canvas.getSecondaryColor());
+                                colorPalettePanel.getColorManager().addRecentColor(picked);
+
+                                colorPalettePanel.setEyedropperActive(false);
+                                showMessage("Color Picked", sf::Color::Green);
+                            }
+                        }
+                        return;
+                    }
                     if (action == "execute") {
                         sf::Image currentCanvas = ExportManager::flattenFrame(canvas, timeline.getCurrentFrame());
                         AIRequest req = g_aiPanel.buildRequestFromCanvasContext(canvas.getCanvasSize().x, canvas.getCanvasSize().y, canvas.getPixelMode(), 1.0f, canvas.getActiveTool() == ToolType::Select);
@@ -1409,6 +1428,25 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (event.type == sf::Event::MouseButtonPressed) {
+                if (event.mouseButton.button == sf::Mouse::Left && colorPalettePanel.getIsEyedropperActive()) {
+                    if (canvas.getDrawArea().contains(logicalMousePos)) {
+                        sf::Image flat = ExportManager::flattenFrame(canvas, timeline.getCurrentFrame());
+                        sf::Vector2f texScale(static_cast<float>(canvas.getCanvasSize().x) / canvas.getDrawArea().width, static_cast<float>(canvas.getCanvasSize().y) / canvas.getDrawArea().height);
+                        int px = static_cast<int>((logicalMousePos.x - canvas.getDrawArea().left) * texScale.x);
+                        int py = static_cast<int>((logicalMousePos.y - canvas.getDrawArea().top) * texScale.y);
+
+                        if (px >= 0 && px < static_cast<int>(flat.getSize().x) && py >= 0 && py < static_cast<int>(flat.getSize().y)) {
+                            sf::Color picked = flat.getPixel(px, py);
+                            canvas.setPrimaryColor(picked);
+                            colorPalettePanel.setColors(picked, canvas.getSecondaryColor());
+                            colorPalettePanel.getColorManager().addRecentColor(picked);
+
+                            colorPalettePanel.setEyedropperActive(false);
+                        }
+                    }
+                    return;
+                }
+
                 if (event.mouseButton.button == sf::Mouse::Left || event.mouseButton.button == sf::Mouse::Right) {
                     if (colorPalettePanel.handleClick(mousePos, canvas)) return;
                 }

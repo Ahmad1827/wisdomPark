@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <iostream>
 
-ColorPalettePanel::ColorPalettePanel() : width(280.f), currentX(1920.f), targetX(1920.f), state(PalettePanelState::Hidden), hovered(false), currentHue(0.f), currentSat(1.f), currentVal(1.f), currentAlpha(1.f), isDraggingSV(false), isDraggingHue(false), isDraggingAlpha(false), activeInputIndex(-1) {}
+ColorPalettePanel::ColorPalettePanel() : width(280.f), currentX(1920.f), targetX(1920.f), state(PalettePanelState::Hidden), hovered(false), currentHue(0.f), currentSat(1.f), currentVal(1.f), currentAlpha(1.f), isDraggingSV(false), isDraggingHue(false), isDraggingAlpha(false), activeInputIndex(-1), isEyedropperActive(false) {}
 
 void ColorPalettePanel::init() {
     colorManager.init();
@@ -48,6 +48,15 @@ void ColorPalettePanel::init() {
     secondaryBox.setSize(sf::Vector2f(40.f, 40.f));
     secondaryBox.setOutlineThickness(1.f);
     secondaryBox.setOutlineColor(sf::Color(100, 100, 100));
+
+    // Initialize Eyedropper Button
+    eyedropperBtn.setSize(sf::Vector2f(90.f, 25.f));
+    eyedropperBtn.setOutlineThickness(1.f);
+
+    eyedropperLabel.setFont(font);
+    eyedropperLabel.setString("Eyedropper");
+    eyedropperLabel.setCharacterSize(11);
+    eyedropperLabel.setFillColor(sf::Color::White);
 
     svImage.create(200, 200, sf::Color::Black);
     hueImage.create(200, 15, sf::Color::Black);
@@ -152,6 +161,18 @@ void ColorPalettePanel::update(float dt, bool focusMode, Canvas& canvas) {
     primaryBox.setFillColor(canvas.getPrimaryColor());
     secondaryBox.setFillColor(canvas.getSecondaryColor());
 
+    // Update Eyedropper Position and Color
+    eyedropperBtn.setPosition(currentX + 100.f, 95.f);
+    if (isEyedropperActive) {
+        eyedropperBtn.setFillColor(sf::Color(0, 191, 255, 100));
+        eyedropperBtn.setOutlineColor(sf::Color(0, 191, 255));
+    }
+    else {
+        eyedropperBtn.setFillColor(sf::Color(30, 30, 35));
+        eyedropperBtn.setOutlineColor(sf::Color(100, 100, 110));
+    }
+    eyedropperLabel.setPosition(currentX + 112.f, 99.f);
+
     float pickerY = 150.f;
     svSprite.setPosition(currentX + 20.f, pickerY);
     svSelector.setPosition(currentX + 20.f + currentSat * 200.f, pickerY + (1.0f - currentVal) * 200.f);
@@ -193,6 +214,10 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
 
     window.draw(secondaryBox);
     window.draw(primaryBox);
+
+    // Draw eyedropper
+    window.draw(eyedropperBtn);
+    window.draw(eyedropperLabel);
 
     window.draw(svSprite);
     window.draw(svSelector);
@@ -346,6 +371,16 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
     }
 
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        if (pinBtn.getGlobalBounds().contains(mousePos)) {
+            state = (state == PalettePanelState::Pinned) ? PalettePanelState::Visible : PalettePanelState::Pinned;
+            return true;
+        }
+
+        if (eyedropperBtn.getGlobalBounds().contains(mousePos)) {
+            isEyedropperActive = !isEyedropperActive;
+            return true;
+        }
+
         if (svSprite.getGlobalBounds().contains(mousePos)) isDraggingSV = true;
         else if (hueSprite.getGlobalBounds().contains(mousePos)) isDraggingHue = true;
         else if (alphaSprite.getGlobalBounds().contains(mousePos)) isDraggingAlpha = true;
@@ -466,3 +501,6 @@ bool ColorPalettePanel::isHovered() const { return hovered; }
 bool ColorPalettePanel::isPanelPinned() const { return state == PalettePanelState::Pinned; }
 sf::FloatRect ColorPalettePanel::getHandleBounds() const { return handleBg.getGlobalBounds(); }
 ColorManager& ColorPalettePanel::getColorManager() { return colorManager; }
+
+bool ColorPalettePanel::getIsEyedropperActive() const { return isEyedropperActive; }
+void ColorPalettePanel::setEyedropperActive(bool active) { isEyedropperActive = active; }
