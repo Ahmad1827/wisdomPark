@@ -1040,8 +1040,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     }
     else if (currentState == AppState::Painting) {
         if (assetBrowser) {
-            assetBrowser->setBounds(sf::FloatRect(leftToolbar.getPanelRightEdge(), 40.f, assetBrowser->getWidth(), 1080.f - 40.f));
-            assetBrowser->update(dt);
+            assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame());
         }
 
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F8) {
@@ -1816,6 +1815,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         audioPanel.update(dt);
         g_aiPanel.update(dt);
         if (assetBrowser) {
+            assetBrowser->setBounds(sf::FloatRect(leftToolbar.getPanelRightEdge(), 40.f, assetBrowser->getWidth(), 1080.f - 40.f));
             assetBrowser->update(dt);
         }
 
