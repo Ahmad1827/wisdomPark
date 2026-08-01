@@ -8,7 +8,7 @@ enum class BrowserView { Grid, List };
 class AssetBrowserPanel {
 public:
     AssetBrowserPanel(AssetManager& am, const sf::Font& font);
-    void handleEvent(const sf::Event& event, const sf::RenderWindow& window, Canvas& canvas);
+    void handleEvent(const sf::Event& event, const sf::RenderWindow& window, Canvas& canvas, int currentFrame);
     void update(float dt);
     void draw(sf::RenderWindow& window);
     void setBounds(const sf::FloatRect& bounds);
@@ -23,7 +23,7 @@ private:
     AssetType currentCategory;
     std::string searchQuery;
     BrowserView viewMode;
-    AssetRecord* selectedAsset;
+    std::string selectedAssetId;
     float panelWidth;
     bool isCollapsed;
     bool isDragging;
@@ -42,6 +42,6 @@ private:
     void drawCategoryList(sf::RenderWindow& window);
     void drawAssetGrid(sf::RenderWindow& window);
     void drawProperties(sf::RenderWindow& window);
-    void handleDragAndDrop(const sf::Vector2f& dropPos, const sf::RenderWindow& window, Canvas& canvas);
+    void handleDragAndDrop(const sf::Vector2f& dropPos, const sf::RenderWindow& window, Canvas& canvas, int currentFrame);
     void triggerImport();
 };

@@ -5,7 +5,8 @@
 AssetManager::AssetManager() {}
 
 void AssetManager::init(const std::string& projectPath) {
-    rootPath = projectPath + "/Assets";
+    rootPath = std::filesystem::absolute(projectPath + "/Assets").string();
+
     std::filesystem::create_directories(rootPath + "/Images");
     std::filesystem::create_directories(rootPath + "/Audio");
     std::filesystem::create_directories(rootPath + "/Fonts");
@@ -17,22 +18,27 @@ void AssetManager::init(const std::string& projectPath) {
 
 void AssetManager::scanAssets() {
     assets.clear();
-    if (!std::filesystem::exists(rootPath)) return;
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(rootPath)) {
-        if (entry.is_regular_file()) {
-            AssetRecord record;
-            record.filepath = entry.path().string();
-            record.filename = entry.path().filename().string();
-            record.extension = entry.path().extension().string();
-            std::transform(record.extension.begin(), record.extension.end(), record.extension.begin(), ::tolower);
-            record.id = record.filepath;
-            record.type = determineType(record.extension);
-            record.fileSize = std::filesystem::file_size(entry);
-            record.lastModified = decltype(record.lastModified)();
-            record.isFavorite = false;
-            record.thumbnailLoaded = false;
-            assets.push_back(record);
+    try {
+        if (!std::filesystem::exists(rootPath)) return;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(rootPath)) {
+            if (entry.is_regular_file()) {
+                AssetRecord record;
+                record.filepath = entry.path().string();
+                record.filename = entry.path().filename().string();
+                record.extension = entry.path().extension().string();
+                std::transform(record.extension.begin(), record.extension.end(), record.extension.begin(), ::tolower);
+                record.id = record.filepath;
+                record.type = determineType(record.extension);
+                record.fileSize = std::filesystem::file_size(entry);
+                record.lastModified = decltype(record.lastModified)();
+                record.isFavorite = false;
+                record.thumbnailLoaded = false;
+                assets.push_back(record);
+            }
         }
+    }
+    catch (...) {
+        // Suppress OS-level file permission crashes
     }
 }
 
@@ -45,16 +51,24 @@ AssetType AssetManager::determineType(const std::string& ext) {
 
 void AssetManager::importAssets(const std::vector<std::string>& filePaths) {
     for (const auto& path : filePaths) {
-        std::filesystem::path p(path);
-        AssetType t = determineType(p.extension().string());
-        std::string subDir = "/Unknown";
-        if (t == AssetType::Image) subDir = "/Images";
-        else if (t == AssetType::Audio) subDir = "/Audio";
-        else if (t == AssetType::Font) subDir = "/Fonts";
+        try {
+            std::filesystem::path p(path);
+            AssetType t = determineType(p.extension().string());
+            std::string subDir = "/Unknown";
+            if (t == AssetType::Image) subDir = "/Images";
+            else if (t == AssetType::Audio) subDir = "/Audio";
+            else if (t == AssetType::Font) subDir = "/Fonts";
 
-        std::string dest = rootPath + subDir + "/" + p.filename().string();
-        copyFileToProject(path, dest);
-        recentIds.push_back(dest);
+            std::string dest = rootPath + subDir + "/" + p.filename().string();
+
+            if (std::filesystem::absolute(path) != std::filesystem::absolute(dest)) {
+                copyFileToProject(path, dest);
+                recentIds.push_back(dest);
+            }
+        }
+        catch (...) {
+            // Suppress invalid filepath parsing crashes
+        }
     }
     scanAssets();
 }

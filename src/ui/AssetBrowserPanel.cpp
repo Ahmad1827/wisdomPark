@@ -4,7 +4,7 @@
 
 AssetBrowserPanel::AssetBrowserPanel(AssetManager& am, const sf::Font& f)
     : assetManager(am), font(f), currentCategory(AssetType::Image), viewMode(BrowserView::Grid),
-    selectedAsset(nullptr), panelWidth(350.f), isCollapsed(false), isDragging(false), isResizing(false), isVisible(false) {
+    selectedAssetId(""), panelWidth(350.f), isCollapsed(false), isDragging(false), isResizing(false), isVisible(false) {
     background.setFillColor(sf::Color(35, 35, 40));
     topBar.setFillColor(sf::Color(45, 45, 50));
     resizeHandle.setFillColor(sf::Color(60, 60, 65));
@@ -40,7 +40,7 @@ void AssetBrowserPanel::setBounds(const sf::FloatRect& bounds) {
     resizeHandle.setSize(sf::Vector2f(5.f, panelBounds.height));
 }
 
-void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWindow& window, Canvas& canvas) {
+void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWindow& window, Canvas& canvas, int currentFrame) {
     if (!isVisible) return;
 
     if (event.type == sf::Event::MouseButtonPressed) {
@@ -55,7 +55,7 @@ void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWind
             for (const auto& cb : categoryBounds) {
                 if (cb.first.contains(mousePos)) {
                     currentCategory = cb.second;
-                    selectedAsset = nullptr;
+                    selectedAssetId = "";
                 }
             }
 
@@ -66,7 +66,7 @@ void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWind
                 float ax = startX + (i % 2) * 80.f;
                 float ay = startY + (i / 2) * 100.f;
                 if (sf::FloatRect(ax, ay, 64.f, 64.f).contains(mousePos)) {
-                    selectedAsset = assets[i];
+                    selectedAssetId = assets[i]->id;
                     isDragging = true;
                     dragStart = mousePos;
                 }
@@ -79,7 +79,7 @@ void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWind
             isDragging = false;
             sf::Vector2f mousePos(static_cast<float>(event.mouseButton.x), static_cast<float>(event.mouseButton.y));
             if (!panelBounds.contains(mousePos)) {
-                handleDragAndDrop(mousePos, window, canvas);
+                handleDragAndDrop(mousePos, window, canvas, currentFrame);
             }
         }
     }
@@ -94,11 +94,12 @@ void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWind
     }
 }
 
-void AssetBrowserPanel::handleDragAndDrop(const sf::Vector2f& dropPos, const sf::RenderWindow& window, Canvas& canvas) {
+void AssetBrowserPanel::handleDragAndDrop(const sf::Vector2f& dropPos, const sf::RenderWindow& window, Canvas& canvas, int currentFrame) {
+    AssetRecord* selectedAsset = assetManager.getAsset(selectedAssetId);
     if (!selectedAsset) return;
 
     if (selectedAsset->type == AssetType::Image) {
-        canvas.importImageToActiveLayer(selectedAsset->filepath, 0);
+        canvas.importImageToActiveLayer(selectedAsset->filepath, currentFrame);
     }
     else if (selectedAsset->type == AssetType::Audio) {
     }
@@ -109,6 +110,7 @@ void AssetBrowserPanel::handleDragAndDrop(const sf::Vector2f& dropPos, const sf:
 void AssetBrowserPanel::update(float dt) {
     if (!isVisible) return;
 
+    AssetRecord* selectedAsset = assetManager.getAsset(selectedAssetId);
     if (selectedAsset && !selectedAsset->thumbnailLoaded) {
         assetManager.requestThumbnail(selectedAsset);
     }
@@ -186,7 +188,7 @@ void AssetBrowserPanel::drawAssetGrid(sf::RenderWindow& window) {
         sf::RectangleShape thumb(sf::Vector2f(64.f, 64.f));
         thumb.setPosition(ax, ay);
 
-        if (assets[i] == selectedAsset) {
+        if (assets[i]->id == selectedAssetId) {
             thumb.setOutlineThickness(2.f);
             thumb.setOutlineColor(sf::Color(0, 191, 255));
         }
@@ -219,6 +221,7 @@ void AssetBrowserPanel::drawProperties(sf::RenderWindow& window) {
     propArea.setFillColor(sf::Color(25, 25, 30));
     window.draw(propArea);
 
+    AssetRecord* selectedAsset = assetManager.getAsset(selectedAssetId);
     if (selectedAsset) {
         sf::Text propTxt("Name: " + selectedAsset->filename + "\n\nType: " + selectedAsset->extension + "\n\nSize: " + std::to_string(selectedAsset->fileSize / 1024) + " KB", font, 14);
         propTxt.setPosition(panelBounds.left + 10.f, panelBounds.top + panelBounds.height - 140.f);
@@ -228,7 +231,7 @@ void AssetBrowserPanel::drawProperties(sf::RenderWindow& window) {
 }
 
 void AssetBrowserPanel::triggerImport() {
-    std::string file = NativeDialogs::openFileDialog("Supported Files\0*.png;*.jpg;*.jpeg;*.bmp;*.wav;*.ogg;*.ttf\0All Files\0*.*\0");
+    std::string file = NativeDialogs::openFileDialog("Image Files\0*.png;*.jpg;*.jpeg;*.bmp;*.webp\0All Files\0*.*\0");
     if (!file.empty()) {
         assetManager.importAssets({ file });
     }

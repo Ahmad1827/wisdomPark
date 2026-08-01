@@ -18,6 +18,29 @@
 #include "../tools/MagicWandTool.h"
 #include "../tools/PerspectiveTool.h"
 #include "../tools/TextTool.h"
+#if defined(_WIN32)
+#include <windows.h>
+#include <shellapi.h>
+
+static WNDPROC g_originalWndProc = nullptr;
+static std::vector<std::string> g_droppedFiles;
+
+static LRESULT CALLBACK DropHookProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    if (uMsg == WM_DROPFILES) {
+        HDROP hDrop = (HDROP)wParam;
+        UINT count = DragQueryFileA(hDrop, 0xFFFFFFFF, NULL, 0);
+        for (UINT i = 0; i < count; ++i) {
+            char path[MAX_PATH];
+            if (DragQueryFileA(hDrop, i, path, MAX_PATH)) {
+                g_droppedFiles.push_back(std::string(path));
+            }
+        }
+        DragFinish(hDrop);
+        return 0;
+    }
+    return CallWindowProc(g_originalWndProc, hwnd, uMsg, wParam, lParam);
+}
+#endif
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -1017,7 +1040,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     }
     else if (currentState == AppState::Painting) {
         if (assetBrowser) {
-            assetBrowser->handleEvent(event, window, canvas);
+            assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame());
         }
 
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F8) {
@@ -1576,6 +1599,25 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 }
 
 void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
+#if defined(_WIN32)
+    static bool s_dragDropHooked = false;
+    if (!s_dragDropHooked) {
+        HWND hwnd = window.getSystemHandle();
+        DragAcceptFiles(hwnd, TRUE);
+        g_originalWndProc = (WNDPROC)SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)DropHookProc);
+        s_dragDropHooked = true;
+    }
+
+    if (!g_droppedFiles.empty()) {
+        assetManager.importAssets(g_droppedFiles);
+        g_droppedFiles.clear();
+
+        // Auto-open the panel to show the user their new assets
+        if (assetBrowser && !assetBrowser->getIsVisible()) {
+            assetBrowser->toggle();
+        }
+    }
+#endif
     if (m_debugUseSpriteStudio) {
         if (m_activeTool) {
             sf::FloatRect physicalSpace(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y));
