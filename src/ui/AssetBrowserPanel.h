@@ -15,6 +15,7 @@ public:
     void setProject(const std::string& projPath);
     void toggle();
     bool getIsVisible() const;
+    float getWidth() const;
 
 private:
     AssetManager& assetManager;

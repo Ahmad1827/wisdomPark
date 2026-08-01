@@ -1040,7 +1040,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     }
     else if (currentState == AppState::Painting) {
         if (assetBrowser) {
-            assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame());
+            assetBrowser->setBounds(sf::FloatRect(leftToolbar.getPanelRightEdge(), 40.f, assetBrowser->getWidth(), 1080.f - 40.f));
+            assetBrowser->update(dt);
         }
 
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F8) {
