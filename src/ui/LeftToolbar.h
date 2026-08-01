@@ -25,8 +25,11 @@ public:
     float getPanelRightEdge() const;
     std::string getActiveTool() const;
     void setActiveTool(const std::string& id);
+    void handleScroll(float delta);
 
 private:
+    float scrollY;
+    float maxScrollY;
     sf::RectangleShape background;
     sf::RectangleShape handleBg;
     sf::Text handleLabel;

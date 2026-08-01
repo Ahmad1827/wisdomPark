@@ -1,6 +1,7 @@
 #include "LeftToolbar.h"
+#include <algorithm>
 
-LeftToolbar::LeftToolbar() : activeToolId("brush"), width(90.f), currentX(-90.f), targetX(-90.f), state(PanelState::Hidden) {}
+LeftToolbar::LeftToolbar() : activeToolId("brush"), width(90.f), currentX(-90.f), targetX(-90.f), state(PanelState::Hidden), scrollY(0.f), maxScrollY(0.f) {}
 
 void LeftToolbar::init() {
     font.loadFromFile("assets/font.otf");
@@ -28,7 +29,7 @@ void LeftToolbar::init() {
     pinLabel.setCharacterSize(12);
     pinLabel.setFillColor(sf::Color(180, 180, 180));
 
-    auto makeBtn = [&](std::string id, std::string text, float y, bool aiTool = false) {
+    auto makeBtn = [&](std::string id, std::string text, bool aiTool = false) {
         ToolItem btn;
         btn.id = id;
         btn.isAiTool = aiTool;
@@ -41,24 +42,22 @@ void LeftToolbar::init() {
         tools.push_back(btn);
         };
 
-    float startY = 60.f;
-    float gap = 45.f;
-
-    makeBtn("brush", "Brush", startY);
-    makeBtn("pencil", "Pencil", startY + gap * 1);
-    makeBtn("eraser", "Erase", startY + gap * 2);
-    makeBtn("fill", "Bucket", startY + gap * 3);
-    makeBtn("text", "Text", startY + gap * 4);
-    makeBtn("select", "Select", startY + gap * 5);
-    makeBtn("magic_wand", "Wand", startY + gap * 6);
-    makeBtn("shapes", "Shapes", startY + gap * 7);
-    makeBtn("symmetry", "Symmetry", startY + gap * 8);
-    makeBtn("perspective", "Perspective", startY + gap * 9);
-    makeBtn("ai_gen", "AI Gen", startY + gap * 10, true);
-    makeBtn("import_img", "Image", startY + gap * 11);
-    makeBtn("audio_panel", "Audio", startY + gap * 12);
-    makeBtn("dither_toggle", "Dither", startY + gap * 13);
-    makeBtn("gradient", "Gradient", startY + gap * 14);
+    makeBtn("brush", "Brush");
+    makeBtn("pencil", "Pencil");
+    makeBtn("eraser", "Erase");
+    makeBtn("fill", "Bucket");
+    makeBtn("text", "Text");
+    makeBtn("select", "Select");
+    makeBtn("magic_wand", "Wand");
+    makeBtn("shapes", "Shapes");
+    makeBtn("symmetry", "Symmetry");
+    makeBtn("perspective", "Perspective");
+    makeBtn("ai_gen", "AI Gen", true);
+    makeBtn("asset_browser", "Assets");
+    makeBtn("import_img", "Image");
+    makeBtn("audio_panel", "Audio");
+    makeBtn("dither_toggle", "Dither");
+    makeBtn("gradient", "Gradient");
 
     auto makeActionBtn = [&](std::string id, std::string text) {
         ToolItem btn;
@@ -79,6 +78,12 @@ void LeftToolbar::init() {
     makeActionBtn("erase_sel", "Erase");
     makeActionBtn("del_sel", "Deselect");
     makeActionBtn("rasterize", "Rasterize");
+}
+
+void LeftToolbar::handleScroll(float delta) {
+    scrollY += delta * 40.f;
+    if (scrollY > 0.f) scrollY = 0.f;
+    if (scrollY < -maxScrollY) scrollY = -maxScrollY;
 }
 
 void LeftToolbar::update(float dt, bool focusMode) {
@@ -104,7 +109,7 @@ void LeftToolbar::update(float dt, bool focusMode) {
     pinBtn.setPosition(currentX + 10.f, 20.f);
     pinLabel.setPosition(currentX + 25.f, 24.f);
 
-    float startY = 60.f;
+    float startY = 60.f + scrollY;
     for (auto& tool : tools) {
         tool.rect.setPosition(currentX + 10.f, startY);
         tool.label.setPosition(currentX + (width / 2.f), startY + 20.f);
@@ -117,6 +122,17 @@ void LeftToolbar::update(float dt, bool focusMode) {
         act.label.setPosition(currentX + (width / 2.f), startY + 15.f);
         startY += 35.f;
     }
+
+    float totalHeight = (startY - scrollY) + 20.f;
+    if (totalHeight > 1080.f) {
+        maxScrollY = totalHeight - 1080.f;
+    }
+    else {
+        maxScrollY = 0.f;
+        scrollY = 0.f;
+    }
+
+    if (scrollY < -maxScrollY) scrollY = -maxScrollY;
 }
 
 void LeftToolbar::updateHover(sf::Vector2f mousePos) {
@@ -126,8 +142,14 @@ void LeftToolbar::updateHover(sf::Vector2f mousePos) {
     if (state == PanelState::Hidden && inHandle) state = PanelState::Visible;
     else if (state == PanelState::Visible && !inPanel && !inHandle) state = PanelState::Hidden;
 
-    for (auto& tool : tools) tool.isHovered = tool.rect.getGlobalBounds().contains(mousePos);
-    for (auto& act : selectionActions) act.isHovered = act.rect.getGlobalBounds().contains(mousePos);
+    for (auto& tool : tools) {
+        if (tool.rect.getPosition().y < 50.f || tool.rect.getPosition().y > 1080.f) tool.isHovered = false;
+        else tool.isHovered = tool.rect.getGlobalBounds().contains(mousePos);
+    }
+    for (auto& act : selectionActions) {
+        if (act.rect.getPosition().y < 50.f || act.rect.getPosition().y > 1080.f) act.isHovered = false;
+        else act.isHovered = act.rect.getGlobalBounds().contains(mousePos);
+    }
 }
 
 void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSelection) {
@@ -138,22 +160,20 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
         window.draw(handleLabel);
     }
 
-    pinBtn.setFillColor(pinBtn.getGlobalBounds().contains(sf::Vector2f(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y))) ? sf::Color(255, 255, 255, 25) : sf::Color(255, 255, 255, 10));
-    window.draw(pinBtn);
-    window.draw(pinLabel);
-
     for (auto& tool : tools) {
+        if (tool.rect.getPosition().y < 50.f || tool.rect.getPosition().y > 1080.f) continue;
+
         bool disabled = tool.isAiTool && !isAIConfigured;
         if (disabled) {
             tool.rect.setFillColor(sf::Color(255, 255, 255, 2));
             tool.label.setFillColor(sf::Color(100, 100, 100));
         }
-        else if (tool.id == activeToolId && tool.id != "audio_panel" && tool.id != "import_img" && tool.id != "dither_toggle") {
+        else if (tool.id == activeToolId && tool.id != "audio_panel" && tool.id != "import_img" && tool.id != "dither_toggle" && tool.id != "asset_browser") {
             tool.rect.setFillColor(sf::Color(0, 122, 204, 180));
             tool.label.setFillColor(sf::Color::White);
         }
         else {
-            if (tool.id == "audio_panel") tool.rect.setFillColor(tool.isHovered ? sf::Color(100, 50, 150, 200) : sf::Color(80, 40, 120, 150));
+            if (tool.id == "audio_panel" || tool.id == "asset_browser") tool.rect.setFillColor(tool.isHovered ? sf::Color(100, 50, 150, 200) : sf::Color(80, 40, 120, 150));
             else tool.rect.setFillColor(tool.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));
             tool.label.setFillColor(sf::Color(220, 220, 225));
         }
@@ -164,6 +184,8 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
 
     if (hasSelection) {
         for (auto& act : selectionActions) {
+            if (act.rect.getPosition().y < 50.f || act.rect.getPosition().y > 1080.f) continue;
+
             if (act.id == "erase_sel") act.rect.setFillColor(act.isHovered ? sf::Color(200, 50, 50, 150) : sf::Color(150, 40, 40, 100));
             else if (act.id == "resize_sel") act.rect.setFillColor(act.isHovered ? sf::Color(0, 200, 100, 150) : sf::Color(0, 150, 80, 100));
             else act.rect.setFillColor(act.isHovered ? sf::Color(0, 191, 255, 150) : sf::Color(0, 122, 204, 100));
@@ -172,6 +194,15 @@ void LeftToolbar::draw(sf::RenderWindow& window, bool isAIConfigured, bool hasSe
             window.draw(act.label);
         }
     }
+
+    sf::RectangleShape topBlocker(sf::Vector2f(width, 50.f));
+    topBlocker.setPosition(currentX, 0.f);
+    topBlocker.setFillColor(sf::Color(15, 15, 18, 255));
+    window.draw(topBlocker);
+
+    pinBtn.setFillColor(pinBtn.getGlobalBounds().contains(sf::Vector2f(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y))) ? sf::Color(255, 255, 255, 25) : sf::Color(255, 255, 255, 10));
+    window.draw(pinBtn);
+    window.draw(pinLabel);
 }
 
 std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured, bool hasSelection) {
@@ -186,9 +217,10 @@ std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured,
     }
 
     for (const auto& tool : tools) {
+        if (tool.rect.getPosition().y < 50.f || tool.rect.getPosition().y > 1080.f) continue;
         if (tool.rect.getGlobalBounds().contains(mousePos)) {
             if (tool.isAiTool && !isAIConfigured) return "ai_disabled";
-            if (tool.id != "import_img" && tool.id != "audio_panel" && tool.id != "dither_toggle") {
+            if (tool.id != "import_img" && tool.id != "audio_panel" && tool.id != "dither_toggle" && tool.id != "asset_browser") {
                 activeToolId = tool.id;
             }
             return tool.id;
@@ -197,6 +229,7 @@ std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured,
 
     if (hasSelection) {
         for (const auto& act : selectionActions) {
+            if (act.rect.getPosition().y < 50.f || act.rect.getPosition().y > 1080.f) continue;
             if (act.rect.getGlobalBounds().contains(mousePos)) {
                 return act.id;
             }

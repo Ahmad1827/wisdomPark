@@ -1400,7 +1400,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
 
             if (event.type == sf::Event::MouseWheelScrolled && event.mouseWheelScroll.wheel == sf::Mouse::VerticalWheel) {
-                canvas.zoom(event.mouseWheelScroll.delta);
+                if (mousePos.x <= leftToolbar.getPanelRightEdge() + 25.f) {
+                    leftToolbar.handleScroll(event.mouseWheelScroll.delta);
+                }
+                else {
+                    canvas.zoom(event.mouseWheelScroll.delta);
+                }
             }
 
             if (event.type == sf::Event::MouseButtonPressed) {
@@ -1570,6 +1575,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             if (t) {
                                 m_textManager.rasterizeText(timeline.getCurrentFrame(), canvas.getActiveLayer(), t->id, canvas);
                                 showMessage("Text Rasterized", sf::Color::Green);
+                            }
+                        }
+                        else if (leftAction == "asset_browser") {
+                            if (assetBrowser) {
+                                assetBrowser->toggle();
+                                showMessage(assetBrowser->getIsVisible() ? "Asset Browser Opened" : "Asset Browser Closed", sf::Color::Cyan);
                             }
                         }
                         return;
