@@ -1,15 +1,12 @@
 #include "AssetBrowserPanel.h"
 #include "../core/NativeDialogs.h"
 #include <iostream>
+#include <algorithm>
 
 AssetBrowserPanel::AssetBrowserPanel(AssetManager& am, const sf::Font& f)
     : assetManager(am), font(f), currentCategory(AssetType::Image), viewMode(BrowserView::Grid),
-    selectedAssetId(""), panelWidth(260.f), isCollapsed(false), isDragging(false), isResizing(false), isVisible(false) {
-    background.setFillColor(sf::Color(20, 20, 25, 240));
+    selectedAssetId(""), panelWidth(280.f), isCollapsed(false), isDragging(false), isResizing(false), isVisible(false), animProgress(0.f) {
     background.setOutlineThickness(1.f);
-    background.setOutlineColor(sf::Color(255, 255, 255, 15));
-    topBar.setFillColor(sf::Color(30, 30, 35, 255));
-    resizeHandle.setFillColor(sf::Color(60, 60, 65, 100));
 }
 
 void AssetBrowserPanel::toggle() {
@@ -21,33 +18,43 @@ bool AssetBrowserPanel::getIsVisible() const {
 }
 
 float AssetBrowserPanel::getWidth() const {
-    return panelWidth;
+    return panelWidth; // We keep bounds allocated even when fading out to push the UI smoothly
 }
 
 void AssetBrowserPanel::setProject(const std::string& projPath) {
     assetManager.init(projPath);
 }
 
+sf::Color AssetBrowserPanel::applyAlpha(sf::Color color, sf::Uint8 alpha) const {
+    return sf::Color(color.r, color.g, color.b, static_cast<sf::Uint8>((color.a * alpha) / 255));
+}
+
 void AssetBrowserPanel::setBounds(const sf::FloatRect& bounds) {
     panelBounds = bounds;
-    if (!isCollapsed) {
-        panelBounds.width = panelWidth;
+    if (!isCollapsed) panelBounds.width = panelWidth;
+    else panelBounds.width = 30.f;
+}
+
+void AssetBrowserPanel::update(float dt) {
+    if (isVisible) {
+        animProgress += 12.0f * dt;
+        if (animProgress > 1.0f) animProgress = 1.0f;
     }
     else {
-        panelBounds.width = 30.f;
+        animProgress -= 12.0f * dt;
+        if (animProgress < 0.0f) animProgress = 0.0f;
     }
-    background.setPosition(panelBounds.left, panelBounds.top);
-    background.setSize(sf::Vector2f(panelBounds.width, panelBounds.height));
 
-    topBar.setPosition(panelBounds.left, panelBounds.top);
-    topBar.setSize(sf::Vector2f(panelBounds.width, 35.f));
-
-    resizeHandle.setPosition(panelBounds.left + panelBounds.width - 5.f, panelBounds.top);
-    resizeHandle.setSize(sf::Vector2f(5.f, panelBounds.height));
+    if (animProgress > 0.0f) {
+        AssetRecord* selectedAsset = assetManager.getAsset(selectedAssetId);
+        if (selectedAsset && !selectedAsset->thumbnailLoaded) {
+            assetManager.requestThumbnail(selectedAsset);
+        }
+    }
 }
 
 void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWindow& window, Canvas& canvas, int currentFrame) {
-    if (!isVisible) return;
+    if (animProgress < 0.5f) return; // Ignore clicks if mostly hidden
 
     if (event.type == sf::Event::MouseButtonPressed) {
         sf::Vector2f mousePos(static_cast<float>(event.mouseButton.x), static_cast<float>(event.mouseButton.y));
@@ -66,12 +73,12 @@ void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWind
             }
 
             auto assets = assetManager.getAssetsByCategory(currentCategory);
-            float startX = panelBounds.left + 85.f;
-            float startY = panelBounds.top + 45.f;
+            float startX = panelBounds.left + 90.f;
+            float startY = panelBounds.top + 55.f;
             for (size_t i = 0; i < assets.size(); ++i) {
-                float ax = startX + (i % 2) * 75.f;
-                float ay = startY + (i / 2) * 90.f;
-                if (sf::FloatRect(ax, ay, 60.f, 60.f).contains(mousePos)) {
+                float ax = startX + (i % 2) * 85.f;
+                float ay = startY + (i / 2) * 105.f;
+                if (sf::FloatRect(ax, ay, 75.f, 75.f).contains(mousePos)) {
                     selectedAssetId = assets[i]->id;
                     isDragging = true;
                     dragStart = mousePos;
@@ -92,7 +99,7 @@ void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWind
     else if (event.type == sf::Event::MouseMoved) {
         if (isResizing) {
             float newWidth = static_cast<float>(event.mouseMove.x) - panelBounds.left;
-            if (newWidth > 180.f && newWidth < 800.f) {
+            if (newWidth > 220.f && newWidth < 800.f) {
                 panelWidth = newWidth;
                 setBounds(sf::FloatRect(panelBounds.left, panelBounds.top, panelWidth, panelBounds.height));
             }
@@ -107,60 +114,65 @@ void AssetBrowserPanel::handleDragAndDrop(const sf::Vector2f& dropPos, const sf:
     if (selectedAsset->type == AssetType::Image) {
         canvas.importImageToActiveLayer(selectedAsset->filepath, currentFrame);
     }
-    else if (selectedAsset->type == AssetType::Audio) {
-    }
-    else if (selectedAsset->type == AssetType::Font) {
-    }
 }
 
-void AssetBrowserPanel::update(float dt) {
-    if (!isVisible) return;
-
-    AssetRecord* selectedAsset = assetManager.getAsset(selectedAssetId);
-    if (selectedAsset && !selectedAsset->thumbnailLoaded) {
-        assetManager.requestThumbnail(selectedAsset);
-    }
-}
 
 void AssetBrowserPanel::draw(sf::RenderWindow& window) {
-    if (!isVisible) return;
+    if (animProgress <= 0.0f) return;
+
+    // Slide-in and fade calculation
+    float currentX = panelBounds.left - 25.f * (1.f - animProgress);
+    sf::Uint8 alpha = static_cast<sf::Uint8>(animProgress * 255);
+
+    background.setPosition(currentX, panelBounds.top);
+    background.setSize(sf::Vector2f(panelBounds.width, panelBounds.height));
+    background.setFillColor(applyAlpha(sf::Color(18, 18, 22, 245), alpha));
+    background.setOutlineColor(applyAlpha(sf::Color(255, 255, 255, 15), alpha));
+
+    resizeHandle.setPosition(currentX + panelBounds.width - 5.f, panelBounds.top);
+    resizeHandle.setSize(sf::Vector2f(5.f, panelBounds.height));
+    resizeHandle.setFillColor(applyAlpha(sf::Color(255, 255, 255, 5), alpha));
 
     window.draw(background);
     if (!isCollapsed) {
-        drawTopBar(window);
-        drawCategoryList(window);
-        drawAssetGrid(window);
-        drawProperties(window);
+        drawTopBar(window, currentX, alpha);
+        drawCategoryList(window, currentX, alpha);
+        drawAssetGrid(window, currentX, alpha);
+        drawProperties(window, currentX, alpha);
     }
     window.draw(resizeHandle);
 }
 
-void AssetBrowserPanel::drawTopBar(sf::RenderWindow& window) {
+void AssetBrowserPanel::drawTopBar(sf::RenderWindow& window, float currentX, sf::Uint8 alpha) {
+    sf::RectangleShape topBar(sf::Vector2f(panelBounds.width, 40.f));
+    topBar.setPosition(currentX, panelBounds.top);
+    topBar.setFillColor(applyAlpha(sf::Color(25, 25, 30, 255), alpha));
     window.draw(topBar);
 
-    sf::Text title("ASSETS", font, 12);
-    title.setPosition(panelBounds.left + 15.f, panelBounds.top + 10.f);
-    title.setFillColor(sf::Color(200, 200, 200));
+    sf::Text title("ASSET BROWSER", font, 11);
+    title.setPosition(currentX + 15.f, panelBounds.top + 14.f);
+    title.setFillColor(applyAlpha(sf::Color(200, 200, 210), alpha));
+    title.setLetterSpacing(1.5f);
     window.draw(title);
 
-    btnImportBounds = sf::FloatRect(panelBounds.left + panelBounds.width - 65.f, panelBounds.top + 5.f, 55.f, 24.f);
+    btnImportBounds = sf::FloatRect(currentX + panelBounds.width - 70.f, panelBounds.top + 8.f, 60.f, 24.f);
     sf::RectangleShape importBtn(sf::Vector2f(btnImportBounds.width, btnImportBounds.height));
     importBtn.setPosition(btnImportBounds.left, btnImportBounds.top);
-    importBtn.setFillColor(sf::Color(0, 122, 204));
+    importBtn.setFillColor(applyAlpha(sf::Color(0, 122, 204, 200), alpha));
     importBtn.setOutlineThickness(1.f);
-    importBtn.setOutlineColor(sf::Color(255, 255, 255, 50));
+    importBtn.setOutlineColor(applyAlpha(sf::Color(0, 191, 255, 100), alpha));
     window.draw(importBtn);
 
     sf::Text importTxt("Import", font, 10);
-    importTxt.setPosition(btnImportBounds.left + 10.f, btnImportBounds.top + 5.f);
-    importTxt.setFillColor(sf::Color::White);
+    importTxt.setPosition(btnImportBounds.left + 14.f, btnImportBounds.top + 5.f);
+    importTxt.setFillColor(applyAlpha(sf::Color::White, alpha));
     window.draw(importTxt);
 }
 
-void AssetBrowserPanel::drawCategoryList(sf::RenderWindow& window) {
-    sf::RectangleShape catArea(sf::Vector2f(75.f, panelBounds.height - 35.f));
-    catArea.setPosition(panelBounds.left, panelBounds.top + 35.f);
-    catArea.setFillColor(sf::Color(15, 15, 18, 150));
+void AssetBrowserPanel::drawCategoryList(sf::RenderWindow& window, float currentX, sf::Uint8 alpha) {
+    sf::RectangleShape catArea(sf::Vector2f(80.f, panelBounds.height - 40.f));
+    catArea.setPosition(currentX, panelBounds.top + 40.f);
+    catArea.setFillColor(applyAlpha(sf::Color(12, 12, 15, 180), alpha));
     window.draw(catArea);
 
     categoryBounds.clear();
@@ -170,74 +182,103 @@ void AssetBrowserPanel::drawCategoryList(sf::RenderWindow& window) {
         {"Fonts", AssetType::Font},
         {"Brushes", AssetType::Brush},
         {"Patterns", AssetType::Pattern},
-        {"AI", AssetType::AI}
+        {"AI Assets", AssetType::AI}
     };
 
-    float y = panelBounds.top + 45.f;
+    float y = panelBounds.top + 55.f;
     for (const auto& cat : cats) {
+        bool isSelected = (currentCategory == cat.second);
+
+        if (isSelected) {
+            sf::RectangleShape highlight(sf::Vector2f(76.f, 26.f));
+            highlight.setPosition(currentX + 2.f, y - 4.f);
+            highlight.setFillColor(applyAlpha(sf::Color(0, 122, 204, 80), alpha));
+            highlight.setOutlineThickness(1.f);
+            highlight.setOutlineColor(applyAlpha(sf::Color(0, 191, 255, 150), alpha));
+            window.draw(highlight);
+        }
+
         sf::Text t(cat.first, font, 10);
-        t.setPosition(panelBounds.left + 10.f, y);
-        t.setFillColor(currentCategory == cat.second ? sf::Color(0, 191, 255) : sf::Color(150, 150, 150));
+        t.setPosition(currentX + 10.f, y);
+        t.setFillColor(isSelected ? applyAlpha(sf::Color::White, alpha) : applyAlpha(sf::Color(130, 130, 140), alpha));
         window.draw(t);
-        categoryBounds.push_back({ sf::FloatRect(panelBounds.left, y, 75.f, 25.f), cat.second });
-        y += 25.f;
+        categoryBounds.push_back({ sf::FloatRect(currentX, y - 4.f, 80.f, 26.f), cat.second });
+        y += 32.f;
     }
 }
 
-void AssetBrowserPanel::drawAssetGrid(sf::RenderWindow& window) {
+void AssetBrowserPanel::drawAssetGrid(sf::RenderWindow& window, float currentX, sf::Uint8 alpha) {
     auto assets = assetManager.getAssetsByCategory(currentCategory);
-    float startX = panelBounds.left + 85.f;
-    float startY = panelBounds.top + 45.f;
+    float startX = currentX + 92.f;
+    float startY = panelBounds.top + 55.f;
 
     for (size_t i = 0; i < assets.size(); ++i) {
-        float ax = startX + (i % 2) * 75.f;
-        float ay = startY + (i / 2) * 90.f;
+        float ax = startX + (i % 2) * 85.f;
+        float ay = startY + (i / 2) * 105.f;
+        bool isSelected = (assets[i]->id == selectedAssetId);
 
-        sf::RectangleShape thumb(sf::Vector2f(60.f, 60.f));
-        thumb.setPosition(ax, ay);
+        // Frame Background
+        sf::RectangleShape frame(sf::Vector2f(75.f, 75.f));
+        frame.setPosition(ax, ay);
+        frame.setFillColor(applyAlpha(sf::Color(25, 25, 30, 200), alpha));
+        frame.setOutlineThickness(1.f);
+        frame.setOutlineColor(isSelected ? applyAlpha(sf::Color(0, 191, 255, 255), alpha) : applyAlpha(sf::Color(255, 255, 255, 10), alpha));
+        window.draw(frame);
 
-        if (assets[i]->id == selectedAssetId) {
-            thumb.setOutlineThickness(1.f);
-            thumb.setOutlineColor(sf::Color(0, 191, 255));
-        }
-        else {
-            thumb.setOutlineThickness(1.f);
-            thumb.setOutlineColor(sf::Color(255, 255, 255, 20));
-        }
-
+        // Thumbnail
+        sf::RectangleShape thumb(sf::Vector2f(65.f, 65.f));
+        thumb.setPosition(ax + 5.f, ay + 5.f);
         if (assets[i]->thumbnailLoaded) {
             thumb.setTexture(&assets[i]->thumbnail);
         }
         else {
-            thumb.setFillColor(sf::Color(40, 40, 45));
+            thumb.setFillColor(applyAlpha(sf::Color(40, 40, 45, 255), alpha));
         }
         window.draw(thumb);
 
+        // Name text
         sf::Text nameTxt(assets[i]->filename, font, 9);
-        nameTxt.setPosition(ax, ay + 64.f);
-        if (nameTxt.getLocalBounds().width > 65.f) {
-            std::string trunc = assets[i]->filename.substr(0, 8) + "...";
+        nameTxt.setPosition(ax, ay + 80.f);
+        if (nameTxt.getLocalBounds().width > 75.f) {
+            std::string trunc = assets[i]->filename.substr(0, 9) + "...";
             nameTxt.setString(trunc);
         }
-        nameTxt.setFillColor(sf::Color(200, 200, 200));
+        nameTxt.setFillColor(isSelected ? applyAlpha(sf::Color(0, 191, 255, 255), alpha) : applyAlpha(sf::Color(170, 170, 180), alpha));
         window.draw(nameTxt);
     }
 }
 
-void AssetBrowserPanel::drawProperties(sf::RenderWindow& window) {
-    sf::RectangleShape propArea(sf::Vector2f(panelBounds.width, 100.f));
-    propArea.setPosition(panelBounds.left, panelBounds.top + panelBounds.height - 100.f);
-    propArea.setFillColor(sf::Color(15, 15, 18, 200));
+void AssetBrowserPanel::drawProperties(sf::RenderWindow& window, float currentX, sf::Uint8 alpha) {
+    sf::RectangleShape propArea(sf::Vector2f(panelBounds.width, 110.f));
+    propArea.setPosition(currentX, panelBounds.top + panelBounds.height - 110.f);
+    propArea.setFillColor(applyAlpha(sf::Color(22, 22, 26, 255), alpha));
     propArea.setOutlineThickness(1.f);
-    propArea.setOutlineColor(sf::Color(255, 255, 255, 15));
+    propArea.setOutlineColor(applyAlpha(sf::Color(255, 255, 255, 20), alpha));
     window.draw(propArea);
+
+    sf::RectangleShape propHeader(sf::Vector2f(panelBounds.width, 25.f));
+    propHeader.setPosition(currentX, panelBounds.top + panelBounds.height - 110.f);
+    propHeader.setFillColor(applyAlpha(sf::Color(30, 30, 35, 255), alpha));
+    window.draw(propHeader);
+
+    sf::Text headerTxt("PROPERTIES", font, 9);
+    headerTxt.setPosition(currentX + 15.f, panelBounds.top + panelBounds.height - 104.f);
+    headerTxt.setFillColor(applyAlpha(sf::Color(130, 130, 140), alpha));
+    headerTxt.setLetterSpacing(1.5f);
+    window.draw(headerTxt);
 
     AssetRecord* selectedAsset = assetManager.getAsset(selectedAssetId);
     if (selectedAsset) {
-        sf::Text propTxt("File: " + selectedAsset->filename + "\nType: " + selectedAsset->extension + "\nSize: " + std::to_string(selectedAsset->fileSize / 1024) + " KB", font, 10);
-        propTxt.setPosition(panelBounds.left + 10.f, panelBounds.top + panelBounds.height - 90.f);
-        propTxt.setFillColor(sf::Color(180, 180, 180));
-        propTxt.setLineSpacing(1.5f);
+        sf::Text propTxt("Name:  " + selectedAsset->filename + "\nType:  " + selectedAsset->extension + "\nSize:  " + std::to_string(selectedAsset->fileSize / 1024) + " KB", font, 10);
+        propTxt.setPosition(currentX + 15.f, panelBounds.top + panelBounds.height - 75.f);
+        propTxt.setFillColor(applyAlpha(sf::Color(200, 200, 210), alpha));
+        propTxt.setLineSpacing(1.6f);
+        window.draw(propTxt);
+    }
+    else {
+        sf::Text propTxt("No asset selected.", font, 10);
+        propTxt.setPosition(currentX + 15.f, panelBounds.top + panelBounds.height - 75.f);
+        propTxt.setFillColor(applyAlpha(sf::Color(100, 100, 110), alpha));
         window.draw(propTxt);
     }
 }

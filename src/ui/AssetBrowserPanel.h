@@ -30,19 +30,21 @@ private:
     bool isDragging;
     bool isResizing;
     bool isVisible;
+    float animProgress; // Controls the fade & slide
     sf::Vector2f dragStart;
 
     sf::RectangleShape background;
-    sf::RectangleShape topBar;
     sf::RectangleShape resizeHandle;
 
     sf::FloatRect btnImportBounds;
     std::vector<std::pair<sf::FloatRect, AssetType>> categoryBounds;
 
-    void drawTopBar(sf::RenderWindow& window);
-    void drawCategoryList(sf::RenderWindow& window);
-    void drawAssetGrid(sf::RenderWindow& window);
-    void drawProperties(sf::RenderWindow& window);
+    void drawTopBar(sf::RenderWindow& window, float currentX, sf::Uint8 alpha);
+    void drawCategoryList(sf::RenderWindow& window, float currentX, sf::Uint8 alpha);
+    void drawAssetGrid(sf::RenderWindow& window, float currentX, sf::Uint8 alpha);
+    void drawProperties(sf::RenderWindow& window, float currentX, sf::Uint8 alpha);
     void handleDragAndDrop(const sf::Vector2f& dropPos, const sf::RenderWindow& window, Canvas& canvas, int currentFrame);
     void triggerImport();
+
+    sf::Color applyAlpha(sf::Color color, sf::Uint8 alpha) const;
 };
