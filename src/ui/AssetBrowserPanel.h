@@ -7,7 +7,7 @@ enum class BrowserView { Grid, List };
 
 class AssetBrowserPanel {
 public:
-    AssetBrowserPanel(AssetManager& am);
+    AssetBrowserPanel(AssetManager& am, const sf::Font& font);
     void handleEvent(const sf::Event& event, const sf::RenderWindow& window, Canvas& canvas);
     void update(float dt);
     void draw(sf::RenderWindow& window);
@@ -18,6 +18,7 @@ public:
 
 private:
     AssetManager& assetManager;
+    const sf::Font& font;
     sf::FloatRect panelBounds;
     AssetType currentCategory;
     std::string searchQuery;
@@ -33,6 +34,9 @@ private:
     sf::RectangleShape background;
     sf::RectangleShape topBar;
     sf::RectangleShape resizeHandle;
+
+    sf::FloatRect btnImportBounds;
+    std::vector<std::pair<sf::FloatRect, AssetType>> categoryBounds;
 
     void drawTopBar(sf::RenderWindow& window);
     void drawCategoryList(sf::RenderWindow& window);

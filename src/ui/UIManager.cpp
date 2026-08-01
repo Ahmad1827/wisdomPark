@@ -108,7 +108,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     warnOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
     warnOverlay.setFillColor(sf::Color(0, 0, 0, 180));
 
-    assetBrowser = std::make_unique<AssetBrowserPanel>(assetManager);
+    assetBrowser = std::make_unique<AssetBrowserPanel>(assetManager, font);
     assetBrowser->setProject("CurrentProject");
     assetBrowser->setBounds(sf::FloatRect(0.f, 40.f, 300.f, 1080.f - 40.f));
 
