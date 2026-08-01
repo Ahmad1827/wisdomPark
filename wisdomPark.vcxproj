@@ -151,6 +151,7 @@
     <ClCompile Include="src\ai\LocalPythonBridge.cpp" />
     <ClCompile Include="src\ai\AIManager.cpp" />
     <ClCompile Include="src\Application.cpp" />
+    <ClCompile Include="src\core\AssetManager.cpp" />
     <ClCompile Include="src\core\Canvas.cpp" />
     <ClCompile Include="src\core\ProjectManager.cpp" />
     <ClCompile Include="src\core\SelectionManager.cpp" />
@@ -219,6 +220,7 @@
     <ClCompile Include="src\tools\GradientTool.cpp" />
     <ClCompile Include="src\tools\TextTool.cpp" />
     <ClCompile Include="src\tools\SpriteSheetStudioTool.cpp" />
+    <ClCompile Include="src\ui\AssetBrowserPanel.cpp" />
     <ClCompile Include="src\ui\KeybindSettingsPanel.cpp" />
     <ClCompile Include="src\core\Timeline.cpp" />
     <ClCompile Include="src\main.cpp" />
@@ -248,6 +250,7 @@
     <ClInclude Include="src\ai\LocalPythonBridge.h" />
     <ClInclude Include="src\Application.h" />
     <ClInclude Include="src\core\AppState.h" />
+    <ClInclude Include="src\core\AssetManager.h" />
     <ClInclude Include="src\core\Canvas.h" />
     <ClInclude Include="src\core\BrushManager.h" />
     <ClInclude Include="src\core\AudioManager.h" />
@@ -329,6 +332,7 @@
     <ClInclude Include="src\SpriteEngine\UI\Source\Utils\NativFileDialog.h" />
     <ClInclude Include="src\tools\CanvasTool.h" />
     <ClInclude Include="src\tools\SpriteSheetStudioTool.h" />
+    <ClInclude Include="src\ui\AssetBrowserPanel.h" />
     <ClInclude Include="src\ui\AudioPanel.h" />
     <ClInclude Include="src\ui\AIPanel.h" />
     <ClInclude Include="src\ui\AIReviewModal.h" />

@@ -108,6 +108,10 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     warnOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
     warnOverlay.setFillColor(sf::Color(0, 0, 0, 180));
 
+    assetBrowser = std::make_unique<AssetBrowserPanel>(assetManager);
+    assetBrowser->setProject("CurrentProject");
+    assetBrowser->setBounds(sf::FloatRect(0.f, 40.f, 300.f, 1080.f - 40.f));
+
 
     warnBox.setSize(sf::Vector2f(600.f, 250.f));
     warnBox.setOrigin(300.f, 125.f);
@@ -1012,6 +1016,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
     }
     else if (currentState == AppState::Painting) {
+        if (assetBrowser) {
+            assetBrowser->handleEvent(event, window, canvas);
+        }
 
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F8) {
             m_debugUseSpriteStudio = !m_debugUseSpriteStudio;
@@ -1748,6 +1755,9 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         bottomTimeline.update(dt, focusMode);
         audioPanel.update(dt);
         g_aiPanel.update(dt);
+        if (assetBrowser) {
+            assetBrowser->update(dt);
+        }
 
         audioPanel.updatePlayback(timeline.getCurrentFrame(), timeline.getFps(), timeline.isPlaying());
 
@@ -1976,6 +1986,9 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         audioPanel.draw(window);
         g_aiPanel.draw(window);
         g_aiReviewModal.draw(window);
+        if (assetBrowser) {
+            assetBrowser->draw(window);
+        }
 
         if (showingText) window.draw(uiText);
         if (isTypingPrompt) { window.draw(promptBox); window.draw(promptDisplay); }

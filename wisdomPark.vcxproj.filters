@@ -300,6 +300,12 @@
     <ClCompile Include="src\ui\GradientPanel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\AssetManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ui\AssetBrowserPanel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\ai\AIHelper.h">
@@ -633,6 +639,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\GradientPanel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\AssetManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ui\AssetBrowserPanel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -33,6 +33,8 @@
 #include "../ui/GradientPanel.h"
 #include "../tools/GradientTool.h"
 #include "../core/GradientSystem.h"
+#include "../core/AssetManager.h"
+#include "AssetBrowserPanel.h"
 
 enum class MenuState {
     Main,
@@ -61,6 +63,8 @@ struct LightRay {
 
 class UIManager {
 private:
+    AssetManager assetManager;
+    std::unique_ptr<AssetBrowserPanel> assetBrowser;
     GradientConfig m_gradientConfig;
     GradientPanel m_gradientPanel;
     TopMenuBar m_topMenuBar;
