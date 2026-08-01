@@ -1280,6 +1280,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     canvas.mergeDown(timeline.getCurrentFrame());
                     showMessage("Merged Object Down", sf::Color::Green);
                 }
+                if (event.key.code == sf::Keyboard::B && event.key.control) {
+                    if (assetBrowser) {
+                        assetBrowser->toggle();
+                        showMessage(assetBrowser->getIsVisible() ? "Asset Browser Opened" : "Asset Browser Closed", sf::Color::Cyan);
+                    }
+                }
                 if (keybindManager.isActionTriggered("edit_del_sel", event)) {
                     if (canvas.getActiveTool() == ToolType::Select) canvas.deleteSelection(timeline.getCurrentFrame());
                 }

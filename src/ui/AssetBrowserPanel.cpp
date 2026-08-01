@@ -3,10 +3,18 @@
 
 AssetBrowserPanel::AssetBrowserPanel(AssetManager& am)
     : assetManager(am), currentCategory(AssetType::Image), viewMode(BrowserView::Grid),
-    selectedAsset(nullptr), panelWidth(300.f), isCollapsed(false), isDragging(false), isResizing(false) {
+    selectedAsset(nullptr), panelWidth(300.f), isCollapsed(false), isDragging(false), isResizing(false), isVisible(false) {
     background.setFillColor(sf::Color(35, 35, 40));
     topBar.setFillColor(sf::Color(45, 45, 50));
     resizeHandle.setFillColor(sf::Color(60, 60, 65));
+}
+
+void AssetBrowserPanel::toggle() {
+    isVisible = !isVisible;
+}
+
+bool AssetBrowserPanel::getIsVisible() const {
+    return isVisible;
 }
 
 void AssetBrowserPanel::setProject(const std::string& projPath) {
@@ -32,6 +40,8 @@ void AssetBrowserPanel::setBounds(const sf::FloatRect& bounds) {
 }
 
 void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWindow& window, Canvas& canvas) {
+    if (!isVisible) return;
+
     if (event.type == sf::Event::MouseButtonPressed) {
         sf::Vector2f mousePos(static_cast<float>(event.mouseButton.x), static_cast<float>(event.mouseButton.y));
         if (resizeHandle.getGlobalBounds().contains(mousePos)) {
@@ -83,12 +93,16 @@ void AssetBrowserPanel::handleDragAndDrop(const sf::Vector2f& dropPos, const sf:
 }
 
 void AssetBrowserPanel::update(float dt) {
+    if (!isVisible) return;
+
     if (selectedAsset && !selectedAsset->thumbnailLoaded) {
         assetManager.requestThumbnail(selectedAsset);
     }
 }
 
 void AssetBrowserPanel::draw(sf::RenderWindow& window) {
+    if (!isVisible) return;
+
     window.draw(background);
     if (!isCollapsed) {
         drawTopBar(window);

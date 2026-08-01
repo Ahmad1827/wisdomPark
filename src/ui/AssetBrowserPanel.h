@@ -13,6 +13,8 @@ public:
     void draw(sf::RenderWindow& window);
     void setBounds(const sf::FloatRect& bounds);
     void setProject(const std::string& projPath);
+    void toggle();
+    bool getIsVisible() const;
 
 private:
     AssetManager& assetManager;
@@ -25,6 +27,7 @@ private:
     bool isCollapsed;
     bool isDragging;
     bool isResizing;
+    bool isVisible;
     sf::Vector2f dragStart;
 
     sf::RectangleShape background;
