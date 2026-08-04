@@ -22,6 +22,9 @@
 #include <windows.h>
 #include <shellapi.h>
 
+static bool g_resDropdownOpen = false;
+static int g_resW = 1280;
+static int g_resH = 720;
 static WNDPROC g_originalWndProc = nullptr;
 static std::vector<std::string> g_droppedFiles;
 
@@ -86,6 +89,9 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     uiText.setCharacterSize(30);
     uiText.setOutlineColor(sf::Color(0, 0, 0, 150));
     uiText.setOutlineThickness(2.0f);
+
+    uiFullscreen = false;
+    uiBorderless = true;
 
     promptBox.setSize(sf::Vector2f(600.f, 50.f));
     promptBox.setPosition(1920.f / 2.f - 300.f, 1080.f - 300.f);
@@ -489,6 +495,7 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         sf::RectangleShape line(sf::Vector2f(bounds.width - 60.f, 2.f));
         line.setPosition(bounds.left + 30.f, bounds.top + 65.f);
         line.setFillColor(sf::Color(255, 255, 255, 40));
+        window.draw(line);
         };
 
     auto drawToggle = [&](float x, float y, const std::string& label, bool active, const std::string& hKey) {
@@ -533,14 +540,60 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         window.draw(btnR);
         };
 
-    drawCard(sf::FloatRect(350.f, 220.f, 550.f, 350.f), "Display & Interface");
+    auto drawDropdown = [&](float x, float y, const std::string& label, const std::string& currentVal, bool isOpen, const std::vector<std::string>& options) {
+        sf::Text t(label, font, 20);
+        t.setFillColor(sf::Color(220, 220, 220));
+        t.setPosition(x, y);
+        window.draw(t);
+
+        sf::RectangleShape box(sf::Vector2f(160.f, 30.f));
+        box.setPosition(x + 180.f, y - 5.f);
+        box.setFillColor(sf::Color(30, 30, 35));
+        box.setOutlineThickness(1.f);
+        box.setOutlineColor(sf::Color(100, 100, 110));
+        window.draw(box);
+
+        sf::Text v(currentVal, font, 16);
+        v.setFillColor(sf::Color(255, 200, 100));
+        v.setPosition(x + 190.f, y + 1.f);
+        window.draw(v);
+
+        sf::Text arrow(isOpen ? "^" : "v", font, 16);
+        arrow.setFillColor(sf::Color(200, 200, 200));
+        arrow.setPosition(x + 320.f, y + 1.f);
+        window.draw(arrow);
+
+        if (isOpen) {
+            sf::RectangleShape dropBg(sf::Vector2f(160.f, static_cast<float>(options.size()) * 30.f));
+            dropBg.setPosition(x + 180.f, y + 25.f);
+            dropBg.setFillColor(sf::Color(40, 40, 45));
+            dropBg.setOutlineThickness(1.f);
+            dropBg.setOutlineColor(sf::Color(100, 100, 110));
+            window.draw(dropBg);
+
+            for (size_t i = 0; i < options.size(); ++i) {
+                sf::Text optT(options[i], font, 16);
+                optT.setFillColor(sf::Color(200, 200, 200));
+                optT.setPosition(x + 190.f, y + 25.f + (static_cast<float>(i) * 30.f) + 3.f);
+                window.draw(optT);
+            }
+        }
+        };
+
+    // Height expanded to 380.f to fit dropdown perfectly
+    drawCard(sf::FloatRect(350.f, 220.f, 550.f, 380.f), "Display & Interface");
     drawToggle(380.f, 310.f, "Fullscreen Mode", uiFullscreen, "set_t_fs");
     drawToggle(380.f, 360.f, "Borderless Window", uiBorderless, "set_t_bl");
     drawToggle(380.f, 410.f, "Vertical Sync", uiVsync, "set_t_vs");
     drawStepper(380.f, 460.f, "Frame Limit", std::to_string(uiFpsLimit), "set_s_fpsL", "set_s_fpsR");
-    drawStepper(380.f, 510.f, "UI Theme", "Modern Dark", "set_s_thmL", "set_s_thmR");
 
-    drawCard(sf::FloatRect(1020.f, 220.f, 550.f, 350.f), "Saving & Exporting");
+    std::string resStr = std::to_string(g_resW) + " x " + std::to_string(g_resH);
+    std::vector<std::string> resOpts = { "1280 x 720", "1600 x 900", "1920 x 1080" };
+    drawDropdown(380.f, 510.f, "Resolution", resStr, g_resDropdownOpen, resOpts);
+
+    drawStepper(380.f, 560.f, "UI Theme", "Modern Dark", "set_s_thmL", "set_s_thmR");
+
+    drawCard(sf::FloatRect(1020.f, 220.f, 550.f, 380.f), "Saving & Exporting");
     drawToggle(1050.f, 310.f, "Enable Auto-Backup", uiAutoBackup, "set_t_ab");
     drawStepper(1050.f, 360.f, "Autosave Interval", "5 Mins", "set_s_asL", "set_s_asR");
     drawStepper(1050.f, 410.f, "Default Directory", "/Projects", "set_s_dirL", "set_s_dirR");
@@ -927,34 +980,103 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     return;
                 }
 
+                // Sync data for the dropdown to render properly
+                g_resW = settings.resWidth;
+                g_resH = settings.resHeight;
+
                 auto checkToggle = [&](float x, float y) { return sf::FloatRect(x, y, 300.f, 30.f).contains(mousePos); };
                 auto checkStepperL = [&](float x, float y) { return sf::FloatRect(x + 190.f, y - 10.f, 40.f, 40.f).contains(mousePos); };
                 auto checkStepperR = [&](float x, float y) { return sf::FloatRect(x + 260.f, y - 10.f, 40.f, 40.f).contains(mousePos); };
 
-                if (checkToggle(380.f, 310.f)) uiFullscreen = !uiFullscreen;
-                if (checkToggle(380.f, 360.f)) { uiFullscreen = false; uiBorderless = false; }
-                if (checkToggle(380.f, 410.f)) uiVsync = !uiVsync;
+                bool displayChanged = false;
 
-                if (checkStepperL(380.f, 460.f)) uiFpsLimit = (uiFpsLimit == 60) ? 240 : ((uiFpsLimit == 144) ? 60 : 144);
-                if (checkStepperR(380.f, 460.f)) uiFpsLimit = (uiFpsLimit == 60) ? 144 : ((uiFpsLimit == 144) ? 240 : 60);
+                // 1. Prioritize Dropdown clicks if the menu is open
+                if (g_resDropdownOpen) {
+                    sf::FloatRect dropBounds(380.f + 180.f, 510.f + 25.f, 160.f, 3 * 30.f);
+                    if (dropBounds.contains(mousePos)) {
+                        int index = static_cast<int>(mousePos.y - (510.f + 25.f)) / 30;
+                        if (index == 0) { settings.resWidth = 1280; settings.resHeight = 720; }
+                        else if (index == 1) { settings.resWidth = 1600; settings.resHeight = 900; }
+                        else if (index == 2) { settings.resWidth = 1920; settings.resHeight = 1080; }
 
-                if (checkToggle(1050.f, 310.f)) uiAutoBackup = !uiAutoBackup;
-                if (checkToggle(380.f, 710.f)) uiHwAccel = !uiHwAccel;
-
-                if (checkStepperL(380.f, 760.f)) uiAnimFps = (uiAnimFps == 12) ? 60 : ((uiAnimFps == 24) ? 12 : 24);
-                if (checkStepperR(380.f, 760.f)) uiAnimFps = (uiAnimFps == 12) ? 24 : ((uiAnimFps == 24) ? 60 : 12);
-
-                if (checkStepperL(380.f, 810.f)) uiHistorySize = (uiHistorySize == 15) ? 50 : ((uiHistorySize == 30) ? 15 : 30);
-                if (checkStepperR(380.f, 810.f)) uiHistorySize = (uiHistorySize == 15) ? 30 : ((uiHistorySize == 30) ? 50 : 15);
-
-                if (checkStepperL(1050.f, 710.f)) AIManager::getInstance().cycleProvider(-1);
-                if (checkStepperR(1050.f, 710.f)) AIManager::getInstance().cycleProvider(1);
-
-                if (sf::FloatRect(1050.f + 200.f, 760.f - 10.f, 150.f, 40.f).contains(mousePos)) {
-                    g_typingApiKey = true;
+                        g_resW = settings.resWidth;
+                        g_resH = settings.resHeight;
+                        displayChanged = true;
+                    }
+                    g_resDropdownOpen = false; // Always close the dropdown after ANY click
                 }
+                // 2. Check if they clicked the Dropdown box to open it
+                else if (sf::FloatRect(380.f + 180.f, 510.f - 5.f, 160.f, 30.f).contains(mousePos)) {
+                    g_resDropdownOpen = true;
+                }
+                // 3. Process normal interface elements
                 else {
-                    g_typingApiKey = false;
+                    if (checkToggle(380.f, 310.f)) {
+                        uiFullscreen = !uiFullscreen;
+                        if (uiFullscreen) uiBorderless = false;
+                        settings.fullscreen = uiFullscreen;
+                        settings.borderless = uiBorderless;
+                        displayChanged = true;
+                    }
+
+                    if (checkToggle(380.f, 360.f)) {
+                        uiBorderless = !uiBorderless;
+                        if (uiBorderless) uiFullscreen = false;
+                        settings.fullscreen = uiFullscreen;
+                        settings.borderless = uiBorderless;
+                        displayChanged = true;
+                    }
+
+                    if (checkToggle(380.f, 410.f)) {
+                        uiVsync = !uiVsync;
+                        settings.vsync = uiVsync;
+                        window.setVerticalSyncEnabled(uiVsync);
+                    }
+
+                    if (checkStepperL(380.f, 460.f)) { uiFpsLimit = (uiFpsLimit == 60) ? 240 : ((uiFpsLimit == 144) ? 60 : 144); settings.fpsLimit = uiFpsLimit; window.setFramerateLimit(uiFpsLimit); }
+                    if (checkStepperR(380.f, 460.f)) { uiFpsLimit = (uiFpsLimit == 60) ? 144 : ((uiFpsLimit == 144) ? 240 : 60); settings.fpsLimit = uiFpsLimit; window.setFramerateLimit(uiFpsLimit); }
+
+                    if (checkToggle(1050.f, 310.f)) { uiAutoBackup = !uiAutoBackup; settings.autoBackup = uiAutoBackup; }
+                    if (checkToggle(380.f, 710.f)) { uiHwAccel = !uiHwAccel; settings.hwAccel = uiHwAccel; }
+
+                    if (checkStepperL(380.f, 760.f)) { uiAnimFps = (uiAnimFps == 12) ? 60 : ((uiAnimFps == 24) ? 12 : 24); settings.animFps = uiAnimFps; }
+                    if (checkStepperR(380.f, 760.f)) { uiAnimFps = (uiAnimFps == 12) ? 24 : ((uiAnimFps == 24) ? 60 : 12); settings.animFps = uiAnimFps; }
+
+                    if (checkStepperL(380.f, 810.f)) { uiHistorySize = (uiHistorySize == 15) ? 50 : ((uiHistorySize == 30) ? 15 : 30); settings.historySize = uiHistorySize; }
+                    if (checkStepperR(380.f, 810.f)) { uiHistorySize = (uiHistorySize == 15) ? 30 : ((uiHistorySize == 30) ? 50 : 15); settings.historySize = uiHistorySize; }
+
+                    if (checkStepperL(1050.f, 710.f)) AIManager::getInstance().cycleProvider(-1);
+                    if (checkStepperR(1050.f, 710.f)) AIManager::getInstance().cycleProvider(1);
+                }
+
+                SettingsManager::saveSettings(settings);
+
+                // --- GUARANTEED WINDOW BEHAVIOR ---
+                if (displayChanged) {
+                    if (uiFullscreen) {
+                        window.create(sf::VideoMode::getDesktopMode(), "Wisdom Park", sf::Style::Fullscreen);
+                    }
+                    else if (uiBorderless) {
+                        window.create(sf::VideoMode::getDesktopMode(), "Wisdom Park", sf::Style::None);
+                        window.setPosition(sf::Vector2i(0, 0));
+                    }
+                    else {
+                        // Regular Windowed Mode (sf::Style::Default implies Titlebar | Resize | Close)
+                        window.create(sf::VideoMode(settings.resWidth, settings.resHeight), "Wisdom Park", sf::Style::Default);
+
+                        // Recenter the window to the monitor strictly using the dropdown dimensions
+                        sf::VideoMode desktop = sf::VideoMode::getDesktopMode();
+                        window.setPosition(sf::Vector2i(
+                            std::max(0, static_cast<int>((desktop.width - settings.resWidth) / 2)),
+                            std::max(0, static_cast<int>((desktop.height - settings.resHeight) / 2))
+                        ));
+                    }
+
+                    window.setFramerateLimit(uiFpsLimit);
+                    window.setVerticalSyncEnabled(uiVsync);
+
+                    // Maintain standard UI logical size bounds
+                    window.setView(sf::View(sf::FloatRect(0.f, 0.f, 1920.f, 1080.f)));
                 }
             }
             else if (currentMenuState == MenuState::Tutorials) {
@@ -1518,7 +1640,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
                     bool hasActiveSel = (canvas.getActiveTool() == ToolType::Select || canvas.getActiveTool() == ToolType::MagicWand);
                     if (event.type == sf::Event::Resized) {
-
+                        // Ensure the camera maintains the 1920x1080 logical coordinate space
+                        /*sf::View view(sf::FloatRect(0.f, 0.f, 1920.f, 1080.f));
+                        window.setView(view);*/
                     }
 
                     std::string topMenuAction = m_topMenuBar.handleEvent(event, mousePos, static_cast<float>(window.getSize().x));

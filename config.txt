@@ -1,5 +1,11 @@
-openrouter
-anthropic=
-gemini=
-openai=
-openrouter=ASDA
+none
+fullscreen=0
+borderless=0
+vsync=1
+fpsLimit=60
+resWidth=1280
+resHeight=720
+autoBackup=1
+hwAccel=1
+animFps=12
+historySize=30
