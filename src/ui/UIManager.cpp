@@ -1266,12 +1266,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (isTypingPrompt) return;
 
                 if (event.key.code == sf::Keyboard::Escape) {
-                    if (canvas.getSelection().getState() == SelectionState::Floating) {
+                    /*if (canvas.getSelection().getState() == SelectionState::Floating) {
                         canvas.undo();
                         return;
                     }
                     currentMenuState = MenuState::Settings;
-                    currentState = AppState::Welcome;
+                    currentState = AppState::Welcome*/;
                 }
 
                 if (event.key.code == sf::Keyboard::G) {
