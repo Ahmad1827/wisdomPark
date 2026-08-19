@@ -225,6 +225,7 @@
     <ClCompile Include="src\core\Timeline.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\ui\LeftToolbar.cpp" />
+    <ClCompile Include="src\ui\Panels\ToolDock.cpp" />
     <ClCompile Include="src\ui\RightProperties.cpp" />
     <ClCompile Include="src\ui\Screens\ProjectBrowser.cpp" />
     <ClCompile Include="src\ui\Screens\ExportModal.cpp" />
@@ -242,6 +243,9 @@
     <ClCompile Include="src\ui\TextPanel.cpp" />
     <ClCompile Include="src\ui\TopMenuBar.cpp" />
     <ClCompile Include="src\ui\UIManager.cpp" />
+    <ClCompile Include="src\ui\UITheme.cpp" />
+    <ClCompile Include="src\ui\Widgets\IconButton.cpp" />
+    <ClCompile Include="src\ui\WorkspaceLayout.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\ai\AIHelper.h" />
@@ -337,6 +341,7 @@
     <ClInclude Include="src\ui\AIPanel.h" />
     <ClInclude Include="src\ui\AIReviewModal.h" />
     <ClInclude Include="src\ui\GradientPanel.h" />
+    <ClInclude Include="src\ui\Panels\ToolDock.h" />
     <ClInclude Include="src\ui\TextPanel.h" />
     <ClInclude Include="src\ui\PerspectivePanel.h" />
     <ClInclude Include="src\ui\KeybindSettingsPanel.h" />
@@ -357,6 +362,9 @@
     <ClInclude Include="src\ui\Screens\WelcomeScreen.h" />
     <ClInclude Include="src\ui\TopMenuBar.h" />
     <ClInclude Include="src\ui\UIManager.h" />
+    <ClInclude Include="src\ui\UITheme.h" />
+    <ClInclude Include="src\ui\Widgets\IconButton.h" />
+    <ClInclude Include="src\ui\WorkspaceLayout.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
