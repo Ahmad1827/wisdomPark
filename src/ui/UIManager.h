@@ -78,6 +78,7 @@ private:
     WisdomUI::WorkspaceLayout m_workspaceLayout;
     WisdomUI::RightDockTabs m_rightDockTabs;
     WisdomUI::TimelineHeader m_timelineHeader;
+    bool m_showTimeline{ false };
     AssetManager assetManager;
     std::unique_ptr<AssetBrowserPanel> assetBrowser;
     GradientConfig m_gradientConfig;

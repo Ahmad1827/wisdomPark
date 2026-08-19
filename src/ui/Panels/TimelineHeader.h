@@ -14,7 +14,8 @@ namespace WisdomUI {
             std::function<void()> onAddFrame,
             std::function<void()> onDuplicateFrame,
             std::function<void()> onDeleteFrame,
-            std::function<void()> onToggleOnion);
+            std::function<void()> onToggleOnion,
+            std::function<void()> onCloseTimeline);
 
         void SetBounds(const sf::FloatRect& bounds);
         void SyncState(bool isPlaying, int currentFrame, int totalFrames, float fps, bool onionEnabled);
@@ -36,18 +37,21 @@ namespace WisdomUI {
         std::function<void()> m_onDuplicateFrame;
         std::function<void()> m_onDeleteFrame;
         std::function<void()> m_onToggleOnion;
+        std::function<void()> m_onCloseTimeline;
 
         sf::FloatRect m_playBtnBounds;
         sf::FloatRect m_addBtnBounds;
         sf::FloatRect m_dupBtnBounds;
         sf::FloatRect m_delBtnBounds;
         sf::FloatRect m_onionBtnBounds;
+        sf::FloatRect m_closeBtnBounds;
 
         float m_playHover{ 0.0f };
         float m_addHover{ 0.0f };
         float m_dupHover{ 0.0f };
         float m_delHover{ 0.0f };
         float m_onionHover{ 0.0f };
+        float m_closeHover{ 0.0f };
     };
 
 }

@@ -11,13 +11,15 @@ namespace WisdomUI {
         std::function<void()> onAddFrame,
         std::function<void()> onDuplicateFrame,
         std::function<void()> onDeleteFrame,
-        std::function<void()> onToggleOnion) {
+        std::function<void()> onToggleOnion,
+        std::function<void()> onCloseTimeline) {
         m_font = font;
         m_onTogglePlay = onTogglePlay;
         m_onAddFrame = onAddFrame;
         m_onDuplicateFrame = onDuplicateFrame;
         m_onDeleteFrame = onDeleteFrame;
         m_onToggleOnion = onToggleOnion;
+        m_onCloseTimeline = onCloseTimeline;
     }
 
     void TimelineHeader::SetBounds(const sf::FloatRect& bounds) {
@@ -28,6 +30,7 @@ namespace WisdomUI {
         m_dupBtnBounds = sf::FloatRect(bounds.left + 252.0f, y, 55.0f, 22.0f);
         m_delBtnBounds = sf::FloatRect(bounds.left + 312.0f, y, 55.0f, 22.0f);
         m_onionBtnBounds = sf::FloatRect(bounds.left + 372.0f, y, 75.0f, 22.0f);
+        m_closeBtnBounds = sf::FloatRect(bounds.left + bounds.width - 32.0f, y, 22.0f, 22.0f);
     }
 
     void TimelineHeader::SyncState(bool isPlaying, int currentFrame, int totalFrames, float fps, bool onionEnabled) {
@@ -48,6 +51,7 @@ namespace WisdomUI {
         updateHov(m_dupBtnBounds, m_dupHover);
         updateHov(m_delBtnBounds, m_delHover);
         updateHov(m_onionBtnBounds, m_onionHover);
+        updateHov(m_closeBtnBounds, m_closeHover);
     }
 
     bool TimelineHeader::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
@@ -59,6 +63,7 @@ namespace WisdomUI {
             if (m_dupBtnBounds.contains(mousePos)) { if (m_onDuplicateFrame) m_onDuplicateFrame(); return true; }
             if (m_delBtnBounds.contains(mousePos)) { if (m_onDeleteFrame) m_onDeleteFrame(); return true; }
             if (m_onionBtnBounds.contains(mousePos)) { if (m_onToggleOnion) m_onToggleOnion(); return true; }
+            if (m_closeBtnBounds.contains(mousePos)) { if (m_onCloseTimeline) m_onCloseTimeline(); return true; }
 
             if (m_bounds.contains(mousePos)) return true;
         }
@@ -102,12 +107,13 @@ namespace WisdomUI {
         drawBtn(m_dupBtnBounds, "Duplicate", m_dupHover);
         drawBtn(m_delBtnBounds, "Delete", m_delHover);
         drawBtn(m_onionBtnBounds, "Onion Skin", m_onionHover, m_onionEnabled);
+        drawBtn(m_closeBtnBounds, "v", m_closeHover);
 
         std::string infoStr = "Frame: " + std::to_string(m_currentFrame + 1) + " / " + std::to_string(m_totalFrames) +
             "  (" + std::to_string(static_cast<int>(m_fps)) + " FPS)";
         sf::Text info(infoStr, m_font, 11);
         info.setFillColor(Theme::TextSecondary);
-        info.setPosition(m_bounds.left + m_bounds.width - info.getLocalBounds().width - 20.0f, m_bounds.top + 6.0f);
+        info.setPosition(m_bounds.left + m_bounds.width - info.getLocalBounds().width - 45.0f, m_bounds.top + 6.0f);
         window.draw(info);
     }
 

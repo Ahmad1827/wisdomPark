@@ -319,16 +319,19 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         }
     );
 
+    m_statusBar.Initialize(font, [this]() {
+        m_showTimeline = !m_showTimeline;
+        });
+
     m_timelineHeader.Initialize(
         font,
-        [this, baseCanvas]() { /* handled dynamically via timeline */ },
-        [this, baseCanvas]() { /* handled dynamically */ },
-        [this, baseCanvas]() { /* handled dynamically */ },
-        [this, baseCanvas]() { /* handled dynamically */ },
-        [this, baseCanvas]() { baseCanvas->setOnionSkin(!baseCanvas->isOnionSkinEnabled(), baseCanvas->getOnionSkinPrevOpacity(), baseCanvas->getOnionSkinNextOpacity()); }
+        [this, &timeline = const_cast<Timeline&>(*reinterpret_cast<Timeline*>(0))]() {},
+        [this, baseCanvas]() {},
+        [this, baseCanvas]() {},
+        [this, baseCanvas]() {},
+        [this, baseCanvas]() { baseCanvas->setOnionSkin(!baseCanvas->isOnionSkinEnabled(), baseCanvas->getOnionSkinPrevOpacity(), baseCanvas->getOnionSkinNextOpacity()); },
+        [this]() { m_showTimeline = false; }
     );
-
-    m_statusBar.Initialize(font);
 
     m_toolDock.AddTool("brush", "Brush Tool (B)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Brush); m_toolDock.SetActiveTool("brush"); });
     m_toolDock.AddTool("pencil", "Pencil Tool (P)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Pencil); m_toolDock.SetActiveTool("pencil"); });
@@ -1279,7 +1282,60 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         )) return;
         if (m_toolDock.HandleEvent(event, window)) return;
         if (m_rightDockTabs.HandleEvent(event, window)) return;
-        if (m_timelineHeader.HandleEvent(event, window)) return;
+        if (m_statusBar.HandleEvent(event, window)) return;
+
+        if (m_showTimeline) {
+            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                float timelineY = 1080.0f - WisdomUI::Theme::StatusBarHeight - WisdomUI::Theme::TimelineHeight;
+                sf::FloatRect headerBounds(0.0f, timelineY, 1920.0f, 28.0f);
+                sf::FloatRect playBtn(120.0f, headerBounds.top + 3.0f, 65.0f, 22.0f);
+                sf::FloatRect addBtn(192.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
+                sf::FloatRect dupBtn(252.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
+                sf::FloatRect delBtn(312.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
+                sf::FloatRect onionBtn(372.0f, headerBounds.top + 3.0f, 75.0f, 22.0f);
+                sf::FloatRect closeBtn(1920.0f - 32.0f, headerBounds.top + 3.0f, 22.0f, 22.0f);
+
+                if (playBtn.contains(mousePos)) { timeline.togglePlayback(); return; }
+                if (addBtn.contains(mousePos)) { canvas.addFrame(timeline.getCurrentFrame()); timeline.addFrameAfter(timeline.getCurrentFrame()); timeline.nextFrame(); return; }
+                if (dupBtn.contains(mousePos)) { canvas.duplicateFrame(timeline.getCurrentFrame()); timeline.duplicateFrame(timeline.getCurrentFrame()); timeline.nextFrame(); return; }
+                if (delBtn.contains(mousePos)) {
+                    if (canvas.getFrameCount() > 1) {
+                        int cur = timeline.getCurrentFrame();
+                        canvas.deleteFrame(cur);
+                        timeline.deleteFrame(cur);
+                        if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) {
+                            timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
+                        }
+                    }
+                    return;
+                }
+                if (onionBtn.contains(mousePos)) {
+                    canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
+                    return;
+                }
+                if (closeBtn.contains(mousePos)) {
+                    m_showTimeline = false;
+                    return;
+                }
+
+                float cardW = 90.0f;
+                float cardH = 120.0f;
+                float startX = 20.0f;
+                float cardY = timelineY + 42.0f;
+                int totalFrames = static_cast<int>(canvas.getFrameCount());
+
+                for (int i = 0; i < totalFrames; ++i) {
+                    sf::FloatRect cardBounds(startX, cardY, cardW, cardH);
+                    if (cardBounds.contains(mousePos)) {
+                        timeline.setFrame(i);
+                        return;
+                    }
+                    startX += cardW + 12.0f;
+                }
+
+                if (headerBounds.contains(mousePos) || mousePos.y > timelineY) return;
+            }
+        }
 
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F8) {
             m_debugUseSpriteStudio = !m_debugUseSpriteStudio;
@@ -1709,27 +1765,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         else if (rpAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() - 25.f, canvas.getOnionSkinNextOpacity() - 25.f);
                         return;
                     }
-
-                    int clickedFrame = bottomTimeline.handleFrameClick(mousePos, static_cast<size_t>(canvas.getFrameCount()));
-                    if (clickedFrame != -1) { timeline.setFrame(clickedFrame); return; }
-
-                    std::string bottomAction = bottomTimeline.handleClick(mousePos);
-                    if (!bottomAction.empty()) {
-                        if (bottomAction == "play") timeline.togglePlayback();
-                        else if (bottomAction == "add") { canvas.addFrame(timeline.getCurrentFrame()); timeline.addFrameAfter(timeline.getCurrentFrame()); timeline.nextFrame(); }
-                        else if (bottomAction == "dup") { canvas.duplicateFrame(timeline.getCurrentFrame()); timeline.duplicateFrame(timeline.getCurrentFrame()); timeline.nextFrame(); }
-                        else if (bottomAction == "del") {
-                            if (canvas.getFrameCount() > 1) {
-                                int cur = timeline.getCurrentFrame(); canvas.deleteFrame(cur); timeline.deleteFrame(cur);
-                                if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
-                            }
-                        }
-                        else if (bottomAction == "export") exportModal.open(canvas, timeline.getCurrentFrame());
-                        else if (bottomAction == "onion_toggle") canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
-                        else if (bottomAction == "onion_prev") { int p = canvas.getOnionSkinPrevCount(); p = (p + 1) % 4; canvas.setOnionSkinCounts(p, canvas.getOnionSkinNextCount()); }
-                        else if (bottomAction == "onion_next") { int n = canvas.getOnionSkinNextCount(); n = (n + 1) % 4; canvas.setOnionSkinCounts(canvas.getOnionSkinPrevCount(), n); }
-                        return;
-                    }
                 }
 
                 canvas.handleMousePressed(logicalMousePos, event.mouseButton.button == sf::Mouse::Right, timeline.getCurrentFrame());
@@ -1928,8 +1963,10 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         }
     }
     else if (currentState == AppState::Painting) {
-        bool rightDockPinned = rightProperties.isPanelPinned() || layerPanel.isPanelPinned() || colorPalettePanel.isPanelPinned();
-        auto regions = m_workspaceLayout.Update(rightDockPinned, true);
+        timeline.update(dt);
+
+        bool rightDockOpen = rightProperties.isPanelPinned() || layerPanel.isPanelPinned() || colorPalettePanel.isPanelPinned();
+        auto regions = m_workspaceLayout.Update(rightDockOpen, m_showTimeline);
 
         m_topBar.SetBounds(regions.topBar);
         m_topBar.SetProjectName(activeProjectName, canvas.getIsDirty());
@@ -1963,14 +2000,17 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         m_rightDockTabs.SetTabState("audio", audioPanel.getIsVisible());
         m_rightDockTabs.Update(dt, mousePos);
 
-        sf::FloatRect headerBounds(0.0f, regions.timeline.top, 1920.0f, 28.0f);
-        m_timelineHeader.SetBounds(headerBounds);
-        m_timelineHeader.SyncState(timeline.isPlaying(), timeline.getCurrentFrame(), static_cast<int>(canvas.getFrameCount()), timeline.getFps(), canvas.isOnionSkinEnabled());
-        m_timelineHeader.Update(dt, mousePos);
+        if (m_showTimeline) {
+            sf::FloatRect headerBounds(0.0f, regions.timeline.top, 1920.0f, 28.0f);
+            m_timelineHeader.SetBounds(headerBounds);
+            m_timelineHeader.SyncState(timeline.isPlaying(), timeline.getCurrentFrame(), static_cast<int>(canvas.getFrameCount()), timeline.getFps(), canvas.isOnionSkinEnabled());
+            m_timelineHeader.Update(dt, mousePos);
+            bottomTimeline.update(dt, focusMode);
+        }
 
         m_statusBar.SetBounds(regions.statusBar);
-        m_statusBar.UpdateData(canvas.getCanvasSize(), logicalMousePos, 1.0f, canvas.getActiveLayer(), timeline.getCurrentFrame());
-        m_statusBar.Update(dt);
+        m_statusBar.UpdateData(canvas.getCanvasSize(), logicalMousePos, 1.0f, canvas.getActiveLayer(), timeline.getCurrentFrame(), m_showTimeline);
+        m_statusBar.Update(dt, mousePos);
 
         bool isLayerOpen = layerPanel.isHovered() || layerPanel.isPanelPinned() || layerPanel.getCurrentX() < 1919.f;
         bool isColorOpen = colorPalettePanel.isHovered() || colorPalettePanel.isPanelPinned() || colorPalettePanel.getCurrentX() < 1919.f;
@@ -1983,7 +2023,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         rightProperties.update(dt, focusMode);
         layerPanel.update(dt, focusMode);
         colorPalettePanel.update(dt, focusMode, canvas);
-        bottomTimeline.update(dt, focusMode);
         audioPanel.update(dt);
         g_aiPanel.update(dt);
 
@@ -2069,8 +2108,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         m_activeTool->SetBounds(regions.canvas);
         m_activeTool->Update(dt, window);
 
-        bottomTimeline.updateHover(mousePos);
-
         if (showingText && textClock.getElapsedTime().asSeconds() > 2.0f) showingText = false;
         else if (showingText && textClock.getElapsedTime().asSeconds() > 1.5f) {
             textAlpha = std::max(0.0f, textAlpha - 255.0f * (1.0f / 60.0f));
@@ -2133,10 +2170,123 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         if (canvas.getActiveTool() == ToolType::Text) m_textPanel.draw(window);
         if (canvas.getActiveTool() == ToolType::Gradient) m_gradientPanel.draw(window);
 
-        bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
-        bottomTimeline.draw(window, timeline, canvas);
+        if (m_showTimeline) {
+            float timelineY = 1080.0f - WisdomUI::Theme::StatusBarHeight - WisdomUI::Theme::TimelineHeight;
+            sf::FloatRect timelineBounds(0.0f, timelineY, 1920.0f, WisdomUI::Theme::TimelineHeight);
 
-        m_timelineHeader.Render(window);
+            sf::RectangleShape panelBg(sf::Vector2f(timelineBounds.width, timelineBounds.height));
+            panelBg.setPosition(timelineBounds.left, timelineBounds.top);
+            panelBg.setFillColor(WisdomUI::Theme::Panel);
+            window.draw(panelBg);
+
+            sf::RectangleShape trayBg(sf::Vector2f(timelineBounds.width - 20.0f, timelineBounds.height - 38.0f));
+            trayBg.setPosition(10.0f, timelineY + 30.0f);
+            trayBg.setFillColor(WisdomUI::Theme::PanelInset);
+            trayBg.setOutlineThickness(1.0f);
+            trayBg.setOutlineColor(WisdomUI::Theme::Border);
+            window.draw(trayBg);
+
+            WisdomUI::Theme::DrawFiligreePanel(window, timelineBounds, 1.0f);
+
+            m_timelineHeader.Render(window);
+
+            float cardW = 90.0f;
+            float cardH = 120.0f;
+            float startX = 20.0f;
+            float cardY = timelineY + 42.0f;
+            int totalFrames = static_cast<int>(canvas.getFrameCount());
+            int curFrame = timeline.getCurrentFrame();
+
+            float canvasW = static_cast<float>(canvas.getCanvasSize().x);
+            float canvasH = static_cast<float>(canvas.getCanvasSize().y);
+
+            for (int i = 0; i < totalFrames; ++i) {
+                bool isSelected = (i == curFrame);
+
+                sf::RectangleShape card(sf::Vector2f(cardW, cardH));
+                card.setPosition(startX, cardY);
+                card.setFillColor(isSelected ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::Background);
+                card.setOutlineThickness(isSelected ? 2.0f : 1.0f);
+                card.setOutlineColor(isSelected ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
+                window.draw(card);
+
+                float boxW = cardW - 12.0f;
+                float boxH = cardH - 36.0f;
+                float boxX = startX + 6.0f;
+                float boxY = cardY + 6.0f;
+
+                sf::RectangleShape thumbBase(sf::Vector2f(boxW, boxH));
+                thumbBase.setPosition(boxX, boxY);
+                thumbBase.setFillColor(sf::Color(220, 220, 220));
+                thumbBase.setOutlineThickness(1.0f);
+                thumbBase.setOutlineColor(WisdomUI::Theme::Border);
+                window.draw(thumbBase);
+
+                int gridCols = 8;
+                int gridRows = 8;
+                float cellW = boxW / static_cast<float>(gridCols);
+                float cellH = boxH / static_cast<float>(gridRows);
+
+                for (int r = 0; r < gridRows; ++r) {
+                    for (int c = 0; c < gridCols; ++c) {
+                        if ((r + c) % 2 == 1) {
+                            sf::RectangleShape cell(sf::Vector2f(cellW, cellH));
+                            cell.setPosition(boxX + c * cellW, boxY + r * cellH);
+                            cell.setFillColor(sf::Color(180, 180, 180));
+                            window.draw(cell);
+                        }
+                    }
+                }
+
+                const Frame* frameData = canvas.getFrameReadOnly(i);
+                if (frameData && canvasW > 0.0f && canvasH > 0.0f) {
+                    float scale = std::min((boxW - 4.0f) / canvasW, (boxH - 4.0f) / canvasH);
+                    float previewW = canvasW * scale;
+                    float previewH = canvasH * scale;
+                    float previewX = boxX + (boxW - previewW) / 2.0f;
+                    float previewY = boxY + (boxH - previewH) / 2.0f;
+
+                    for (const auto& layer : frameData->layers) {
+                        if (layer.visible && layer.texture) {
+                            const sf::Texture& tex = layer.texture->getTexture();
+                            sf::Sprite layerSprite(tex);
+                            layerSprite.setScale(scale, scale);
+                            layerSprite.setPosition(previewX, previewY);
+
+                            float rawOp = layer.opacity;
+                            if (rawOp <= 1.0f && rawOp > 0.0f) {
+                                rawOp *= 255.0f;
+                            }
+                            else if (rawOp > 1.0f && rawOp <= 100.0f) {
+                                rawOp = (rawOp / 100.0f) * 255.0f;
+                            }
+                            sf::Uint8 alpha = static_cast<sf::Uint8>(std::clamp(rawOp, 0.0f, 255.0f));
+
+                            layerSprite.setColor(sf::Color(255, 255, 255, alpha));
+                            window.draw(layerSprite);
+                        }
+                    }
+                }
+
+                sf::Text fNum(std::to_string(i + 1), font, 12);
+                fNum.setFillColor(isSelected ? WisdomUI::Theme::Gold : WisdomUI::Theme::TextSecondary);
+                sf::FloatRect nb = fNum.getLocalBounds();
+                fNum.setPosition(startX + (cardW - nb.width) / 2.0f, cardY + cardH - 24.0f);
+                window.draw(fNum);
+
+                if (isSelected) {
+                    sf::RectangleShape selTag(sf::Vector2f(cardW, 3.0f));
+                    selTag.setPosition(startX, cardY);
+                    selTag.setFillColor(WisdomUI::Theme::Accent);
+                    window.draw(selTag);
+                }
+
+                startX += cardW + 12.0f;
+            }
+
+            bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
+        }
+
         m_topBar.Render(window);
         m_toolOptionsBar.Render(window);
         m_toolDock.Render(window);

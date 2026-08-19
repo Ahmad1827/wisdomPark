@@ -6,7 +6,9 @@
 #include "ai/AIHelper.h"
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode(1920, 1080), "Wisdom Park", sf::Style::Default);
+    sf::VideoMode desktopMode = sf::VideoMode::getDesktopMode();
+    sf::RenderWindow window(desktopMode, "Wisdom Park", sf::Style::Fullscreen);
+    window.setVerticalSyncEnabled(true);
     window.setFramerateLimit(60);
 
     ProjectManager pm;
