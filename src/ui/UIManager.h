@@ -3,6 +3,10 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <memory>
+#include <chrono>
+#include <SFML/Network.hpp>
+
 #include "../core/TextSystem.h"
 #include "../ui/TextPanel.h"
 #include "../core/PerspectiveSystem.h"
@@ -25,24 +29,21 @@
 #include "ColorPalettePanel.h"
 #include "RightProperties.h"
 #include "AudioPanel.h"
-#include <SFML/Network.hpp>
-#include <chrono>
 #include "../core/ITool.h"
-#include <memory>
 #include "../ui/TopMenuBar.h"
 #include "../ui/GradientPanel.h"
 #include "../tools/GradientTool.h"
 #include "../core/GradientSystem.h"
 #include "../core/AssetManager.h"
 #include "AssetBrowserPanel.h"
+
 #include "../UI/WorkspaceLayout.h"
 #include "../UI/Panels/TopBar.h"
 #include "../UI/Panels/ToolOptionsBar.h"
 #include "../UI/Panels/ToolDock.h"
-#include "../UI/Panels/StatusBar.h"
 #include "../UI/Panels/RightDockTabs.h"
 #include "../UI/Panels/TimelineHeader.h"
-
+#include "../UI/Panels/StatusBar.h"
 
 enum class MenuState {
     Main,
@@ -50,6 +51,15 @@ enum class MenuState {
     Settings,
     Tutorials,
     Credits
+};
+
+enum class RightTabMode {
+    None,
+    Layers,
+    Palette,
+    Properties,
+    Assets,
+    Audio
 };
 
 struct StartParticle {
@@ -71,14 +81,6 @@ struct LightRay {
 
 class UIManager {
 private:
-    WisdomUI::TopBar m_topBar;
-    WisdomUI::ToolOptionsBar m_toolOptionsBar;
-    WisdomUI::ToolDock m_toolDock;
-    WisdomUI::StatusBar m_statusBar;
-    WisdomUI::WorkspaceLayout m_workspaceLayout;
-    WisdomUI::RightDockTabs m_rightDockTabs;
-    WisdomUI::TimelineHeader m_timelineHeader;
-    bool m_showTimeline{ false };
     AssetManager assetManager;
     std::unique_ptr<AssetBrowserPanel> assetBrowser;
     GradientConfig m_gradientConfig;
@@ -138,9 +140,6 @@ private:
     sf::Text promptDisplay;
     std::string currentPrompt;
 
-  /*  bool isPanning;
-    sf::Vector2f lastPanMousePos;*/
-
     sf::RectangleShape toolBg;
     sf::RectangleShape sizeSliderBg;
     sf::RectangleShape sizeSliderHandle;
@@ -180,6 +179,17 @@ private:
     int uiHistorySize;
     int easterEggClicks;
 
+    bool m_showTimeline{ false };
+    RightTabMode m_activeRightTab{ RightTabMode::None };
+
+    WisdomUI::WorkspaceLayout m_workspaceLayout;
+    WisdomUI::TopBar m_topBar;
+    WisdomUI::ToolOptionsBar m_toolOptionsBar;
+    WisdomUI::ToolDock m_toolDock;
+    WisdomUI::RightDockTabs m_rightDockTabs;
+    WisdomUI::TimelineHeader m_timelineHeader;
+    WisdomUI::StatusBar m_statusBar;
+
     void initStartMenu();
     void updateStartMenu(float dt, sf::Vector2f mousePos);
     void drawStartMenu(sf::RenderWindow& window);
@@ -197,6 +207,7 @@ private:
     void drawGlassPanel(sf::RenderWindow& window, sf::FloatRect bounds, float hoverScale = 1.0f);
 
     bool triggerSave(Canvas& canvas, Timeline& timeline);
+
 public:
     UIManager();
     void init(ProjectManager* pm, Canvas* baseCanvas);

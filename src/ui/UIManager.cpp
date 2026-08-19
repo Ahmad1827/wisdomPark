@@ -140,64 +140,12 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     pixelPerfText.setCharacterSize(10);
     pixelPerfText.setFillColor(sf::Color::White);
 
-
     warnOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
     warnOverlay.setFillColor(sf::Color(0, 0, 0, 180));
 
     assetBrowser = std::make_unique<AssetBrowserPanel>(assetManager, font);
     assetBrowser->setProject("CurrentProject");
-    assetBrowser->setBounds(sf::FloatRect(0.f, 40.f, 300.f, 1080.f - 40.f));
-
-
-    warnBox.setSize(sf::Vector2f(600.f, 250.f));
-    warnBox.setOrigin(300.f, 125.f);
-    warnBox.setPosition(960.f, 540.f);
-    warnBox.setFillColor(sf::Color(30, 30, 35, 255));
-    warnBox.setOutlineThickness(2.f);
-    warnBox.setOutlineColor(sf::Color(100, 100, 110));
-
-    warnTitle.setFont(font);
-    warnTitle.setString("Unsaved Changes!\nDo you want to save before leaving?");
-    warnTitle.setCharacterSize(24);
-    warnTitle.setFillColor(sf::Color::White);
-    warnTitle.setOrigin(warnTitle.getLocalBounds().width / 2.f, warnTitle.getLocalBounds().height / 2.f);
-    warnTitle.setPosition(960.f, 480.f);
-
-    warnSaveBtn.setSize(sf::Vector2f(140.f, 50.f));
-    warnSaveBtn.setOrigin(70.f, 25.f);
-    warnSaveBtn.setPosition(760.f, 600.f);
-    warnSaveBtn.setFillColor(sf::Color(50, 180, 50));
-
-    warnSaveText.setFont(font);
-    warnSaveText.setString("Save & Exit");
-    warnSaveText.setCharacterSize(18);
-    warnSaveText.setFillColor(sf::Color::White);
-    warnSaveText.setOrigin(warnSaveText.getLocalBounds().width / 2.f, warnSaveText.getLocalBounds().height / 2.f);
-    warnSaveText.setPosition(760.f, 595.f);
-
-    warnDiscardBtn.setSize(sf::Vector2f(180.f, 50.f));
-    warnDiscardBtn.setOrigin(90.f, 25.f);
-    warnDiscardBtn.setPosition(960.f, 600.f);
-    warnDiscardBtn.setFillColor(sf::Color(180, 50, 50));
-
-    warnDiscardText.setFont(font);
-    warnDiscardText.setString("Exit without saving");
-    warnDiscardText.setCharacterSize(18);
-    warnDiscardText.setFillColor(sf::Color::White);
-    warnDiscardText.setOrigin(warnDiscardText.getLocalBounds().width / 2.f, warnDiscardText.getLocalBounds().height / 2.f);
-    warnDiscardText.setPosition(960.f, 595.f);
-
-    warnCancelBtn.setSize(sf::Vector2f(120.f, 50.f));
-    warnCancelBtn.setOrigin(60.f, 25.f);
-    warnCancelBtn.setPosition(1160.f, 600.f);
-    warnCancelBtn.setFillColor(sf::Color(80, 80, 90));
-
-    warnCancelText.setFont(font);
-    warnCancelText.setString("Cancel");
-    warnCancelText.setCharacterSize(18);
-    warnCancelText.setFillColor(sf::Color::White);
-    warnCancelText.setOrigin(warnCancelText.getLocalBounds().width / 2.f, warnCancelText.getLocalBounds().height / 2.f);
-    warnCancelText.setPosition(1160.f, 595.f);
+    assetBrowser->setBounds(sf::FloatRect(1920.f - 44.f - 280.f, 68.f, 280.f, 1080.f - 68.f - 24.f));
 
     loadingOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
     loadingOverlay.setFillColor(sf::Color(10, 10, 15, 200));
@@ -233,7 +181,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     loadingCancelText.setFillColor(sf::Color::White);
     loadingCancelText.setOrigin(loadingCancelText.getLocalBounds().width / 2.f, loadingCancelText.getLocalBounds().height / 2.f);
     loadingCancelText.setPosition(960.f, 607.f);
-    
+
     m_gradientPanel.init(&m_gradientConfig);
     m_topMenuBar.init();
     m_perspectiveManager.init();
@@ -288,34 +236,37 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     m_toolOptionsBar.Initialize(font);
     m_toolDock.Initialize(font);
+
     m_rightDockTabs.Initialize(
         font,
         [this]() {
-            if (layerPanel.isPanelPinned()) layerPanel.forceClose();
+            m_activeRightTab = (m_activeRightTab == RightTabMode::Layers) ? RightTabMode::None : RightTabMode::Layers;
+        },
+        [this]() {
+            m_activeRightTab = (m_activeRightTab == RightTabMode::Palette) ? RightTabMode::None : RightTabMode::Palette;
+        },
+        [this]() {
+            m_activeRightTab = (m_activeRightTab == RightTabMode::Properties) ? RightTabMode::None : RightTabMode::Properties;
+        },
+        [this]() {
+            if (m_activeRightTab == RightTabMode::Assets) {
+                m_activeRightTab = RightTabMode::None;
+                if (assetBrowser && assetBrowser->getIsVisible()) assetBrowser->toggle();
+            }
             else {
-                sf::Vector2f handleCenter = layerPanel.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
-                layerPanel.updateHover(handleCenter, true);
+                m_activeRightTab = RightTabMode::Assets;
+                if (assetBrowser && !assetBrowser->getIsVisible()) assetBrowser->toggle();
             }
         },
         [this]() {
-            if (colorPalettePanel.isPanelPinned()) colorPalettePanel.forceClose();
-            else {
-                sf::Vector2f handleCenter = colorPalettePanel.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
-                colorPalettePanel.updateHover(handleCenter, true);
+            if (m_activeRightTab == RightTabMode::Audio) {
+                m_activeRightTab = RightTabMode::None;
+                if (audioPanel.getIsVisible()) audioPanel.toggle();
             }
-        },
-        [this]() {
-            if (rightProperties.isPanelPinned()) rightProperties.forceClose();
             else {
-                sf::Vector2f handleCenter = rightProperties.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
-                rightProperties.updateHover(handleCenter, true);
+                m_activeRightTab = RightTabMode::Audio;
+                if (!audioPanel.getIsVisible()) audioPanel.toggle();
             }
-        },
-        [this]() {
-            if (assetBrowser) assetBrowser->toggle();
-        },
-        [this]() {
-            audioPanel.toggle();
         }
     );
 
@@ -325,7 +276,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     m_timelineHeader.Initialize(
         font,
-        [this, &timeline = const_cast<Timeline&>(*reinterpret_cast<Timeline*>(0))]() {},
+        [this]() {},
         [this, baseCanvas]() {},
         [this, baseCanvas]() {},
         [this, baseCanvas]() {},
@@ -345,6 +296,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     m_toolDock.AddTool("symmetry", "Symmetry Axis", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Symmetry); m_toolDock.SetActiveTool("symmetry"); });
     m_toolDock.AddTool("perspective", "Perspective Grid", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Perspective); m_toolDock.SetActiveTool("perspective"); });
     m_toolDock.AddTool("ai_gen", "AI Generator", [this]() { g_aiPanel.toggle(); m_toolDock.SetActiveTool("ai_gen"); });
+
     initStartMenu();
 }
 
@@ -877,7 +829,7 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
     }
 }
 
-void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
+void UIManager::handleEvent(const sf::Event & event, sf::RenderWindow & window, AppState & currentState, AppSettings & settings, Canvas & canvas, Timeline & timeline, AIHelper & aiHelper, ProjectManager & pm) {
     if (AIManager::getInstance().isProcessingAsync()) {
         auto killAiProcess = [&]() {
             AIManager::getInstance().abortTask();
@@ -974,31 +926,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
         else if (res == "cancel") {
             newProjectModal.close();
-        }
-        return;
-    }
-
-    if (audioPanel.getIsVisible()) {
-        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            std::string action = audioPanel.handleClick(mousePos, timeline.getCurrentFrame());
-
-            if (action == "imported") {
-                showMessage("Audio Directory Scanned Successfully", sf::Color::Green);
-                return;
-            }
-            if (action == "closed") return;
-            if (audioPanel.handleEvent(event, mousePos)) return;
-        }
-    }
-
-    if (g_aiReviewModal.getIsOpen()) {
-        std::string res = g_aiReviewModal.handleEvent(event, mousePos);
-        if (res == "accept_new" || res == "accept_replace") {
-            if (res == "accept_new") {
-                canvas.addLayer(timeline.getCurrentFrame(), "AI Generation");
-            }
-            g_aiReviewModal.getResultImage().saveToFile("temp_ai_import.png");
-            canvas.importImageToActiveLayer("temp_ai_import.png", timeline.getCurrentFrame());
         }
         return;
     }
@@ -1268,10 +1195,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
     }
     else if (currentState == AppState::Painting) {
-        if (assetBrowser) {
-            assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame());
-        }
-
         if (m_topBar.HandleEvent(event, window)) return;
         if (m_toolOptionsBar.HandleEvent(event, window,
             [&](float sz) {
@@ -1283,6 +1206,80 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         if (m_toolDock.HandleEvent(event, window)) return;
         if (m_rightDockTabs.HandleEvent(event, window)) return;
         if (m_statusBar.HandleEvent(event, window)) return;
+
+        if (m_activeRightTab == RightTabMode::Layers) {
+            if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
+            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                std::string lpAction = layerPanel.processClick(mousePos, canvas, timeline.getCurrentFrame());
+                if (!lpAction.empty()) {
+                    if (lpAction == "layer_close") { m_activeRightTab = RightTabMode::None; return; }
+                    if (lpAction == "layer_push") {
+                        int cur = timeline.getCurrentFrame();
+                        if (cur == static_cast<int>(canvas.getFrameCount()) - 1) {
+                            canvas.addFrame(cur); timeline.addFrameAfter(cur);
+                        }
+                        canvas.pushLayerToNextFrame(cur, canvas.getActiveLayer());
+                        timeline.nextFrame();
+                    }
+                    return;
+                }
+            }
+            if (mousePos.x > 1920.f - 44.f - 280.f && mousePos.x < 1920.f - 44.f) return;
+        }
+        else if (m_activeRightTab == RightTabMode::Palette) {
+            if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
+            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                std::string cpAction = colorPalettePanel.processClick(mousePos, canvas);
+                if (cpAction == "color_close") { m_activeRightTab = RightTabMode::None; return; }
+            }
+            if (mousePos.x > 1920.f - 44.f - 280.f && mousePos.x < 1920.f - 44.f) return;
+        }
+        else if (m_activeRightTab == RightTabMode::Properties) {
+            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                std::string rpAction = rightProperties.handleClick(mousePos);
+                if (!rpAction.empty()) {
+                    if (rpAction == "prop_close") { m_activeRightTab = RightTabMode::None; return; }
+                    if (rpAction == "fps_up") timeline.setFps(timeline.getFps() + 1.0f);
+                    else if (rpAction == "fps_down") timeline.setFps(std::max(1.0f, timeline.getFps() - 1.0f));
+                    else if (rpAction == "theme_all") aiHelper.setTheme("all");
+                    else if (rpAction == "theme_struct") aiHelper.setTheme("structure");
+                    else if (rpAction == "theme_clutter") aiHelper.setTheme("clutter");
+                    else if (rpAction == "theme_custom") aiHelper.setTheme("custom");
+                    else if (rpAction == "theme_wfc") aiHelper.setTheme("wfc");
+                    else if (rpAction == "toggle_light") isLightingMode = !isLightingMode;
+                    else if (rpAction == "toggle_terrain") aiHelper.toggleTerrain();
+                    else if (rpAction == "onion_toggle") canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
+                    else if (rpAction == "onion_op_up") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() + 25.f, canvas.getOnionSkinNextOpacity() + 25.f);
+                    else if (rpAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() - 25.f, canvas.getOnionSkinNextOpacity() - 25.f);
+                    return;
+                }
+            }
+            if (mousePos.x > 1920.f - 44.f - 280.f && mousePos.x < 1920.f - 44.f) return;
+        }
+        else if (m_activeRightTab == RightTabMode::Assets) {
+            if (assetBrowser) {
+                assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame());
+                if (mousePos.x > 1920.f - 44.f - 280.f && mousePos.x < 1920.f - 44.f) return;
+            }
+        }
+        else if (m_activeRightTab == RightTabMode::Audio) {
+            if (audioPanel.getIsVisible()) {
+                if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                    std::string action = audioPanel.handleClick(mousePos, timeline.getCurrentFrame());
+                    if (action == "imported") {
+                        showMessage("Audio Directory Scanned Successfully", sf::Color::Green);
+                        return;
+                    }
+                    if (action == "closed") {
+                        m_activeRightTab = RightTabMode::None;
+                        if (audioPanel.getIsVisible()) audioPanel.toggle();
+                        return;
+                    }
+                    if (audioPanel.handleEvent(event, mousePos)) return;
+                }
+            }
+            if (mousePos.x > 1920.f - 44.f - 280.f && mousePos.x < 1920.f - 44.f) return;
+        }
 
         if (m_showTimeline) {
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
@@ -1607,9 +1604,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     showMessage("Merged Object Down", sf::Color::Green);
                 }
                 if (event.key.code == sf::Keyboard::B && event.key.control) {
-                    if (assetBrowser) {
-                        assetBrowser->toggle();
-                        showMessage(assetBrowser->getIsVisible() ? "Asset Browser Opened" : "Asset Browser Closed", sf::Color::Cyan);
+                    if (m_activeRightTab == RightTabMode::Assets) {
+                        m_activeRightTab = RightTabMode::None;
+                        if (assetBrowser && assetBrowser->getIsVisible()) assetBrowser->toggle();
+                    }
+                    else {
+                        m_activeRightTab = RightTabMode::Assets;
+                        if (assetBrowser && !assetBrowser->getIsVisible()) assetBrowser->toggle();
                     }
                 }
                 if (keybindManager.isActionTriggered("edit_del_sel", event)) {
@@ -1670,10 +1671,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
 
-        if (!timeline.isPlaying() && !keybindPanel.isVisible() && !exportModal.getIsOpen() && !newProjectModal.getIsOpen() && !audioPanel.getIsVisible() && !g_aiPanel.getIsVisible() && !g_aiReviewModal.getIsOpen()) {
-
-            if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
-
+        if (!timeline.isPlaying() && !keybindPanel.isVisible() && !exportModal.getIsOpen() && !newProjectModal.getIsOpen() && !g_aiPanel.getIsVisible() && !g_aiReviewModal.getIsOpen()) {
             sf::Vector2f shiftedMousePos = mousePos;
             shiftedMousePos.x -= WisdomUI::Theme::ToolDockWidth;
 
@@ -1685,22 +1683,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
             if (canvas.getActiveTool() == ToolType::Gradient) {
                 if (m_gradientPanel.handleEvent(event, shiftedMousePos)) return;
-            }
-            if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
-
-            if (event.type == sf::Event::MouseMoved) {
-                if (layerPanel.getHandleBounds().contains(mousePos)) {
-                    if (rightProperties.isPanelPinned()) rightProperties.forceClose();
-                    if (colorPalettePanel.isPanelPinned()) colorPalettePanel.forceClose();
-                }
-                else if (rightProperties.getHandleBounds().contains(mousePos)) {
-                    if (layerPanel.isPanelPinned()) layerPanel.forceClose();
-                    if (colorPalettePanel.isPanelPinned()) colorPalettePanel.forceClose();
-                }
-                else if (colorPalettePanel.getHandleBounds().contains(mousePos)) {
-                    if (layerPanel.isPanelPinned()) layerPanel.forceClose();
-                    if (rightProperties.isPanelPinned()) rightProperties.forceClose();
-                }
             }
 
             if (event.type == sf::Event::MouseWheelScrolled && event.mouseWheelScroll.wheel == sf::Mouse::VerticalWheel) {
@@ -1726,47 +1708,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     return;
                 }
 
-                if (event.mouseButton.button == sf::Mouse::Left || event.mouseButton.button == sf::Mouse::Right) {
-                    if (colorPalettePanel.handleClick(mousePos, canvas)) return;
-                }
-
-                if (event.mouseButton.button == sf::Mouse::Left) {
-                    std::string lpAction = layerPanel.processClick(mousePos, canvas, timeline.getCurrentFrame());
-                    if (!lpAction.empty()) {
-                        if (lpAction == "layer_push") {
-                            int cur = timeline.getCurrentFrame();
-                            if (cur == static_cast<int>(canvas.getFrameCount()) - 1) {
-                                canvas.addFrame(cur); timeline.addFrameAfter(cur);
-                            }
-                            canvas.pushLayerToNextFrame(cur, canvas.getActiveLayer());
-                            timeline.nextFrame();
-                        }
-                        else if (lpAction == "layer_pin" && layerPanel.isPanelPinned()) {
-                            rightProperties.forceClose(); colorPalettePanel.forceClose();
-                        }
-                        return;
-                    }
-
-                    std::string rpAction = rightProperties.handleClick(mousePos);
-                    if (!rpAction.empty()) {
-                        if (rpAction == "pin_toggle" || rpAction == "handle_click" || rpAction == "section_toggle") return;
-
-                        if (rpAction == "fps_up") timeline.setFps(timeline.getFps() + 1.0f);
-                        else if (rpAction == "fps_down") timeline.setFps(std::max(1.0f, timeline.getFps() - 1.0f));
-                        else if (rpAction == "theme_all") aiHelper.setTheme("all");
-                        else if (rpAction == "theme_struct") aiHelper.setTheme("structure");
-                        else if (rpAction == "theme_clutter") aiHelper.setTheme("clutter");
-                        else if (rpAction == "theme_custom") aiHelper.setTheme("custom");
-                        else if (rpAction == "theme_wfc") aiHelper.setTheme("wfc");
-                        else if (rpAction == "toggle_light") isLightingMode = !isLightingMode;
-                        else if (rpAction == "toggle_terrain") aiHelper.toggleTerrain();
-                        else if (rpAction == "onion_toggle") canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
-                        else if (rpAction == "onion_op_up") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() + 25.f, canvas.getOnionSkinNextOpacity() + 25.f);
-                        else if (rpAction == "onion_op_down") canvas.setOnionSkin(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity() - 25.f, canvas.getOnionSkinNextOpacity() - 25.f);
-                        return;
-                    }
-                }
-
                 canvas.handleMousePressed(logicalMousePos, event.mouseButton.button == sf::Mouse::Right, timeline.getCurrentFrame());
             }
 
@@ -1777,7 +1718,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     }
 }
 
-void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
+void UIManager::update(sf::RenderWindow & window, AppState currentState, AppSettings & settings, float dt, Canvas & canvas, Timeline & timeline) {
 #if defined(_WIN32)
     static bool s_dragDropHooked = false;
     if (!s_dragDropHooked) {
@@ -1791,9 +1732,8 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         assetManager.importAssets(g_droppedFiles);
         g_droppedFiles.clear();
 
-        if (assetBrowser && !assetBrowser->getIsVisible()) {
-            assetBrowser->toggle();
-        }
+        m_activeRightTab = RightTabMode::Assets;
+        if (assetBrowser && !assetBrowser->getIsVisible()) assetBrowser->toggle();
     }
 #endif
 
@@ -1954,7 +1894,9 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 sf::Text dummyText("WISDOM PARK STUDIO", font, 26);
                 sf::FloatRect sb = dummyText.getLocalBounds();
                 sf::FloatRect titleBounds(960.f - sb.width / 2.f, 300.f - sb.height / 2.f, sb.width, sb.height);
-                updateHoverValue("cred_title", titleBounds.contains(mousePos), dt);
+                if (titleBounds.contains(mousePos)) {
+                    easterEggClicks++;
+                }
             }
             else {
                 sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
@@ -1965,7 +1907,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     else if (currentState == AppState::Painting) {
         timeline.update(dt);
 
-        bool rightDockOpen = rightProperties.isPanelPinned() || layerPanel.isPanelPinned() || colorPalettePanel.isPanelPinned();
+        bool rightDockOpen = (m_activeRightTab != RightTabMode::None);
         auto regions = m_workspaceLayout.Update(rightDockOpen, m_showTimeline);
 
         m_topBar.SetBounds(regions.topBar);
@@ -1993,12 +1935,50 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         m_toolDock.Update(dt, mousePos);
 
         m_rightDockTabs.SetBounds(regions.rightDockTabs);
-        m_rightDockTabs.SetTabState("layers", layerPanel.isPanelPinned());
-        m_rightDockTabs.SetTabState("palette", colorPalettePanel.isPanelPinned());
-        m_rightDockTabs.SetTabState("properties", rightProperties.isPanelPinned());
-        m_rightDockTabs.SetTabState("assets", assetBrowser && assetBrowser->getIsVisible());
-        m_rightDockTabs.SetTabState("audio", audioPanel.getIsVisible());
+        m_rightDockTabs.SetTabState("layers", m_activeRightTab == RightTabMode::Layers);
+        m_rightDockTabs.SetTabState("palette", m_activeRightTab == RightTabMode::Palette);
+        m_rightDockTabs.SetTabState("properties", m_activeRightTab == RightTabMode::Properties);
+        m_rightDockTabs.SetTabState("assets", m_activeRightTab == RightTabMode::Assets);
+        m_rightDockTabs.SetTabState("audio", m_activeRightTab == RightTabMode::Audio);
         m_rightDockTabs.Update(dt, mousePos);
+
+        if (m_activeRightTab == RightTabMode::Layers) {
+            layerPanel.update(dt, focusMode, true);
+        }
+        else {
+            layerPanel.update(dt, focusMode, false);
+        }
+
+        if (m_activeRightTab == RightTabMode::Palette) {
+            colorPalettePanel.update(dt, focusMode, canvas, true);
+        }
+        else {
+            colorPalettePanel.update(dt, focusMode, canvas, false);
+        }
+
+        if (m_activeRightTab == RightTabMode::Properties) {
+            rightProperties.update(dt, focusMode, true);
+        }
+        else {
+            rightProperties.update(dt, focusMode, false);
+        }
+
+        if (m_activeRightTab == RightTabMode::Assets && assetBrowser) {
+            if (!assetBrowser->getIsVisible()) assetBrowser->toggle();
+            assetBrowser->setBounds(sf::FloatRect(1920.f - 44.f - 280.f, 68.0f, 280.f, 1080.0f - 68.0f - 24.0f));
+            assetBrowser->update(dt);
+        }
+        else if (assetBrowser && assetBrowser->getIsVisible()) {
+            assetBrowser->toggle();
+        }
+
+        if (m_activeRightTab == RightTabMode::Audio) {
+            if (!audioPanel.getIsVisible()) audioPanel.toggle();
+            audioPanel.update(dt);
+        }
+        else if (audioPanel.getIsVisible()) {
+            audioPanel.toggle();
+        }
 
         if (m_showTimeline) {
             sf::FloatRect headerBounds(0.0f, regions.timeline.top, 1920.0f, 28.0f);
@@ -2012,25 +1992,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         m_statusBar.UpdateData(canvas.getCanvasSize(), logicalMousePos, 1.0f, canvas.getActiveLayer(), timeline.getCurrentFrame(), m_showTimeline);
         m_statusBar.Update(dt, mousePos);
 
-        bool isLayerOpen = layerPanel.isHovered() || layerPanel.isPanelPinned() || layerPanel.getCurrentX() < 1919.f;
-        bool isColorOpen = colorPalettePanel.isHovered() || colorPalettePanel.isPanelPinned() || colorPalettePanel.getCurrentX() < 1919.f;
-        bool isPropOpen = rightProperties.isHovered() || rightProperties.isPanelPinned() || rightProperties.getCurrentX() < 1919.f;
-
-        layerPanel.updateHover(mousePos, !isColorOpen && !isPropOpen);
-        colorPalettePanel.updateHover(mousePos, !isLayerOpen && !isPropOpen);
-        rightProperties.updateHover(mousePos, !isLayerOpen && !isColorOpen);
-
-        rightProperties.update(dt, focusMode);
-        layerPanel.update(dt, focusMode);
-        colorPalettePanel.update(dt, focusMode, canvas);
-        audioPanel.update(dt);
         g_aiPanel.update(dt);
-
-        if (assetBrowser) {
-            assetBrowser->setBounds(sf::FloatRect(WisdomUI::Theme::ToolDockWidth, 68.0f, assetBrowser->getWidth(), 1080.0f - 68.0f - 24.0f));
-            assetBrowser->update(dt);
-        }
-
         audioPanel.updatePlayback(timeline.getCurrentFrame(), timeline.getFps(), timeline.isPlaying());
 
         if (AIManager::getInstance().hasAsyncFinished()) {
@@ -2084,23 +2046,20 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
         if (auto* wand = dynamic_cast<MagicWandTool*>(m_activeTool.get())) {
             if (wand->wantsColorPanelOpen()) {
-                sf::Vector2f handleCenter = colorPalettePanel.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
-                colorPalettePanel.updateHover(handleCenter, true);
+                m_activeRightTab = RightTabMode::Palette;
                 wand->clearColorPanelRequest();
             }
         }
         if (canvas.getActiveTool() == ToolType::Text) {
             if (m_textPanel.wantsColorPanelOpen()) {
-                sf::Vector2f handleCenter = colorPalettePanel.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
-                colorPalettePanel.updateHover(handleCenter, true);
+                m_activeRightTab = RightTabMode::Palette;
                 m_textPanel.clearColorPanelRequest();
             }
         }
         if (canvas.getActiveTool() == ToolType::Gradient) {
             m_gradientPanel.setSelectedColor(canvas.getPrimaryColor());
             if (m_gradientPanel.wantsColorPanelOpen()) {
-                sf::Vector2f handleCenter = colorPalettePanel.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
-                colorPalettePanel.updateHover(handleCenter, true);
+                m_activeRightTab = RightTabMode::Palette;
                 m_gradientPanel.clearColorPanelRequest();
             }
         }
@@ -2129,7 +2088,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     }
 }
 
-void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& canvas, AIHelper& aiHelper, Timeline& timeline) {
+void UIManager::draw(sf::RenderWindow & window, AppState currentState, Canvas & canvas, AIHelper & aiHelper, Timeline & timeline) {
     window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(window.getSize()));
 
     bgSprite.setPosition(0.f, 0.f);
@@ -2162,9 +2121,25 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         aiHelper.draw(window);
 
-        layerPanel.draw(window, canvas, timeline.getCurrentFrame());
-        colorPalettePanel.draw(window);
-        rightProperties.draw(window);
+        if (m_activeRightTab == RightTabMode::Layers) {
+            layerPanel.draw(window, canvas, timeline.getCurrentFrame());
+        }
+        else if (m_activeRightTab == RightTabMode::Palette) {
+            colorPalettePanel.draw(window);
+        }
+        else if (m_activeRightTab == RightTabMode::Properties) {
+            rightProperties.draw(window);
+        }
+        else if (m_activeRightTab == RightTabMode::Assets && assetBrowser) {
+            sf::FloatRect abBounds(1920.f - 44.f - 280.f, 68.0f, 280.f, 1080.0f - 68.0f - 24.0f);
+            WisdomUI::Theme::DrawFiligreePanel(window, abBounds, 1.0f);
+            assetBrowser->draw(window);
+        }
+        else if (m_activeRightTab == RightTabMode::Audio) {
+            sf::FloatRect audBounds(1920.f - 44.f - 280.f, 68.0f, 280.f, 1080.0f - 68.0f - 24.0f);
+            WisdomUI::Theme::DrawFiligreePanel(window, audBounds, 1.0f);
+            audioPanel.draw(window);
+        }
 
         if (canvas.getActiveTool() == ToolType::Perspective) m_perspectivePanel.draw(window);
         if (canvas.getActiveTool() == ToolType::Text) m_textPanel.draw(window);
@@ -2293,10 +2268,8 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         m_rightDockTabs.Render(window);
         m_statusBar.Render(window);
 
-        audioPanel.draw(window);
         g_aiPanel.draw(window);
         g_aiReviewModal.draw(window);
-        if (assetBrowser) assetBrowser->draw(window);
 
         if (showingText) window.draw(uiText);
         if (isTypingPrompt) {

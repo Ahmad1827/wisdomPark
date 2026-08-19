@@ -10,10 +10,10 @@ enum class PalettePanelState { Hidden, Visible, Pinned };
 class ColorPalettePanel {
 private:
     sf::RectangleShape background;
-    sf::RectangleShape handleBg;
-    sf::Text handleLabel;
     sf::RectangleShape headerBg;
     sf::Text headerText;
+    sf::RectangleShape closeBtn;
+    sf::Text closeText;
 
     sf::RectangleShape pinBtn;
     sf::Text pinLabel;
@@ -21,7 +21,6 @@ private:
     sf::RectangleShape primaryBox;
     sf::RectangleShape secondaryBox;
 
-    // Eyedropper Tool Elements
     sf::RectangleShape eyedropperBtn;
     sf::Text eyedropperLabel;
     bool isEyedropperActive;
@@ -70,7 +69,7 @@ private:
 public:
     ColorPalettePanel();
     void init();
-    void update(float dt, bool focusMode, Canvas& canvas);
+    void update(float dt, bool focusMode, Canvas& canvas, bool isOpen = true);
     void updateHover(sf::Vector2f mousePos, bool canOpen);
     void draw(sf::RenderWindow& window);
 
@@ -88,7 +87,6 @@ public:
     sf::FloatRect getHandleBounds() const;
     ColorManager& getColorManager();
 
-    // Eyedropper Getters/Setters
     bool getIsEyedropperActive() const;
     void setEyedropperActive(bool active);
 };

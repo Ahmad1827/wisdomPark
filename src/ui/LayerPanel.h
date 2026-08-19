@@ -1,6 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <string>
+#include <vector>
 #include "../core/Canvas.h"
 
 enum class LayerPanelState { Hidden, Visible, Pinned };
@@ -9,11 +10,11 @@ class LayerPanel {
 private:
     sf::Font font;
     sf::RectangleShape background;
-    sf::RectangleShape handleBg;
-    sf::Text handleText;
     sf::RectangleShape headerBg;
     sf::Text headerText;
 
+    sf::RectangleShape closeBtn;
+    sf::Text closeText;
     sf::RectangleShape pinBtn;
     sf::Text pinText;
 
@@ -64,7 +65,7 @@ private:
 public:
     LayerPanel();
     void init();
-    void update(float dt, bool focusMode);
+    void update(float dt, bool focusMode, bool isOpen = true);
     void updateHover(sf::Vector2f mousePos, bool canOpen);
     void draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame);
     std::string processClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame);

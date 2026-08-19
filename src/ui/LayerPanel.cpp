@@ -1,4 +1,5 @@
 #include "LayerPanel.h"
+#include "../UI/UITheme.h"
 #include <algorithm>
 #include <iostream>
 
@@ -7,158 +8,145 @@ LayerPanel::LayerPanel() : scrollOffset(0.f), maxScroll(0.f), renamingLayerIndex
 void LayerPanel::init() {
     font.loadFromFile("assets/font.otf");
 
-    background.setFillColor(sf::Color(25, 25, 30, 240));
+    background.setFillColor(WisdomUI::Theme::Panel);
     background.setOutlineThickness(1.f);
-    background.setOutlineColor(sf::Color(255, 255, 255, 30));
+    background.setOutlineColor(WisdomUI::Theme::Border);
 
-    handleBg.setFillColor(sf::Color(40, 40, 45, 200));
-    handleBg.setOutlineThickness(1.f);
-    handleBg.setOutlineColor(sf::Color(255, 255, 255, 30));
-
-    handleText.setFont(font);
-    handleText.setString("< L");
-    handleText.setCharacterSize(14);
-    handleText.setFillColor(sf::Color(200, 200, 200));
-
-    headerBg.setFillColor(sf::Color(40, 40, 45, 255));
+    headerBg.setFillColor(WisdomUI::Theme::PanelInset);
     headerText.setFont(font);
     headerText.setString("LAYERS");
-    headerText.setCharacterSize(14);
-    headerText.setFillColor(sf::Color(200, 200, 200));
+    headerText.setCharacterSize(13);
+    headerText.setFillColor(WisdomUI::Theme::Gold);
 
-    pinBtn.setSize(sf::Vector2f(45.f, 24.f));
-    pinBtn.setFillColor(sf::Color(50, 50, 60, 255));
+    closeBtn.setSize(sf::Vector2f(22.f, 22.f));
+    closeBtn.setFillColor(WisdomUI::Theme::PanelInset);
+    closeBtn.setOutlineThickness(1.f);
+    closeBtn.setOutlineColor(WisdomUI::Theme::Border);
+    closeText.setFont(font);
+    closeText.setString("X");
+    closeText.setCharacterSize(11);
+    closeText.setFillColor(WisdomUI::Theme::TextSecondary);
+
+    pinBtn.setSize(sf::Vector2f(42.f, 22.f));
+    pinBtn.setFillColor(WisdomUI::Theme::PanelInset);
+    pinBtn.setOutlineThickness(1.f);
+    pinBtn.setOutlineColor(WisdomUI::Theme::Border);
     pinText.setFont(font);
     pinText.setString("Pin");
-    pinText.setCharacterSize(12);
-    pinText.setFillColor(sf::Color::White);
+    pinText.setCharacterSize(11);
+    pinText.setFillColor(WisdomUI::Theme::TextSecondary);
 
     auto setupBtn = [&](sf::RectangleShape& r, sf::Text& t, std::string str, float w) {
-        r.setSize(sf::Vector2f(w, 24.f));
-        r.setFillColor(sf::Color(50, 50, 60, 255));
+        r.setSize(sf::Vector2f(w, 22.f));
+        r.setFillColor(WisdomUI::Theme::PanelInset);
+        r.setOutlineThickness(1.f);
+        r.setOutlineColor(WisdomUI::Theme::Border);
         t.setFont(font);
         t.setString(str);
-        t.setCharacterSize(12);
-        t.setFillColor(sf::Color::White);
+        t.setCharacterSize(11);
+        t.setFillColor(WisdomUI::Theme::Gold);
         };
-    setupBtn(addBtn, addText, "+", 25.f);
-    setupBtn(dupBtn, dupText, "D", 25.f);
-    setupBtn(delBtn, delText, "-", 25.f);
-    setupBtn(mergeDownBtn, mergeDownText, "Mv", 25.f);
-    setupBtn(mergeVisBtn, mergeVisText, "M*", 25.f);
-    setupBtn(pushBtn, pushText, ">>", 25.f);
 
-    renameBox.setFillColor(sf::Color(10, 10, 15, 255));
+    setupBtn(addBtn, addText, "+", 24.f);
+    setupBtn(dupBtn, dupText, "D", 24.f);
+    setupBtn(delBtn, delText, "-", 24.f);
+    setupBtn(mergeDownBtn, mergeDownText, "Mv", 26.f);
+    setupBtn(mergeVisBtn, mergeVisText, "M*", 26.f);
+    setupBtn(pushBtn, pushText, ">>", 24.f);
+
+    renameBox.setFillColor(WisdomUI::Theme::PanelInset);
     renameBox.setOutlineThickness(1.f);
-    renameBox.setOutlineColor(sf::Color(0, 122, 204));
+    renameBox.setOutlineColor(WisdomUI::Theme::BorderHighlight);
     renameText.setFont(font);
     renameText.setCharacterSize(12);
     renameText.setFillColor(sf::Color::White);
 }
 
-void LayerPanel::update(float dt, bool focusMode) {
-    if (focusMode) targetX = 1920.f;
-    else targetX = (state == LayerPanelState::Pinned || state == LayerPanelState::Visible) ? 1920.f - width : 1920.f;
+void LayerPanel::update(float dt, bool focusMode, bool isOpen) {
+    if (focusMode || !isOpen) targetX = 1920.f;
+    else targetX = 1920.f - 44.f - width;
 
-    currentX += (targetX - currentX) * 15.f * dt;
+    currentX += (targetX - currentX) * 16.f * dt;
 
-    background.setPosition(currentX, 0.f);
-    background.setSize(sf::Vector2f(width, 1080.f));
+    background.setPosition(currentX, 36.f + 32.f);
+    background.setSize(sf::Vector2f(width, 1080.f - (36.f + 32.f + 24.f)));
 
-    handleBg.setPosition(currentX - 24.f, 350.f);
-    handleBg.setSize(sf::Vector2f(24.f, 80.f));
-    handleText.setPosition(currentX - 20.f, 380.f);
+    headerBg.setPosition(currentX, 36.f + 32.f);
+    headerBg.setSize(sf::Vector2f(width, 32.f));
+    headerText.setPosition(currentX + 12.f, 36.f + 32.f + 7.f);
 
-    headerBg.setPosition(currentX, 0.f);
-    headerBg.setSize(sf::Vector2f(width, 30.f));
-    headerText.setPosition(currentX + 10.f, 5.f);
+    closeBtn.setPosition(currentX + width - 30.f, 36.f + 32.f + 5.f);
+    closeText.setPosition(currentX + width - 23.f, 36.f + 32.f + 7.f);
 
-    pinBtn.setPosition(currentX + 5.f, 40.f);
-    pinText.setPosition(currentX + 15.f, 43.f);
+    float actionY = 36.f + 32.f + 38.f;
+    pinBtn.setPosition(currentX + 8.f, actionY);
+    pinText.setPosition(currentX + 18.f, actionY + 3.f);
 
-    if (state == LayerPanelState::Pinned) {
-        handleText.setString("x");
-        pinText.setString("Unpin");
-    }
-    else {
-        handleText.setString("< L");
-        pinText.setString("Pin");
-    }
+    pushBtn.setPosition(currentX + width - 170.f, actionY);
+    pushText.setPosition(currentX + width - 165.f, actionY + 3.f);
 
-    pushBtn.setPosition(currentX + width - 180.f, 40.f);
-    pushText.setPosition(currentX + width - 175.f, 43.f);
+    addBtn.setPosition(currentX + width - 142.f, actionY);
+    addText.setPosition(currentX + width - 135.f, actionY + 3.f);
 
-    addBtn.setPosition(currentX + width - 150.f, 40.f);
-    addText.setPosition(currentX + width - 142.f, 43.f);
+    dupBtn.setPosition(currentX + width - 114.f, actionY);
+    dupText.setPosition(currentX + width - 107.f, actionY + 3.f);
 
-    dupBtn.setPosition(currentX + width - 120.f, 40.f);
-    dupText.setPosition(currentX + width - 112.f, 43.f);
+    delBtn.setPosition(currentX + width - 86.f, actionY);
+    delText.setPosition(currentX + width - 79.f, actionY + 3.f);
 
-    delBtn.setPosition(currentX + width - 90.f, 40.f);
-    delText.setPosition(currentX + width - 83.f, 43.f);
+    mergeDownBtn.setPosition(currentX + width - 58.f, actionY);
+    mergeDownText.setPosition(currentX + width - 53.f, actionY + 3.f);
 
-    mergeDownBtn.setPosition(currentX + width - 60.f, 40.f);
-    mergeDownText.setPosition(currentX + width - 55.f, 43.f);
-
-    mergeVisBtn.setPosition(currentX + width - 30.f, 40.f);
-    mergeVisText.setPosition(currentX + width - 25.f, 43.f);
+    mergeVisBtn.setPosition(currentX + width - 28.f, actionY);
+    mergeVisText.setPosition(currentX + width - 23.f, actionY + 3.f);
 }
 
 void LayerPanel::updateHover(sf::Vector2f mousePos, bool canOpen) {
     bool inPanel = background.getGlobalBounds().contains(mousePos);
-    bool inHandle = handleBg.getGlobalBounds().contains(mousePos);
-
     if (state == LayerPanelState::Hidden) {
-        if (canOpen && inHandle) state = LayerPanelState::Visible;
+        if (canOpen && inPanel) state = LayerPanelState::Visible;
     }
     else if (state == LayerPanelState::Visible) {
-        if (!inPanel && !inHandle) state = LayerPanelState::Hidden;
+        if (!inPanel) state = LayerPanelState::Hidden;
     }
 }
 
 bool LayerPanel::isPanelPinned() const { return state == LayerPanelState::Pinned; }
-void LayerPanel::forceClose() { if (state != LayerPanelState::Pinned) state = LayerPanelState::Hidden; }
+void LayerPanel::forceClose() { targetX = 1920.f; }
 bool LayerPanel::isHovered() const { return state == LayerPanelState::Visible; }
 float LayerPanel::getCurrentX() const { return currentX; }
-bool LayerPanel::isOpen() const { return state != LayerPanelState::Hidden; }
-sf::FloatRect LayerPanel::getHandleBounds() const { return handleBg.getGlobalBounds(); }
+bool LayerPanel::isOpen() const { return currentX < 1918.f; }
+sf::FloatRect LayerPanel::getHandleBounds() const { return sf::FloatRect(0, 0, 0, 0); }
 
 sf::Color LayerPanel::getTagColor(int tagId) const {
     switch (tagId) {
-    case 1: return sf::Color(255, 50, 50);
-    case 2: return sf::Color(50, 100, 255);
-    case 3: return sf::Color(50, 200, 50);
-    case 4: return sf::Color(255, 200, 50);
-    case 5: return sf::Color(150, 50, 200);
-    case 6: return sf::Color(255, 120, 0);
-    default: return sf::Color(100, 100, 110);
+    case 1: return sf::Color(255, 60, 60);
+    case 2: return sf::Color(60, 140, 255);
+    case 3: return sf::Color(60, 220, 80);
+    case 4: return sf::Color(255, 215, 60);
+    case 5: return sf::Color(180, 70, 240);
+    case 6: return sf::Color(255, 140, 30);
+    default: return WisdomUI::Theme::Border;
     }
 }
 
 void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame) {
-    window.draw(background);
-    if (state != LayerPanelState::Pinned) {
-        window.draw(handleBg);
-        window.draw(handleText);
-    }
+    if (currentX >= 1918.f) return;
+
+    WisdomUI::Theme::DrawFiligreePanel(window, background.getGlobalBounds(), 1.0f);
 
     window.draw(headerBg);
     window.draw(headerText);
+    window.draw(closeBtn);
+    window.draw(closeText);
 
     auto styleBtn = [&](sf::RectangleShape& r, sf::Text& t) {
-        r.setFillColor(r.getGlobalBounds().contains(sf::Vector2f(sf::Mouse::getPosition(window))) ? sf::Color(80, 80, 90) : sf::Color(50, 50, 60));
-        window.draw(r); window.draw(t);
+        bool hov = r.getGlobalBounds().contains(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
+        r.setFillColor(hov ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
+        r.setOutlineColor(hov ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
+        window.draw(r);
+        window.draw(t);
         };
-
-    if (state == LayerPanelState::Pinned) {
-        pinBtn.setOutlineThickness(1.f);
-        pinBtn.setOutlineColor(sf::Color(0, 191, 255));
-        pinText.setFillColor(sf::Color(0, 191, 255));
-    }
-    else {
-        pinBtn.setOutlineThickness(0.f);
-        pinText.setFillColor(sf::Color::White);
-    }
 
     styleBtn(pinBtn, pinText);
     styleBtn(pushBtn, pushText);
@@ -175,11 +163,11 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
     rowCache.resize(frame->layers.size());
 
     float rowHeight = 45.f;
-    float startY = 80.f;
+    float startY = 36.f + 32.f + 68.f;
 
     if (isDragging && !sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
         isDragging = false;
-        float my = static_cast<float>(sf::Mouse::getPosition(window).y);
+        float my = static_cast<float>(window.mapPixelToCoords(sf::Mouse::getPosition(window)).y);
         if (draggedLayerIndex != -1) {
             for (int i = 0; i < static_cast<int>(rowCache.size()); ++i) {
                 float checkY = startY + (rowCache.size() - 1 - i) * rowHeight - scrollOffset;
@@ -194,28 +182,33 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         draggedLayerIndex = -1;
     }
 
-    sf::View oldView = window.getView();
-    sf::View panelView(sf::FloatRect(currentX, startY, width, 1080.f - startY));
-    panelView.setViewport(sf::FloatRect(currentX / window.getSize().x, startY / window.getSize().y, width / window.getSize().x, (1080.f - startY) / window.getSize().y));
-    window.setView(panelView);
-
     for (int i = static_cast<int>(frame->layers.size()) - 1; i >= 0; --i) {
         float curY = startY + (frame->layers.size() - 1 - i) * rowHeight - scrollOffset;
-        if (isDragging && draggedLayerIndex == i) curY = sf::Mouse::getPosition(window).y - 20.f;
+        if (isDragging && draggedLayerIndex == i) curY = window.mapPixelToCoords(sf::Mouse::getPosition(window)).y - 20.f;
 
-        rowCache[i].bounds = sf::FloatRect(currentX, curY, width, rowHeight);
-        rowCache[i].colorTagBounds = sf::FloatRect(currentX + 2.f, curY + 1.f, 6.f, rowHeight - 2.f);
-        rowCache[i].eyeBounds = sf::FloatRect(currentX + 12.f, curY + 10.f, 20.f, 20.f);
-        rowCache[i].lockBounds = sf::FloatRect(currentX + 37.f, curY + 10.f, 20.f, 20.f);
-        rowCache[i].persistBounds = sf::FloatRect(currentX + 62.f, curY + 10.f, 20.f, 20.f);
-        rowCache[i].nameBounds = sf::FloatRect(currentX + 125.f, curY + 5.f, 150.f, 20.f);
-        rowCache[i].opacityBounds = sf::FloatRect(currentX + 125.f, curY + 28.f, 60.f, 10.f);
-        rowCache[i].blendBounds = sf::FloatRect(currentX + 195.f, curY + 25.f, 80.f, 15.f);
+        if (curY + rowHeight < startY || curY > 1080.f - 24.f) continue;
 
-        sf::RectangleShape rowBg(sf::Vector2f(width - 4.f, rowHeight - 2.f));
-        rowBg.setPosition(currentX + 2.f, curY + 1.f);
-        if (i == canvas.getActiveLayer()) rowBg.setFillColor(sf::Color(0, 122, 204, 150));
-        else rowBg.setFillColor(sf::Color(35, 35, 40, 200));
+        rowCache[i].bounds = sf::FloatRect(currentX + 4.f, curY, width - 8.f, rowHeight - 2.f);
+        rowCache[i].colorTagBounds = sf::FloatRect(currentX + 6.f, curY + 2.f, 4.f, rowHeight - 6.f);
+        rowCache[i].eyeBounds = sf::FloatRect(currentX + 14.f, curY + 11.f, 18.f, 18.f);
+        rowCache[i].lockBounds = sf::FloatRect(currentX + 36.f, curY + 11.f, 18.f, 18.f);
+        rowCache[i].persistBounds = sf::FloatRect(currentX + 58.f, curY + 11.f, 18.f, 18.f);
+        rowCache[i].nameBounds = sf::FloatRect(currentX + 122.f, curY + 4.f, 145.f, 18.f);
+        rowCache[i].opacityBounds = sf::FloatRect(currentX + 122.f, curY + 26.f, 65.f, 8.f);
+        rowCache[i].blendBounds = sf::FloatRect(currentX + 195.f, curY + 23.f, 75.f, 14.f);
+
+        sf::RectangleShape rowBg(sf::Vector2f(rowCache[i].bounds.width, rowCache[i].bounds.height));
+        rowBg.setPosition(rowCache[i].bounds.left, rowCache[i].bounds.top);
+        if (i == canvas.getActiveLayer()) {
+            rowBg.setFillColor(WisdomUI::Theme::PanelHover);
+            rowBg.setOutlineThickness(1.f);
+            rowBg.setOutlineColor(WisdomUI::Theme::BorderHighlight);
+        }
+        else {
+            rowBg.setFillColor(WisdomUI::Theme::PanelInset);
+            rowBg.setOutlineThickness(1.f);
+            rowBg.setOutlineColor(WisdomUI::Theme::Border);
+        }
         window.draw(rowBg);
 
         sf::RectangleShape colorTag(sf::Vector2f(rowCache[i].colorTagBounds.width, rowCache[i].colorTagBounds.height));
@@ -224,33 +217,44 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         window.draw(colorTag);
 
         auto drawToggle = [&](sf::FloatRect r, bool toggleState, std::string label, sf::Color activeCol) {
-            sf::RectangleShape toggle(sf::Vector2f(16.f, 16.f));
-            toggle.setPosition(r.left + 2.f, r.top + 2.f);
-            toggle.setFillColor(toggleState ? activeCol : sf::Color(60, 60, 70));
-            sf::Text t(label, font, 10);
-            t.setPosition(r.left + 4.f, r.top + 2.f);
-            t.setFillColor(sf::Color::White);
-            window.draw(toggle); window.draw(t);
+            sf::RectangleShape toggle(sf::Vector2f(r.width, r.height));
+            toggle.setPosition(r.left, r.top);
+            toggle.setFillColor(toggleState ? activeCol : WisdomUI::Theme::Background);
+            toggle.setOutlineThickness(1.f);
+            toggle.setOutlineColor(toggleState ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
+            window.draw(toggle);
+
+            sf::Text t(label, font, 9);
+            t.setPosition(r.left + 5.f, r.top + 2.f);
+            t.setFillColor(toggleState ? sf::Color::White : WisdomUI::Theme::TextMuted);
+            window.draw(t);
             };
 
-        drawToggle(rowCache[i].eyeBounds, frame->layers[i].visible, "O", sf::Color(200, 200, 200));
-        drawToggle(rowCache[i].lockBounds, frame->layers[i].locked, "L", sf::Color(200, 50, 50));
-        drawToggle(rowCache[i].persistBounds, frame->layers[i].persistent, "P", sf::Color(255, 150, 0));
+        drawToggle(rowCache[i].eyeBounds, frame->layers[i].visible, "V", WisdomUI::Theme::Accent);
+        drawToggle(rowCache[i].lockBounds, frame->layers[i].locked, "L", sf::Color(190, 50, 50));
+        drawToggle(rowCache[i].persistBounds, frame->layers[i].persistent, "P", WisdomUI::Theme::Gold);
 
-        sf::RectangleShape check1(sf::Vector2f(17.f, 17.f)); check1.setFillColor(sf::Color(100, 100, 100));
-        sf::RectangleShape check2(sf::Vector2f(17.f, 17.f)); check2.setFillColor(sf::Color(150, 150, 150));
-        float tX = currentX + 85.f; float tY = curY + 5.f;
-        check1.setPosition(tX, tY); window.draw(check1);
-        check2.setPosition(tX + 17.f, tY); window.draw(check2);
-        check2.setPosition(tX, tY + 17.f); window.draw(check2);
-        check1.setPosition(tX + 17.f, tY + 17.f); window.draw(check1);
+        float tX = currentX + 80.f;
+        float tY = curY + 4.f;
 
-        sf::RectangleShape thumb(sf::Vector2f(34.f, 34.f));
-        thumb.setPosition(tX, tY);
-        thumb.setTexture(&frame->layers[i].texture->getTexture());
-        thumb.setOutlineThickness(1.f);
-        thumb.setOutlineColor(sf::Color(255, 255, 255, 50));
-        window.draw(thumb);
+        sf::RectangleShape thumbBase(sf::Vector2f(34.f, 34.f));
+        thumbBase.setPosition(tX, tY);
+        thumbBase.setFillColor(sf::Color(180, 180, 180));
+        thumbBase.setOutlineThickness(1.f);
+        thumbBase.setOutlineColor(WisdomUI::Theme::Border);
+        window.draw(thumbBase);
+
+        if (frame->layers[i].texture) {
+            sf::Sprite thumb(frame->layers[i].texture->getTexture());
+            float canvasW = static_cast<float>(canvas.getCanvasSize().x);
+            float canvasH = static_cast<float>(canvas.getCanvasSize().y);
+            if (canvasW > 0.f && canvasH > 0.f) {
+                float s = std::min(34.f / canvasW, 34.f / canvasH);
+                thumb.setScale(s, s);
+                thumb.setPosition(tX, tY);
+                window.draw(thumb);
+            }
+        }
 
         if (renamingLayerIndex == i) {
             renameBox.setPosition(rowCache[i].nameBounds.left, rowCache[i].nameBounds.top);
@@ -261,19 +265,22 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
             window.draw(renameText);
         }
         else {
-            sf::Text nText(frame->layers[i].name, font, 12);
-            nText.setPosition(rowCache[i].nameBounds.left, rowCache[i].nameBounds.top + 2.f);
-            nText.setFillColor(sf::Color::White);
+            sf::Text nText(frame->layers[i].name, font, 11);
+            nText.setPosition(rowCache[i].nameBounds.left, rowCache[i].nameBounds.top);
+            nText.setFillColor(i == canvas.getActiveLayer() ? WisdomUI::Theme::Gold : WisdomUI::Theme::TextPrimary);
             window.draw(nText);
         }
 
         sf::RectangleShape opTrack(sf::Vector2f(rowCache[i].opacityBounds.width, rowCache[i].opacityBounds.height));
         opTrack.setPosition(rowCache[i].opacityBounds.left, rowCache[i].opacityBounds.top);
-        opTrack.setFillColor(sf::Color(50, 50, 60));
-        sf::RectangleShape opFill(sf::Vector2f(rowCache[i].opacityBounds.width * frame->layers[i].opacity, rowCache[i].opacityBounds.height));
+        opTrack.setFillColor(WisdomUI::Theme::PanelInset);
+        window.draw(opTrack);
+
+        float opVal = frame->layers[i].opacity > 1.0f ? (frame->layers[i].opacity / 255.f) : frame->layers[i].opacity;
+        sf::RectangleShape opFill(sf::Vector2f(rowCache[i].opacityBounds.width * std::clamp(opVal, 0.f, 1.f), rowCache[i].opacityBounds.height));
         opFill.setPosition(rowCache[i].opacityBounds.left, rowCache[i].opacityBounds.top);
-        opFill.setFillColor(sf::Color(100, 150, 255));
-        window.draw(opTrack); window.draw(opFill);
+        opFill.setFillColor(WisdomUI::Theme::BorderHighlight);
+        window.draw(opFill);
 
         std::string modeStr = "Norm";
         if (frame->layers[i].blendMode == BlendMode::Multiply) modeStr = "Mult";
@@ -282,22 +289,22 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         else if (frame->layers[i].blendMode == BlendMode::Overlay) modeStr = "Ovrl";
         sf::Text bText(modeStr, font, 10);
         bText.setPosition(rowCache[i].blendBounds.left, rowCache[i].blendBounds.top);
-        bText.setFillColor(sf::Color(150, 150, 150));
+        bText.setFillColor(WisdomUI::Theme::TextSecondary);
         window.draw(bText);
     }
 
-    maxScroll = std::max(0.f, static_cast<float>(frame->layers.size()) * rowHeight - (1080.f - startY));
-    window.setView(oldView);
+    maxScroll = std::max(0.f, static_cast<float>(frame->layers.size()) * rowHeight - (1080.f - startY - 24.f));
 }
 
 std::string LayerPanel::processClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame) {
+    if (closeBtn.getGlobalBounds().contains(mousePos)) {
+        forceClose();
+        return "layer_close";
+    }
+
     if (pinBtn.getGlobalBounds().contains(mousePos)) {
         state = (state == LayerPanelState::Pinned) ? LayerPanelState::Visible : LayerPanelState::Pinned;
         return "layer_pin";
-    }
-    if (state == LayerPanelState::Hidden && handleBg.getGlobalBounds().contains(mousePos)) {
-        state = LayerPanelState::Pinned;
-        return "handle_click";
     }
 
     if (pushBtn.getGlobalBounds().contains(mousePos)) return "layer_push";
@@ -380,7 +387,7 @@ bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canv
         }
     }
 
-    if (event.type == sf::Event::MouseWheelScrolled && (background.getGlobalBounds().contains(mousePos) || handleBg.getGlobalBounds().contains(mousePos))) {
+    if (event.type == sf::Event::MouseWheelScrolled && background.getGlobalBounds().contains(mousePos)) {
         scrollOffset -= event.mouseWheelScroll.delta * 20.f;
         scrollOffset = std::clamp(scrollOffset, 0.f, maxScroll);
         return true;

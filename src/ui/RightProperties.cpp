@@ -1,4 +1,5 @@
 #include "RightProperties.h"
+#include "../UI/UITheme.h"
 #include "../core/Canvas.h"
 #include <sstream>
 #include <iomanip>
@@ -8,173 +9,167 @@ RightProperties::RightProperties() : width(260.f), currentX(1920.f), targetX(192
 void RightProperties::init() {
     font.loadFromFile("assets/font.otf");
 
-    background.setSize(sf::Vector2f(width, 1080.f));
-    background.setFillColor(sf::Color(15, 15, 18, 220));
+    background.setFillColor(WisdomUI::Theme::Panel);
     background.setOutlineThickness(1.f);
-    background.setOutlineColor(sf::Color(255, 255, 255, 15));
+    background.setOutlineColor(WisdomUI::Theme::Border);
 
-    handleBg.setSize(sf::Vector2f(24.f, 80.f));
-    handleBg.setFillColor(sf::Color(30, 30, 35, 200));
-    handleBg.setOutlineThickness(1.f);
-    handleBg.setOutlineColor(sf::Color(255, 255, 255, 30));
+    headerBg.setFillColor(WisdomUI::Theme::PanelInset);
+    headerText.setFont(font);
+    headerText.setString("PROPERTIES");
+    headerText.setCharacterSize(13);
+    headerText.setFillColor(WisdomUI::Theme::Gold);
 
-    handleLabel.setFont(font);
-    handleLabel.setString("< P");
-    handleLabel.setCharacterSize(14);
-    handleLabel.setFillColor(sf::Color(200, 200, 200));
+    closeBtn.setSize(sf::Vector2f(22.f, 22.f));
+    closeBtn.setFillColor(WisdomUI::Theme::PanelInset);
+    closeBtn.setOutlineThickness(1.f);
+    closeBtn.setOutlineColor(WisdomUI::Theme::Border);
+    closeText.setFont(font);
+    closeText.setString("X");
+    closeText.setCharacterSize(11);
+    closeText.setFillColor(WisdomUI::Theme::TextSecondary);
 
-    pinBtn.setSize(sf::Vector2f(width - 40.f, 24.f));
-    pinBtn.setFillColor(sf::Color(255, 255, 255, 10));
+    pinBtn.setSize(sf::Vector2f(width - 24.f, 22.f));
+    pinBtn.setFillColor(WisdomUI::Theme::PanelInset);
+    pinBtn.setOutlineThickness(1.f);
+    pinBtn.setOutlineColor(WisdomUI::Theme::Border);
 
     pinLabel.setFont(font);
     pinLabel.setString("Pin Panel");
-    pinLabel.setCharacterSize(12);
-    pinLabel.setFillColor(sf::Color(180, 180, 180));
+    pinLabel.setCharacterSize(11);
+    pinLabel.setFillColor(WisdomUI::Theme::TextSecondary);
 
     auto createSection = [&](std::string id, std::string title, std::vector<std::pair<std::string, std::string>> btns) {
         PropSection sec;
         sec.id = id;
         sec.isOpen = true;
 
-        sec.headerRect.setSize(sf::Vector2f(width, 35.f));
+        sec.headerRect.setSize(sf::Vector2f(width - 24.f, 26.f));
+        sec.headerRect.setFillColor(WisdomUI::Theme::PanelInset);
+        sec.headerRect.setOutlineThickness(1.f);
+        sec.headerRect.setOutlineColor(WisdomUI::Theme::Border);
+
         sec.headerLabel.setFont(font);
         sec.headerLabel.setString(title);
-        sec.headerLabel.setCharacterSize(14);
-        sec.headerLabel.setFillColor(sf::Color(230, 230, 235));
+        sec.headerLabel.setCharacterSize(12);
+        sec.headerLabel.setFillColor(WisdomUI::Theme::Gold);
 
         for (const auto& pair : btns) {
             PropItem item;
             item.id = pair.first;
-            item.rect.setSize(sf::Vector2f(width - 40.f, 30.f));
+            item.rect.setSize(sf::Vector2f(width - 32.f, 24.f));
+            item.rect.setFillColor(WisdomUI::Theme::PanelInset);
+            item.rect.setOutlineThickness(1.f);
+            item.rect.setOutlineColor(WisdomUI::Theme::Border);
+
             item.label.setFont(font);
             item.label.setString(pair.second);
-            item.label.setCharacterSize(12);
+            item.label.setCharacterSize(11);
+            item.label.setFillColor(WisdomUI::Theme::TextPrimary);
             sec.items.push_back(item);
         }
         sections.push_back(sec);
         };
 
-    createSection("anim", "ANIMATION", { {"fps_up", "Increase Speed (+FPS)"}, {"fps_down", "Decrease Speed (-FPS)"}, {"fps_display", "Current: 12 FPS"} });
-    createSection("onion", "ONION SKIN", { {"onion_toggle", "Toggle Onion Skin"}, {"onion_op_up", "Opacity +"}, {"onion_op_down", "Opacity -"} });
+    createSection("anim", "ANIMATION SPEED", { {"fps_up", "+ FPS Speed"}, {"fps_down", "- FPS Speed"}, {"fps_display", "Speed: 12 FPS"} });
+    createSection("onion", "ONION REFERENCE", { {"onion_toggle", "Toggle Reference"}, {"onion_op_up", "Opacity +"}, {"onion_op_down", "Opacity -"} });
     createSection("themes", "THEMES", { {"theme_all", "All Objects"}, {"theme_struct", "Structures Only"}, {"theme_clutter", "Clutter Only"}, {"theme_custom", "Custom Art"} });
     createSection("gen", "GENERATION", { {"theme_wfc", "Procedural WFC"}, {"toggle_terrain", "Toggle Terrain"} });
-    createSection("fx", "LIGHTING & FX", { {"toggle_light", "Toggle Lighting"} });
+    createSection("fx", "EFFECTS", { {"toggle_light", "Toggle Lighting"} });
 
     updateLayout();
 }
 
-void RightProperties::update(float dt, bool focusMode) {
-    if (focusMode) {
-        targetX = 1920.f;
-    }
-    else {
-        if (state == RightPanelState::Pinned || state == RightPanelState::Visible) {
-            targetX = 1920.f - width;
-        }
-        else {
-            targetX = 1920.f;
-        }
-    }
+void RightProperties::update(float dt, bool focusMode, bool isOpen) {
+    if (focusMode || !isOpen) targetX = 1920.f;
+    else targetX = 1920.f - 44.f - width;
 
-    currentX += (targetX - currentX) * 15.0f * dt;
+    currentX += (targetX - currentX) * 16.0f * dt;
 
-    background.setPosition(currentX, 0.f);
+    background.setPosition(currentX, 36.f + 32.f);
+    background.setSize(sf::Vector2f(width, 1080.f - (36.f + 32.f + 24.f)));
 
-    handleBg.setPosition(currentX - 24.f, 50.f);
-    handleLabel.setPosition(currentX - 18.f, 80.f);
+    headerBg.setPosition(currentX, 36.f + 32.f);
+    headerBg.setSize(sf::Vector2f(width, 32.f));
+    headerText.setPosition(currentX + 12.f, 36.f + 32.f + 7.f);
 
-    if (state == RightPanelState::Pinned) {
-        handleLabel.setString("x");
-        pinLabel.setString("Unpin Panel");
-        pinLabel.setFillColor(sf::Color(0, 191, 255));
-    }
-    else {
-        handleLabel.setString("< P");
-        pinLabel.setString("Pin Panel");
-        pinLabel.setFillColor(sf::Color(180, 180, 180));
-    }
+    closeBtn.setPosition(currentX + width - 30.f, 36.f + 32.f + 5.f);
+    closeText.setPosition(currentX + width - 23.f, 36.f + 32.f + 7.f);
 
-    pinBtn.setPosition(currentX + 20.f, 20.f);
-    pinLabel.setPosition(currentX + (width / 2.f) - 30.f, 24.f);
+    pinBtn.setPosition(currentX + 12.f, 36.f + 32.f + 38.f);
+    pinLabel.setPosition(currentX + 22.f, 36.f + 32.f + 41.f);
 
     updateLayout();
 }
 
 void RightProperties::updateLayout() {
-    float startY = 70.f;
+    float startY = 36.f + 32.f + 68.f;
     for (auto& sec : sections) {
-        sec.headerRect.setPosition(currentX, startY);
-        sec.headerLabel.setPosition(currentX + 20.f, startY + 10.f);
-        startY += 35.f;
+        sec.headerRect.setPosition(currentX + 12.f, startY);
+        sec.headerLabel.setPosition(currentX + 20.f, startY + 5.f);
+        startY += 30.f;
 
         if (sec.isOpen) {
             for (auto& item : sec.items) {
-                item.rect.setPosition(currentX + 20.f, startY);
-                item.label.setPosition(currentX + 30.f, startY + 8.f);
-                startY += 35.f;
+                item.rect.setPosition(currentX + 16.f, startY);
+                item.label.setPosition(currentX + 24.f, startY + 4.f);
+                startY += 28.f;
             }
-            startY += 10.f;
+            startY += 6.f;
         }
     }
 }
 
 void RightProperties::updateHover(sf::Vector2f mousePos, bool canOpen) {
     bool inPanel = background.getGlobalBounds().contains(mousePos);
-    bool inHandle = handleBg.getGlobalBounds().contains(mousePos);
-
     if (state == RightPanelState::Hidden) {
-        if (canOpen && inHandle) state = RightPanelState::Visible;
-        hovered = inHandle;
+        if (canOpen && inPanel) state = RightPanelState::Visible;
     }
     else if (state == RightPanelState::Visible) {
-        if (!inPanel && !inHandle) state = RightPanelState::Hidden;
-        hovered = inPanel || inHandle;
-    }
-    else {
-        hovered = inPanel || inHandle;
-    }
-
-    for (auto& sec : sections) {
-        sec.isHovered = sec.headerRect.getGlobalBounds().contains(mousePos);
-        if (sec.isOpen) {
-            for (auto& item : sec.items) {
-                item.isHovered = item.rect.getGlobalBounds().contains(mousePos);
-            }
-        }
+        if (!inPanel) state = RightPanelState::Hidden;
     }
 }
 
 void RightProperties::draw(sf::RenderWindow& window) {
-    window.draw(background);
+    if (currentX >= 1918.f) return;
 
-    if (state != RightPanelState::Pinned) {
-        window.draw(handleBg);
-        window.draw(handleLabel);
-    }
+    WisdomUI::Theme::DrawFiligreePanel(window, background.getGlobalBounds(), 1.0f);
 
-    pinBtn.setFillColor(pinBtn.getGlobalBounds().contains(sf::Vector2f(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y))) ? sf::Color(255, 255, 255, 25) : sf::Color(255, 255, 255, 10));
-    window.draw(pinBtn);
-    window.draw(pinLabel);
+    window.draw(headerBg);
+    window.draw(headerText);
+    window.draw(closeBtn);
+    window.draw(closeText);
+
+    auto styleBtn = [&](sf::RectangleShape& r, sf::Text& t) {
+        bool hov = r.getGlobalBounds().contains(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
+        r.setFillColor(hov ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
+        r.setOutlineColor(hov ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
+        window.draw(r);
+        window.draw(t);
+        };
+
+    styleBtn(pinBtn, pinLabel);
 
     for (auto& sec : sections) {
-        sec.headerRect.setFillColor(sec.isHovered ? sf::Color(255, 255, 255, 10) : sf::Color::Transparent);
         window.draw(sec.headerRect);
 
-        sf::Text arrow = sec.headerLabel;
-        arrow.setString(sec.isOpen ? "v" : "<");
-        arrow.setPosition(currentX + width - 30.f, sec.headerRect.getPosition().y + 10.f);
+        sf::Text arrow(sec.isOpen ? "v" : ">", font, 11);
+        arrow.setFillColor(WisdomUI::Theme::Gold);
+        arrow.setPosition(currentX + width - 26.f, sec.headerRect.getPosition().y + 5.f);
         window.draw(arrow);
         window.draw(sec.headerLabel);
 
         if (sec.isOpen) {
             for (auto& item : sec.items) {
                 if (item.isActive) {
-                    item.rect.setFillColor(sf::Color(0, 122, 204, 180));
+                    item.rect.setFillColor(WisdomUI::Theme::Accent);
+                    item.rect.setOutlineColor(WisdomUI::Theme::BorderHighlight);
                     item.label.setFillColor(sf::Color::White);
                 }
                 else {
-                    item.rect.setFillColor(item.isHovered ? sf::Color(255, 255, 255, 20) : sf::Color(255, 255, 255, 5));
-                    item.label.setFillColor(sf::Color(220, 220, 225));
+                    bool hov = item.rect.getGlobalBounds().contains(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
+                    item.rect.setFillColor(hov ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
+                    item.rect.setOutlineColor(hov ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
+                    item.label.setFillColor(hov ? WisdomUI::Theme::Gold : WisdomUI::Theme::TextPrimary);
                 }
                 window.draw(item.rect);
                 window.draw(item.label);
@@ -184,16 +179,15 @@ void RightProperties::draw(sf::RenderWindow& window) {
 }
 
 std::string RightProperties::handleClick(sf::Vector2f mousePos) {
+    if (closeBtn.getGlobalBounds().contains(mousePos)) {
+        forceClose();
+        return "prop_close";
+    }
+
     if (pinBtn.getGlobalBounds().contains(mousePos)) {
         state = (state == RightPanelState::Pinned) ? RightPanelState::Visible : RightPanelState::Pinned;
         pinned = (state == RightPanelState::Pinned);
         return "pin_toggle";
-    }
-
-    if (state == RightPanelState::Hidden && handleBg.getGlobalBounds().contains(mousePos)) {
-        state = RightPanelState::Pinned;
-        pinned = true;
-        return "handle_click";
     }
 
     for (auto& sec : sections) {
@@ -215,7 +209,7 @@ std::string RightProperties::handleClick(sf::Vector2f mousePos) {
 }
 
 bool RightProperties::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canvas& canvas, int currentFrame) {
-    return false; // Properties logic explicitly mapped and isolated directly through handleClick orchestration
+    return false;
 }
 
 void RightProperties::syncState(const std::string& theme, bool lighting, bool terrain, bool onion, float onionOpacity, float currentFps) {
@@ -233,22 +227,21 @@ void RightProperties::syncState(const std::string& theme, bool lighting, bool te
 
             if (item.id == "onion_toggle") {
                 std::stringstream ss;
-                ss << "Toggle Onion (" << static_cast<int>((onionOpacity / 255.f) * 100) << "%)";
+                ss << "Reference (" << static_cast<int>((onionOpacity / 255.f) * 100) << "%)";
                 item.label.setString(ss.str());
             }
 
             if (item.id == "fps_display") {
                 std::stringstream ss;
-                ss << "Current Speed: " << static_cast<int>(currentFps) << " FPS";
+                ss << "Speed: " << static_cast<int>(currentFps) << " FPS";
                 item.label.setString(ss.str());
-                item.rect.setFillColor(sf::Color(0, 0, 0, 0));
             }
         }
     }
 }
 
 float RightProperties::getCurrentX() const { return currentX; }
-void RightProperties::forceClose() { if (state != RightPanelState::Pinned) state = RightPanelState::Hidden; hovered = false; pinned = false; }
-bool RightProperties::isHovered() const { return hovered; }
+void RightProperties::forceClose() { targetX = 1920.f; }
+bool RightProperties::isHovered() const { return state == RightPanelState::Visible; }
 bool RightProperties::isPanelPinned() const { return state == RightPanelState::Pinned; }
-sf::FloatRect RightProperties::getHandleBounds() const { return handleBg.getGlobalBounds(); }
+sf::FloatRect RightProperties::getHandleBounds() const { return sf::FloatRect(0, 0, 0, 0); }

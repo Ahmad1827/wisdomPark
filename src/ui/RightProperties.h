@@ -22,13 +22,16 @@ struct PropSection {
     bool isHovered = false;
 };
 
-class Canvas; // Forward declaration
+class Canvas;
 
 class RightProperties {
 private:
     sf::RectangleShape background;
-    sf::RectangleShape handleBg;
-    sf::Text handleLabel;
+    sf::RectangleShape headerBg;
+    sf::Text headerText;
+    sf::RectangleShape closeBtn;
+    sf::Text closeText;
+
     sf::RectangleShape pinBtn;
     sf::Text pinLabel;
     std::vector<PropSection> sections;
@@ -46,7 +49,7 @@ private:
 public:
     RightProperties();
     void init();
-    void update(float dt, bool focusMode);
+    void update(float dt, bool focusMode, bool isOpen = true);
     void updateHover(sf::Vector2f mousePos, bool canOpen);
     void draw(sf::RenderWindow& window);
     std::string handleClick(sf::Vector2f mousePos);
