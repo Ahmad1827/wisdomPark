@@ -225,7 +225,9 @@
     <ClCompile Include="src\core\Timeline.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\ui\LeftToolbar.cpp" />
+    <ClCompile Include="src\ui\Panels\RightDockTabs.cpp" />
     <ClCompile Include="src\ui\Panels\StatusBar.cpp" />
+    <ClCompile Include="src\ui\Panels\TimelineHeader.cpp" />
     <ClCompile Include="src\ui\Panels\ToolDock.cpp" />
     <ClCompile Include="src\ui\Panels\ToolOptionsBar.cpp" />
     <ClCompile Include="src\ui\Panels\TopBar.cpp" />
@@ -344,7 +346,9 @@
     <ClInclude Include="src\ui\AIPanel.h" />
     <ClInclude Include="src\ui\AIReviewModal.h" />
     <ClInclude Include="src\ui\GradientPanel.h" />
+    <ClInclude Include="src\ui\Panels\RightDockTabs.h" />
     <ClInclude Include="src\ui\Panels\StatusBar.h" />
+    <ClInclude Include="src\ui\Panels\TimelineHeader.h" />
     <ClInclude Include="src\ui\Panels\ToolDock.h" />
     <ClInclude Include="src\ui\Panels\ToolOptionsBar.h" />
     <ClInclude Include="src\ui\Panels\TopBar.h" />

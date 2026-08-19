@@ -40,6 +40,8 @@
 #include "../UI/Panels/ToolOptionsBar.h"
 #include "../UI/Panels/ToolDock.h"
 #include "../UI/Panels/StatusBar.h"
+#include "../UI/Panels/RightDockTabs.h"
+#include "../UI/Panels/TimelineHeader.h"
 
 
 enum class MenuState {
@@ -74,6 +76,8 @@ private:
     WisdomUI::ToolDock m_toolDock;
     WisdomUI::StatusBar m_statusBar;
     WisdomUI::WorkspaceLayout m_workspaceLayout;
+    WisdomUI::RightDockTabs m_rightDockTabs;
+    WisdomUI::TimelineHeader m_timelineHeader;
     AssetManager assetManager;
     std::unique_ptr<AssetBrowserPanel> assetBrowser;
     GradientConfig m_gradientConfig;

@@ -1,5 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include "UITheme.h"
+#include <algorithm>
 
 namespace WisdomUI {
 
@@ -9,15 +11,17 @@ namespace WisdomUI {
             sf::FloatRect topBar;
             sf::FloatRect optionsBar;
             sf::FloatRect toolDock;
+            sf::FloatRect rightDockTabs;
             sf::FloatRect rightDock;
             sf::FloatRect timeline;
             sf::FloatRect statusBar;
-            sf::FloatRect canvas; // The most important area
+            sf::FloatRect canvas;
         };
 
         WorkspaceLayout() = default;
 
-        LayoutRegions Update(const sf::Vector2u& windowSize, bool showRightDock, bool showTimeline);
+        static sf::View GetLetterboxView(sf::Vector2u windowSize);
+        LayoutRegions Update(bool showRightDock, bool showTimeline);
 
     private:
         LayoutRegions m_currentLayout;

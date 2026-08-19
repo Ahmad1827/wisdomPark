@@ -95,6 +95,46 @@ namespace WisdomUI {
                 drawPixel(10, 7, 5, 2);
                 drawPixel(6, 6, 4, 4);
             }
+            else if (id == "layers") {
+                drawPixel(2, 2, 12, 3);
+                drawPixel(1, 6, 14, 3);
+                drawPixel(2, 10, 12, 3);
+            }
+            else if (id == "palette") {
+                drawPixel(4, 2, 8, 2);
+                drawPixel(2, 4, 12, 8);
+                drawPixel(4, 12, 8, 2);
+                drawPixel(4, 4, 2, 2);
+                drawPixel(8, 4, 2, 2);
+                drawPixel(10, 7, 2, 2);
+                drawPixel(6, 9, 2, 2);
+            }
+            else if (id == "properties") {
+                drawPixel(2, 3, 12, 2);
+                drawPixel(4, 2, 3, 4);
+                drawPixel(2, 8, 12, 2);
+                drawPixel(9, 7, 3, 4);
+                drawPixel(2, 13, 12, 2);
+                drawPixel(6, 12, 3, 4);
+            }
+            else if (id == "assets") {
+                drawPixel(2, 3, 5, 2);
+                drawPixel(2, 5, 12, 8);
+                drawPixel(4, 7, 8, 4);
+            }
+            else if (id == "audio") {
+                drawPixel(8, 2, 4, 2);
+                drawPixel(8, 4, 2, 7);
+                drawPixel(5, 9, 4, 3);
+                drawPixel(12, 2, 2, 6);
+            }
+            else if (id == "timeline") {
+                drawPixel(2, 4, 12, 8);
+                drawPixel(4, 2, 2, 2);
+                drawPixel(7, 2, 2, 2);
+                drawPixel(10, 2, 2, 2);
+                drawPixel(5, 6, 6, 4);
+            }
             else if (id == "undo") {
                 drawPixel(3, 5, 2, 4);
                 drawPixel(5, 3, 2, 3);

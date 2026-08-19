@@ -1,43 +1,56 @@
 #include "WorkspaceLayout.h"
-#include "UITheme.h"
-#include <algorithm>
 
 namespace WisdomUI {
 
-    WorkspaceLayout::LayoutRegions WorkspaceLayout::Update(const sf::Vector2u& windowSize, bool showRightDock, bool showTimeline) {
-        float width = static_cast<float>(windowSize.x);
-        float height = static_cast<float>(windowSize.y);
+    sf::View WorkspaceLayout::GetLetterboxView(sf::Vector2u windowSize) {
+        sf::View view(sf::FloatRect(0.f, 0.f, 1920.f, 1080.f));
+        float windowRatio = static_cast<float>(windowSize.x) / static_cast<float>(windowSize.y);
+        float viewRatio = 1920.f / 1080.f;
+        float sizeX = 1.0f;
+        float sizeY = 1.0f;
+        float posX = 0.0f;
+        float posY = 0.0f;
 
-        // Top bars span the full width
-        m_currentLayout.topBar = sf::FloatRect(0, 0, width, Theme::TopBarHeight);
-        m_currentLayout.optionsBar = sf::FloatRect(0, Theme::TopBarHeight, width, Theme::OptionsBarHeight);
+        if (windowRatio >= viewRatio) {
+            sizeX = viewRatio / windowRatio;
+            posX = (1.0f - sizeX) / 2.0f;
+        }
+        else {
+            sizeY = windowRatio / viewRatio;
+            posY = (1.0f - sizeY) / 2.0f;
+        }
+
+        view.setViewport(sf::FloatRect(posX, posY, sizeX, sizeY));
+        return view;
+    }
+
+    WorkspaceLayout::LayoutRegions WorkspaceLayout::Update(bool showRightDock, bool showTimeline) {
+        const float W = 1920.0f;
+        const float H = 1080.0f;
+
+        m_currentLayout.topBar = sf::FloatRect(0, 0, W, Theme::TopBarHeight);
+        m_currentLayout.optionsBar = sf::FloatRect(0, Theme::TopBarHeight, W, Theme::OptionsBarHeight);
 
         float currentY = Theme::TopBarHeight + Theme::OptionsBarHeight;
-        float remainingHeight = height - currentY - Theme::StatusBarHeight;
+        float bottomBarY = H - Theme::StatusBarHeight;
+        m_currentLayout.statusBar = sf::FloatRect(0, bottomBarY, W, Theme::StatusBarHeight);
 
-        // Status bar is pinned to the bottom
-        m_currentLayout.statusBar = sf::FloatRect(0, height - Theme::StatusBarHeight, width, Theme::StatusBarHeight);
-
-        // Timeline is pinned above the status bar
         float timelineH = showTimeline ? Theme::TimelineHeight : 0.0f;
-        m_currentLayout.timeline = sf::FloatRect(0, height - Theme::StatusBarHeight - timelineH, width, timelineH);
+        m_currentLayout.timeline = sf::FloatRect(0, bottomBarY - timelineH, W, timelineH);
 
-        remainingHeight -= timelineH;
+        float midHeight = bottomBarY - currentY - timelineH;
 
-        // Left Tool Dock
-        m_currentLayout.toolDock = sf::FloatRect(0, currentY, Theme::ToolDockWidth, remainingHeight);
+        m_currentLayout.toolDock = sf::FloatRect(0, currentY, Theme::ToolDockWidth, midHeight);
 
-        // Right Dock
+        const float rightTabsW = 44.0f;
+        m_currentLayout.rightDockTabs = sf::FloatRect(W - rightTabsW, currentY, rightTabsW, midHeight);
+
         float rightDockW = showRightDock ? Theme::RightDockWidth : 0.0f;
-        m_currentLayout.rightDock = sf::FloatRect(width - rightDockW, currentY, rightDockW, remainingHeight);
+        m_currentLayout.rightDock = sf::FloatRect(W - rightTabsW - rightDockW, currentY, rightDockW, midHeight);
 
-        // Canvas gets the exact remaining internal space
         float canvasX = Theme::ToolDockWidth;
-        float canvasY = currentY;
-        float canvasW = width - Theme::ToolDockWidth - rightDockW;
-        float canvasH = remainingHeight;
-
-        m_currentLayout.canvas = sf::FloatRect(canvasX, canvasY, std::max(0.0f, canvasW), std::max(0.0f, canvasH));
+        float canvasW = W - Theme::ToolDockWidth - rightTabsW - rightDockW;
+        m_currentLayout.canvas = sf::FloatRect(canvasX, currentY, std::max(0.0f, canvasW), std::max(0.0f, midHeight));
 
         return m_currentLayout;
     }
