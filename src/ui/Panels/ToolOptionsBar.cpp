@@ -1,0 +1,110 @@
+#include "ToolOptionsBar.h"
+#include "../UITheme.h"
+#include <algorithm>
+
+namespace WisdomUI {
+
+    ToolOptionsBar::ToolOptionsBar() = default;
+
+    void ToolOptionsBar::Initialize(const sf::Font& font) {
+        m_font = font;
+    }
+
+    void ToolOptionsBar::SetBounds(const sf::FloatRect& bounds) {
+        m_bounds = bounds;
+        m_sliderBounds = sf::FloatRect(bounds.left + 180.0f, bounds.top + 10.0f, 100.0f, 10.0f);
+        m_perfBtnBounds = sf::FloatRect(bounds.left + 360.0f, bounds.top + 5.0f, 80.0f, 20.0f);
+    }
+
+    void ToolOptionsBar::SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect) {
+        m_activeToolName = toolName;
+        m_size = size;
+        m_pixelMode = pixelMode;
+        m_pixelPerfect = pixelPerfect;
+    }
+
+    bool ToolOptionsBar::HandleEvent(const sf::Event& event, const sf::RenderWindow& window,
+        std::function<void(float)> onSizeChange,
+        std::function<void()> onTogglePixelPerfect) {
+        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            if (m_sliderBounds.contains(mousePos)) {
+                m_isDraggingSlider = true;
+            }
+            else if (m_pixelMode && m_perfBtnBounds.contains(mousePos)) {
+                if (onTogglePixelPerfect) onTogglePixelPerfect();
+                return true;
+            }
+        }
+
+        if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+            m_isDraggingSlider = false;
+        }
+
+        if (m_isDraggingSlider && (event.type == sf::Event::MouseMoved || sf::Mouse::isButtonPressed(sf::Mouse::Left))) {
+            float ratio = std::clamp((mousePos.x - m_sliderBounds.left) / m_sliderBounds.width, 0.0f, 1.0f);
+            float newSize = m_pixelMode ? (1.0f + ratio * 31.0f) : (1.0f + ratio * 99.0f);
+            if (onSizeChange) onSizeChange(newSize);
+            return true;
+        }
+
+        return m_bounds.contains(mousePos);
+    }
+
+    void ToolOptionsBar::Render(sf::RenderWindow& window) {
+        sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
+        bg.setPosition(m_bounds.left, m_bounds.top);
+        bg.setFillColor(Theme::Panel);
+        window.draw(bg);
+
+        sf::RectangleShape border(sf::Vector2f(m_bounds.width, Theme::BorderThickness));
+        border.setPosition(m_bounds.left, m_bounds.top + m_bounds.height - Theme::BorderThickness);
+        border.setFillColor(Theme::Border);
+        window.draw(border);
+
+        sf::Text toolLabel("Tool: " + m_activeToolName, m_font, 12);
+        toolLabel.setFillColor(Theme::TextPrimary);
+        toolLabel.setPosition(m_bounds.left + 16.0f, m_bounds.top + 7.0f);
+        window.draw(toolLabel);
+
+        sf::Text sizeLabel("Size:", m_font, 12);
+        sizeLabel.setFillColor(Theme::TextSecondary);
+        sizeLabel.setPosition(m_bounds.left + 140.0f, m_bounds.top + 7.0f);
+        window.draw(sizeLabel);
+
+        sf::RectangleShape sliderTrack(sf::Vector2f(m_sliderBounds.width, m_sliderBounds.height));
+        sliderTrack.setPosition(m_sliderBounds.left, m_sliderBounds.top);
+        sliderTrack.setFillColor(sf::Color(20, 22, 28));
+        sliderTrack.setOutlineThickness(1.0f);
+        sliderTrack.setOutlineColor(Theme::Border);
+        window.draw(sliderTrack);
+
+        float maxVal = m_pixelMode ? 32.0f : 100.0f;
+        float fillW = std::clamp((m_size / maxVal) * m_sliderBounds.width, 2.0f, m_sliderBounds.width);
+        sf::RectangleShape sliderFill(sf::Vector2f(fillW, m_sliderBounds.height));
+        sliderFill.setPosition(m_sliderBounds.left, m_sliderBounds.top);
+        sliderFill.setFillColor(Theme::Accent);
+        window.draw(sliderFill);
+
+        sf::Text sizeVal(std::to_string(static_cast<int>(m_size)) + "px", m_font, 11);
+        sizeVal.setFillColor(Theme::TextPrimary);
+        sizeVal.setPosition(m_sliderBounds.left + m_sliderBounds.width + 10.0f, m_bounds.top + 7.0f);
+        window.draw(sizeVal);
+
+        if (m_pixelMode) {
+            sf::RectangleShape perfBtn(sf::Vector2f(m_perfBtnBounds.width, m_perfBtnBounds.height));
+            perfBtn.setPosition(m_perfBtnBounds.left, m_perfBtnBounds.top);
+            perfBtn.setFillColor(m_pixelPerfect ? Theme::Accent : Theme::Background);
+            perfBtn.setOutlineThickness(1.0f);
+            perfBtn.setOutlineColor(m_pixelPerfect ? Theme::AccentHover : Theme::Border);
+            window.draw(perfBtn);
+
+            sf::Text perfText("Pixel Perfect", m_font, 10);
+            perfText.setFillColor(m_pixelPerfect ? sf::Color::White : Theme::TextSecondary);
+            perfText.setPosition(m_perfBtnBounds.left + 8.0f, m_perfBtnBounds.top + 3.0f);
+            window.draw(perfText);
+        }
+    }
+
+}

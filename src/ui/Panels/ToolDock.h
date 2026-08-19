@@ -6,19 +6,20 @@
 
 namespace WisdomUI {
 
-    struct ToolDefinition {
+    struct ToolItem {
         std::string id;
         std::string tooltip;
-        sf::IntRect iconRect; // Coordinates in a master icon sprite sheet
+        sf::FloatRect bounds;
         std::function<void()> onSelect;
+        bool isHovered{ false };
     };
 
     class ToolDock {
     public:
         ToolDock();
-        void Initialize(const sf::Texture& iconTexture, const sf::Font& font);
+        void Initialize(const sf::Font& font);
         void SetBounds(const sf::FloatRect& bounds);
-        void AddTool(const ToolDefinition& tool);
+        void AddTool(const std::string& id, const std::string& tooltip, std::function<void()> onSelect);
         void SetActiveTool(const std::string& id);
 
         bool HandleEvent(const sf::Event& event, const sf::RenderWindow& window);
@@ -27,18 +28,11 @@ namespace WisdomUI {
 
     private:
         sf::FloatRect m_bounds;
-        sf::RectangleShape m_background;
-        sf::RectangleShape m_rightBorder;
-
-        const sf::Texture* m_iconTexture{ nullptr };
-        const sf::Font* m_font{ nullptr };
-
-        std::vector<ToolDefinition> m_tools;
-        std::string m_activeToolId;
-        std::string m_hoveredToolId;
-
-        float m_buttonSize = 32.0f;
-        float m_spacing = 8.0f;
+        sf::Font m_font;
+        std::vector<ToolItem> m_tools;
+        std::string m_activeToolId{ "brush" };
+        std::string m_hoveredTooltip{ "" };
+        sf::Vector2f m_tooltipPos;
     };
 
 }

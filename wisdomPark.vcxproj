@@ -225,7 +225,10 @@
     <ClCompile Include="src\core\Timeline.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\ui\LeftToolbar.cpp" />
+    <ClCompile Include="src\ui\Panels\StatusBar.cpp" />
     <ClCompile Include="src\ui\Panels\ToolDock.cpp" />
+    <ClCompile Include="src\ui\Panels\ToolOptionsBar.cpp" />
+    <ClCompile Include="src\ui\Panels\TopBar.cpp" />
     <ClCompile Include="src\ui\RightProperties.cpp" />
     <ClCompile Include="src\ui\Screens\ProjectBrowser.cpp" />
     <ClCompile Include="src\ui\Screens\ExportModal.cpp" />
@@ -341,7 +344,10 @@
     <ClInclude Include="src\ui\AIPanel.h" />
     <ClInclude Include="src\ui\AIReviewModal.h" />
     <ClInclude Include="src\ui\GradientPanel.h" />
+    <ClInclude Include="src\ui\Panels\StatusBar.h" />
     <ClInclude Include="src\ui\Panels\ToolDock.h" />
+    <ClInclude Include="src\ui\Panels\ToolOptionsBar.h" />
+    <ClInclude Include="src\ui\Panels\TopBar.h" />
     <ClInclude Include="src\ui\TextPanel.h" />
     <ClInclude Include="src\ui\PerspectivePanel.h" />
     <ClInclude Include="src\ui\KeybindSettingsPanel.h" />
@@ -361,6 +367,7 @@
     <ClInclude Include="src\ui\Screens\ProjectBrowser.h" />
     <ClInclude Include="src\ui\Screens\WelcomeScreen.h" />
     <ClInclude Include="src\ui\TopMenuBar.h" />
+    <ClInclude Include="src\ui\UIIcons.h" />
     <ClInclude Include="src\ui\UIManager.h" />
     <ClInclude Include="src\ui\UITheme.h" />
     <ClInclude Include="src\ui\Widgets\IconButton.h" />

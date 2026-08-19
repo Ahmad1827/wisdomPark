@@ -1,29 +1,34 @@
 #include "ToolDock.h"
 #include "../UITheme.h"
+#include "../UIIcons.h"
 
 namespace WisdomUI {
 
-    ToolDock::ToolDock() {
-        m_background.setFillColor(Theme::Panel);
-        m_rightBorder.setFillColor(Theme::Border);
-    }
+    ToolDock::ToolDock() = default;
 
-    void ToolDock::Initialize(const sf::Texture& iconTexture, const sf::Font& font) {
-        m_iconTexture = &iconTexture;
-        m_font = &font;
+    void ToolDock::Initialize(const sf::Font& font) {
+        m_font = font;
     }
 
     void ToolDock::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        m_background.setPosition(bounds.left, bounds.top);
-        m_background.setSize(sf::Vector2f(bounds.width, bounds.height));
+        float startY = bounds.top + 8.0f;
+        float btnSize = 34.0f;
+        float startX = bounds.left + (bounds.width - btnSize) / 2.0f;
 
-        m_rightBorder.setPosition(bounds.left + bounds.width - Theme::BorderThickness, bounds.top);
-        m_rightBorder.setSize(sf::Vector2f(Theme::BorderThickness, bounds.height));
+        for (auto& tool : m_tools) {
+            tool.bounds = sf::FloatRect(startX, startY, btnSize, btnSize);
+            startY += btnSize + 6.0f;
+        }
     }
 
-    void ToolDock::AddTool(const ToolDefinition& tool) {
-        m_tools.push_back(tool);
+    void ToolDock::AddTool(const std::string& id, const std::string& tooltip, std::function<void()> onSelect) {
+        ToolItem item;
+        item.id = id;
+        item.tooltip = tooltip;
+        item.onSelect = onSelect;
+        m_tools.push_back(item);
+        SetBounds(m_bounds);
     }
 
     void ToolDock::SetActiveTool(const std::string& id) {
@@ -31,85 +36,70 @@ namespace WisdomUI {
     }
 
     void ToolDock::Update(float deltaTime, const sf::Vector2f& mousePos) {
-        m_hoveredToolId = "";
-        if (!m_bounds.contains(mousePos)) return;
-
-        float currentY = m_bounds.top + m_spacing;
-        float startX = m_bounds.left + (m_bounds.width - m_buttonSize) / 2.0f;
-
-        for (const auto& tool : m_tools) {
-            sf::FloatRect btnBounds(startX, currentY, m_buttonSize, m_buttonSize);
-            if (btnBounds.contains(mousePos)) {
-                m_hoveredToolId = tool.id;
-                break;
+        m_hoveredTooltip = "";
+        for (auto& tool : m_tools) {
+            tool.isHovered = tool.bounds.contains(mousePos);
+            if (tool.isHovered) {
+                m_hoveredTooltip = tool.tooltip;
+                m_tooltipPos = sf::Vector2f(tool.bounds.left + tool.bounds.width + 10.0f, tool.bounds.top + 6.0f);
             }
-            currentY += m_buttonSize + m_spacing;
         }
     }
 
     bool ToolDock::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
             sf::Vector2f mousePos = window.mapPixelToCoords({ event.mouseButton.x, event.mouseButton.y });
-
-            if (!m_bounds.contains(mousePos)) return false;
-
-            float currentY = m_bounds.top + m_spacing;
-            float startX = m_bounds.left + (m_bounds.width - m_buttonSize) / 2.0f;
-
-            for (const auto& tool : m_tools) {
-                sf::FloatRect btnBounds(startX, currentY, m_buttonSize, m_buttonSize);
-                if (btnBounds.contains(mousePos)) {
+            for (auto& tool : m_tools) {
+                if (tool.bounds.contains(mousePos)) {
                     SetActiveTool(tool.id);
                     if (tool.onSelect) tool.onSelect();
                     return true;
                 }
-                currentY += m_buttonSize + m_spacing;
             }
+            if (m_bounds.contains(mousePos)) return true;
         }
         return false;
     }
 
     void ToolDock::Render(sf::RenderWindow& window) {
-        window.draw(m_background);
-        window.draw(m_rightBorder);
+        sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
+        bg.setPosition(m_bounds.left, m_bounds.top);
+        bg.setFillColor(Theme::Background);
+        window.draw(bg);
 
-        float currentY = m_bounds.top + m_spacing;
-        float startX = m_bounds.left + (m_bounds.width - m_buttonSize) / 2.0f;
+        sf::RectangleShape border(sf::Vector2f(Theme::BorderThickness, m_bounds.height));
+        border.setPosition(m_bounds.left + m_bounds.width - Theme::BorderThickness, m_bounds.top);
+        border.setFillColor(Theme::Border);
+        window.draw(border);
 
         for (const auto& tool : m_tools) {
-            sf::RectangleShape btnShape(sf::Vector2f(m_buttonSize, m_buttonSize));
-            btnShape.setPosition(startX, currentY);
-
             bool isActive = (m_activeToolId == tool.id);
-            bool isHovered = (m_hoveredToolId == tool.id);
 
-            if (isActive) {
-                btnShape.setFillColor(Theme::Accent);
-                btnShape.setOutlineThickness(1.0f);
-                btnShape.setOutlineColor(Theme::TextPrimary);
-            }
-            else if (isHovered) {
-                btnShape.setFillColor(Theme::AccentHover);
-                btnShape.setOutlineThickness(0.0f);
-            }
-            else {
-                btnShape.setFillColor(Theme::Transparent);
-                btnShape.setOutlineThickness(0.0f);
-            }
+            sf::RectangleShape btn(sf::Vector2f(tool.bounds.width, tool.bounds.height));
+            btn.setPosition(tool.bounds.left, tool.bounds.top);
+            btn.setFillColor(isActive ? Theme::Accent : (tool.isHovered ? Theme::Panel : Theme::Background));
+            btn.setOutlineThickness(1.0f);
+            btn.setOutlineColor(isActive ? Theme::AccentHover : (tool.isHovered ? Theme::Border : sf::Color::Transparent));
+            window.draw(btn);
 
-            window.draw(btnShape);
+            sf::Color iconColor = isActive ? sf::Color::White : (tool.isHovered ? Theme::TextPrimary : Theme::TextSecondary);
+            Icons::Draw(window, tool.id, sf::Vector2f(tool.bounds.left + 7.0f, tool.bounds.top + 7.0f), 20.0f, iconColor);
+        }
 
-            if (m_iconTexture) {
-                sf::Sprite iconSprite(*m_iconTexture, tool.iconRect);
-                // Center the icon inside the button
-                iconSprite.setPosition(
-                    startX + (m_buttonSize - tool.iconRect.width) / 2.0f,
-                    currentY + (m_buttonSize - tool.iconRect.height) / 2.0f
-                );
-                window.draw(iconSprite);
-            }
+        if (!m_hoveredTooltip.empty()) {
+            sf::Text tip(m_hoveredTooltip, m_font, 11);
+            sf::FloatRect tb = tip.getLocalBounds();
 
-            currentY += m_buttonSize + m_spacing;
+            sf::RectangleShape tipBg(sf::Vector2f(tb.width + 12.0f, tb.height + 10.0f));
+            tipBg.setPosition(m_tooltipPos.x, m_tooltipPos.y);
+            tipBg.setFillColor(sf::Color(15, 17, 22, 240));
+            tipBg.setOutlineThickness(1.0f);
+            tipBg.setOutlineColor(Theme::Border);
+            window.draw(tipBg);
+
+            tip.setFillColor(sf::Color::White);
+            tip.setPosition(m_tooltipPos.x + 6.0f, m_tooltipPos.y + 3.0f);
+            window.draw(tip);
         }
     }
 
