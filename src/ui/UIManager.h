@@ -35,6 +35,8 @@
 #include "../core/GradientSystem.h"
 #include "../core/AssetManager.h"
 #include "AssetBrowserPanel.h"
+#include "../UI/WorkspaceLayout.h"
+#include "../UI/Panels/ToolDock.h"
 
 enum class MenuState {
     Main,
@@ -63,6 +65,8 @@ struct LightRay {
 
 class UIManager {
 private:
+    WisdomUI::WorkspaceLayout m_workspaceLayout;
+    WisdomUI::ToolDock m_toolDock;
     AssetManager assetManager;
     std::unique_ptr<AssetBrowserPanel> assetBrowser;
     GradientConfig m_gradientConfig;

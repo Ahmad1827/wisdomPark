@@ -1,5 +1,5 @@
 #include "ToolDock.h"
-#include "UITheme.h"
+#include "../UITheme.h"
 
 namespace WisdomUI {
 

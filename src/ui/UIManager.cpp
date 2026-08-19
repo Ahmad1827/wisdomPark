@@ -236,6 +236,13 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     baseCanvas->setPerspectiveManager(&m_perspectiveManager);
     baseCanvas->setTextManager(&m_textManager);
 
+    m_toolDock.Initialize(bgTexture, font); // Reusing bgTexture as a placeholder for now
+    m_toolDock.AddTool({ "brush", "Brush Tool (B)", sf::IntRect(0,0,16,16), [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Brush); } });
+    m_toolDock.AddTool({ "pencil", "Pencil Tool (P)", sf::IntRect(16,0,16,16), [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Pencil); } });
+    m_toolDock.AddTool({ "eraser", "Eraser Tool (E)", sf::IntRect(32,0,16,16), [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Eraser); } });
+    m_toolDock.AddTool({ "fill", "Fill Bucket (F)", sf::IntRect(48,0,16,16), [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Fill); } });
+    m_toolDock.AddTool({ "select", "Select Box (M)", sf::IntRect(64,0,16,16), [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Select); } });
+
     initStartMenu();
 }
 
@@ -1672,6 +1679,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         }
                         return;
                     }
+                    if (m_toolDock.HandleEvent(event, window)) return;
                     std::string leftAction = leftToolbar.handleClick(mousePos, AIManager::getInstance().isAIEnabled(), hasActiveSel);
                     if (!leftAction.empty()) {
                         if (leftAction == "ai_disabled") showMessage("Enable AI in Settings.", sf::Color::Red);
@@ -1960,6 +1968,11 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         }
     }
     else if (currentState == AppState::Painting) {
+        auto regions = m_workspaceLayout.Update(window.getSize(), rightProperties.isPanelPinned() || layerPanel.isPanelPinned(), true);
+        m_toolDock.SetBounds(regions.toolDock);
+
+        // Update the new tool dock hover states
+        m_toolDock.Update(dt, mousePos);
         leftToolbar.update(dt, focusMode);
 
         bool isLayerOpen = layerPanel.isHovered() || layerPanel.isPanelPinned() || layerPanel.getCurrentX() < 1919.f;
@@ -2159,7 +2172,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         aiHelper.draw(window);
 
-        leftToolbar.draw(window, AIManager::getInstance().isAIEnabled(), canvas.getActiveTool() == ToolType::Select);
+        m_toolDock.Render(window);
 
         layerPanel.draw(window, canvas, timeline.getCurrentFrame());
         colorPalettePanel.draw(window);
