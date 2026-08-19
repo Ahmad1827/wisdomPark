@@ -13,11 +13,14 @@ namespace WisdomUI {
     void ToolDock::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
         float startY = bounds.top + 8.0f;
-        float btnSize = 34.0f;
+        float btnSize = 36.0f;
         float startX = bounds.left + (bounds.width - btnSize) / 2.0f;
 
         for (auto& tool : m_tools) {
             tool.bounds = sf::FloatRect(startX, startY, btnSize, btnSize);
+            if (tool.id == m_activeToolId) {
+                m_selectionSliderY.SetImmediate(startY);
+            }
             startY += btnSize + 6.0f;
         }
     }
@@ -33,17 +36,32 @@ namespace WisdomUI {
 
     void ToolDock::SetActiveTool(const std::string& id) {
         m_activeToolId = id;
+        for (const auto& tool : m_tools) {
+            if (tool.id == id) {
+                m_selectionSliderY.target = tool.bounds.top;
+                break;
+            }
+        }
     }
 
     void ToolDock::Update(float deltaTime, const sf::Vector2f& mousePos) {
-        m_hoveredTooltip = "";
+        m_globalTime += deltaTime;
+        m_selectionSliderY.Update(deltaTime);
+
+        bool hasHover = false;
         for (auto& tool : m_tools) {
-            tool.isHovered = tool.bounds.contains(mousePos);
-            if (tool.isHovered) {
+            bool isHov = tool.bounds.contains(mousePos);
+            tool.hoverAlpha += ((isHov ? 1.0f : 0.0f) - tool.hoverAlpha) * 14.0f * deltaTime;
+            tool.scale += ((isHov ? 1.10f : 1.0f) - tool.scale) * 16.0f * deltaTime;
+
+            if (isHov) {
+                hasHover = true;
                 m_hoveredTooltip = tool.tooltip;
-                m_tooltipPos = sf::Vector2f(tool.bounds.left + tool.bounds.width + 10.0f, tool.bounds.top + 6.0f);
+                m_tooltipPos = sf::Vector2f(tool.bounds.left + tool.bounds.width + 12.0f, tool.bounds.top + 6.0f);
             }
         }
+
+        m_tooltipAlpha += ((hasHover ? 1.0f : 0.0f) - m_tooltipAlpha) * 16.0f * deltaTime;
     }
 
     bool ToolDock::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
@@ -67,38 +85,62 @@ namespace WisdomUI {
         bg.setFillColor(Theme::Background);
         window.draw(bg);
 
-        sf::RectangleShape border(sf::Vector2f(Theme::BorderThickness, m_bounds.height));
-        border.setPosition(m_bounds.left + m_bounds.width - Theme::BorderThickness, m_bounds.top);
+        sf::RectangleShape border(sf::Vector2f(Theme::BorderThickness * 2.0f, m_bounds.height));
+        border.setPosition(m_bounds.left + m_bounds.width - Theme::BorderThickness * 2.0f, m_bounds.top);
         border.setFillColor(Theme::Border);
         window.draw(border);
+
+        if (!m_tools.empty()) {
+            float btnSize = 36.0f;
+            float startX = m_bounds.left + (m_bounds.width - btnSize) / 2.0f;
+            sf::RectangleShape activeIndicator(sf::Vector2f(btnSize, btnSize));
+            activeIndicator.setPosition(startX, m_selectionSliderY.current);
+            activeIndicator.setFillColor(Theme::Accent);
+            activeIndicator.setOutlineThickness(1.0f);
+            activeIndicator.setOutlineColor(Theme::BorderHighlight);
+            window.draw(activeIndicator);
+
+            float pulseGlow = Animation::Pulse(m_globalTime, 3.5f, 0.4f, 0.9f);
+            sf::RectangleShape glowRibbon(sf::Vector2f(3.0f, btnSize - 6.0f));
+            glowRibbon.setPosition(m_bounds.left + 2.0f, m_selectionSliderY.current + 3.0f);
+            sf::Color glowCol = Theme::BorderHighlight;
+            glowCol.a = static_cast<sf::Uint8>(255 * pulseGlow);
+            glowRibbon.setFillColor(glowCol);
+            window.draw(glowRibbon);
+        }
 
         for (const auto& tool : m_tools) {
             bool isActive = (m_activeToolId == tool.id);
 
-            sf::RectangleShape btn(sf::Vector2f(tool.bounds.width, tool.bounds.height));
-            btn.setPosition(tool.bounds.left, tool.bounds.top);
-            btn.setFillColor(isActive ? Theme::Accent : (tool.isHovered ? Theme::PanelHover : Theme::Panel));
-            btn.setOutlineThickness(1.0f);
-            btn.setOutlineColor(isActive ? Theme::BorderHighlight : (tool.isHovered ? Theme::Border : sf::Color::Transparent));
-            window.draw(btn);
+            if (!isActive && tool.hoverAlpha > 0.01f) {
+                sf::RectangleShape hovBtn(sf::Vector2f(tool.bounds.width, tool.bounds.height));
+                hovBtn.setOrigin(tool.bounds.width / 2.0f, tool.bounds.height / 2.0f);
+                hovBtn.setPosition(tool.bounds.left + tool.bounds.width / 2.0f, tool.bounds.top + tool.bounds.height / 2.0f);
+                hovBtn.setScale(tool.scale, tool.scale);
 
-            sf::Color iconColor = isActive ? sf::Color::White : (tool.isHovered ? Theme::Gold : Theme::TextPrimary);
-            Icons::Draw(window, tool.id, sf::Vector2f(tool.bounds.left + 7.0f, tool.bounds.top + 7.0f), 20.0f, iconColor);
+                sf::Color hovCol = Theme::PanelHover;
+                hovCol.a = static_cast<sf::Uint8>(220 * tool.hoverAlpha);
+                hovBtn.setFillColor(hovCol);
+                hovBtn.setOutlineThickness(1.0f);
+                sf::Color hovBrd = Theme::Border;
+                hovBrd.a = static_cast<sf::Uint8>(255 * tool.hoverAlpha);
+                hovBtn.setOutlineColor(hovBrd);
+                window.draw(hovBtn);
+            }
+
+            sf::Color iconColor = isActive ? sf::Color::White : (tool.hoverAlpha > 0.5f ? Theme::Gold : Theme::TextPrimary);
+            Icons::Draw(window, tool.id, sf::Vector2f(tool.bounds.left + 8.0f, tool.bounds.top + 8.0f), 20.0f, iconColor);
         }
 
-        if (!m_hoveredTooltip.empty()) {
+        if (m_tooltipAlpha > 0.02f) {
             sf::Text tip(m_hoveredTooltip, m_font, 11);
             sf::FloatRect tb = tip.getLocalBounds();
 
-            sf::RectangleShape tipBg(sf::Vector2f(tb.width + 12.0f, tb.height + 10.0f));
-            tipBg.setPosition(m_tooltipPos.x, m_tooltipPos.y);
-            tipBg.setFillColor(sf::Color(25, 20, 15, 240));
-            tipBg.setOutlineThickness(1.0f);
-            tipBg.setOutlineColor(Theme::BorderHighlight);
-            window.draw(tipBg);
+            sf::FloatRect tipBounds(m_tooltipPos.x, m_tooltipPos.y, tb.width + 16.0f, tb.height + 12.0f);
+            Theme::DrawFiligreePanel(window, tipBounds, m_tooltipAlpha);
 
             tip.setFillColor(Theme::Gold);
-            tip.setPosition(m_tooltipPos.x + 6.0f, m_tooltipPos.y + 3.0f);
+            tip.setPosition(m_tooltipPos.x + 8.0f, m_tooltipPos.y + 4.0f);
             window.draw(tip);
         }
     }

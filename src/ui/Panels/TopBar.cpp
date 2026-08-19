@@ -19,25 +19,27 @@ namespace WisdomUI {
 
         m_menus.clear();
         m_menus.push_back({ "File", {}, {
-            {"New Project", onNew},
-            {"Open Project...", onOpen},
-            {"Save Project", onSave},
-            {"Export PNG / Sheet...", onExport},
-            {"Exit to Menu", onExit}
-        } });
+            {"New Project (Ctrl+N)", onNew, 0.0f},
+            {"Open Project... (Ctrl+O)", onOpen, 0.0f},
+            {"Save Project (Ctrl+S)", onSave, 0.0f},
+            {"Export PNG / Sheet...", onExport, 0.0f},
+            {"Exit to Menu", onExit, 0.0f}
+        }, 0.0f, false });
+
         m_menus.push_back({ "Edit", {}, {
-            {"Undo", onUndo},
-            {"Redo", onRedo}
-        } });
+            {"Undo (Ctrl+Z)", onUndo, 0.0f},
+            {"Redo (Ctrl+Y)", onRedo, 0.0f}
+        }, 0.0f, false });
+
         m_menus.push_back({ "View", {}, {
-            {"Toggle Fullscreen", onToggleFullscreen}
-        } });
+            {"Toggle Fullscreen (F11)", onToggleFullscreen, 0.0f}
+        }, 0.0f, false });
 
         m_quickBtns.clear();
-        m_quickBtns.push_back({ "undo", "Undo (Ctrl+Z)", {}, onUndo });
-        m_quickBtns.push_back({ "redo", "Redo (Ctrl+Y)", {}, onRedo });
-        m_quickBtns.push_back({ "save", "Save Project (Ctrl+S)", {}, onSave });
-        m_quickBtns.push_back({ "fullscreen", "Toggle Fullscreen", {}, onToggleFullscreen });
+        m_quickBtns.push_back({ "undo", "Undo (Ctrl+Z)", {}, onUndo, 0.0f, 1.0f });
+        m_quickBtns.push_back({ "redo", "Redo (Ctrl+Y)", {}, onRedo, 0.0f, 1.0f });
+        m_quickBtns.push_back({ "save", "Save Project (Ctrl+S)", {}, onSave, 0.0f, 1.0f });
+        m_quickBtns.push_back({ "fullscreen", "Toggle Fullscreen", {}, onToggleFullscreen, 0.0f, 1.0f });
     }
 
     void TopBar::SetProjectName(const std::string& name, bool isDirty) {
@@ -48,25 +50,53 @@ namespace WisdomUI {
     void TopBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
 
-        float menuX = 180.0f;
+        float menuX = 200.0f;
         for (auto& menu : m_menus) {
             sf::Text t(menu.title, m_font, 13);
-            float w = t.getLocalBounds().width + 16.0f;
+            float w = t.getLocalBounds().width + 20.0f;
             menu.bounds = sf::FloatRect(menuX, bounds.top, w, bounds.height);
             menuX += w + 2.0f;
         }
 
-        float qX = bounds.left + bounds.width - 140.0f;
+        float qX = bounds.left + bounds.width - 150.0f;
         float btnSize = bounds.height - 8.0f;
         for (auto& qb : m_quickBtns) {
             qb.bounds = sf::FloatRect(qX, bounds.top + 4.0f, btnSize, btnSize);
-            qX += btnSize + 4.0f;
+            qX += btnSize + 6.0f;
         }
     }
 
     void TopBar::Update(float deltaTime, const sf::Vector2f& mousePos) {
+        m_globalTime += deltaTime;
+        m_shimmerOffset += deltaTime * 120.0f;
+        if (m_shimmerOffset > m_bounds.width + 400.0f) {
+            m_shimmerOffset = -200.0f;
+        }
+
+        for (size_t i = 0; i < m_menus.size(); ++i) {
+            auto& menu = m_menus[i];
+            bool isTargetOpen = (m_openMenuIndex == static_cast<int>(i));
+            float target = isTargetOpen ? 1.0f : 0.0f;
+            menu.openProgress += (target - menu.openProgress) * 16.0f * deltaTime;
+            menu.openProgress = std::clamp(menu.openProgress, 0.0f, 1.0f);
+
+            if (isTargetOpen) {
+                float itemY = m_bounds.top + m_bounds.height + 4.0f;
+                float itemW = 200.0f;
+                float itemH = 26.0f;
+                for (auto& act : menu.actions) {
+                    sf::FloatRect actBounds(menu.bounds.left, itemY, itemW, itemH);
+                    bool actHover = actBounds.contains(mousePos);
+                    act.hoverAlpha += ((actHover ? 1.0f : 0.0f) - act.hoverAlpha) * 20.0f * deltaTime;
+                    itemY += itemH;
+                }
+            }
+        }
+
         for (auto& qb : m_quickBtns) {
-            qb.isHovered = qb.bounds.contains(mousePos);
+            bool hover = qb.bounds.contains(mousePos);
+            qb.hoverAlpha += ((hover ? 1.0f : 0.0f) - qb.hoverAlpha) * 14.0f * deltaTime;
+            qb.scale += ((hover ? 1.12f : 1.0f) - qb.scale) * 16.0f * deltaTime;
         }
     }
 
@@ -76,11 +106,11 @@ namespace WisdomUI {
 
             if (m_openMenuIndex != -1) {
                 auto& openMenu = m_menus[m_openMenuIndex];
-                float itemY = m_bounds.top + m_bounds.height;
-                float itemW = 180.0f;
+                float itemY = m_bounds.top + m_bounds.height + 4.0f;
+                float itemW = 200.0f;
                 float itemH = 26.0f;
 
-                for (const auto& act : openMenu.actions) {
+                for (auto& act : openMenu.actions) {
                     sf::FloatRect itemBounds(openMenu.bounds.left, itemY, itemW, itemH);
                     if (itemBounds.contains(mousePos)) {
                         if (act.callback) act.callback();
@@ -122,32 +152,49 @@ namespace WisdomUI {
         bg.setFillColor(Theme::Panel);
         window.draw(bg);
 
-        sf::RectangleShape border(sf::Vector2f(m_bounds.width, Theme::BorderThickness));
-        border.setPosition(m_bounds.left, m_bounds.top + m_bounds.height - Theme::BorderThickness);
-        border.setFillColor(Theme::Border);
-        window.draw(border);
+        sf::RectangleShape brassLine(sf::Vector2f(m_bounds.width, Theme::BorderThickness * 2.0f));
+        brassLine.setPosition(m_bounds.left, m_bounds.top + m_bounds.height - Theme::BorderThickness * 2.0f);
+        brassLine.setFillColor(Theme::Border);
+        window.draw(brassLine);
 
+        float glintX = m_bounds.left + m_shimmerOffset;
+        if (glintX >= m_bounds.left && glintX <= m_bounds.left + m_bounds.width) {
+            sf::RectangleShape glint(sf::Vector2f(45.0f, 2.0f));
+            glint.setPosition(glintX, m_bounds.top + m_bounds.height - 2.0f);
+            glint.setFillColor(sf::Color(255, 245, 180, 200));
+            window.draw(glint);
+        }
+
+        float pulseGlow = Animation::Pulse(m_globalTime, 2.5f, 0.7f, 1.0f);
         sf::Text logo("WISDOM PARK", m_font, 13);
-        logo.setFillColor(Theme::Gold);
-        logo.setPosition(m_bounds.left + 12.0f, m_bounds.top + 9.0f);
+        sf::Color logoCol = Theme::Gold;
+        logoCol.r = static_cast<sf::Uint8>(logoCol.r * pulseGlow);
+        logoCol.g = static_cast<sf::Uint8>(logoCol.g * pulseGlow);
+        logoCol.b = static_cast<sf::Uint8>(logoCol.b * pulseGlow);
+        logo.setFillColor(logoCol);
+        logo.setPosition(m_bounds.left + 14.0f, m_bounds.top + 9.0f);
         window.draw(logo);
 
-        std::string projTitle = "|  " + m_projectName + (m_isDirty ? " *" : "");
+        std::string projTitle = "|   " + m_projectName + (m_isDirty ? " *" : "");
         sf::Text projText(projTitle, m_font, 12);
-        projText.setFillColor(Theme::TextSecondary);
-        projText.setPosition(m_bounds.left + 115.0f, m_bounds.top + 10.0f);
+        projText.setFillColor(m_isDirty ? Theme::BorderHighlight : Theme::TextSecondary);
+        projText.setPosition(m_bounds.left + 124.0f, m_bounds.top + 10.0f);
         window.draw(projText);
 
         for (size_t i = 0; i < m_menus.size(); ++i) {
             const auto& menu = m_menus[i];
             bool isOpen = (m_openMenuIndex == static_cast<int>(i));
 
-            if (isOpen) {
+            if (isOpen || menu.openProgress > 0.01f) {
                 sf::RectangleShape mBg(sf::Vector2f(menu.bounds.width, menu.bounds.height));
                 mBg.setPosition(menu.bounds.left, menu.bounds.top);
-                mBg.setFillColor(Theme::PanelHover);
+                sf::Color mCol = Theme::PanelHover;
+                mCol.a = static_cast<sf::Uint8>(240 * menu.openProgress);
+                mBg.setFillColor(mCol);
                 mBg.setOutlineThickness(1.0f);
-                mBg.setOutlineColor(Theme::BorderHighlight);
+                sf::Color bCol = Theme::BorderHighlight;
+                bCol.a = static_cast<sf::Uint8>(255 * menu.openProgress);
+                mBg.setOutlineColor(bCol);
                 window.draw(mBg);
             }
 
@@ -160,34 +207,51 @@ namespace WisdomUI {
 
         for (const auto& qb : m_quickBtns) {
             sf::RectangleShape qBg(sf::Vector2f(qb.bounds.width, qb.bounds.height));
-            qBg.setPosition(qb.bounds.left, qb.bounds.top);
-            qBg.setFillColor(qb.isHovered ? Theme::AccentHover : Theme::PanelHover);
+            qBg.setOrigin(qb.bounds.width / 2.0f, qb.bounds.height / 2.0f);
+            qBg.setPosition(qb.bounds.left + qb.bounds.width / 2.0f, qb.bounds.top + qb.bounds.height / 2.0f);
+            qBg.setScale(qb.scale, qb.scale);
+
+            sf::Color btnCol = Animation::InterpolateColor(Theme::PanelInset, Theme::Accent, qb.hoverAlpha);
+            qBg.setFillColor(btnCol);
             qBg.setOutlineThickness(1.0f);
-            qBg.setOutlineColor(qb.isHovered ? Theme::BorderHighlight : Theme::Border);
+            qBg.setOutlineColor(Animation::InterpolateColor(Theme::Border, Theme::BorderHighlight, qb.hoverAlpha));
             window.draw(qBg);
 
-            Icons::Draw(window, qb.id, sf::Vector2f(qb.bounds.left + 5.0f, qb.bounds.top + 5.0f), 18.0f, Theme::TextPrimary);
+            sf::Vector2f iconPos(qb.bounds.left + 5.0f, qb.bounds.top + 5.0f);
+            Icons::Draw(window, qb.id, iconPos, 18.0f, Animation::InterpolateColor(Theme::TextSecondary, Theme::Gold, qb.hoverAlpha));
         }
 
-        if (m_openMenuIndex != -1) {
-            const auto& openMenu = m_menus[m_openMenuIndex];
-            float itemY = m_bounds.top + m_bounds.height;
-            float itemW = 180.0f;
-            float itemH = 26.0f;
+        for (size_t i = 0; i < m_menus.size(); ++i) {
+            const auto& menu = m_menus[i];
+            if (menu.openProgress > 0.02f) {
+                float eased = Animation::EaseOutBack(menu.openProgress);
+                float itemW = 200.0f;
+                float itemH = 26.0f;
+                float totalH = menu.actions.size() * itemH + 6.0f;
+                float currentH = totalH * menu.openProgress;
 
-            sf::RectangleShape dropBg(sf::Vector2f(itemW, openMenu.actions.size() * itemH + 4.0f));
-            dropBg.setPosition(openMenu.bounds.left, itemY);
-            dropBg.setFillColor(Theme::Panel);
-            dropBg.setOutlineThickness(1.0f);
-            dropBg.setOutlineColor(Theme::BorderHighlight);
-            window.draw(dropBg);
+                sf::FloatRect dropBounds(menu.bounds.left, m_bounds.top + m_bounds.height + 2.0f, itemW, currentH);
+                Theme::DrawFiligreePanel(window, dropBounds, menu.openProgress);
 
-            for (const auto& act : openMenu.actions) {
-                sf::Text actText(act.label, m_font, 12);
-                actText.setFillColor(Theme::TextPrimary);
-                actText.setPosition(openMenu.bounds.left + 12.0f, itemY + 5.0f);
-                window.draw(actText);
-                itemY += itemH;
+                if (menu.openProgress > 0.4f) {
+                    float itemY = dropBounds.top + 4.0f;
+                    for (const auto& act : menu.actions) {
+                        if (act.hoverAlpha > 0.01f) {
+                            sf::RectangleShape hovBg(sf::Vector2f(itemW - 6.0f, itemH));
+                            hovBg.setPosition(dropBounds.left + 3.0f, itemY);
+                            sf::Color hCol = Theme::Accent;
+                            hCol.a = static_cast<sf::Uint8>(180 * act.hoverAlpha * menu.openProgress);
+                            hovBg.setFillColor(hCol);
+                            window.draw(hovBg);
+                        }
+
+                        sf::Text actText(act.label, m_font, 12);
+                        actText.setFillColor(Animation::InterpolateColor(Theme::TextPrimary, Theme::Gold, act.hoverAlpha));
+                        actText.setPosition(dropBounds.left + 12.0f, itemY + 4.0f);
+                        window.draw(actText);
+                        itemY += itemH;
+                    }
+                }
             }
         }
     }

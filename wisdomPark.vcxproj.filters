@@ -692,5 +692,8 @@
     <ClInclude Include="src\ui\Panels\StatusBar.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\ui\UIAnimation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

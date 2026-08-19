@@ -1860,12 +1860,12 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         assetManager.importAssets(g_droppedFiles);
         g_droppedFiles.clear();
 
-        // Auto-open the panel to show the user their new assets
         if (assetBrowser && !assetBrowser->getIsVisible()) {
             assetBrowser->toggle();
         }
     }
 #endif
+
     if (m_debugUseSpriteStudio) {
         if (m_activeTool) {
             sf::FloatRect physicalSpace(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y));
@@ -1874,15 +1874,11 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         }
         return;
     }
+
     char buffer[1024];
     std::size_t received;
     sf::IpAddress sender;
     unsigned short port;
-    static int lastLeftState = 0;
-    static int lastRightState = 0;
-
-    static int lastZoomState = 0;
-    static float zoomOriginY = 0.0f;
 
     if (handTrackerSocket.receive(buffer, sizeof(buffer) - 1, received, sender, port) == sf::Socket::Done) {
         buffer[received] = '\0';
@@ -1947,13 +1943,17 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
     sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
+    sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
+
     m_topMenuBar.update(mousePos, static_cast<float>(window.getSize().x));
     if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);
     if (exportModal.getIsOpen()) exportModal.updateHover(mousePos);
     if (newProjectModal.getIsOpen()) newProjectModal.updateHover(mousePos);
+
     if (AIManager::getInstance().isProcessingAsync()) {
         loadingSpinner.rotate(150.f * dt);
     }
+
     if (currentState == AppState::Welcome) {
         if (!keybindPanel.isVisible()) {
             projectBrowser.updateHover(mousePos);
@@ -1987,15 +1987,12 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 updateHoverValue("set_t_vs", checkToggle(380.f, 410.f), dt);
                 updateHoverValue("set_s_fpsL", checkStepperL(380.f, 460.f), dt);
                 updateHoverValue("set_s_fpsR", checkStepperR(380.f, 460.f), dt);
-
                 updateHoverValue("set_t_ab", checkToggle(1050.f, 310.f), dt);
-
                 updateHoverValue("set_t_hw", checkToggle(380.f, 710.f), dt);
                 updateHoverValue("set_s_afpsL", checkStepperL(380.f, 760.f), dt);
                 updateHoverValue("set_s_afpsR", checkStepperR(380.f, 760.f), dt);
                 updateHoverValue("set_s_undoL", checkStepperL(380.f, 810.f), dt);
                 updateHoverValue("set_s_undoR", checkStepperR(380.f, 810.f), dt);
-
                 updateHoverValue("set_s_aiL", checkStepperL(1050.f, 710.f), dt);
                 updateHoverValue("set_s_aiR", checkStepperR(1050.f, 710.f), dt);
             }
@@ -2035,11 +2032,8 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         }
     }
     else if (currentState == AppState::Painting) {
-        sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
-        sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
-        sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
-
-        auto regions = m_workspaceLayout.Update(window.getSize(), rightProperties.isPanelPinned() || layerPanel.isPanelPinned(), true);
+        bool rightDockPinned = rightProperties.isPanelPinned() || layerPanel.isPanelPinned() || colorPalettePanel.isPanelPinned();
+        auto regions = m_workspaceLayout.Update(window.getSize(), rightDockPinned, true);
 
         m_topBar.SetBounds(regions.topBar);
         m_topBar.SetProjectName(activeProjectName, canvas.getIsDirty());
@@ -2060,13 +2054,14 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
         float curSize = canvas.getPixelMode() ? static_cast<float>(canvas.getPixelBrushSize()) : canvas.getBrushSize();
         m_toolOptionsBar.SyncState(toolName, curSize, canvas.getPixelMode(), canvas.isPixelPerfectEnabled());
+        m_toolOptionsBar.Update(dt, mousePos);
 
         m_toolDock.SetBounds(regions.toolDock);
         m_toolDock.Update(dt, mousePos);
 
         m_statusBar.SetBounds(regions.statusBar);
         m_statusBar.UpdateData(canvas.getCanvasSize(), logicalMousePos, 1.0f, canvas.getActiveLayer(), timeline.getCurrentFrame());
-        leftToolbar.update(dt, focusMode);
+        m_statusBar.Update(dt);
 
         bool isLayerOpen = layerPanel.isHovered() || layerPanel.isPanelPinned() || layerPanel.getCurrentX() < 1919.f;
         bool isColorOpen = colorPalettePanel.isHovered() || colorPalettePanel.isPanelPinned() || colorPalettePanel.getCurrentX() < 1919.f;
@@ -2082,8 +2077,9 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         bottomTimeline.update(dt, focusMode);
         audioPanel.update(dt);
         g_aiPanel.update(dt);
+
         if (assetBrowser) {
-            assetBrowser->setBounds(sf::FloatRect(leftToolbar.getPanelRightEdge(), 40.f, assetBrowser->getWidth(), 1080.f - 40.f));
+            assetBrowser->setBounds(sf::FloatRect(WisdomUI::Theme::ToolDockWidth, WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight, assetBrowser->getWidth(), window.getSize().y - (WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight + WisdomUI::Theme::StatusBarHeight)));
             assetBrowser->update(dt);
         }
 
@@ -2100,19 +2096,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 showMessage("AI Process Error: " + asyncRes.errorMessage, sf::Color::Red);
             }
         }
-
-        float availLeft = std::max(0.0f, static_cast<float>(leftToolbar.getPanelRightEdge()));
-        float edgeL = static_cast<float>(layerPanel.getCurrentX());
-        float edgeC = static_cast<float>(colorPalettePanel.getCurrentX());
-        float edgeP = static_cast<float>(rightProperties.getCurrentX());
-        float availRight = std::min(1920.0f, std::min(edgeL, std::min(edgeC, edgeP)));
-
-        float availTop = 0.0f;
-        float availBottom = std::min(1080.0f, static_cast<float>(bottomTimeline.getPanelTopEdge()));
-        float availWidth = std::max(0.0f, availRight - availLeft);
-        float availHeight = std::max(0.0f, availBottom - availTop);
-
-        sf::FloatRect availableSpace(availLeft, availTop, availWidth, availHeight);
 
         bool needsShapeTool = (canvas.getActiveTool() == ToolType::Shapes);
         bool needsWandTool = (canvas.getActiveTool() == ToolType::MagicWand);
@@ -2150,6 +2133,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             }
             m_activeTool->Initialize();
         }
+
         if (auto* wand = dynamic_cast<MagicWandTool*>(m_activeTool.get())) {
             if (wand->wantsColorPanelOpen()) {
                 sf::Vector2f handleCenter = colorPalettePanel.getHandleBounds().getPosition() + sf::Vector2f(5.f, 5.f);
@@ -2172,34 +2156,11 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 m_gradientPanel.clearColorPanelRequest();
             }
         }
-        m_activeTool->SetBounds(availableSpace);
+
+        m_activeTool->SetBounds(regions.canvas);
         m_activeTool->Update(dt, window);
 
-        leftToolbar.updateHover(mousePos);
         bottomTimeline.updateHover(mousePos);
-
-        float tbX = leftToolbar.getPanelRightEdge();
-        toolBg.setPosition(tbX + 15.f, 100.f);
-        sizeLabelText.setPosition(tbX + 22.f, 110.f);
-        sizeSliderBg.setPosition(tbX + 32.f, 130.f);
-
-        float handlePercent = 0.f;
-        if (canvas.getPixelMode()) {
-            handlePercent = (canvas.getPixelBrushSize() - 1.0f) / 31.0f;
-            sizeValueText.setString(std::to_string(canvas.getPixelBrushSize()));
-        }
-        else {
-            handlePercent = (canvas.getBrushSize() - 1.0f) / 99.0f;
-            sizeValueText.setString(std::to_string(static_cast<int>(canvas.getBrushSize())));
-        }
-
-        float handleY = sizeSliderBg.getPosition().y + sizeSliderBg.getSize().y - (handlePercent * sizeSliderBg.getSize().y);
-        sizeSliderHandle.setPosition(sizeSliderBg.getPosition().x - 5.f, handleY - 5.f);
-
-        sizeValueText.setPosition(tbX + 22.f + (canvas.getPixelMode() && canvas.getPixelBrushSize() < 10 ? 5.f : 0.f), sizeSliderBg.getPosition().y + sizeSliderBg.getSize().y + 10.f);
-
-        pixelPerfBtn.setPosition(tbX + 17.f, 245.f);
-        pixelPerfText.setPosition(tbX + 19.f, 248.f);
 
         if (showingText && textClock.getElapsedTime().asSeconds() > 2.0f) showingText = false;
         else if (showingText && textClock.getElapsedTime().asSeconds() > 1.5f) {
@@ -2208,8 +2169,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             sf::Color oc = uiText.getOutlineColor(); oc.a = static_cast<sf::Uint8>(textAlpha);
             uiText.setFillColor(fc); uiText.setOutlineColor(oc);
         }
-
-
 
         if (showUnsavedWarning) {
             if (warnSaveBtn.getGlobalBounds().contains(mousePos)) warnSaveBtn.setFillColor(sf::Color(70, 200, 70));
@@ -2225,7 +2184,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 }
 
 void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& canvas, AIHelper& aiHelper, Timeline& timeline) {
-    // 1. Draw the Wisdom Park theme park backdrop artwork across all states
     sf::Vector2u winSize = window.getSize();
     sf::Vector2u texSize = bgTexture.getSize();
     if (texSize.x > 0 && texSize.y > 0) {
@@ -2249,20 +2207,12 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         if (m_debugUseSpriteStudio) {
             sf::View physicalView(sf::FloatRect(0.f, 0.f, static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
             window.setView(physicalView);
-
-            sf::RectangleShape solidBg(sf::Vector2f(static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
-            solidBg.setFillColor(sf::Color(18, 18, 22));
-            window.draw(solidBg);
-
-            if (m_activeTool) {
-                m_activeTool->Render(window);
-            }
+            if (m_activeTool) m_activeTool->Render(window);
             return;
         }
 
         rightProperties.syncState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), timeline.getFps());
 
-        // Draw Canvas and active painting tools
         if (m_activeTool) {
             m_activeTool->Render(window);
             if (auto* canvasTool = dynamic_cast<CanvasTool*>(m_activeTool.get())) {
@@ -2296,7 +2246,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);
 
-        // Modern Theme Park Framed Interface
         m_topBar.Render(window);
         m_toolOptionsBar.Render(window);
         m_toolDock.Render(window);
@@ -2305,9 +2254,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         audioPanel.draw(window);
         g_aiPanel.draw(window);
         g_aiReviewModal.draw(window);
-        if (assetBrowser) {
-            assetBrowser->draw(window);
-        }
+        if (assetBrowser) assetBrowser->draw(window);
 
         if (showingText) window.draw(uiText);
         if (isTypingPrompt) {
@@ -2337,12 +2284,8 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             float cx = (static_cast<float>(window.getSize().x) - boxWidth) / 2.f;
             float cy = (static_cast<float>(window.getSize().y) - boxHeight) / 2.f;
 
-            sf::RectangleShape warningBg(sf::Vector2f(boxWidth, boxHeight));
-            warningBg.setPosition(cx, cy);
-            warningBg.setFillColor(WisdomUI::Theme::Panel);
-            warningBg.setOutlineThickness(1.f);
-            warningBg.setOutlineColor(WisdomUI::Theme::BorderHighlight);
-            window.draw(warningBg);
+            sf::FloatRect warnBounds(cx, cy, boxWidth, boxHeight);
+            WisdomUI::Theme::DrawFiligreePanel(window, warnBounds, 1.0f);
 
             sf::Text warnTitleText("UNSAVED CHANGES", font, 20);
             warnTitleText.setFillColor(WisdomUI::Theme::Gold);
@@ -2367,7 +2310,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
                 btn.setPosition(bounds.left, bounds.top);
                 btn.setFillColor(hovered ? sf::Color(baseColor.r + 25, baseColor.g + 25, baseColor.b + 25) : baseColor);
                 btn.setOutlineThickness(1.f);
-                btn.setOutlineColor(WisdomUI::Theme::Border);
+                btn.setOutlineColor(WisdomUI::Theme::BorderHighlight);
                 window.draw(btn);
 
                 sf::Text btnText(textStr, font, 14);

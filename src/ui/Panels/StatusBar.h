@@ -1,6 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <string>
+#include "../UIAnimation.h"
 
 namespace WisdomUI {
 
@@ -10,6 +11,7 @@ namespace WisdomUI {
         void Initialize(const sf::Font& font);
         void SetBounds(const sf::FloatRect& bounds);
         void UpdateData(sf::Vector2u canvasSize, sf::Vector2f cursorCoords, float zoom, int currentLayer, int currentFrame);
+        void Update(float deltaTime);
         void Render(sf::RenderWindow& window);
 
     private:
@@ -20,6 +22,7 @@ namespace WisdomUI {
         float m_zoom{ 1.0f };
         int m_layer{ 0 };
         int m_frame{ 0 };
+        float m_globalTime{ 0.0f };
     };
 
 }

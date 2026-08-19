@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include "../UIAnimation.h"
 
 namespace WisdomUI {
 
@@ -11,7 +12,8 @@ namespace WisdomUI {
         std::string tooltip;
         sf::FloatRect bounds;
         std::function<void()> onSelect;
-        bool isHovered{ false };
+        float hoverAlpha{ 0.0f };
+        float scale{ 1.0f };
     };
 
     class ToolDock {
@@ -31,8 +33,12 @@ namespace WisdomUI {
         sf::Font m_font;
         std::vector<ToolItem> m_tools;
         std::string m_activeToolId{ "brush" };
+
+        SpringFloat m_selectionSliderY;
         std::string m_hoveredTooltip{ "" };
         sf::Vector2f m_tooltipPos;
+        float m_tooltipAlpha{ 0.0f };
+        float m_globalTime{ 0.0f };
     };
 
 }

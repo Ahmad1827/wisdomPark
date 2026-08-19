@@ -367,6 +367,7 @@
     <ClInclude Include="src\ui\Screens\ProjectBrowser.h" />
     <ClInclude Include="src\ui\Screens\WelcomeScreen.h" />
     <ClInclude Include="src\ui\TopMenuBar.h" />
+    <ClInclude Include="src\ui\UIAnimation.h" />
     <ClInclude Include="src\ui\UIIcons.h" />
     <ClInclude Include="src\ui\UIManager.h" />
     <ClInclude Include="src\ui\UITheme.h" />

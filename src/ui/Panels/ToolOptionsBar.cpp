@@ -12,8 +12,8 @@ namespace WisdomUI {
 
     void ToolOptionsBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        m_sliderBounds = sf::FloatRect(bounds.left + 180.0f, bounds.top + 10.0f, 100.0f, 10.0f);
-        m_perfBtnBounds = sf::FloatRect(bounds.left + 360.0f, bounds.top + 5.0f, 85.0f, 22.0f);
+        m_sliderBounds = sf::FloatRect(bounds.left + 190.0f, bounds.top + 10.0f, 110.0f, 12.0f);
+        m_perfBtnBounds = sf::FloatRect(bounds.left + 380.0f, bounds.top + 5.0f, 92.0f, 22.0f);
     }
 
     void ToolOptionsBar::SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect) {
@@ -21,6 +21,18 @@ namespace WisdomUI {
         m_size = size;
         m_pixelMode = pixelMode;
         m_pixelPerfect = pixelPerfect;
+    }
+
+    void ToolOptionsBar::Update(float deltaTime, const sf::Vector2f& mousePos) {
+        m_globalTime += deltaTime;
+        bool perfHover = m_perfBtnBounds.contains(mousePos);
+        m_perfHoverAlpha += ((perfHover ? 1.0f : 0.0f) - m_perfHoverAlpha) * 14.0f * deltaTime;
+
+        float targetToggle = m_pixelPerfect ? 1.0f : 0.0f;
+        m_perfToggleProgress += (targetToggle - m_perfToggleProgress) * 16.0f * deltaTime;
+
+        bool sliderHover = m_sliderBounds.contains(mousePos) || m_isDraggingSlider;
+        m_sliderThumbScale += ((sliderHover ? 1.3f : 1.0f) - m_sliderThumbScale) * 18.0f * deltaTime;
     }
 
     bool ToolOptionsBar::HandleEvent(const sf::Event& event, const sf::RenderWindow& window,
@@ -70,39 +82,55 @@ namespace WisdomUI {
 
         sf::Text sizeLabel("Size:", m_font, 12);
         sizeLabel.setFillColor(Theme::TextSecondary);
-        sizeLabel.setPosition(m_bounds.left + 140.0f, m_bounds.top + 7.0f);
+        sizeLabel.setPosition(m_bounds.left + 150.0f, m_bounds.top + 7.0f);
         window.draw(sizeLabel);
 
         sf::RectangleShape sliderTrack(sf::Vector2f(m_sliderBounds.width, m_sliderBounds.height));
         sliderTrack.setPosition(m_sliderBounds.left, m_sliderBounds.top);
-        sliderTrack.setFillColor(sf::Color(18, 14, 10, 230));
+        sliderTrack.setFillColor(Theme::PanelInset);
         sliderTrack.setOutlineThickness(1.0f);
         sliderTrack.setOutlineColor(Theme::Border);
         window.draw(sliderTrack);
 
         float maxVal = m_pixelMode ? 32.0f : 100.0f;
-        float fillW = std::clamp((m_size / maxVal) * m_sliderBounds.width, 2.0f, m_sliderBounds.width);
+        float fillRatio = std::clamp(m_size / maxVal, 0.0f, 1.0f);
+        float fillW = fillRatio * m_sliderBounds.width;
+
         sf::RectangleShape sliderFill(sf::Vector2f(fillW, m_sliderBounds.height));
         sliderFill.setPosition(m_sliderBounds.left, m_sliderBounds.top);
-        sliderFill.setFillColor(Theme::Accent);
+        sliderFill.setFillColor(Animation::InterpolateColor(Theme::Border, Theme::Accent, fillRatio));
         window.draw(sliderFill);
+
+        float thumbX = m_sliderBounds.left + fillW;
+        float thumbY = m_sliderBounds.top + m_sliderBounds.height / 2.0f;
+        sf::RectangleShape thumb(sf::Vector2f(6.0f, 16.0f));
+        thumb.setOrigin(3.0f, 8.0f);
+        thumb.setPosition(thumbX, thumbY);
+        thumb.setScale(m_sliderThumbScale, m_sliderThumbScale);
+        thumb.setFillColor(Theme::Gold);
+        thumb.setOutlineThickness(1.0f);
+        thumb.setOutlineColor(Theme::BorderHighlight);
+        window.draw(thumb);
 
         sf::Text sizeVal(std::to_string(static_cast<int>(m_size)) + "px", m_font, 11);
         sizeVal.setFillColor(Theme::TextPrimary);
-        sizeVal.setPosition(m_sliderBounds.left + m_sliderBounds.width + 10.0f, m_bounds.top + 7.0f);
+        sizeVal.setPosition(m_sliderBounds.left + m_sliderBounds.width + 12.0f, m_bounds.top + 7.0f);
         window.draw(sizeVal);
 
         if (m_pixelMode) {
             sf::RectangleShape perfBtn(sf::Vector2f(m_perfBtnBounds.width, m_perfBtnBounds.height));
             perfBtn.setPosition(m_perfBtnBounds.left, m_perfBtnBounds.top);
-            perfBtn.setFillColor(m_pixelPerfect ? Theme::Accent : Theme::Panel);
+
+            sf::Color btnBg = Animation::InterpolateColor(Theme::PanelInset, Theme::Accent, m_perfToggleProgress);
+            btnBg = Animation::InterpolateColor(btnBg, Theme::AccentHover, m_perfHoverAlpha * 0.4f);
+            perfBtn.setFillColor(btnBg);
             perfBtn.setOutlineThickness(1.0f);
-            perfBtn.setOutlineColor(m_pixelPerfect ? Theme::BorderHighlight : Theme::Border);
+            perfBtn.setOutlineColor(Animation::InterpolateColor(Theme::Border, Theme::BorderHighlight, m_perfToggleProgress));
             window.draw(perfBtn);
 
             sf::Text perfText("Pixel Perfect", m_font, 10);
-            perfText.setFillColor(m_pixelPerfect ? sf::Color::White : Theme::TextSecondary);
-            perfText.setPosition(m_perfBtnBounds.left + 10.0f, m_perfBtnBounds.top + 4.0f);
+            perfText.setFillColor(Animation::InterpolateColor(Theme::TextSecondary, sf::Color::White, m_perfToggleProgress));
+            perfText.setPosition(m_perfBtnBounds.left + 12.0f, m_perfBtnBounds.top + 4.0f);
             window.draw(perfText);
         }
     }

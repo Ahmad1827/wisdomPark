@@ -3,18 +3,21 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include "../UIAnimation.h"
 
 namespace WisdomUI {
 
     struct MenuAction {
         std::string label;
         std::function<void()> callback;
+        float hoverAlpha{ 0.0f };
     };
 
     struct MenuCategory {
         std::string title;
         sf::FloatRect bounds;
         std::vector<MenuAction> actions;
+        float openProgress{ 0.0f };
         bool isOpen{ false };
     };
 
@@ -23,7 +26,8 @@ namespace WisdomUI {
         std::string tooltip;
         sf::FloatRect bounds;
         std::function<void()> onClick;
-        bool isHovered{ false };
+        float hoverAlpha{ 0.0f };
+        float scale{ 1.0f };
     };
 
     class TopBar {
@@ -54,6 +58,8 @@ namespace WisdomUI {
         std::vector<MenuCategory> m_menus;
         std::vector<QuickBtn> m_quickBtns;
         int m_openMenuIndex{ -1 };
+        float m_globalTime{ 0.0f };
+        float m_shimmerOffset{ 0.0f };
     };
 
 }

@@ -2,6 +2,7 @@
 #include <SFML/Graphics.hpp>
 #include <functional>
 #include <string>
+#include "../UIAnimation.h"
 
 namespace WisdomUI {
 
@@ -16,6 +17,7 @@ namespace WisdomUI {
             std::function<void(float)> onSizeChange,
             std::function<void()> onTogglePixelPerfect);
 
+        void Update(float deltaTime, const sf::Vector2f& mousePos);
         void Render(sf::RenderWindow& window);
 
     private:
@@ -29,6 +31,11 @@ namespace WisdomUI {
 
         sf::FloatRect m_sliderBounds;
         sf::FloatRect m_perfBtnBounds;
+
+        float m_perfHoverAlpha{ 0.0f };
+        float m_perfToggleProgress{ 0.0f };
+        float m_sliderThumbScale{ 1.0f };
+        float m_globalTime{ 0.0f };
     };
 
 }
