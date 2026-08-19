@@ -119,7 +119,7 @@ namespace WisdomUI {
     void TopBar::Render(sf::RenderWindow& window) {
         sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
         bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::Background);
+        bg.setFillColor(Theme::Panel);
         window.draw(bg);
 
         sf::RectangleShape border(sf::Vector2f(m_bounds.width, Theme::BorderThickness));
@@ -128,14 +128,14 @@ namespace WisdomUI {
         window.draw(border);
 
         sf::Text logo("WISDOM PARK", m_font, 13);
-        logo.setFillColor(sf::Color(255, 200, 90));
+        logo.setFillColor(Theme::Gold);
         logo.setPosition(m_bounds.left + 12.0f, m_bounds.top + 9.0f);
         window.draw(logo);
 
         std::string projTitle = "|  " + m_projectName + (m_isDirty ? " *" : "");
         sf::Text projText(projTitle, m_font, 12);
         projText.setFillColor(Theme::TextSecondary);
-        projText.setPosition(m_bounds.left + 105.0f, m_bounds.top + 10.0f);
+        projText.setPosition(m_bounds.left + 115.0f, m_bounds.top + 10.0f);
         window.draw(projText);
 
         for (size_t i = 0; i < m_menus.size(); ++i) {
@@ -145,12 +145,14 @@ namespace WisdomUI {
             if (isOpen) {
                 sf::RectangleShape mBg(sf::Vector2f(menu.bounds.width, menu.bounds.height));
                 mBg.setPosition(menu.bounds.left, menu.bounds.top);
-                mBg.setFillColor(Theme::Panel);
+                mBg.setFillColor(Theme::PanelHover);
+                mBg.setOutlineThickness(1.0f);
+                mBg.setOutlineColor(Theme::BorderHighlight);
                 window.draw(mBg);
             }
 
             sf::Text mText(menu.title, m_font, 12);
-            mText.setFillColor(isOpen ? sf::Color::White : Theme::TextPrimary);
+            mText.setFillColor(isOpen ? Theme::Gold : Theme::TextPrimary);
             sf::FloatRect tb = mText.getLocalBounds();
             mText.setPosition(menu.bounds.left + (menu.bounds.width - tb.width) / 2.0f, menu.bounds.top + 9.0f);
             window.draw(mText);
@@ -159,9 +161,9 @@ namespace WisdomUI {
         for (const auto& qb : m_quickBtns) {
             sf::RectangleShape qBg(sf::Vector2f(qb.bounds.width, qb.bounds.height));
             qBg.setPosition(qb.bounds.left, qb.bounds.top);
-            qBg.setFillColor(qb.isHovered ? Theme::AccentHover : Theme::Panel);
+            qBg.setFillColor(qb.isHovered ? Theme::AccentHover : Theme::PanelHover);
             qBg.setOutlineThickness(1.0f);
-            qBg.setOutlineColor(Theme::Border);
+            qBg.setOutlineColor(qb.isHovered ? Theme::BorderHighlight : Theme::Border);
             window.draw(qBg);
 
             Icons::Draw(window, qb.id, sf::Vector2f(qb.bounds.left + 5.0f, qb.bounds.top + 5.0f), 18.0f, Theme::TextPrimary);
@@ -177,7 +179,7 @@ namespace WisdomUI {
             dropBg.setPosition(openMenu.bounds.left, itemY);
             dropBg.setFillColor(Theme::Panel);
             dropBg.setOutlineThickness(1.0f);
-            dropBg.setOutlineColor(Theme::Border);
+            dropBg.setOutlineColor(Theme::BorderHighlight);
             window.draw(dropBg);
 
             for (const auto& act : openMenu.actions) {

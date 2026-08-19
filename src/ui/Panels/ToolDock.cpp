@@ -77,12 +77,12 @@ namespace WisdomUI {
 
             sf::RectangleShape btn(sf::Vector2f(tool.bounds.width, tool.bounds.height));
             btn.setPosition(tool.bounds.left, tool.bounds.top);
-            btn.setFillColor(isActive ? Theme::Accent : (tool.isHovered ? Theme::Panel : Theme::Background));
+            btn.setFillColor(isActive ? Theme::Accent : (tool.isHovered ? Theme::PanelHover : Theme::Panel));
             btn.setOutlineThickness(1.0f);
-            btn.setOutlineColor(isActive ? Theme::AccentHover : (tool.isHovered ? Theme::Border : sf::Color::Transparent));
+            btn.setOutlineColor(isActive ? Theme::BorderHighlight : (tool.isHovered ? Theme::Border : sf::Color::Transparent));
             window.draw(btn);
 
-            sf::Color iconColor = isActive ? sf::Color::White : (tool.isHovered ? Theme::TextPrimary : Theme::TextSecondary);
+            sf::Color iconColor = isActive ? sf::Color::White : (tool.isHovered ? Theme::Gold : Theme::TextPrimary);
             Icons::Draw(window, tool.id, sf::Vector2f(tool.bounds.left + 7.0f, tool.bounds.top + 7.0f), 20.0f, iconColor);
         }
 
@@ -92,12 +92,12 @@ namespace WisdomUI {
 
             sf::RectangleShape tipBg(sf::Vector2f(tb.width + 12.0f, tb.height + 10.0f));
             tipBg.setPosition(m_tooltipPos.x, m_tooltipPos.y);
-            tipBg.setFillColor(sf::Color(15, 17, 22, 240));
+            tipBg.setFillColor(sf::Color(25, 20, 15, 240));
             tipBg.setOutlineThickness(1.0f);
-            tipBg.setOutlineColor(Theme::Border);
+            tipBg.setOutlineColor(Theme::BorderHighlight);
             window.draw(tipBg);
 
-            tip.setFillColor(sf::Color::White);
+            tip.setFillColor(Theme::Gold);
             tip.setPosition(m_tooltipPos.x + 6.0f, m_tooltipPos.y + 3.0f);
             window.draw(tip);
         }

@@ -24,7 +24,7 @@ namespace WisdomUI {
     void StatusBar::Render(sf::RenderWindow& window) {
         sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
         bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::Background);
+        bg.setFillColor(Theme::Panel);
         window.draw(bg);
 
         sf::RectangleShape border(sf::Vector2f(m_bounds.width, Theme::BorderThickness));
@@ -32,8 +32,8 @@ namespace WisdomUI {
         border.setFillColor(Theme::Border);
         window.draw(border);
 
-        std::string text = "Canvas: " + std::to_string(m_canvasSize.x) + "x" + std::to_string(m_canvasSize.y) +
-            "  |  Cursor: " + std::to_string(static_cast<int>(m_cursorCoords.x)) + ", " + std::to_string(static_cast<int>(m_cursorCoords.y)) +
+        std::string text = "Park Canvas: " + std::to_string(m_canvasSize.x) + "x" + std::to_string(m_canvasSize.y) +
+            "  |  Position: " + std::to_string(static_cast<int>(m_cursorCoords.x)) + ", " + std::to_string(static_cast<int>(m_cursorCoords.y)) +
             "  |  Zoom: " + std::to_string(static_cast<int>(m_zoom * 100.0f)) + "%" +
             "  |  Layer: " + std::to_string(m_layer + 1) +
             "  |  Frame: " + std::to_string(m_frame + 1);

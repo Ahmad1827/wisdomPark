@@ -2225,8 +2225,18 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 }
 
 void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& canvas, AIHelper& aiHelper, Timeline& timeline) {
+    // 1. Draw the Wisdom Park theme park backdrop artwork across all states
+    sf::Vector2u winSize = window.getSize();
+    sf::Vector2u texSize = bgTexture.getSize();
+    if (texSize.x > 0 && texSize.y > 0) {
+        bgSprite.setScale(
+            static_cast<float>(winSize.x) / static_cast<float>(texSize.x),
+            static_cast<float>(winSize.y) / static_cast<float>(texSize.y)
+        );
+    }
+    window.draw(bgSprite);
+
     if (currentState == AppState::Welcome) {
-        window.draw(bgSprite);
         drawStartMenu(window);
         if (currentMenuState == MenuState::Projects) {
             projectBrowser.draw(window);
@@ -2250,12 +2260,9 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             return;
         }
 
-        sf::RectangleShape darkBackdrop(sf::Vector2f(static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
-        darkBackdrop.setFillColor(WisdomUI::Theme::Background);
-        window.draw(darkBackdrop);
-
         rightProperties.syncState(aiHelper.getTheme(), isLightingMode, aiHelper.isTerrainEnabled(), canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), timeline.getFps());
 
+        // Draw Canvas and active painting tools
         if (m_activeTool) {
             m_activeTool->Render(window);
             if (auto* canvasTool = dynamic_cast<CanvasTool*>(m_activeTool.get())) {
@@ -2289,6 +2296,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         bottomTimeline.draw(window, timeline, canvas);
 
+        // Modern Theme Park Framed Interface
         m_topBar.Render(window);
         m_toolOptionsBar.Render(window);
         m_toolDock.Render(window);
@@ -2331,13 +2339,13 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
             sf::RectangleShape warningBg(sf::Vector2f(boxWidth, boxHeight));
             warningBg.setPosition(cx, cy);
-            warningBg.setFillColor(sf::Color(35, 38, 48));
+            warningBg.setFillColor(WisdomUI::Theme::Panel);
             warningBg.setOutlineThickness(1.f);
-            warningBg.setOutlineColor(WisdomUI::Theme::Border);
+            warningBg.setOutlineColor(WisdomUI::Theme::BorderHighlight);
             window.draw(warningBg);
 
             sf::Text warnTitleText("UNSAVED CHANGES", font, 20);
-            warnTitleText.setFillColor(sf::Color(255, 200, 100));
+            warnTitleText.setFillColor(WisdomUI::Theme::Gold);
             warnTitleText.setPosition(cx + (boxWidth - warnTitleText.getLocalBounds().width) / 2.f, cy + 25.f);
             window.draw(warnTitleText);
 

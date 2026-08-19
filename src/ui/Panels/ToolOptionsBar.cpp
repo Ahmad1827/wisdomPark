@@ -13,7 +13,7 @@ namespace WisdomUI {
     void ToolOptionsBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
         m_sliderBounds = sf::FloatRect(bounds.left + 180.0f, bounds.top + 10.0f, 100.0f, 10.0f);
-        m_perfBtnBounds = sf::FloatRect(bounds.left + 360.0f, bounds.top + 5.0f, 80.0f, 20.0f);
+        m_perfBtnBounds = sf::FloatRect(bounds.left + 360.0f, bounds.top + 5.0f, 85.0f, 22.0f);
     }
 
     void ToolOptionsBar::SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect) {
@@ -55,7 +55,7 @@ namespace WisdomUI {
     void ToolOptionsBar::Render(sf::RenderWindow& window) {
         sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
         bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::Panel);
+        bg.setFillColor(Theme::Background);
         window.draw(bg);
 
         sf::RectangleShape border(sf::Vector2f(m_bounds.width, Theme::BorderThickness));
@@ -64,7 +64,7 @@ namespace WisdomUI {
         window.draw(border);
 
         sf::Text toolLabel("Tool: " + m_activeToolName, m_font, 12);
-        toolLabel.setFillColor(Theme::TextPrimary);
+        toolLabel.setFillColor(Theme::Gold);
         toolLabel.setPosition(m_bounds.left + 16.0f, m_bounds.top + 7.0f);
         window.draw(toolLabel);
 
@@ -75,7 +75,7 @@ namespace WisdomUI {
 
         sf::RectangleShape sliderTrack(sf::Vector2f(m_sliderBounds.width, m_sliderBounds.height));
         sliderTrack.setPosition(m_sliderBounds.left, m_sliderBounds.top);
-        sliderTrack.setFillColor(sf::Color(20, 22, 28));
+        sliderTrack.setFillColor(sf::Color(18, 14, 10, 230));
         sliderTrack.setOutlineThickness(1.0f);
         sliderTrack.setOutlineColor(Theme::Border);
         window.draw(sliderTrack);
@@ -95,14 +95,14 @@ namespace WisdomUI {
         if (m_pixelMode) {
             sf::RectangleShape perfBtn(sf::Vector2f(m_perfBtnBounds.width, m_perfBtnBounds.height));
             perfBtn.setPosition(m_perfBtnBounds.left, m_perfBtnBounds.top);
-            perfBtn.setFillColor(m_pixelPerfect ? Theme::Accent : Theme::Background);
+            perfBtn.setFillColor(m_pixelPerfect ? Theme::Accent : Theme::Panel);
             perfBtn.setOutlineThickness(1.0f);
-            perfBtn.setOutlineColor(m_pixelPerfect ? Theme::AccentHover : Theme::Border);
+            perfBtn.setOutlineColor(m_pixelPerfect ? Theme::BorderHighlight : Theme::Border);
             window.draw(perfBtn);
 
             sf::Text perfText("Pixel Perfect", m_font, 10);
             perfText.setFillColor(m_pixelPerfect ? sf::Color::White : Theme::TextSecondary);
-            perfText.setPosition(m_perfBtnBounds.left + 8.0f, m_perfBtnBounds.top + 3.0f);
+            perfText.setPosition(m_perfBtnBounds.left + 10.0f, m_perfBtnBounds.top + 4.0f);
             window.draw(perfText);
         }
     }
