@@ -1,75 +1,21 @@
 #include "AIPanel.h"
 #include "../ai/AIManager.h"
+#include "../UI/UITheme.h"
+#include <algorithm>
 #include <cmath>
 
-AIPanel::AIPanel() : currentX(-400.f), targetX(-400.f), width(350.f), isVisible(false), isTypingPrompt(false), isTypingNegative(false), currentOp(AIOperation::Generate) {}
+AIPanel::AIPanel() : position(64.f, 78.f), size(320.f, 540.f), isVisible(false), isTypingPrompt(false), isTypingNegative(false), currentOp(AIOperation::Generate) {}
 
 void AIPanel::init() {
     font.loadFromFile("assets/font.otf");
+    position = sf::Vector2f(64.f, 78.f);
 
-    background.setSize(sf::Vector2f(width, 1080.f));
-    background.setFillColor(sf::Color(25, 25, 30, 245));
-    background.setOutlineThickness(1.f);
-    background.setOutlineColor(sf::Color(100, 150, 255, 100));
-
-    header.setSize(sf::Vector2f(width, 40.f));
-    header.setFillColor(sf::Color(35, 35, 45, 255));
-
-    titleText.setFont(font);
-    titleText.setString("AI Assistant");
-    titleText.setCharacterSize(18);
-    titleText.setFillColor(sf::Color::White);
-
-    promptBox.setSize(sf::Vector2f(width - 40.f, 80.f));
-    promptBox.setFillColor(sf::Color(15, 15, 18));
-    promptBox.setOutlineThickness(1.f);
-
-    promptText.setFont(font);
-    promptText.setCharacterSize(14);
-    promptText.setFillColor(sf::Color::White);
-
-    negativePromptBox.setSize(sf::Vector2f(width - 40.f, 60.f));
-    negativePromptBox.setFillColor(sf::Color(15, 15, 18));
-    negativePromptBox.setOutlineThickness(1.f);
-
-    negativePromptText.setFont(font);
-    negativePromptText.setCharacterSize(14);
-    negativePromptText.setFillColor(sf::Color::White);
-
-    generateBtn.setSize(sf::Vector2f(width - 40.f, 45.f));
-    generateBtn.setFillColor(sf::Color(50, 150, 255));
-
-    generateBtnText.setFont(font);
-    generateBtnText.setString("Execute");
-    generateBtnText.setCharacterSize(16);
-    generateBtnText.setFillColor(sf::Color::White);
-
-    backBtn.setSize(sf::Vector2f(width - 40.f, 35.f));
-    backBtn.setFillColor(sf::Color(150, 50, 50));
-
-    backBtnText.setFont(font);
-    backBtnText.setString("< Close Panel");
-    backBtnText.setCharacterSize(14);
-    backBtnText.setFillColor(sf::Color::White);
-
-    std::vector<std::string> opNames = { "Generate", "Edit", "Variation", "Remove BG", "Upscale", "Colorize", "Inpaint", "Outpaint", "Gen Frame" };
+    opNames = { "Generate", "Edit", "Variation", "Remove BG", "Upscale", "Colorize", "Inpaint", "Outpaint", "Gen Frame" };
     opValues = { AIOperation::Generate, AIOperation::Edit, AIOperation::Variation, AIOperation::RemoveBackground, AIOperation::Upscale, AIOperation::Colorize, AIOperation::Inpaint, AIOperation::Outpaint, AIOperation::GenerateFrame };
-
-    for (size_t i = 0; i < opNames.size(); ++i) {
-        sf::RectangleShape btn(sf::Vector2f((width - 50.f) / 2.f, 30.f));
-        btn.setFillColor(sf::Color(40, 40, 50));
-        opButtons.push_back(btn);
-
-        sf::Text txt(opNames[i], font, 12);
-        txt.setFillColor(sf::Color::White);
-        opTexts.push_back(txt);
-    }
 }
 
 void AIPanel::toggle() {
     isVisible = !isVisible;
-    if (isVisible) targetX = 0.f;
-    else targetX = -width;
 }
 
 bool AIPanel::getIsVisible() const {
@@ -77,105 +23,115 @@ bool AIPanel::getIsVisible() const {
 }
 
 void AIPanel::update(float dt) {
-    if (!isVisible && std::abs(currentX - targetX) < 1.0f) {
-        currentX = targetX;
-        return;
+    if (!isVisible) return;
+
+    float bx = position.x;
+    float by = position.y;
+
+    opButtonBounds.clear();
+    float opY = by + 40.f;
+    float btnW = (size.x - 32.f) / 2.f;
+
+    for (size_t i = 0; i < opNames.size(); ++i) {
+        float x = bx + 12.f + (i % 2) * (btnW + 8.f);
+        float y = opY + (i / 2) * 28.f;
+        opButtonBounds.push_back(sf::FloatRect(x, y, btnW, 24.f));
     }
 
-    currentX += (targetX - currentX) * 15.0f * dt;
+    float nextY = opY + ((opNames.size() + 1) / 2) * 28.f + 8.f;
+    promptBoxBounds = sf::FloatRect(bx + 12.f, nextY, size.x - 24.f, 70.f);
 
-    background.setPosition(currentX, 0.f);
-    header.setPosition(currentX, 0.f);
-    titleText.setPosition(currentX + 20.f, 10.f);
+    nextY += 82.f;
+    negativePromptBoxBounds = sf::FloatRect(bx + 12.f, nextY, size.x - 24.f, 55.f);
 
-    float y = 60.f;
+    nextY += 68.f;
+    generateBtnBounds = sf::FloatRect(bx + 12.f, nextY, size.x - 24.f, 32.f);
 
-    for (size_t i = 0; i < opButtons.size(); ++i) {
-        float bx = currentX + 20.f + (i % 2) * ((width - 30.f) / 2.f);
-        float by = y + (i / 2) * 40.f;
-        opButtons[i].setPosition(bx, by);
-        if (opValues[i] == currentOp) opButtons[i].setFillColor(sf::Color(0, 120, 200));
-        else opButtons[i].setFillColor(sf::Color(40, 40, 50));
-
-        sf::FloatRect bounds = opTexts[i].getLocalBounds();
-        opTexts[i].setPosition(bx + opButtons[i].getSize().x / 2.f - bounds.width / 2.f, by + 5.f);
-    }
-
-    y += ((opButtons.size() + 1) / 2) * 40.f + 20.f;
-
-    promptBox.setPosition(currentX + 20.f, y);
-    promptBox.setOutlineColor(isTypingPrompt ? sf::Color(0, 191, 255) : sf::Color(60, 60, 70));
-    promptText.setPosition(currentX + 25.f, y + 5.f);
-
-    y += 100.f;
-    negativePromptBox.setPosition(currentX + 20.f, y);
-    negativePromptBox.setOutlineColor(isTypingNegative ? sf::Color(255, 100, 100) : sf::Color(60, 60, 70));
-    negativePromptText.setPosition(currentX + 25.f, y + 5.f);
-
-    y += 80.f;
-    generateBtn.setPosition(currentX + 20.f, y);
-    sf::FloatRect gb = generateBtnText.getLocalBounds();
-    generateBtnText.setPosition(currentX + 20.f + generateBtn.getSize().x / 2.f - gb.width / 2.f, y + 12.f);
-
-    y += 60.f;
-    backBtn.setPosition(currentX + 20.f, y);
-    sf::FloatRect bb = backBtnText.getLocalBounds();
-    backBtnText.setPosition(currentX + 20.f + backBtn.getSize().x / 2.f - bb.width / 2.f, y + 8.f);
-
-    updateTextDisplays();
-}
-
-void AIPanel::updateTextDisplays() {
-    std::string p = currentPrompt;
-    if (isTypingPrompt) p += "_";
-    else if (p.empty()) p = "Enter prompt...";
-    promptText.setString(p);
-
-    std::string n = currentNegativePrompt;
-    if (isTypingNegative) n += "_";
-    else if (n.empty()) n = "Enter negative prompt...";
-    negativePromptText.setString(n);
+    nextY += 38.f;
+    backBtnBounds = sf::FloatRect(bx + 12.f, nextY, size.x - 24.f, 26.f);
 }
 
 void AIPanel::draw(sf::RenderWindow& window) {
-    if (currentX <= -width + 1.f) return;
+    if (!isVisible) return;
 
-    window.draw(background);
-    window.draw(header);
-    window.draw(titleText);
+    sf::FloatRect panelBounds(position.x, position.y, size.x, size.y);
+    WisdomUI::Theme::DrawSunsetPanel(window, panelBounds, 1.0f);
 
-    for (size_t i = 0; i < opButtons.size(); ++i) {
-        window.draw(opButtons[i]);
-        window.draw(opTexts[i]);
+    sf::FloatRect headerGrip(position.x + 8.f, position.y + 6.f, size.x - 16.f, 26.f);
+    sf::RectangleShape gripBg(sf::Vector2f(headerGrip.width, headerGrip.height));
+    gripBg.setPosition(headerGrip.left, headerGrip.top);
+    gripBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    gripBg.setOutlineThickness(1.f);
+    gripBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(gripBg);
+
+    WisdomUI::Theme::DrawCrispText(window, font, ":: AI ASSISTANT ::", 12, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+
+    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+    for (size_t i = 0; i < opButtonBounds.size(); ++i) {
+        bool isActive = (opValues[i] == currentOp);
+        bool isHov = opButtonBounds[i].contains(mPos);
+        WisdomUI::Theme::DrawSunsetButton(window, opButtonBounds[i], opNames[i], font, 11, isActive, isHov, isActive, 1.0f);
     }
 
-    window.draw(promptBox);
-    window.draw(promptText);
-    window.draw(negativePromptBox);
-    window.draw(negativePromptText);
-    window.draw(generateBtn);
-    window.draw(generateBtnText);
-    window.draw(backBtn);
-    window.draw(backBtnText);
+    auto drawInputBox = [&](sf::FloatRect b, const std::string& label, const std::string& val, bool active, const std::string& placeholder) {
+        sf::RectangleShape box(sf::Vector2f(b.width, b.height));
+        box.setPosition(b.left, b.top);
+        box.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+        box.setOutlineThickness(1.5f);
+        box.setOutlineColor(active ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
+        window.draw(box);
+
+        WisdomUI::Theme::DrawCrispText(window, font, label, 10, b.left + 6.f, b.top + 4.f, WisdomUI::Theme::TextSecondary);
+
+        std::string display = val;
+        if (active) display += "_";
+        else if (display.empty()) display = placeholder;
+
+        sf::Color textColor = (val.empty() && !active) ? WisdomUI::Theme::SunsetPlum : WisdomUI::Theme::TextPrimary;
+        WisdomUI::Theme::DrawCrispText(window, font, display, 11, b.left + 6.f, b.top + 18.f, textColor);
+        };
+
+    drawInputBox(promptBoxBounds, "PROMPT:", currentPrompt, isTypingPrompt, "Enter generation prompt...");
+    drawInputBox(negativePromptBoxBounds, "NEGATIVE PROMPT:", currentNegativePrompt, isTypingNegative, "Optional negative tokens...");
+
+    WisdomUI::Theme::DrawSunsetButton(window, generateBtnBounds, "EXECUTE REQUEST", font, 12, false, generateBtnBounds.contains(mPos), true, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, backBtnBounds, "< CLOSE PANEL", font, 11, false, backBtnBounds.contains(mPos), false, 1.0f);
 }
 
 bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
     if (!isVisible) return false;
 
-    // Check if the mouse cursor is hovering over the panel slide-out footprint
-    bool mouseOverPanel = (mousePos.x >= currentX && mousePos.x <= currentX + width);
+    sf::FloatRect headerGrip(position.x, position.y, size.x, 34.f);
 
-    if (event.type == sf::Event::MouseButtonPressed) {
-        if (!mouseOverPanel) return false;
+    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        if (headerGrip.contains(mousePos)) {
+            isDraggingPanel = true;
+            dragOffset = mousePos - position;
+            return true;
+        }
 
-        isTypingPrompt = promptBox.getGlobalBounds().contains(mousePos);
-        isTypingNegative = negativePromptBox.getGlobalBounds().contains(mousePos);
+        if (!sf::FloatRect(position.x, position.y, size.x, size.y).contains(mousePos)) return false;
 
-        for (size_t i = 0; i < opButtons.size(); ++i) {
-            if (opButtons[i].getGlobalBounds().contains(mousePos)) {
+        isTypingPrompt = promptBoxBounds.contains(mousePos);
+        isTypingNegative = negativePromptBoxBounds.contains(mousePos);
+
+        for (size_t i = 0; i < opButtonBounds.size(); ++i) {
+            if (opButtonBounds[i].contains(mousePos)) {
                 currentOp = opValues[i];
+                return true;
             }
         }
+        return true;
+    }
+    else if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+        isDraggingPanel = false;
+    }
+    else if (event.type == sf::Event::MouseMoved && isDraggingPanel) {
+        position = mousePos - dragOffset;
+        position.x = std::clamp(position.x, 56.f, 1920.f - size.x);
+        position.y = std::clamp(position.y, 40.f, 1080.f - size.y);
         return true;
     }
 
@@ -192,14 +148,13 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
         }
     }
 
-    // Capture all other event types (like MouseMoved) over the panel area to absorb the focus
-    return mouseOverPanel;
+    return sf::FloatRect(position.x, position.y, size.x, size.y).contains(mousePos);
 }
 
 std::string AIPanel::handleClick(sf::Vector2f mousePos) {
     if (!isVisible) return "";
-    if (generateBtn.getGlobalBounds().contains(mousePos)) return "execute";
-    if (backBtn.getGlobalBounds().contains(mousePos)) {
+    if (generateBtnBounds.contains(mousePos)) return "execute";
+    if (backBtnBounds.contains(mousePos)) {
         toggle();
         return "back";
     }

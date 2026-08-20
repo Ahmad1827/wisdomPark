@@ -6,38 +6,29 @@
 
 class AIPanel {
 private:
-    sf::RectangleShape background;
-    sf::RectangleShape header;
-    sf::Text titleText;
     sf::Font font;
+    sf::Vector2f position;
+    sf::Vector2f size;
 
-    sf::RectangleShape promptBox;
-    sf::Text promptText;
+    bool isDraggingPanel = false;
+    sf::Vector2f dragOffset;
+
     std::string currentPrompt;
-
-    sf::RectangleShape negativePromptBox;
-    sf::Text negativePromptText;
     std::string currentNegativePrompt;
 
-    sf::RectangleShape generateBtn;
-    sf::Text generateBtnText;
+    sf::FloatRect promptBoxBounds;
+    sf::FloatRect negativePromptBoxBounds;
+    sf::FloatRect generateBtnBounds;
+    sf::FloatRect backBtnBounds;
 
-    sf::RectangleShape backBtn;
-    sf::Text backBtnText;
-
-    std::vector<sf::RectangleShape> opButtons;
-    std::vector<sf::Text> opTexts;
+    std::vector<sf::FloatRect> opButtonBounds;
+    std::vector<std::string> opNames;
     std::vector<AIOperation> opValues;
     AIOperation currentOp;
 
-    float currentX;
-    float targetX;
-    float width;
     bool isVisible;
     bool isTypingPrompt;
     bool isTypingNegative;
-
-    void updateTextDisplays();
 
 public:
     AIPanel();
