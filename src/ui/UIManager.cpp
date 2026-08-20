@@ -2088,7 +2088,7 @@ void UIManager::update(sf::RenderWindow & window, AppState currentState, AppSett
     }
 }
 
-void UIManager::draw(sf::RenderWindow & window, AppState currentState, Canvas & canvas, AIHelper & aiHelper, Timeline & timeline) {
+void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& canvas, AIHelper& aiHelper, Timeline& timeline) {
     window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(window.getSize()));
 
     bgSprite.setPosition(0.f, 0.f);
@@ -2132,12 +2132,12 @@ void UIManager::draw(sf::RenderWindow & window, AppState currentState, Canvas & 
         }
         else if (m_activeRightTab == RightTabMode::Assets && assetBrowser) {
             sf::FloatRect abBounds(1920.f - 44.f - 280.f, 68.0f, 280.f, 1080.0f - 68.0f - 24.0f);
-            WisdomUI::Theme::DrawFiligreePanel(window, abBounds, 1.0f);
+            WisdomUI::Theme::DrawParchmentPanel(window, abBounds, 1.0f);
             assetBrowser->draw(window);
         }
         else if (m_activeRightTab == RightTabMode::Audio) {
             sf::FloatRect audBounds(1920.f - 44.f - 280.f, 68.0f, 280.f, 1080.0f - 68.0f - 24.0f);
-            WisdomUI::Theme::DrawFiligreePanel(window, audBounds, 1.0f);
+            WisdomUI::Theme::DrawParchmentPanel(window, audBounds, 1.0f);
             audioPanel.draw(window);
         }
 
@@ -2149,25 +2149,21 @@ void UIManager::draw(sf::RenderWindow & window, AppState currentState, Canvas & 
             float timelineY = 1080.0f - WisdomUI::Theme::StatusBarHeight - WisdomUI::Theme::TimelineHeight;
             sf::FloatRect timelineBounds(0.0f, timelineY, 1920.0f, WisdomUI::Theme::TimelineHeight);
 
-            sf::RectangleShape panelBg(sf::Vector2f(timelineBounds.width, timelineBounds.height));
-            panelBg.setPosition(timelineBounds.left, timelineBounds.top);
-            panelBg.setFillColor(WisdomUI::Theme::Panel);
-            window.draw(panelBg);
+            WisdomUI::Theme::DrawCarvedWoodPlank(window, timelineBounds, false, 1.0f);
 
-            sf::RectangleShape trayBg(sf::Vector2f(timelineBounds.width - 20.0f, timelineBounds.height - 38.0f));
-            trayBg.setPosition(10.0f, timelineY + 30.0f);
-            trayBg.setFillColor(WisdomUI::Theme::PanelInset);
-            trayBg.setOutlineThickness(1.0f);
-            trayBg.setOutlineColor(WisdomUI::Theme::Border);
+            sf::FloatRect trayBounds(12.0f, timelineY + 32.0f, 1920.0f - 24.0f, WisdomUI::Theme::TimelineHeight - 40.0f);
+            sf::RectangleShape trayBg(sf::Vector2f(trayBounds.width, trayBounds.height));
+            trayBg.setPosition(trayBounds.left, trayBounds.top);
+            trayBg.setFillColor(WisdomUI::Theme::WoodDeepShadow);
+            trayBg.setOutlineThickness(1.5f);
+            trayBg.setOutlineColor(WisdomUI::Theme::BrassDark);
             window.draw(trayBg);
-
-            WisdomUI::Theme::DrawFiligreePanel(window, timelineBounds, 1.0f);
 
             m_timelineHeader.Render(window);
 
             float cardW = 90.0f;
             float cardH = 120.0f;
-            float startX = 20.0f;
+            float startX = 24.0f;
             float cardY = timelineY + 42.0f;
             int totalFrames = static_cast<int>(canvas.getFrameCount());
             int curFrame = timeline.getCurrentFrame();
@@ -2178,23 +2174,24 @@ void UIManager::draw(sf::RenderWindow & window, AppState currentState, Canvas & 
             for (int i = 0; i < totalFrames; ++i) {
                 bool isSelected = (i == curFrame);
 
-                sf::RectangleShape card(sf::Vector2f(cardW, cardH));
-                card.setPosition(startX, cardY);
-                card.setFillColor(isSelected ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::Background);
-                card.setOutlineThickness(isSelected ? 2.0f : 1.0f);
-                card.setOutlineColor(isSelected ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
-                window.draw(card);
+                sf::FloatRect cardBounds(startX, cardY, cardW, cardH);
+                if (isSelected) {
+                    WisdomUI::Theme::DrawParchmentPanel(window, cardBounds, 1.0f);
+                }
+                else {
+                    WisdomUI::Theme::DrawCarvedWoodPlank(window, cardBounds, false, 1.0f);
+                }
 
-                float boxW = cardW - 12.0f;
+                float boxW = cardW - 14.0f;
                 float boxH = cardH - 36.0f;
-                float boxX = startX + 6.0f;
-                float boxY = cardY + 6.0f;
+                float boxX = startX + 7.0f;
+                float boxY = cardY + 7.0f;
 
                 sf::RectangleShape thumbBase(sf::Vector2f(boxW, boxH));
                 thumbBase.setPosition(boxX, boxY);
                 thumbBase.setFillColor(sf::Color(220, 220, 220));
                 thumbBase.setOutlineThickness(1.0f);
-                thumbBase.setOutlineColor(WisdomUI::Theme::Border);
+                thumbBase.setOutlineColor(WisdomUI::Theme::BrassDark);
                 window.draw(thumbBase);
 
                 int gridCols = 8;
@@ -2243,16 +2240,16 @@ void UIManager::draw(sf::RenderWindow & window, AppState currentState, Canvas & 
                     }
                 }
 
-                sf::Text fNum(std::to_string(i + 1), font, 12);
-                fNum.setFillColor(isSelected ? WisdomUI::Theme::Gold : WisdomUI::Theme::TextSecondary);
+                sf::Text fNum(std::to_string(i + 1), font, 11);
+                fNum.setFillColor(isSelected ? WisdomUI::Theme::TextParchment : WisdomUI::Theme::TextGold);
                 sf::FloatRect nb = fNum.getLocalBounds();
-                fNum.setPosition(startX + (cardW - nb.width) / 2.0f, cardY + cardH - 24.0f);
+                fNum.setPosition(startX + (cardW - nb.width) / 2.0f, cardY + cardH - 22.0f);
                 window.draw(fNum);
 
                 if (isSelected) {
-                    sf::RectangleShape selTag(sf::Vector2f(cardW, 3.0f));
-                    selTag.setPosition(startX, cardY);
-                    selTag.setFillColor(WisdomUI::Theme::Accent);
+                    sf::RectangleShape selTag(sf::Vector2f(cardW - 12.0f, 2.0f));
+                    selTag.setPosition(startX + 6.0f, cardY + 3.0f);
+                    selTag.setFillColor(WisdomUI::Theme::RubyAccent);
                     window.draw(selTag);
                 }
 
@@ -2291,7 +2288,7 @@ void UIManager::draw(sf::RenderWindow & window, AppState currentState, Canvas & 
 
         if (showUnsavedWarning) {
             sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
-            overlay.setFillColor(sf::Color(0, 0, 0, 150));
+            overlay.setFillColor(sf::Color(0, 0, 0, 160));
             window.draw(overlay);
 
             float boxWidth = 450.f;
@@ -2300,15 +2297,15 @@ void UIManager::draw(sf::RenderWindow & window, AppState currentState, Canvas & 
             float cy = (1080.f - boxHeight) / 2.f;
 
             sf::FloatRect warnBounds(cx, cy, boxWidth, boxHeight);
-            WisdomUI::Theme::DrawFiligreePanel(window, warnBounds, 1.0f);
+            WisdomUI::Theme::DrawParchmentPanel(window, warnBounds, 1.0f);
 
             sf::Text warnTitleText("UNSAVED CHANGES", font, 20);
-            warnTitleText.setFillColor(WisdomUI::Theme::Gold);
+            warnTitleText.setFillColor(WisdomUI::Theme::TextParchment);
             warnTitleText.setPosition(cx + (boxWidth - warnTitleText.getLocalBounds().width) / 2.f, cy + 25.f);
             window.draw(warnTitleText);
 
             sf::Text warnSubText("Would you like to save before leaving?", font, 14);
-            warnSubText.setFillColor(WisdomUI::Theme::TextSecondary);
+            warnSubText.setFillColor(WisdomUI::Theme::TextParchmentMuted);
             warnSubText.setPosition(cx + (boxWidth - warnSubText.getLocalBounds().width) / 2.f, cy + 65.f);
             window.draw(warnSubText);
 
@@ -2319,27 +2316,9 @@ void UIManager::draw(sf::RenderWindow & window, AppState currentState, Canvas & 
             sf::FloatRect discardBounds(cx + 170.f, cy + 120.f, 110.f, 40.f);
             sf::FloatRect cancelBounds(cx + 310.f, cy + 120.f, 110.f, 40.f);
 
-            auto drawDialogBtn = [&](sf::FloatRect bounds, const std::string& textStr, sf::Color baseColor) {
-                bool hovered = bounds.contains(mousePos);
-                sf::RectangleShape btn(sf::Vector2f(bounds.width, bounds.height));
-                btn.setPosition(bounds.left, bounds.top);
-                btn.setFillColor(hovered ? sf::Color(baseColor.r + 25, baseColor.g + 25, baseColor.b + 25) : baseColor);
-                btn.setOutlineThickness(1.f);
-                btn.setOutlineColor(WisdomUI::Theme::BorderHighlight);
-                window.draw(btn);
-
-                sf::Text btnText(textStr, font, 14);
-                btnText.setFillColor(sf::Color::White);
-                btnText.setPosition(
-                    bounds.left + (bounds.width - btnText.getLocalBounds().width) / 2.f,
-                    bounds.top + (bounds.height - 14.f) / 2.f - 2.f
-                );
-                window.draw(btnText);
-                };
-
-            drawDialogBtn(saveBounds, "Save", sf::Color(60, 140, 80));
-            drawDialogBtn(discardBounds, "Discard", sf::Color(160, 60, 60));
-            drawDialogBtn(cancelBounds, "Cancel", sf::Color(60, 65, 80));
+            WisdomUI::Theme::DrawThemedButton(window, saveBounds, "Save", font, 14, false, saveBounds.contains(mousePos), false, 1.0f);
+            WisdomUI::Theme::DrawThemedButton(window, discardBounds, "Discard", font, 14, false, discardBounds.contains(mousePos), true, 1.0f);
+            WisdomUI::Theme::DrawThemedButton(window, cancelBounds, "Cancel", font, 14, false, cancelBounds.contains(mousePos), false, 1.0f);
         }
     }
 }

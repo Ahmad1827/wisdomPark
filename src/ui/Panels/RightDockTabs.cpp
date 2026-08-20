@@ -76,27 +76,10 @@ namespace WisdomUI {
     }
 
     void RightDockTabs::Render(sf::RenderWindow& window) {
-        sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
-        bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::WoodMedium);
-        window.draw(bg);
-
-        sf::RectangleShape border(sf::Vector2f(2.0f, m_bounds.height));
-        border.setPosition(m_bounds.left, m_bounds.top);
-        border.setFillColor(Theme::Brass);
-        window.draw(border);
+        Theme::DrawCarvedWoodPlank(window, m_bounds, true, 1.0f);
 
         for (const auto& tab : m_tabs) {
-            sf::RectangleShape btn(sf::Vector2f(tab.bounds.width, tab.bounds.height));
-            btn.setOrigin(tab.bounds.width / 2.0f, tab.bounds.height / 2.0f);
-            btn.setPosition(tab.bounds.left + tab.bounds.width / 2.0f, tab.bounds.top + tab.bounds.height / 2.0f);
-            btn.setScale(tab.scale, tab.scale);
-
-            sf::Color fillCol = tab.isToggled ? Theme::RubyAccent : Animation::InterpolateColor(Theme::WoodDark, Theme::WoodLight, tab.hoverAlpha);
-            btn.setFillColor(fillCol);
-            btn.setOutlineThickness(1.0f);
-            btn.setOutlineColor(tab.isToggled ? Theme::Gold : Animation::InterpolateColor(Theme::Brass, Theme::Gold, tab.hoverAlpha));
-            window.draw(btn);
+            Theme::DrawThemedButton(window, tab.bounds, "", m_font, 11, tab.isToggled, tab.hoverAlpha > 0.5f, tab.isToggled, tab.scale);
 
             sf::Color iconCol = tab.isToggled ? sf::Color::White : (tab.hoverAlpha > 0.5f ? Theme::Gold : Theme::Parchment);
             Icons::Draw(window, tab.id, sf::Vector2f(tab.bounds.left + 8.0f, tab.bounds.top + 8.0f), 20.0f, iconCol);

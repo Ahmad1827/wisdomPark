@@ -98,6 +98,17 @@ void RightProperties::update(float dt, bool focusMode, bool isOpen) {
     pinBtn.setPosition(currentX + 12.f, 36.f + 32.f + 38.f);
     pinLabel.setPosition(currentX + 22.f, 36.f + 32.f + 41.f);
 
+    if (state == RightPanelState::Pinned) {
+        pinLabel.setString("Unpin Panel");
+        pinLabel.setFillColor(WisdomUI::Theme::Gold);
+        pinBtn.setOutlineColor(WisdomUI::Theme::BorderHighlight);
+    }
+    else {
+        pinLabel.setString("Pin Panel");
+        pinLabel.setFillColor(WisdomUI::Theme::TextSecondary);
+        pinBtn.setOutlineColor(WisdomUI::Theme::Border);
+    }
+
     updateLayout();
 }
 

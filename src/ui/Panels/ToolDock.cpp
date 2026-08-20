@@ -80,29 +80,17 @@ namespace WisdomUI {
     }
 
     void ToolDock::Render(sf::RenderWindow& window) {
-        sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
-        bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::WoodMedium);
-        window.draw(bg);
-
-        sf::RectangleShape border(sf::Vector2f(2.0f, m_bounds.height));
-        border.setPosition(m_bounds.left + m_bounds.width - 2.0f, m_bounds.top);
-        border.setFillColor(Theme::Brass);
-        window.draw(border);
+        Theme::DrawCarvedWoodPlank(window, m_bounds, true, 1.0f);
 
         if (!m_tools.empty()) {
             float btnSize = 36.0f;
             float startX = m_bounds.left + (m_bounds.width - btnSize) / 2.0f;
-            sf::RectangleShape activeIndicator(sf::Vector2f(btnSize, btnSize));
-            activeIndicator.setPosition(startX, m_selectionSliderY.current);
-            activeIndicator.setFillColor(Theme::RubyAccent);
-            activeIndicator.setOutlineThickness(1.0f);
-            activeIndicator.setOutlineColor(Theme::Gold);
-            window.draw(activeIndicator);
+            sf::FloatRect activeIndicatorBounds(startX, m_selectionSliderY.current, btnSize, btnSize);
+            Theme::DrawThemedButton(window, activeIndicatorBounds, "", m_font, 11, true, false, true, 1.0f);
 
             float pulseGlow = Animation::Pulse(m_globalTime, 3.5f, 0.4f, 0.9f);
             sf::RectangleShape glowRibbon(sf::Vector2f(3.0f, btnSize - 6.0f));
-            glowRibbon.setPosition(m_bounds.left + 2.0f, m_selectionSliderY.current + 3.0f);
+            glowRibbon.setPosition(m_bounds.left + 3.0f, m_selectionSliderY.current + 3.0f);
             sf::Color glowCol = Theme::Gold;
             glowCol.a = static_cast<sf::Uint8>(255 * pulseGlow);
             glowRibbon.setFillColor(glowCol);
@@ -112,20 +100,8 @@ namespace WisdomUI {
         for (const auto& tool : m_tools) {
             bool isActive = (m_activeToolId == tool.id);
 
-            if (!isActive && tool.hoverAlpha > 0.01f) {
-                sf::RectangleShape hovBtn(sf::Vector2f(tool.bounds.width, tool.bounds.height));
-                hovBtn.setOrigin(tool.bounds.width / 2.0f, tool.bounds.height / 2.0f);
-                hovBtn.setPosition(tool.bounds.left + tool.bounds.width / 2.0f, tool.bounds.top + tool.bounds.height / 2.0f);
-                hovBtn.setScale(tool.scale, tool.scale);
-
-                sf::Color hovCol = Theme::WoodLight;
-                hovCol.a = static_cast<sf::Uint8>(220 * tool.hoverAlpha);
-                hovBtn.setFillColor(hovCol);
-                hovBtn.setOutlineThickness(1.0f);
-                sf::Color hovBrd = Theme::Brass;
-                hovBrd.a = static_cast<sf::Uint8>(255 * tool.hoverAlpha);
-                hovBtn.setOutlineColor(hovBrd);
-                window.draw(hovBtn);
+            if (!isActive) {
+                Theme::DrawThemedButton(window, tool.bounds, "", m_font, 11, false, tool.hoverAlpha > 0.5f, false, tool.scale);
             }
 
             sf::Color iconColor = isActive ? sf::Color::White : (tool.hoverAlpha > 0.5f ? Theme::Gold : Theme::Parchment);

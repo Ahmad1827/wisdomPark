@@ -43,22 +43,16 @@ namespace WisdomUI {
     }
 
     void StatusBar::Render(sf::RenderWindow& window) {
-        sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
-        bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::WoodDark);
-        window.draw(bg);
-
-        sf::RectangleShape border(sf::Vector2f(m_bounds.width, 2.0f));
-        border.setPosition(m_bounds.left, m_bounds.top);
-        border.setFillColor(Theme::Brass);
-        window.draw(border);
+        Theme::DrawCarvedWoodPlank(window, m_bounds, false, 1.0f);
 
         float jewelPulse = Animation::Pulse(m_globalTime, 3.0f, 0.5f, 1.0f);
-        sf::CircleShape jewel(3.0f);
-        jewel.setPosition(m_bounds.left + 12.0f, m_bounds.top + 9.0f);
+        sf::CircleShape jewel(3.5f);
+        jewel.setPosition(m_bounds.left + 14.0f, m_bounds.top + 8.5f);
         sf::Color jewelCol = sf::Color(80, 230, 110);
         jewelCol.a = static_cast<sf::Uint8>(255 * jewelPulse);
         jewel.setFillColor(jewelCol);
+        jewel.setOutlineThickness(1.0f);
+        jewel.setOutlineColor(Theme::Gold);
         window.draw(jewel);
 
         std::string text = "Park Canvas: " + std::to_string(m_canvasSize.x) + "x" + std::to_string(m_canvasSize.y) +
@@ -69,26 +63,11 @@ namespace WisdomUI {
 
         sf::Text status(text, m_font, 11);
         status.setFillColor(Theme::TextSecondary);
-        status.setPosition(m_bounds.left + 26.0f, m_bounds.top + 4.0f);
+        status.setPosition(m_bounds.left + 28.0f, m_bounds.top + 4.0f);
         window.draw(status);
 
-        sf::RectangleShape btn(sf::Vector2f(m_timelineToggleBtn.width, m_timelineToggleBtn.height));
-        btn.setPosition(m_timelineToggleBtn.left, m_timelineToggleBtn.top);
-        sf::Color btnCol = m_isTimelineOpen ? Theme::RubyAccent : Animation::InterpolateColor(Theme::WoodMedium, Theme::WoodLight, m_toggleHoverAlpha);
-        btn.setFillColor(btnCol);
-        btn.setOutlineThickness(1.0f);
-        btn.setOutlineColor(m_isTimelineOpen ? Theme::Gold : Animation::InterpolateColor(Theme::Brass, Theme::Gold, m_toggleHoverAlpha));
-        window.draw(btn);
-
         std::string btnStr = m_isTimelineOpen ? "[ v ] TIMELINE" : "[ ^ ] TIMELINE";
-        sf::Text btnText(btnStr, m_font, 10);
-        btnText.setFillColor(m_isTimelineOpen ? sf::Color::White : Animation::InterpolateColor(Theme::TextPrimary, Theme::Gold, m_toggleHoverAlpha));
-        sf::FloatRect tb = btnText.getLocalBounds();
-        btnText.setPosition(
-            m_timelineToggleBtn.left + (m_timelineToggleBtn.width - tb.width) / 2.0f,
-            m_timelineToggleBtn.top + 3.0f
-        );
-        window.draw(btnText);
+        Theme::DrawThemedButton(window, m_timelineToggleBtn, btnStr, m_font, 10, m_isTimelineOpen, m_toggleHoverAlpha > 0.5f, m_isTimelineOpen, 1.0f);
     }
 
 }

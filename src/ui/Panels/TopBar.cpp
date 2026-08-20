@@ -50,18 +50,18 @@ namespace WisdomUI {
     void TopBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
 
-        float menuX = 210.0f;
+        float menuX = 220.0f;
         for (auto& menu : m_menus) {
             sf::Text t(menu.title, m_font, 13);
-            float w = t.getLocalBounds().width + 22.0f;
-            menu.bounds = sf::FloatRect(menuX, bounds.top, w, bounds.height);
-            menuX += w + 4.0f;
+            float w = t.getLocalBounds().width + 24.0f;
+            menu.bounds = sf::FloatRect(menuX, bounds.top + 4.0f, w, bounds.height - 8.0f);
+            menuX += w + 6.0f;
         }
 
-        float qX = bounds.left + bounds.width - 150.0f;
-        float btnSize = bounds.height - 8.0f;
+        float qX = bounds.left + bounds.width - 155.0f;
+        float btnSize = bounds.height - 10.0f;
         for (auto& qb : m_quickBtns) {
-            qb.bounds = sf::FloatRect(qX, bounds.top + 4.0f, btnSize, btnSize);
+            qb.bounds = sf::FloatRect(qX, bounds.top + 5.0f, btnSize, btnSize);
             qX += btnSize + 6.0f;
         }
     }
@@ -106,11 +106,11 @@ namespace WisdomUI {
 
             if (m_openMenuIndex != -1) {
                 auto& openMenu = m_menus[m_openMenuIndex];
-                float itemY = m_bounds.top + m_bounds.height + 4.0f;
+                float itemY = m_bounds.top + m_bounds.height + 6.0f;
                 float itemW = 200.0f;
                 float itemH = 26.0f;
 
-                for (auto& act : openMenu.actions) {
+                for (const auto& act : openMenu.actions) {
                     sf::FloatRect itemBounds(openMenu.bounds.left, itemY, itemW, itemH);
                     if (itemBounds.contains(mousePos)) {
                         if (act.callback) act.callback();
@@ -147,15 +147,7 @@ namespace WisdomUI {
     }
 
     void TopBar::Render(sf::RenderWindow& window) {
-        sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
-        bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::WoodDark);
-        window.draw(bg);
-
-        sf::RectangleShape woodBevel(sf::Vector2f(m_bounds.width, 2.0f));
-        woodBevel.setPosition(m_bounds.left, m_bounds.top);
-        woodBevel.setFillColor(Theme::WoodLight);
-        window.draw(woodBevel);
+        Theme::DrawCarvedWoodPlank(window, m_bounds, false, 1.0f);
 
         sf::RectangleShape brassLine(sf::Vector2f(m_bounds.width, 2.0f));
         brassLine.setPosition(m_bounds.left, m_bounds.top + m_bounds.height - 2.0f);
@@ -170,63 +162,47 @@ namespace WisdomUI {
             window.draw(glint);
         }
 
-        sf::RectangleShape crest(sf::Vector2f(12.0f, 12.0f));
-        crest.setPosition(m_bounds.left + 10.0f, m_bounds.top + 12.0f);
+        sf::RectangleShape crest(sf::Vector2f(10.0f, 10.0f));
+        crest.setPosition(m_bounds.left + 16.0f, m_bounds.top + 13.0f);
         crest.setRotation(45.0f);
         crest.setFillColor(Theme::Gold);
         crest.setOutlineThickness(1.0f);
         crest.setOutlineColor(Theme::BrassDark);
         window.draw(crest);
 
+        sf::Text shadowLogo("WISDOM PARK", m_font, 13);
+        shadowLogo.setFillColor(Theme::WoodDeepShadow);
+        shadowLogo.setPosition(m_bounds.left + 35.0f, m_bounds.top + 10.0f);
+        window.draw(shadowLogo);
+
         sf::Text logo("WISDOM PARK", m_font, 13);
         logo.setFillColor(Theme::Gold);
-        logo.setPosition(m_bounds.left + 30.0f, m_bounds.top + 9.0f);
+        logo.setPosition(m_bounds.left + 34.0f, m_bounds.top + 9.0f);
         window.draw(logo);
 
         std::string projTitle = "|   " + m_projectName + (m_isDirty ? " *" : "");
         sf::Text projText(projTitle, m_font, 12);
         projText.setFillColor(m_isDirty ? Theme::GoldHighlight : Theme::TextSecondary);
-        projText.setPosition(m_bounds.left + 140.0f, m_bounds.top + 10.0f);
+        projText.setPosition(m_bounds.left + 144.0f, m_bounds.top + 10.0f);
         window.draw(projText);
 
         for (size_t i = 0; i < m_menus.size(); ++i) {
             const auto& menu = m_menus[i];
             bool isOpen = (m_openMenuIndex == static_cast<int>(i));
 
-            if (isOpen || menu.openProgress > 0.01f) {
-                sf::RectangleShape mBg(sf::Vector2f(menu.bounds.width, menu.bounds.height));
-                mBg.setPosition(menu.bounds.left, menu.bounds.top);
-                sf::Color mCol = Theme::WoodMedium;
-                mCol.a = static_cast<sf::Uint8>(255 * menu.openProgress);
-                mBg.setFillColor(mCol);
-                mBg.setOutlineThickness(1.0f);
-                sf::Color bCol = Theme::Gold;
-                bCol.a = static_cast<sf::Uint8>(255 * menu.openProgress);
-                mBg.setOutlineColor(bCol);
-                window.draw(mBg);
-            }
+            sf::Vector2i mPosI = sf::Mouse::getPosition(window);
+            sf::Vector2f mPos = window.mapPixelToCoords(mPosI);
+            bool hovered = menu.bounds.contains(mPos);
 
-            sf::Text mText(menu.title, m_font, 12);
-            mText.setFillColor(isOpen ? Theme::Gold : Theme::TextPrimary);
-            sf::FloatRect tb = mText.getLocalBounds();
-            mText.setPosition(menu.bounds.left + (menu.bounds.width - tb.width) / 2.0f, menu.bounds.top + 9.0f);
-            window.draw(mText);
+            Theme::DrawThemedButton(window, menu.bounds, menu.title, m_font, 11, isOpen, hovered, false, 1.0f);
         }
 
         for (const auto& qb : m_quickBtns) {
-            sf::RectangleShape qBg(sf::Vector2f(qb.bounds.width, qb.bounds.height));
-            qBg.setOrigin(qb.bounds.width / 2.0f, qb.bounds.height / 2.0f);
-            qBg.setPosition(qb.bounds.left + qb.bounds.width / 2.0f, qb.bounds.top + qb.bounds.height / 2.0f);
-            qBg.setScale(qb.scale, qb.scale);
+            bool active = false;
+            Theme::DrawThemedButton(window, qb.bounds, "", m_font, 11, active, qb.hoverAlpha > 0.5f, false, qb.scale);
 
-            sf::Color btnCol = Animation::InterpolateColor(Theme::WoodMedium, Theme::RubyAccent, qb.hoverAlpha);
-            qBg.setFillColor(btnCol);
-            qBg.setOutlineThickness(1.0f);
-            qBg.setOutlineColor(Animation::InterpolateColor(Theme::Brass, Theme::Gold, qb.hoverAlpha));
-            window.draw(qBg);
-
-            sf::Vector2f iconPos(qb.bounds.left + 5.0f, qb.bounds.top + 5.0f);
-            Icons::Draw(window, qb.id, iconPos, 18.0f, Animation::InterpolateColor(Theme::TextSecondary, Theme::Gold, qb.hoverAlpha));
+            sf::Vector2f iconPos(qb.bounds.left + 4.0f, qb.bounds.top + 4.0f);
+            Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::Gold : Theme::Parchment);
         }
 
         for (size_t i = 0; i < m_menus.size(); ++i) {
@@ -234,7 +210,7 @@ namespace WisdomUI {
             if (menu.openProgress > 0.02f) {
                 float itemW = 200.0f;
                 float itemH = 26.0f;
-                float totalH = menu.actions.size() * itemH + 8.0f;
+                float totalH = menu.actions.size() * itemH + 12.0f;
                 float currentH = totalH * menu.openProgress;
 
                 sf::FloatRect dropBounds(menu.bounds.left, m_bounds.top + m_bounds.height + 2.0f, itemW, currentH);

@@ -13,7 +13,7 @@ namespace WisdomUI {
     void ToolOptionsBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
         m_sliderBounds = sf::FloatRect(bounds.left + 190.0f, bounds.top + 10.0f, 110.0f, 12.0f);
-        m_perfBtnBounds = sf::FloatRect(bounds.left + 380.0f, bounds.top + 5.0f, 92.0f, 22.0f);
+        m_perfBtnBounds = sf::FloatRect(bounds.left + 380.0f, bounds.top + 5.0f, 96.0f, 22.0f);
     }
 
     void ToolOptionsBar::SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect) {
@@ -32,7 +32,7 @@ namespace WisdomUI {
         m_perfToggleProgress += (targetToggle - m_perfToggleProgress) * 16.0f * deltaTime;
 
         bool sliderHover = m_sliderBounds.contains(mousePos) || m_isDraggingSlider;
-        m_sliderThumbScale += ((sliderHover ? 1.3f : 1.0f) - m_sliderThumbScale) * 18.0f * deltaTime;
+        m_sliderThumbScale += ((sliderHover ? 1.25f : 1.0f) - m_sliderThumbScale) * 18.0f * deltaTime;
     }
 
     bool ToolOptionsBar::HandleEvent(const sf::Event& event, const sf::RenderWindow& window,
@@ -75,21 +75,28 @@ namespace WisdomUI {
         border.setFillColor(Theme::Brass);
         window.draw(border);
 
-        sf::Text toolLabel("Tool: " + m_activeToolName, m_font, 12);
+        sf::RectangleShape trough(sf::Vector2f(m_bounds.width - 24.0f, m_bounds.height - 8.0f));
+        trough.setPosition(m_bounds.left + 12.0f, m_bounds.top + 4.0f);
+        trough.setFillColor(Theme::ParchmentDark);
+        trough.setOutlineThickness(1.0f);
+        trough.setOutlineColor(Theme::BrassDark);
+        window.draw(trough);
+
+        sf::Text toolLabel("TOOL: " + m_activeToolName, m_font, 11);
         toolLabel.setFillColor(Theme::TextParchment);
-        toolLabel.setPosition(m_bounds.left + 16.0f, m_bounds.top + 7.0f);
+        toolLabel.setPosition(m_bounds.left + 24.0f, m_bounds.top + 8.0f);
         window.draw(toolLabel);
 
-        sf::Text sizeLabel("Size:", m_font, 12);
+        sf::Text sizeLabel("SIZE:", m_font, 11);
         sizeLabel.setFillColor(Theme::TextParchmentMuted);
-        sizeLabel.setPosition(m_bounds.left + 150.0f, m_bounds.top + 7.0f);
+        sizeLabel.setPosition(m_bounds.left + 150.0f, m_bounds.top + 8.0f);
         window.draw(sizeLabel);
 
         sf::RectangleShape sliderTrack(sf::Vector2f(m_sliderBounds.width, m_sliderBounds.height));
         sliderTrack.setPosition(m_sliderBounds.left, m_sliderBounds.top);
         sliderTrack.setFillColor(Theme::ParchmentInset);
         sliderTrack.setOutlineThickness(1.0f);
-        sliderTrack.setOutlineColor(Theme::Brass);
+        sliderTrack.setOutlineColor(Theme::BrassDark);
         window.draw(sliderTrack);
 
         float maxVal = m_pixelMode ? 32.0f : 100.0f;
@@ -114,23 +121,11 @@ namespace WisdomUI {
 
         sf::Text sizeVal(std::to_string(static_cast<int>(m_size)) + "px", m_font, 11);
         sizeVal.setFillColor(Theme::TextParchment);
-        sizeVal.setPosition(m_sliderBounds.left + m_sliderBounds.width + 12.0f, m_bounds.top + 7.0f);
+        sizeVal.setPosition(m_sliderBounds.left + m_sliderBounds.width + 12.0f, m_bounds.top + 8.0f);
         window.draw(sizeVal);
 
         if (m_pixelMode) {
-            sf::RectangleShape perfBtn(sf::Vector2f(m_perfBtnBounds.width, m_perfBtnBounds.height));
-            perfBtn.setPosition(m_perfBtnBounds.left, m_perfBtnBounds.top);
-
-            sf::Color btnBg = Animation::InterpolateColor(Theme::ParchmentInset, Theme::RubyAccent, m_perfToggleProgress);
-            perfBtn.setFillColor(btnBg);
-            perfBtn.setOutlineThickness(1.0f);
-            perfBtn.setOutlineColor(Animation::InterpolateColor(Theme::Brass, Theme::Gold, m_perfToggleProgress));
-            window.draw(perfBtn);
-
-            sf::Text perfText("Pixel Perfect", m_font, 10);
-            perfText.setFillColor(Animation::InterpolateColor(Theme::TextParchment, sf::Color::White, m_perfToggleProgress));
-            perfText.setPosition(m_perfBtnBounds.left + 12.0f, m_perfBtnBounds.top + 4.0f);
-            window.draw(perfText);
+            Theme::DrawThemedButton(window, m_perfBtnBounds, "Pixel Perfect", m_font, 10, m_pixelPerfect, m_perfHoverAlpha > 0.5f, true, 1.0f);
         }
     }
 

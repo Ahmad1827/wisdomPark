@@ -71,43 +71,19 @@ namespace WisdomUI {
     }
 
     void TimelineHeader::Render(sf::RenderWindow& window) {
-        sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
-        bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::WoodDark);
-        window.draw(bg);
-
-        sf::RectangleShape border(sf::Vector2f(m_bounds.width, 2.0f));
-        border.setPosition(m_bounds.left, m_bounds.top);
-        border.setFillColor(Theme::Brass);
-        window.draw(border);
+        Theme::DrawCarvedWoodPlank(window, m_bounds, false, 1.0f);
 
         sf::Text label("TIMELINE", m_font, 12);
         label.setFillColor(Theme::Gold);
-        label.setPosition(m_bounds.left + 14.0f, m_bounds.top + 6.0f);
+        label.setPosition(m_bounds.left + 16.0f, m_bounds.top + 6.0f);
         window.draw(label);
 
-        auto drawBtn = [&](sf::FloatRect b, const std::string& str, float hov, bool active = false) {
-            sf::RectangleShape r(sf::Vector2f(b.width, b.height));
-            r.setPosition(b.left, b.top);
-            sf::Color fill = active ? Theme::RubyAccent : Animation::InterpolateColor(Theme::WoodMedium, Theme::WoodLight, hov);
-            r.setFillColor(fill);
-            r.setOutlineThickness(1.0f);
-            r.setOutlineColor(active ? Theme::Gold : Animation::InterpolateColor(Theme::Brass, Theme::Gold, hov));
-            window.draw(r);
-
-            sf::Text t(str, m_font, 11);
-            t.setFillColor(active ? sf::Color::White : Animation::InterpolateColor(Theme::TextPrimary, Theme::Gold, hov));
-            sf::FloatRect tb = t.getLocalBounds();
-            t.setPosition(b.left + (b.width - tb.width) / 2.0f, b.top + 3.0f);
-            window.draw(t);
-            };
-
-        drawBtn(m_playBtnBounds, m_isPlaying ? "Pause" : "Play", m_playHover, m_isPlaying);
-        drawBtn(m_addBtnBounds, "+ Add", m_addHover);
-        drawBtn(m_dupBtnBounds, "Duplicate", m_dupHover);
-        drawBtn(m_delBtnBounds, "Delete", m_delHover);
-        drawBtn(m_onionBtnBounds, "Onion Skin", m_onionHover, m_onionEnabled);
-        drawBtn(m_closeBtnBounds, "v", m_closeHover);
+        Theme::DrawThemedButton(window, m_playBtnBounds, m_isPlaying ? "Pause" : "Play", m_font, 11, m_isPlaying, m_playHover > 0.5f, m_isPlaying, 1.0f);
+        Theme::DrawThemedButton(window, m_addBtnBounds, "+ Add", m_font, 11, false, m_addHover > 0.5f, false, 1.0f);
+        Theme::DrawThemedButton(window, m_dupBtnBounds, "Duplicate", m_font, 11, false, m_dupHover > 0.5f, false, 1.0f);
+        Theme::DrawThemedButton(window, m_delBtnBounds, "Delete", m_font, 11, false, m_delHover > 0.5f, false, 1.0f);
+        Theme::DrawThemedButton(window, m_onionBtnBounds, "Onion Skin", m_font, 11, m_onionEnabled, m_onionHover > 0.5f, false, 1.0f);
+        Theme::DrawThemedButton(window, m_closeBtnBounds, "v", m_font, 11, false, m_closeHover > 0.5f, false, 1.0f);
 
         std::string infoStr = "Frame: " + std::to_string(m_currentFrame + 1) + " / " + std::to_string(m_totalFrames) +
             "  (" + std::to_string(static_cast<int>(m_fps)) + " FPS)";
