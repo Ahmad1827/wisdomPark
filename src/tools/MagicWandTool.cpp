@@ -1,24 +1,24 @@
 #include "MagicWandTool.h"
 #include "../core/ExportManager.h"
+#include "../UI/UITheme.h"
 #include <cmath>
+#include <algorithm>
 
 MagicWandTool::MagicWandTool(Canvas& canvas, Timeline& timeline)
     : m_canvas(canvas), m_timeline(timeline), m_tolerance(10),
-    m_contiguous(true), m_sampleAllLayers(false), m_isPanning(false), m_requestColorPanelOpen(false) {
+    m_contiguous(true), m_sampleAllLayers(false), m_isPanning(false),
+    m_panelPos(64.f, 78.f), m_panelSize(250.f, 250.f), m_isDraggingPanel(false),
+    m_requestColorPanelOpen(false) {
     m_lastPrimaryColor = canvas.getPrimaryColor();
 }
 
 void MagicWandTool::Initialize() {
     m_font.loadFromFile("assets/font.otf");
-    m_panelBg.setSize(sf::Vector2f(220.f, 210.f));
-    m_panelBg.setFillColor(sf::Color(25, 25, 30, 240));
-    m_panelBg.setOutlineThickness(1.f);
-    m_panelBg.setOutlineColor(sf::Color(100, 100, 110));
+    m_panelPos = sf::Vector2f(64.f, 78.f);
 }
 
 void MagicWandTool::SetBounds(const sf::FloatRect& bounds) {
     m_bounds = bounds;
-    m_panelBg.setPosition(bounds.left + 110.f, bounds.top + 60.f);
 }
 
 bool MagicWandTool::wantsColorPanelOpen() const { return m_requestColorPanelOpen; }
@@ -159,23 +159,47 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
 
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
+    sf::FloatRect headerGrip(m_panelPos.x, m_panelPos.y, m_panelSize.x, 34.f);
 
-    if (m_panelBg.getGlobalBounds().contains(mousePos)) {
+    if (headerGrip.contains(mousePos) && event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        m_isDraggingPanel = true;
+        m_panelDragOffset = mousePos - m_panelPos;
+        return;
+    }
+
+    if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+        m_isDraggingPanel = false;
+    }
+
+    if (event.type == sf::Event::MouseMoved && m_isDraggingPanel) {
+        m_panelPos = mousePos - m_panelDragOffset;
+        m_panelPos.x = std::clamp(m_panelPos.x, 56.f, 1920.f - m_panelSize.x);
+        m_panelPos.y = std::clamp(m_panelPos.y, 40.f, 1080.f - m_panelSize.y);
+        return;
+    }
+
+    if (sf::FloatRect(m_panelPos.x, m_panelPos.y, m_panelSize.x, m_panelSize.y).contains(mousePos)) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-
             if (m_colorBoxRect.contains(mousePos)) {
                 m_requestColorPanelOpen = true;
                 return;
             }
-
-            float y = mousePos.y - m_panelBg.getPosition().y;
-
-            if (y > 40 && y < 70) {
-                if (mousePos.x < m_panelBg.getPosition().x + 110) m_tolerance = std::max(0, m_tolerance - 5);
-                else m_tolerance = std::min(255, m_tolerance + 5);
+            if (m_tolMinusRect.contains(mousePos)) {
+                m_tolerance = std::max(0, m_tolerance - 5);
+                return;
             }
-            else if (y > 80 && y < 110) m_contiguous = !m_contiguous;
-            else if (y > 120 && y < 150) m_sampleAllLayers = !m_sampleAllLayers;
+            if (m_tolPlusRect.contains(mousePos)) {
+                m_tolerance = std::min(255, m_tolerance + 5);
+                return;
+            }
+            if (m_contigRect.contains(mousePos)) {
+                m_contiguous = !m_contiguous;
+                return;
+            }
+            if (m_sampleRect.contains(mousePos)) {
+                m_sampleAllLayers = !m_sampleAllLayers;
+                return;
+            }
         }
         return;
     }
@@ -217,7 +241,6 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
             for (int y = 0; y < h; ++y) {
                 for (int x = 0; x < w; ++x) {
                     if (mask[y * w + x] && !visited[y * w + x]) {
-
                         std::vector<bool> islandMask(w * h, false);
                         std::queue<sf::Vector2i> q;
                         q.push({ x, y });
@@ -246,8 +269,6 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
 
             if (!polygons.empty()) {
                 std::vector<sf::Vector2f> unified;
-
-                // Pure sequential bridging to completely eliminate the starburst glitch
                 for (size_t i = 0; i < polygons.size(); ++i) {
                     unified.insert(unified.end(), polygons[i].begin(), polygons[i].end());
                     unified.push_back(polygons[i].front());
@@ -255,7 +276,6 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
                         unified.push_back(polygons[i + 1].front());
                     }
                 }
-                // Backtrack the exact path to make the bridges mathematically cancel out
                 for (int i = static_cast<int>(polygons.size()) - 2; i >= 0; --i) {
                     unified.push_back(polygons[i].front());
                 }
@@ -298,46 +318,46 @@ void MagicWandTool::Render(sf::RenderWindow& window) {
 }
 
 void MagicWandTool::drawPropertiesPanel(sf::RenderWindow& window) {
-    window.draw(m_panelBg);
+    sf::FloatRect panelBounds(m_panelPos.x, m_panelPos.y, m_panelSize.x, m_panelSize.y);
+    WisdomUI::Theme::DrawSunsetPanel(window, panelBounds, 1.0f);
 
-    sf::Text title("MAGIC WAND", m_font, 14);
-    title.setPosition(m_panelBg.getPosition().x + 10.f, m_panelBg.getPosition().y + 10.f);
-    title.setFillColor(sf::Color(255, 200, 100));
-    window.draw(title);
+    sf::FloatRect headerGrip(m_panelPos.x + 8.f, m_panelPos.y + 6.f, m_panelSize.x - 16.f, 26.f);
+    sf::RectangleShape gripBg(sf::Vector2f(headerGrip.width, headerGrip.height));
+    gripBg.setPosition(headerGrip.left, headerGrip.top);
+    gripBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    gripBg.setOutlineThickness(1.f);
+    gripBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(gripBg);
 
-    float y = m_panelBg.getPosition().y + 40.f;
-    sf::Text tol("Tolerance: " + std::to_string(m_tolerance), m_font, 12);
-    tol.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
-    tol.setFillColor(sf::Color::White);
-    window.draw(tol);
+    WisdomUI::Theme::DrawCrispText(window, m_font, ":: MAGIC WAND ::", 12, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
-    sf::Text tMinus("[-]", m_font, 14); tMinus.setPosition(m_panelBg.getPosition().x + 130.f, y + 3.f); tMinus.setFillColor(sf::Color(200, 50, 50));
-    sf::Text tPlus("[+]", m_font, 14); tPlus.setPosition(m_panelBg.getPosition().x + 160.f, y + 3.f); tPlus.setFillColor(sf::Color(50, 200, 50));
-    window.draw(tMinus); window.draw(tPlus);
+    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    float bx = m_panelPos.x;
+    float y = m_panelPos.y + 40.f;
 
-    y += 40.f;
-    sf::Text contT("Contiguous: " + std::string(m_contiguous ? "ON" : "OFF"), m_font, 12);
-    contT.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
-    contT.setFillColor(m_contiguous ? sf::Color::Green : sf::Color::Red);
-    window.draw(contT);
+    WisdomUI::Theme::DrawCrispText(window, m_font, "Tolerance: " + std::to_string(m_tolerance), 11, bx + 14.f, y + 4.f, WisdomUI::Theme::TextPrimary);
 
-    y += 40.f;
-    sf::Text sampT("Sample: " + std::string(m_sampleAllLayers ? "All Layers" : "Current"), m_font, 12);
-    sampT.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
-    sampT.setFillColor(sf::Color(200, 200, 200));
-    window.draw(sampT);
+    m_tolMinusRect = sf::FloatRect(bx + 140.f, y, 42.f, 22.f);
+    m_tolPlusRect = sf::FloatRect(bx + 190.f, y, 42.f, 22.f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_tolMinusRect, "-5", m_font, 10, false, m_tolMinusRect.contains(mPos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_tolPlusRect, "+5", m_font, 10, false, m_tolPlusRect.contains(mPos), true, 1.0f);
+    y += 32.f;
 
-    y += 40.f;
-    sf::Text fillTxt("Change Into:", m_font, 12);
-    fillTxt.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
-    fillTxt.setFillColor(sf::Color(200, 200, 200));
-    window.draw(fillTxt);
+    m_contigRect = sf::FloatRect(bx + 12.f, y, m_panelSize.x - 24.f, 26.f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_contigRect, m_contiguous ? "Contiguous: ON" : "Contiguous: OFF", m_font, 11, m_contiguous, m_contigRect.contains(mPos), m_contiguous, 1.0f);
+    y += 32.f;
 
-    m_colorBoxRect = sf::FloatRect(m_panelBg.getPosition().x + 110.f, y, 40.f, 24.f);
+    m_sampleRect = sf::FloatRect(bx + 12.f, y, m_panelSize.x - 24.f, 26.f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_sampleRect, m_sampleAllLayers ? "Sample: All Layers" : "Sample: Current Layer", m_font, 11, m_sampleAllLayers, m_sampleRect.contains(mPos), m_sampleAllLayers, 1.0f);
+    y += 36.f;
+
+    WisdomUI::Theme::DrawCrispText(window, m_font, "Fill Color:", 11, bx + 14.f, y + 5.f, WisdomUI::Theme::TextSecondary);
+
+    m_colorBoxRect = sf::FloatRect(bx + 110.f, y, m_panelSize.x - 122.f, 24.f);
     sf::RectangleShape colorBox(sf::Vector2f(m_colorBoxRect.width, m_colorBoxRect.height));
     colorBox.setPosition(m_colorBoxRect.left, m_colorBoxRect.top);
     colorBox.setFillColor(m_canvas.getPrimaryColor());
-    colorBox.setOutlineThickness(1.f);
-    colorBox.setOutlineColor(sf::Color(200, 200, 200));
+    colorBox.setOutlineThickness(1.5f);
+    colorBox.setOutlineColor(m_colorBoxRect.contains(mPos) ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber);
     window.draw(colorBox);
 }

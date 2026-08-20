@@ -1,4 +1,7 @@
 #pragma once
+#include <SFML/Graphics.hpp>
+#include <vector>
+#include <string>
 #include "../core/Canvas.h"
 #include "../core/Timeline.h"
 #include "../core/ITool.h"
@@ -25,8 +28,14 @@ private:
     sf::Vector2f m_lastPanPos;
 
     sf::Vector2f m_startPos;
-    sf::RectangleShape m_panelBg;
     sf::Font m_font;
+
+    sf::Vector2f m_panelPos;
+    sf::Vector2f m_panelSize;
+    bool m_isDraggingPanel;
+    sf::Vector2f m_panelDragOffset;
+
+    std::vector<std::pair<sf::FloatRect, ShapeId>> m_shapeButtons;
 
     void drawPropertiesPanel(sf::RenderWindow& window);
 };

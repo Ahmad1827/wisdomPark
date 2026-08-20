@@ -1,48 +1,57 @@
 #include "ShapeTool.h"
+#include "../UI/UITheme.h"
+#include <cmath>
+#include <algorithm>
 
 ShapeTool::ShapeTool(Canvas& canvas, Timeline& timeline)
-    : m_canvas(canvas), m_timeline(timeline), m_isDragging(false), m_isPanning(false), m_currentShapeId(ShapeId::Rectangle) {
-}
+    : m_canvas(canvas), m_timeline(timeline), m_isDragging(false), m_isPanning(false),
+    m_currentShapeId(ShapeId::Rectangle), m_panelPos(64.f, 78.f), m_panelSize(210.f, 320.f),
+    m_isDraggingPanel(false) {}
 
 void ShapeTool::Initialize() {
     m_font.loadFromFile("assets/font.otf");
-
-    m_panelBg.setSize(sf::Vector2f(180.f, 290.f));
-    m_panelBg.setFillColor(sf::Color(25, 25, 30, 240));
-    m_panelBg.setOutlineThickness(1.f);
-    m_panelBg.setOutlineColor(sf::Color(100, 100, 110));
+    m_panelPos = sf::Vector2f(64.f, 78.f);
 }
 
 void ShapeTool::SetBounds(const sf::FloatRect& bounds) {
     m_bounds = bounds;
-    m_panelBg.setPosition(bounds.left + 110.f, bounds.top + 60.f);
 }
 
 void ShapeTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
-    sf::Vector2f viewPos = m_canvas.getInverseTransform().transformPoint(mousePos);
-    float scaleX = static_cast<float>(m_canvas.getCanvasSize().x) / m_canvas.getDrawArea().width;
-    float scaleY = static_cast<float>(m_canvas.getCanvasSize().y) / m_canvas.getDrawArea().height;
-    sf::Vector2f logicalPos((viewPos.x - m_canvas.getDrawArea().left) * scaleX, (viewPos.y - m_canvas.getDrawArea().top) * scaleY);
+    sf::FloatRect headerGrip(m_panelPos.x, m_panelPos.y, m_panelSize.x, 34.f);
 
-    if (m_panelBg.getGlobalBounds().contains(mousePos)) {
+    if (headerGrip.contains(mousePos) && event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        m_isDraggingPanel = true;
+        m_panelDragOffset = mousePos - m_panelPos;
+        return;
+    }
+
+    if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+        m_isDraggingPanel = false;
+    }
+
+    if (event.type == sf::Event::MouseMoved && m_isDraggingPanel) {
+        m_panelPos = mousePos - m_panelDragOffset;
+        m_panelPos.x = std::clamp(m_panelPos.x, 56.f, 1920.f - m_panelSize.x);
+        m_panelPos.y = std::clamp(m_panelPos.y, 40.f, 1080.f - m_panelSize.y);
+        return;
+    }
+
+    if (sf::FloatRect(m_panelPos.x, m_panelPos.y, m_panelSize.x, m_panelSize.y).contains(mousePos)) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            float y = mousePos.y - m_panelBg.getPosition().y;
-            if (y > 40 && y < 70) m_currentShapeId = ShapeId::Line;
-            else if (y > 70 && y < 100) m_currentShapeId = ShapeId::Rectangle;
-            else if (y > 100 && y < 130) m_currentShapeId = ShapeId::FilledRectangle;
-            else if (y > 130 && y < 160) m_currentShapeId = ShapeId::Circle;
-            else if (y > 160 && y < 190) m_currentShapeId = ShapeId::FilledCircle;
-            else if (y > 190 && y < 220) m_currentShapeId = ShapeId::Polygon;
-            else if (y > 220 && y < 250) m_currentShapeId = ShapeId::Star;
-            else if (y > 250 && y < 280) m_currentShapeId = ShapeId::Arrow;
+            for (const auto& btn : m_shapeButtons) {
+                if (btn.first.contains(mousePos)) {
+                    m_currentShapeId = btn.second;
+                    return;
+                }
+            }
         }
         return;
     }
 
-    // Panning Support
     if (event.type == sf::Event::MouseButtonPressed && (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle)) {
         m_isPanning = true;
         m_lastPanPos = mousePos;
@@ -59,7 +68,11 @@ void ShapeTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& wind
         return;
     }
 
-    // Shape Drawing Logic
+    sf::Vector2f viewPos = m_canvas.getInverseTransform().transformPoint(mousePos);
+    float scaleX = static_cast<float>(m_canvas.getCanvasSize().x) / m_canvas.getDrawArea().width;
+    float scaleY = static_cast<float>(m_canvas.getCanvasSize().y) / m_canvas.getDrawArea().height;
+    sf::Vector2f logicalPos((viewPos.x - m_canvas.getDrawArea().left) * scaleX, (viewPos.y - m_canvas.getDrawArea().top) * scaleY);
+
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
         if (m_canvas.getPixelMode()) {
             logicalPos.x = std::floor(logicalPos.x);
@@ -95,7 +108,7 @@ void ShapeTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& wind
             }
 
             m_shapeManager.rasterizeActive(*target, m_canvas.getPixelMode());
-            target->display(); // This fully locks the drawn pixels and fixes the invisible bug!
+            target->display();
 
             m_shapeManager.clearActive();
         }
@@ -126,12 +139,18 @@ void ShapeTool::Render(sf::RenderWindow& window) {
 }
 
 void ShapeTool::drawPropertiesPanel(sf::RenderWindow& window) {
-    window.draw(m_panelBg);
+    sf::FloatRect panelBounds(m_panelPos.x, m_panelPos.y, m_panelSize.x, m_panelSize.y);
+    WisdomUI::Theme::DrawSunsetPanel(window, panelBounds, 1.0f);
 
-    sf::Text title("SHAPES MENU", m_font, 14);
-    title.setPosition(m_panelBg.getPosition().x + 10.f, m_panelBg.getPosition().y + 10.f);
-    title.setFillColor(sf::Color(255, 200, 100));
-    window.draw(title);
+    sf::FloatRect headerGrip(m_panelPos.x + 8.f, m_panelPos.y + 6.f, m_panelSize.x - 16.f, 26.f);
+    sf::RectangleShape gripBg(sf::Vector2f(headerGrip.width, headerGrip.height));
+    gripBg.setPosition(headerGrip.left, headerGrip.top);
+    gripBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    gripBg.setOutlineThickness(1.f);
+    gripBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(gripBg);
+
+    WisdomUI::Theme::DrawCrispText(window, m_font, ":: VECTOR SHAPES ::", 12, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
     std::vector<std::pair<std::string, ShapeId>> opts = {
         {"Line", ShapeId::Line},
@@ -144,23 +163,18 @@ void ShapeTool::drawPropertiesPanel(sf::RenderWindow& window) {
         {"Arrow", ShapeId::Arrow}
     };
 
-    float y = m_panelBg.getPosition().y + 40.f;
+    m_shapeButtons.clear();
+    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    float y = m_panelPos.y + 40.f;
+
     for (const auto& o : opts) {
-        sf::Text t(o.first, m_font, 12);
-        t.setPosition(m_panelBg.getPosition().x + 20.f, y + 5.f);
+        sf::FloatRect btnRect(m_panelPos.x + 12.f, y, m_panelSize.x - 24.f, 28.f);
+        m_shapeButtons.push_back({ btnRect, o.second });
 
-        if (m_currentShapeId == o.second) {
-            sf::RectangleShape activeBg(sf::Vector2f(160.f, 24.f));
-            activeBg.setPosition(m_panelBg.getPosition().x + 10.f, y);
-            activeBg.setFillColor(sf::Color(0, 122, 204, 180));
-            window.draw(activeBg);
-            t.setFillColor(sf::Color::White);
-        }
-        else {
-            t.setFillColor(sf::Color(200, 200, 200));
-        }
+        bool isActive = (m_currentShapeId == o.second);
+        bool isHovered = btnRect.contains(mPos);
 
-        window.draw(t);
-        y += 30.f;
+        WisdomUI::Theme::DrawSunsetButton(window, btnRect, o.first, m_font, 11, isActive, isHovered, isActive, 1.0f);
+        y += 33.f;
     }
 }
