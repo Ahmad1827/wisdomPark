@@ -1,4 +1,5 @@
 #include "NewProjectModal.h"
+#include "../UITheme.h"
 #include <algorithm>
 
 const int NORMAL_W[] = { 640, 800, 1280, 1920, 0 };
@@ -9,171 +10,105 @@ const int PIXEL_W[] = { 16, 32, 64, 128, 256, 0 };
 const int PIXEL_H[] = { 16, 32, 64, 128, 256, 0 };
 const std::string PIXEL_LABELS[] = { "16x16", "32x32", "64x64", "128x128", "256x256", "Custom" };
 
-NewProjectModal::NewProjectModal() : isOpen(false), isPixelMode(false), selectedPresetIndex(2), customWidth(1280), customHeight(720), typingWidth(false), typingHeight(false), projectName("") {}
+NewProjectModal::NewProjectModal()
+    : isOpen(false), isPixelMode(false), selectedPresetIndex(2),
+    customWidth(1280), customHeight(720), typingWidth(false),
+    typingHeight(false), typingName(false), projectName("") {}
 
 void NewProjectModal::init() {
     font.loadFromFile("assets/font.otf");
 
     overlay.setSize(sf::Vector2f(1920.f, 1080.f));
-    overlay.setFillColor(sf::Color(0, 0, 0, 200));
+    overlay.setFillColor(sf::Color(10, 4, 16, 220));
 
-    modalBg.setSize(sf::Vector2f(800.f, 500.f));
-    modalBg.setPosition(1920.f / 2.f - 400.f, 1080.f / 2.f - 250.f);
-    modalBg.setFillColor(sf::Color(25, 25, 30, 255));
-    modalBg.setOutlineThickness(2.f);
-    modalBg.setOutlineColor(sf::Color(100, 100, 110, 100));
+    modalBounds = sf::FloatRect(1920.f / 2.f - 430.f, 1080.f / 2.f - 280.f, 860.f, 560.f);
 
-    title.setFont(font);
-    title.setString("Create New Project");
-    title.setCharacterSize(24);
-    title.setFillColor(sf::Color::White);
-    title.setPosition(modalBg.getPosition().x + 30.f, modalBg.getPosition().y + 30.f);
+    closeBtnBounds = sf::FloatRect(modalBounds.left + modalBounds.width - 104.f, modalBounds.top + 20.f, 84.f, 32.f);
 
-    closeBtn.setSize(sf::Vector2f(100.f, 40.f));
-    closeBtn.setPosition(modalBg.getPosition().x + 670.f, modalBg.getPosition().y + 30.f);
-    closeBtn.setFillColor(sf::Color(50, 50, 60));
+    normalToggleBounds = sf::FloatRect(modalBounds.left + 30.f, modalBounds.top + 80.f, 180.f, 38.f);
+    pixelToggleBounds = sf::FloatRect(modalBounds.left + 220.f, modalBounds.top + 80.f, 180.f, 38.f);
 
-    closeText.setFont(font);
-    closeText.setString("Cancel");
-    closeText.setCharacterSize(16);
-    closeText.setFillColor(sf::Color::White);
-    closeText.setPosition(closeBtn.getPosition().x + 25.f, closeBtn.getPosition().y + 10.f);
+    nameInputBounds = sf::FloatRect(modalBounds.left + 30.f, modalBounds.top + 330.f, 380.f, 44.f);
+    widthInputBounds = sf::FloatRect(modalBounds.left + 30.f, modalBounds.top + 410.f, 180.f, 44.f);
+    heightInputBounds = sf::FloatRect(modalBounds.left + 230.f, modalBounds.top + 410.f, 180.f, 44.f);
 
-    normalToggleBtn.setSize(sf::Vector2f(150.f, 40.f));
-    normalToggleBtn.setPosition(modalBg.getPosition().x + 30.f, modalBg.getPosition().y + 100.f);
-    normalToggleText.setFont(font);
-    normalToggleText.setString("Normal");
-    normalToggleText.setCharacterSize(18);
-    normalToggleText.setPosition(normalToggleBtn.getPosition().x + 40.f, normalToggleBtn.getPosition().y + 10.f);
-
-    pixelToggleBtn.setSize(sf::Vector2f(150.f, 40.f));
-    pixelToggleBtn.setPosition(modalBg.getPosition().x + 190.f, modalBg.getPosition().y + 100.f);
-    pixelToggleText.setFont(font);
-    pixelToggleText.setString("Pixel Art");
-    pixelToggleText.setCharacterSize(18);
-    pixelToggleText.setPosition(pixelToggleBtn.getPosition().x + 35.f, pixelToggleBtn.getPosition().y + 10.f);
-
-    widthLabel.setFont(font); widthLabel.setString("Width:"); widthLabel.setCharacterSize(18); widthLabel.setFillColor(sf::Color::White);
-    widthLabel.setPosition(modalBg.getPosition().x + 30.f, modalBg.getPosition().y + 300.f);
-    widthBg.setSize(sf::Vector2f(120.f, 35.f)); widthBg.setPosition(modalBg.getPosition().x + 100.f, modalBg.getPosition().y + 295.f);
-    widthText.setFont(font); widthText.setCharacterSize(18); widthText.setPosition(widthBg.getPosition().x + 10.f, widthBg.getPosition().y + 5.f);
-
-    heightLabel.setFont(font); heightLabel.setString("Height:"); heightLabel.setCharacterSize(18); heightLabel.setFillColor(sf::Color::White);
-    heightLabel.setPosition(modalBg.getPosition().x + 250.f, modalBg.getPosition().y + 300.f);
-    heightBg.setSize(sf::Vector2f(120.f, 35.f)); heightBg.setPosition(modalBg.getPosition().x + 330.f, modalBg.getPosition().y + 295.f);
-    heightText.setFont(font); heightText.setCharacterSize(18); heightText.setPosition(heightBg.getPosition().x + 10.f, heightBg.getPosition().y + 5.f);
-
-    createBtn.setSize(sf::Vector2f(200.f, 50.f));
-    createBtn.setPosition(modalBg.getPosition().x + 570.f, modalBg.getPosition().y + 420.f);
-    createBtn.setFillColor(sf::Color(50, 180, 50));
-    createText.setFont(font);
-    createText.setString("Create");
-    createText.setCharacterSize(22);
-    createText.setFillColor(sf::Color::White);
-    createText.setPosition(createBtn.getPosition().x + 65.f, createBtn.getPosition().y + 12.f);
+    createBtnBounds = sf::FloatRect(modalBounds.left + modalBounds.width - 240.f, modalBounds.top + modalBounds.height - 74.f, 210.f, 50.f);
 
     buildPresets();
-    updateSelectionVisuals();
 }
 
 void NewProjectModal::buildPresets() {
-    presetBtns.clear();
-    presetTexts.clear();
+    presetBounds.clear();
 
     int count = isPixelMode ? 6 : 5;
-    const std::string* labels = isPixelMode ? PIXEL_LABELS : NORMAL_LABELS;
-
-    float px = modalBg.getPosition().x + 30.f;
-    float py = modalBg.getPosition().y + 170.f;
+    float px = modalBounds.left + 30.f;
+    float py = modalBounds.top + 150.f;
 
     for (int i = 0; i < count; i++) {
-        sf::RectangleShape btn(sf::Vector2f(120.f, 40.f));
-        btn.setPosition(px, py);
-        presetBtns.push_back(btn);
-
-        sf::Text txt(labels[i], font, 16);
-        txt.setPosition(px + 10.f, py + 10.f);
-        presetTexts.push_back(txt);
-
-        px += 130.f;
-        if (px > modalBg.getPosition().x + 600.f) {
-            px = modalBg.getPosition().x + 30.f;
-            py += 50.f;
+        presetBounds.push_back(sf::FloatRect(px, py, 126.f, 42.f));
+        px += 134.f;
+        if (px > modalBounds.left + 700.f) {
+            px = modalBounds.left + 30.f;
+            py += 52.f;
         }
     }
-}
-
-void NewProjectModal::updateSelectionVisuals() {
-    normalToggleBtn.setFillColor(isPixelMode ? sf::Color(40, 40, 50) : sf::Color(80, 120, 200));
-    pixelToggleBtn.setFillColor(isPixelMode ? sf::Color(80, 120, 200) : sf::Color(40, 40, 50));
-
-    for (size_t i = 0; i < presetBtns.size(); i++) {
-        presetBtns[i].setFillColor((static_cast<int>(i) == selectedPresetIndex) ? sf::Color(100, 150, 220) : sf::Color(50, 50, 60));
-    }
-
-    widthBg.setFillColor(typingWidth ? sf::Color(60, 60, 80) : sf::Color(30, 30, 40));
-    heightBg.setFillColor(typingHeight ? sf::Color(60, 60, 80) : sf::Color(30, 30, 40));
-    widthBg.setOutlineThickness(1.f); widthBg.setOutlineColor(sf::Color(100, 100, 110));
-    heightBg.setOutlineThickness(1.f); heightBg.setOutlineColor(sf::Color(100, 100, 110));
-
-    widthText.setString(std::to_string(customWidth) + (typingWidth ? "_" : ""));
-    heightText.setString(std::to_string(customHeight) + (typingHeight ? "_" : ""));
 }
 
 void NewProjectModal::open() {
     isOpen = true;
     typingWidth = false;
     typingHeight = false;
-    updateSelectionVisuals();
+    typingName = false;
+    buildPresets();
 }
 
-void NewProjectModal::close() { isOpen = false; }
-bool NewProjectModal::getIsOpen() const { return isOpen; }
-
-void NewProjectModal::updateHover(sf::Vector2f mousePos) {
-    if (!isOpen) return;
-    closeBtn.setFillColor(closeBtn.getGlobalBounds().contains(mousePos) ? sf::Color(80, 80, 90) : sf::Color(50, 50, 60));
-    createBtn.setFillColor(createBtn.getGlobalBounds().contains(mousePos) ? sf::Color(70, 200, 70) : sf::Color(50, 180, 50));
+void NewProjectModal::close() {
+    isOpen = false;
 }
+
+bool NewProjectModal::getIsOpen() const {
+    return isOpen;
+}
+
+void NewProjectModal::updateHover(sf::Vector2f mousePos) {}
 
 std::string NewProjectModal::handleEvent(const sf::Event& event, sf::RenderWindow& window) {
     if (!isOpen) return "";
 
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
+    sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
+
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-
-        // FIX: Map mouse pixels to windowed coords
-        sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
-        sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
-
-        if (closeBtn.getGlobalBounds().contains(mousePos)) { close(); return "cancel"; }
-        if (createBtn.getGlobalBounds().contains(mousePos)) {
+        if (closeBtnBounds.contains(mousePos)) {
+            close();
+            return "cancel";
+        }
+        if (createBtnBounds.contains(mousePos)) {
             customWidth = std::max(1, customWidth);
             customHeight = std::max(1, customHeight);
             close();
             return "create";
         }
 
-        if (normalToggleBtn.getGlobalBounds().contains(mousePos) && isPixelMode) {
+        if (normalToggleBounds.contains(mousePos) && isPixelMode) {
             isPixelMode = false;
             selectedPresetIndex = 2;
             customWidth = NORMAL_W[selectedPresetIndex];
             customHeight = NORMAL_H[selectedPresetIndex];
             buildPresets();
-            updateSelectionVisuals();
             return "";
         }
-        if (pixelToggleBtn.getGlobalBounds().contains(mousePos) && !isPixelMode) {
+        if (pixelToggleBounds.contains(mousePos) && !isPixelMode) {
             isPixelMode = true;
             selectedPresetIndex = 2;
             customWidth = PIXEL_W[selectedPresetIndex];
             customHeight = PIXEL_H[selectedPresetIndex];
             buildPresets();
-            updateSelectionVisuals();
             return "";
         }
 
-        for (size_t i = 0; i < presetBtns.size(); i++) {
-            if (presetBtns[i].getGlobalBounds().contains(mousePos)) {
+        for (size_t i = 0; i < presetBounds.size(); i++) {
+            if (presetBounds[i].contains(mousePos)) {
                 selectedPresetIndex = static_cast<int>(i);
                 int w = isPixelMode ? PIXEL_W[i] : NORMAL_W[i];
                 int h = isPixelMode ? PIXEL_H[i] : NORMAL_H[i];
@@ -181,22 +116,30 @@ std::string NewProjectModal::handleEvent(const sf::Event& event, sf::RenderWindo
                     customWidth = w;
                     customHeight = h;
                 }
-                typingWidth = false; typingHeight = false;
-                updateSelectionVisuals();
+                typingWidth = false;
+                typingHeight = false;
+                typingName = false;
                 return "";
             }
         }
 
-        typingWidth = widthBg.getGlobalBounds().contains(mousePos);
-        typingHeight = heightBg.getGlobalBounds().contains(mousePos);
+        typingName = nameInputBounds.contains(mousePos);
+        typingWidth = widthInputBounds.contains(mousePos);
+        typingHeight = heightInputBounds.contains(mousePos);
+
         if (typingWidth || typingHeight) {
             selectedPresetIndex = isPixelMode ? 5 : 4;
         }
-        updateSelectionVisuals();
     }
 
     if (event.type == sf::Event::TextEntered) {
-        if (typingWidth || typingHeight) {
+        if (typingName) {
+            if (event.text.unicode == '\b' && !projectName.empty()) projectName.pop_back();
+            else if (event.text.unicode >= 32 && event.text.unicode < 127 && projectName.length() < 24) {
+                projectName += static_cast<char>(event.text.unicode);
+            }
+        }
+        else if (typingWidth || typingHeight) {
             if (event.text.unicode == '\b') {
                 if (typingWidth) customWidth /= 10;
                 if (typingHeight) customHeight /= 10;
@@ -206,7 +149,6 @@ std::string NewProjectModal::handleEvent(const sf::Event& event, sf::RenderWindo
                 if (typingWidth) customWidth = std::min(16384, customWidth * 10 + digit);
                 if (typingHeight) customHeight = std::min(16384, customHeight * 10 + digit);
             }
-            updateSelectionVisuals();
         }
     }
 
@@ -215,23 +157,47 @@ std::string NewProjectModal::handleEvent(const sf::Event& event, sf::RenderWindo
 
 void NewProjectModal::draw(sf::RenderWindow& window) {
     if (!isOpen) return;
+
     window.draw(overlay);
-    window.draw(modalBg);
-    window.draw(title);
-    window.draw(closeBtn);
-    window.draw(closeText);
 
-    window.draw(normalToggleBtn); window.draw(normalToggleText);
-    window.draw(pixelToggleBtn); window.draw(pixelToggleText);
+    WisdomUI::Theme::DrawSunsetPanel(window, modalBounds, 1.0f);
 
-    for (size_t i = 0; i < presetBtns.size(); i++) {
-        window.draw(presetBtns[i]);
-        window.draw(presetTexts[i]);
+    WisdomUI::Theme::DrawCrispText(window, font, ":: INITIALIZE NEW CANVAS ::", 14, modalBounds.left + 30.f, modalBounds.top + 28.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20));
+
+    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Cancel", font, 11, false, closeBtnBounds.contains(mPos), false, 1.0f);
+
+    WisdomUI::Theme::DrawSunsetButton(window, normalToggleBounds, "Standard Dynamic", font, 12, !isPixelMode, normalToggleBounds.contains(mPos), !isPixelMode, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, pixelToggleBounds, "Pixel Art Grid", font, 12, isPixelMode, pixelToggleBounds.contains(mPos), isPixelMode, 1.0f);
+
+    const std::string* labels = isPixelMode ? PIXEL_LABELS : NORMAL_LABELS;
+    for (size_t i = 0; i < presetBounds.size(); i++) {
+        bool isSel = (static_cast<int>(i) == selectedPresetIndex);
+        WisdomUI::Theme::DrawSunsetButton(window, presetBounds[i], labels[i], font, 12, isSel, presetBounds[i].contains(mPos), isSel, 1.0f);
     }
 
-    window.draw(widthLabel); window.draw(widthBg); window.draw(widthText);
-    window.draw(heightLabel); window.draw(heightBg); window.draw(heightText);
+    auto drawField = [&](sf::FloatRect b, const std::string& label, const std::string& val, bool active, const std::string& placeholder) {
+        sf::RectangleShape box(sf::Vector2f(b.width, b.height));
+        box.setPosition(b.left, b.top);
+        box.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+        box.setOutlineThickness(1.5f);
+        box.setOutlineColor(active ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
+        window.draw(box);
 
-    window.draw(createBtn);
-    window.draw(createText);
+        WisdomUI::Theme::DrawCrispText(window, font, label, 10, b.left, b.top - 18.f, WisdomUI::Theme::TextSecondary);
+
+        std::string display = val;
+        if (active) display += "_";
+        else if (display.empty()) display = placeholder;
+
+        sf::Color textColor = (val.empty() && !active) ? WisdomUI::Theme::SunsetPlum : WisdomUI::Theme::TextPrimary;
+        WisdomUI::Theme::DrawCrispText(window, font, display, 13, b.left + 12.f, b.top + 12.f, textColor);
+        };
+
+    drawField(nameInputBounds, "PROJECT IDENTITY", projectName, typingName, "Untitled_Artwork");
+    drawField(widthInputBounds, "CANVAS WIDTH (PX)", std::to_string(customWidth), typingWidth, "Width");
+    drawField(heightInputBounds, "CANVAS HEIGHT (PX)", std::to_string(customHeight), typingHeight, "Height");
+
+    WisdomUI::Theme::DrawSunsetButton(window, createBtnBounds, "CREATE PROJECT", font, 13, false, createBtnBounds.contains(mPos), true, 1.0f);
 }

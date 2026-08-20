@@ -7,28 +7,19 @@
 class ExportModal {
 private:
     sf::RectangleShape overlay;
-    sf::RectangleShape modalBg;
+    sf::FloatRect modalBounds;
     sf::Font font;
-    sf::Text title;
 
-    sf::RectangleShape closeBtn;
-    sf::Text closeText;
+    sf::FloatRect closeBtnBounds;
+    sf::FloatRect exportPngBtnBounds;
+    sf::FloatRect exportSheetBtnBounds;
+    sf::FloatRect transCheckboxBounds;
+    sf::FloatRect cropCheckboxBounds;
+    sf::FloatRect previewAreaBounds;
 
-    sf::RectangleShape exportPngBtn;
-    sf::Text exportPngText;
-    sf::RectangleShape exportSheetBtn;
-    sf::Text exportSheetText;
-
-    sf::RectangleShape transCheckbox;
-    sf::Text transText;
-    sf::RectangleShape cropCheckbox;
-    sf::Text cropText;
-
-    sf::RectangleShape previewArea;
     sf::Sprite previewSprite;
     sf::Texture previewTex;
-
-    sf::Text infoText;
+    std::string infoString;
 
     bool isOpen;
     bool transparentBg;

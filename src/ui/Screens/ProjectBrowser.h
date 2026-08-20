@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include "../../core/ProjectManager.h"
+
 class ProjectBrowser {
 private:
     ProjectManager* pm;
@@ -10,23 +11,18 @@ private:
     std::vector<ProjectMetadata> projects;
     bool showDeleteConfirm;
     std::string projectToDelete;
-    sf::RectangleShape confirmBg;
-    sf::Text confirmTitle;
-    sf::Text confirmWarning;
-    sf::RectangleShape confirmBtn;
-    sf::Text confirmText;
-    sf::RectangleShape cancelBtn;
-    sf::Text cancelText;
 
-    // Was missing entirely before - handleClick() had no code path that
-    // could ever return "new_project", so there was nothing to click to
-    // create a project once you were on this screen.
-    sf::RectangleShape newProjectBtn;
-    sf::Text newProjectText;
-    sf::RectangleShape openFileBtn;
-    sf::Text openFileText;
+    sf::FloatRect newProjectBtnBounds;
+    sf::FloatRect openFileBtnBounds;
+    sf::FloatRect confirmBtnBounds;
+    sf::FloatRect cancelBtnBounds;
+    sf::FloatRect deleteModalBounds;
+
+    std::vector<sf::FloatRect> cardBoundsList;
+    std::vector<sf::FloatRect> deleteBtnsList;
 
     void refreshList();
+
 public:
     ProjectBrowser();
     void init(ProjectManager* projectManager);

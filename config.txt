@@ -1,6 +1,6 @@
 none
 fullscreen=0
-borderless=1
+borderless=0
 vsync=1
 fpsLimit=60
 resWidth=1280

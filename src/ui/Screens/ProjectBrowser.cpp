@@ -1,4 +1,5 @@
 #include "ProjectBrowser.h"
+#include "../UITheme.h"
 
 ProjectBrowser::ProjectBrowser() : pm(nullptr), showDeleteConfirm(false) {}
 
@@ -6,65 +7,12 @@ void ProjectBrowser::init(ProjectManager* projectManager) {
     pm = projectManager;
     font.loadFromFile("assets/font.otf");
 
-    confirmBg.setSize(sf::Vector2f(500.f, 250.f));
-    confirmBg.setOrigin(250.f, 125.f);
-    confirmBg.setPosition(1920.f / 2.f, 1080.f / 2.f);
-    confirmBg.setFillColor(sf::Color(30, 30, 35, 255));
-    confirmBg.setOutlineThickness(2.f);
-    confirmBg.setOutlineColor(sf::Color(150, 50, 50));
+    deleteModalBounds = sf::FloatRect(1920.f / 2.f - 250.f, 1080.f / 2.f - 130.f, 500.f, 260.f);
+    confirmBtnBounds = sf::FloatRect(deleteModalBounds.left + 40.f, deleteModalBounds.top + 180.f, 190.f, 44.f);
+    cancelBtnBounds = sf::FloatRect(deleteModalBounds.left + 270.f, deleteModalBounds.top + 180.f, 190.f, 44.f);
 
-    confirmTitle.setFont(font);
-    confirmTitle.setCharacterSize(22);
-    confirmTitle.setFillColor(sf::Color::White);
-
-    confirmWarning.setFont(font);
-    confirmWarning.setString("This action cannot be undone.");
-    confirmWarning.setCharacterSize(16);
-    confirmWarning.setFillColor(sf::Color(200, 100, 100));
-
-    confirmBtn.setSize(sf::Vector2f(120.f, 40.f));
-    confirmBtn.setFillColor(sf::Color(180, 50, 50));
-    confirmText.setFont(font);
-    confirmText.setString("Delete");
-    confirmText.setCharacterSize(18);
-    confirmText.setFillColor(sf::Color::White);
-
-    cancelBtn.setSize(sf::Vector2f(120.f, 40.f));
-    cancelBtn.setFillColor(sf::Color(80, 80, 90));
-    cancelText.setFont(font);
-    cancelText.setString("Cancel");
-    cancelText.setCharacterSize(18);
-    cancelText.setFillColor(sf::Color::White);
-
-    // "+ New Project" - sits to the right of the "Recent Projects" title,
-    // same row (y=200, matching the old invisible open-file hitbox height).
-    newProjectBtn.setSize(sf::Vector2f(180.f, 40.f));
-    newProjectBtn.setPosition(1520.f, 200.f);
-    newProjectBtn.setFillColor(sf::Color(50, 150, 220));
-
-    newProjectText.setFont(font);
-    newProjectText.setString("+ New Project");
-    newProjectText.setCharacterSize(16);
-    newProjectText.setFillColor(sf::Color::White);
-    sf::FloatRect npb = newProjectText.getLocalBounds();
-    newProjectText.setOrigin(npb.left + npb.width / 2.f, npb.top + npb.height / 2.f);
-    newProjectText.setPosition(newProjectBtn.getPosition().x + newProjectBtn.getSize().x / 2.f,
-        newProjectBtn.getPosition().y + newProjectBtn.getSize().y / 2.f);
-
-    // "Open File" - loads a .wpk from anywhere on disk via the native file
-    // dialog, next to the New Project button.
-    openFileBtn.setSize(sf::Vector2f(150.f, 40.f));
-    openFileBtn.setPosition(1350.f, 200.f);
-    openFileBtn.setFillColor(sf::Color(60, 60, 70));
-
-    openFileText.setFont(font);
-    openFileText.setString("Open File");
-    openFileText.setCharacterSize(16);
-    openFileText.setFillColor(sf::Color::White);
-    sf::FloatRect ofb = openFileText.getLocalBounds();
-    openFileText.setOrigin(ofb.left + ofb.width / 2.f, ofb.top + ofb.height / 2.f);
-    openFileText.setPosition(openFileBtn.getPosition().x + openFileBtn.getSize().x / 2.f,
-        openFileBtn.getPosition().y + openFileBtn.getSize().y / 2.f);
+    openFileBtnBounds = sf::FloatRect(1320.f, 190.f, 160.f, 38.f);
+    newProjectBtnBounds = sf::FloatRect(1500.f, 190.f, 180.f, 38.f);
 
     refreshList();
 }
@@ -73,23 +21,14 @@ void ProjectBrowser::refreshList() {
     if (pm) projects = pm->getRecentProjects();
 }
 
-void ProjectBrowser::updateHover(sf::Vector2f mousePos) {
-    if (showDeleteConfirm) {
-        confirmBtn.setFillColor(confirmBtn.getGlobalBounds().contains(mousePos) ? sf::Color(220, 70, 70) : sf::Color(180, 50, 50));
-        cancelBtn.setFillColor(cancelBtn.getGlobalBounds().contains(mousePos) ? sf::Color(100, 100, 110) : sf::Color(80, 80, 90));
-        return;
-    }
-
-    newProjectBtn.setFillColor(newProjectBtn.getGlobalBounds().contains(mousePos) ? sf::Color(70, 170, 240) : sf::Color(50, 150, 220));
-    openFileBtn.setFillColor(openFileBtn.getGlobalBounds().contains(mousePos) ? sf::Color(80, 80, 90) : sf::Color(60, 60, 70));
-}
+void ProjectBrowser::updateHover(sf::Vector2f mousePos) {}
 
 std::string ProjectBrowser::handleClick(sf::Vector2f mousePos, ProjectMetadata& outMeta) {
     if (showDeleteConfirm) {
-        if (cancelBtn.getGlobalBounds().contains(mousePos)) {
+        if (cancelBtnBounds.contains(mousePos)) {
             showDeleteConfirm = false;
         }
-        else if (confirmBtn.getGlobalBounds().contains(mousePos)) {
+        else if (confirmBtnBounds.contains(mousePos)) {
             if (pm) {
                 pm->deleteProject(projectToDelete);
                 refreshList();
@@ -99,122 +38,96 @@ std::string ProjectBrowser::handleClick(sf::Vector2f mousePos, ProjectMetadata& 
         return "";
     }
 
-    if (newProjectBtn.getGlobalBounds().contains(mousePos)) {
-        return "new_project";
-    }
-    if (openFileBtn.getGlobalBounds().contains(mousePos)) {
-        return "open_native";
-    }
+    if (newProjectBtnBounds.contains(mousePos)) return "new_project";
+    if (openFileBtnBounds.contains(mousePos)) return "open_native";
 
-    float rx = 900.f;
-    float ry = 280.f;
-
-    for (size_t i = 0; i < projects.size(); ++i) {
-        sf::FloatRect cardBounds(rx, ry, 800.f, 100.f);
-        sf::FloatRect delBounds(rx + 730.f, ry + 30.f, 40.f, 40.f);
-
-        if (delBounds.contains(mousePos)) {
+    for (size_t i = 0; i < deleteBtnsList.size(); ++i) {
+        if (deleteBtnsList[i].contains(mousePos) && i < projects.size()) {
             projectToDelete = projects[i].name;
             showDeleteConfirm = true;
-
-            confirmTitle.setString("Delete project '" + projectToDelete + "'?");
-            sf::FloatRect tb = confirmTitle.getLocalBounds();
-            confirmTitle.setOrigin(tb.width / 2.f, tb.height / 2.f);
-            confirmTitle.setPosition(1920.f / 2.f, 1080.f / 2.f - 60.f);
-
-            sf::FloatRect wb = confirmWarning.getLocalBounds();
-            confirmWarning.setOrigin(wb.width / 2.f, wb.height / 2.f);
-            confirmWarning.setPosition(1920.f / 2.f, 1080.f / 2.f - 20.f);
-
-            confirmBtn.setPosition(1920.f / 2.f + 20.f, 1080.f / 2.f + 40.f);
-            confirmText.setPosition(confirmBtn.getPosition().x + 30.f, confirmBtn.getPosition().y + 8.f);
-
-            cancelBtn.setPosition(1920.f / 2.f - 140.f, 1080.f / 2.f + 40.f);
-            cancelText.setPosition(cancelBtn.getPosition().x + 30.f, cancelBtn.getPosition().y + 8.f);
             return "";
         }
+    }
 
-        if (cardBounds.contains(mousePos)) {
+    for (size_t i = 0; i < cardBoundsList.size(); ++i) {
+        if (cardBoundsList[i].contains(mousePos) && i < projects.size()) {
             outMeta = projects[i];
             return "load_project";
         }
-        ry += 125.f;
     }
 
     return "";
 }
 
 void ProjectBrowser::draw(sf::RenderWindow& window) {
-    sf::Text recTitle("Recent Projects", font, 24);
-    recTitle.setFillColor(sf::Color::White);
-    recTitle.setPosition(900.f, 200.f);
-    window.draw(recTitle);
+    WisdomUI::Theme::DrawCrispText(window, font, "RECENT ARCHIVES", 22, 900.f, 194.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20));
 
-    window.draw(newProjectBtn);
-    window.draw(newProjectText);
-    window.draw(openFileBtn);
-    window.draw(openFileText);
+    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
-    sf::RectangleShape line(sf::Vector2f(800.f, 2.f));
+    WisdomUI::Theme::DrawSunsetButton(window, openFileBtnBounds, "Open Disk File", font, 11, false, openFileBtnBounds.contains(mPos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, newProjectBtnBounds, "+ New Project", font, 11, false, newProjectBtnBounds.contains(mPos), true, 1.0f);
+
+    sf::RectangleShape line(sf::Vector2f(780.f, 1.5f));
     line.setPosition(900.f, 240.f);
-    line.setFillColor(sf::Color(255, 255, 255, 40));
+    line.setFillColor(WisdomUI::Theme::SunsetPlum);
     window.draw(line);
 
+    cardBoundsList.clear();
+    deleteBtnsList.clear();
+
     float rx = 900.f;
-    float ry = 280.f;
+    float ry = 265.f;
 
     for (const auto& meta : projects) {
-        sf::RectangleShape card(sf::Vector2f(800.f, 100.f));
-        card.setPosition(rx, ry);
-        card.setFillColor(sf::Color(25, 28, 35, 190));
+        sf::FloatRect cardRect(rx, ry, 780.f, 96.f);
+        cardBoundsList.push_back(cardRect);
+
+        bool isHov = cardRect.contains(mPos);
+
+        sf::RectangleShape card(sf::Vector2f(cardRect.width, cardRect.height));
+        card.setPosition(cardRect.left, cardRect.top);
+        card.setFillColor(isHov ? WisdomUI::Theme::SunsetSkyMid : WisdomUI::Theme::SunsetSkyTop);
         card.setOutlineThickness(1.5f);
-        card.setOutlineColor(sf::Color(100, 100, 120));
+        card.setOutlineColor(isHov ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetCoralDark);
         window.draw(card);
 
-        sf::RectangleShape thumb(sf::Vector2f(140.f, 80.f));
-        thumb.setPosition(rx + 10.f, ry + 10.f);
-        thumb.setFillColor(sf::Color(15, 15, 20));
+        sf::FloatRect thumbRect(rx + 10.f, ry + 8.f, 130.f, 80.f);
+        sf::RectangleShape thumbFrame(sf::Vector2f(thumbRect.width, thumbRect.height));
+        thumbFrame.setPosition(thumbRect.left, thumbRect.top);
+        thumbFrame.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+        thumbFrame.setOutlineThickness(1.f);
+        thumbFrame.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+
         if (meta.thumbnail.getSize().x > 0) {
-            thumb.setTexture(&meta.thumbnail);
+            thumbFrame.setTexture(&meta.thumbnail);
         }
-        window.draw(thumb);
+        window.draw(thumbFrame);
 
-        sf::Text pName(meta.name, font, 24);
-        pName.setFillColor(sf::Color(255, 200, 100));
-        pName.setPosition(rx + 170.f, ry + 15.f);
-        window.draw(pName);
+        WisdomUI::Theme::DrawCrispText(window, font, meta.name, 18, rx + 160.f, ry + 16.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
 
-        std::string typeStr = meta.isPixelMode ? "Pixel Art" : "Normal";
-        std::string details = typeStr + "  |  " + std::to_string(meta.width) + "x" + std::to_string(meta.height) + "  |  Modified: " + meta.lastModified;
-        sf::Text pDet(details, font, 14);
-        pDet.setFillColor(sf::Color(180, 180, 180));
-        pDet.setPosition(rx + 170.f, ry + 55.f);
-        window.draw(pDet);
+        std::string typeStr = meta.isPixelMode ? "Pixel Mode" : "Standard Engine";
+        std::string details = typeStr + "  |  " + std::to_string(meta.width) + "x" + std::to_string(meta.height) + "  |  " + meta.lastModified;
+        WisdomUI::Theme::DrawCrispText(window, font, details, 12, rx + 160.f, ry + 56.f, WisdomUI::Theme::TextSecondary);
 
-        sf::RectangleShape delBtn(sf::Vector2f(40.f, 40.f));
-        delBtn.setPosition(rx + 730.f, ry + 30.f);
-        delBtn.setFillColor(sf::Color(150, 40, 40));
-        window.draw(delBtn);
+        sf::FloatRect delRect(rx + 724.f, ry + 28.f, 40.f, 40.f);
+        deleteBtnsList.push_back(delRect);
+        WisdomUI::Theme::DrawSunsetButton(window, delRect, "X", font, 13, false, delRect.contains(mPos), true, 1.0f);
 
-        sf::Text xText("X", font, 20);
-        xText.setFillColor(sf::Color::White);
-        xText.setPosition(delBtn.getPosition().x + 13.f, delBtn.getPosition().y + 8.f);
-        window.draw(xText);
-
-        ry += 125.f;
+        ry += 112.f;
     }
 
     if (showDeleteConfirm) {
         sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
-        overlay.setFillColor(sf::Color(0, 0, 0, 180));
+        overlay.setFillColor(sf::Color(10, 4, 16, 210));
         window.draw(overlay);
 
-        window.draw(confirmBg);
-        window.draw(confirmTitle);
-        window.draw(confirmWarning);
-        window.draw(confirmBtn);
-        window.draw(confirmText);
-        window.draw(cancelBtn);
-        window.draw(cancelText);
+        WisdomUI::Theme::DrawSunsetPanel(window, deleteModalBounds, 1.0f);
+
+        WisdomUI::Theme::DrawCrispText(window, font, "DELETE CONFIRMATION", 16, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 35.f, WisdomUI::Theme::SunsetCoral, sf::Color(14, 6, 20), true, true);
+        WisdomUI::Theme::DrawCrispText(window, font, "Remove '" + projectToDelete + "' permanently?", 13, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 80.f, WisdomUI::Theme::TextPrimary, sf::Color(14, 6, 20), true, true);
+        WisdomUI::Theme::DrawCrispText(window, font, "This action cannot be undone.", 11, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 115.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 6, 20), true, true);
+
+        WisdomUI::Theme::DrawSunsetButton(window, confirmBtnBounds, "Delete Forever", font, 12, false, confirmBtnBounds.contains(mPos), true, 1.0f);
+        WisdomUI::Theme::DrawSunsetButton(window, cancelBtnBounds, "Cancel", font, 12, false, cancelBtnBounds.contains(mPos), false, 1.0f);
     }
 }

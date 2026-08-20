@@ -6,30 +6,19 @@
 class NewProjectModal {
 private:
     sf::RectangleShape overlay;
-    sf::RectangleShape modalBg;
+    sf::FloatRect modalBounds;
     sf::Font font;
-    sf::Text title;
-    sf::RectangleShape closeBtn;
-    sf::Text closeText;
 
-    sf::RectangleShape normalToggleBtn;
-    sf::Text normalToggleText;
-    sf::RectangleShape pixelToggleBtn;
-    sf::Text pixelToggleText;
+    sf::FloatRect closeBtnBounds;
+    sf::FloatRect normalToggleBounds;
+    sf::FloatRect pixelToggleBounds;
 
-    sf::Text widthLabel;
-    sf::RectangleShape widthBg;
-    sf::Text widthText;
+    sf::FloatRect widthInputBounds;
+    sf::FloatRect heightInputBounds;
+    sf::FloatRect nameInputBounds;
+    sf::FloatRect createBtnBounds;
 
-    sf::Text heightLabel;
-    sf::RectangleShape heightBg;
-    sf::Text heightText;
-
-    sf::RectangleShape createBtn;
-    sf::Text createText;
-
-    std::vector<sf::RectangleShape> presetBtns;
-    std::vector<sf::Text> presetTexts;
+    std::vector<sf::FloatRect> presetBounds;
 
     bool isOpen;
     bool isPixelMode;
@@ -39,10 +28,10 @@ private:
     int customHeight;
     bool typingWidth;
     bool typingHeight;
+    bool typingName;
 
     std::string projectName;
 
-    void updateSelectionVisuals();
     void buildPresets();
 
 public:

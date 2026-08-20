@@ -1,5 +1,6 @@
 #include "ExportModal.h"
 #include "../../core/NativeDialogs.h"
+#include "../UITheme.h"
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
@@ -11,82 +12,18 @@ void ExportModal::init() {
     font.loadFromFile("assets/font.otf");
 
     overlay.setSize(sf::Vector2f(1920.f, 1080.f));
-    overlay.setFillColor(sf::Color(0, 0, 0, 200));
+    overlay.setFillColor(sf::Color(10, 4, 16, 220));
 
-    modalBg.setSize(sf::Vector2f(900.f, 600.f));
-    modalBg.setPosition(1920.f / 2.f - 450.f, 1080.f / 2.f - 300.f);
-    modalBg.setFillColor(sf::Color(25, 25, 30, 255));
-    modalBg.setOutlineThickness(2.f);
-    modalBg.setOutlineColor(sf::Color(100, 100, 110, 100));
+    modalBounds = sf::FloatRect(1920.f / 2.f - 470.f, 1080.f / 2.f - 310.f, 940.f, 620.f);
 
-    title.setFont(font);
-    title.setString("Export Options");
-    title.setCharacterSize(24);
-    title.setFillColor(sf::Color::White);
-    title.setPosition(modalBg.getPosition().x + 30.f, modalBg.getPosition().y + 30.f);
+    closeBtnBounds = sf::FloatRect(modalBounds.left + modalBounds.width - 110.f, modalBounds.top + 20.f, 90.f, 32.f);
+    previewAreaBounds = sf::FloatRect(modalBounds.left + 24.f, modalBounds.top + 70.f, 580.f, 520.f);
 
-    closeBtn.setSize(sf::Vector2f(100.f, 40.f));
-    closeBtn.setPosition(modalBg.getPosition().x + 770.f, modalBg.getPosition().y + 30.f);
-    closeBtn.setFillColor(sf::Color(50, 50, 60));
+    transCheckboxBounds = sf::FloatRect(modalBounds.left + 630.f, modalBounds.top + 140.f, 280.f, 36.f);
+    cropCheckboxBounds = sf::FloatRect(modalBounds.left + 630.f, modalBounds.top + 186.f, 280.f, 36.f);
 
-    closeText.setFont(font);
-    closeText.setString("Cancel");
-    closeText.setCharacterSize(16);
-    closeText.setFillColor(sf::Color::White);
-    closeText.setPosition(closeBtn.getPosition().x + 25.f, closeBtn.getPosition().y + 10.f);
-
-    exportPngBtn.setSize(sf::Vector2f(180.f, 50.f));
-    exportPngBtn.setPosition(modalBg.getPosition().x + 670.f, modalBg.getPosition().y + 450.f);
-    exportPngBtn.setFillColor(sf::Color(0, 122, 204));
-
-    exportPngText.setFont(font);
-    exportPngText.setString("Export PNG");
-    exportPngText.setCharacterSize(18);
-    exportPngText.setFillColor(sf::Color::White);
-    exportPngText.setPosition(exportPngBtn.getPosition().x + 40.f, exportPngBtn.getPosition().y + 13.f);
-
-    exportSheetBtn.setSize(sf::Vector2f(180.f, 50.f));
-    exportSheetBtn.setPosition(modalBg.getPosition().x + 670.f, modalBg.getPosition().y + 520.f);
-    exportSheetBtn.setFillColor(sf::Color(0, 150, 50));
-
-    exportSheetText.setFont(font);
-    exportSheetText.setString("Sprite Sheet");
-    exportSheetText.setCharacterSize(18);
-    exportSheetText.setFillColor(sf::Color::White);
-    exportSheetText.setPosition(exportSheetBtn.getPosition().x + 40.f, exportSheetBtn.getPosition().y + 13.f);
-
-    transCheckbox.setSize(sf::Vector2f(24.f, 24.f));
-    transCheckbox.setPosition(modalBg.getPosition().x + 670.f, modalBg.getPosition().y + 150.f);
-    transCheckbox.setFillColor(sf::Color(50, 50, 60));
-    transCheckbox.setOutlineThickness(1.f);
-
-    transText.setFont(font);
-    transText.setString("Transparent BG");
-    transText.setCharacterSize(14);
-    transText.setFillColor(sf::Color::White);
-    transText.setPosition(modalBg.getPosition().x + 705.f, modalBg.getPosition().y + 153.f);
-
-    cropCheckbox.setSize(sf::Vector2f(24.f, 24.f));
-    cropCheckbox.setPosition(modalBg.getPosition().x + 670.f, modalBg.getPosition().y + 200.f);
-    cropCheckbox.setFillColor(sf::Color(50, 50, 60));
-    cropCheckbox.setOutlineThickness(1.f);
-
-    cropText.setFont(font);
-    cropText.setString("Auto Crop");
-    cropText.setCharacterSize(14);
-    cropText.setFillColor(sf::Color::White);
-    cropText.setPosition(modalBg.getPosition().x + 705.f, modalBg.getPosition().y + 203.f);
-
-    previewArea.setSize(sf::Vector2f(600.f, 450.f));
-    previewArea.setPosition(modalBg.getPosition().x + 30.f, modalBg.getPosition().y + 100.f);
-    previewArea.setFillColor(sf::Color(15, 15, 18));
-    previewArea.setOutlineThickness(1.f);
-    previewArea.setOutlineColor(sf::Color(100, 100, 110));
-
-    infoText.setFont(font);
-    infoText.setCharacterSize(14);
-    infoText.setFillColor(sf::Color(180, 180, 180));
-    infoText.setPosition(modalBg.getPosition().x + 670.f, modalBg.getPosition().y + 260.f);
+    exportPngBtnBounds = sf::FloatRect(modalBounds.left + 630.f, modalBounds.top + 460.f, 280.f, 54.f);
+    exportSheetBtnBounds = sf::FloatRect(modalBounds.left + 630.f, modalBounds.top + 526.f, 280.f, 54.f);
 }
 
 void ExportModal::open(Canvas& canvas, int frameIndex) {
@@ -115,58 +52,49 @@ void ExportModal::updatePreview() {
     previewTex.loadFromImage(finalImg);
     previewSprite.setTexture(previewTex, true);
 
-    float sX = 580.f / static_cast<float>(previewTex.getSize().x);
-    float sY = 430.f / static_cast<float>(previewTex.getSize().y);
-    float scale = std::min(std::min(sX, sY), 1.0f);
+    float sX = (previewAreaBounds.width - 24.f) / static_cast<float>(previewTex.getSize().x);
+    float sY = (previewAreaBounds.height - 24.f) / static_cast<float>(previewTex.getSize().y);
+    float scale = std::min({ sX, sY, 1.0f });
 
     previewSprite.setScale(scale, scale);
 
-    float px = previewArea.getPosition().x + (previewArea.getSize().x - previewTex.getSize().x * scale) / 2.f;
-    float py = previewArea.getPosition().y + (previewArea.getSize().y - previewTex.getSize().y * scale) / 2.f;
-    previewSprite.setPosition(px, py);
+    float px = previewAreaBounds.left + (previewAreaBounds.width - previewTex.getSize().x * scale) / 2.f;
+    float py = previewAreaBounds.top + (previewAreaBounds.height - previewTex.getSize().y * scale) / 2.f;
+    previewSprite.setPosition(std::floor(px), std::floor(py));
 
     size_t estimatedBytes = finalImg.getSize().x * finalImg.getSize().y * 4;
-    float mb = estimatedBytes / (1024.f * 1024.f);
+    float mb = static_cast<float>(estimatedBytes) / (1024.f * 1024.f);
 
     std::stringstream ss;
-    ss << "Resolution:\n" << finalImg.getSize().x << " x " << finalImg.getSize().y << " px\n\n";
-    ss << "Est Size (Single):\n~" << std::fixed << std::setprecision(2) << mb << " MB\n\n";
-    ss << "Total Frames:\n" << linkedCanvas->getFrameCount();
-    infoText.setString(ss.str());
-
-    transCheckbox.setFillColor(transparentBg ? sf::Color(0, 191, 255) : sf::Color(50, 50, 60));
-    cropCheckbox.setFillColor(autoCrop ? sf::Color(0, 191, 255) : sf::Color(50, 50, 60));
+    ss << "CANVAS SPECIFICATIONS\n\n";
+    ss << "Resolution : " << finalImg.getSize().x << " x " << finalImg.getSize().y << " px\n";
+    ss << "Est Size   : ~" << std::fixed << std::setprecision(2) << mb << " MB\n";
+    ss << "Timeline   : " << linkedCanvas->getFrameCount() << " Frames\n";
+    ss << "Mode       : " << (linkedCanvas->getPixelMode() ? "Pixel Perfect Grid" : "Dynamic RGBA");
+    infoString = ss.str();
 }
 
-void ExportModal::updateHover(sf::Vector2f mousePos) {
-    if (!isOpen) return;
-    closeBtn.setFillColor(closeBtn.getGlobalBounds().contains(mousePos) ? sf::Color(80, 80, 90) : sf::Color(50, 50, 60));
-    exportPngBtn.setFillColor(exportPngBtn.getGlobalBounds().contains(mousePos) ? sf::Color(0, 150, 255) : sf::Color(0, 122, 204));
-    exportSheetBtn.setFillColor(exportSheetBtn.getGlobalBounds().contains(mousePos) ? sf::Color(0, 180, 80) : sf::Color(0, 150, 50));
-    transCheckbox.setOutlineColor(transCheckbox.getGlobalBounds().contains(mousePos) ? sf::Color::White : sf::Color::Transparent);
-    cropCheckbox.setOutlineColor(cropCheckbox.getGlobalBounds().contains(mousePos) ? sf::Color::White : sf::Color::Transparent);
-}
+void ExportModal::updateHover(sf::Vector2f mousePos) {}
 
 void ExportModal::handleEvent(const sf::Event& event, sf::RenderWindow& window) {
     if (!isOpen) return;
 
-    // FIX: Map mouse pixels to windowed coords
     sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
 
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        if (closeBtn.getGlobalBounds().contains(mousePos)) {
+        if (closeBtnBounds.contains(mousePos)) {
             close();
         }
-        else if (transCheckbox.getGlobalBounds().contains(mousePos)) {
+        else if (transCheckboxBounds.contains(mousePos)) {
             transparentBg = !transparentBg;
             updatePreview();
         }
-        else if (cropCheckbox.getGlobalBounds().contains(mousePos)) {
+        else if (cropCheckboxBounds.contains(mousePos)) {
             autoCrop = !autoCrop;
             updatePreview();
         }
-        else if (exportPngBtn.getGlobalBounds().contains(mousePos)) {
+        else if (exportPngBtnBounds.contains(mousePos)) {
             if (linkedCanvas->getFrameCount() > 1) {
                 std::string folder = NativeDialogs::selectFolderDialog();
                 if (!folder.empty()) {
@@ -182,7 +110,7 @@ void ExportModal::handleEvent(const sf::Event& event, sf::RenderWindow& window) 
                 }
             }
         }
-        else if (exportSheetBtn.getGlobalBounds().contains(mousePos)) {
+        else if (exportSheetBtnBounds.contains(mousePos)) {
             std::string file = NativeDialogs::saveFileDialog("PNG Files\0*.png\0", "png", "spritesheet.png");
             if (!file.empty()) {
                 ExportManager::exportSpriteSheet(*linkedCanvas, file, 10, transparentBg, autoCrop);
@@ -196,31 +124,32 @@ void ExportModal::draw(sf::RenderWindow& window) {
     if (!isOpen) return;
 
     window.draw(overlay);
-    window.draw(modalBg);
-    window.draw(title);
-    window.draw(closeBtn);
-    window.draw(closeText);
 
-    window.draw(exportPngBtn);
-    window.draw(exportPngText);
-    window.draw(exportSheetBtn);
-    window.draw(exportSheetText);
+    WisdomUI::Theme::DrawSunsetPanel(window, modalBounds, 1.0f);
 
-    window.draw(transCheckbox);
-    window.draw(transText);
-    window.draw(cropCheckbox);
-    window.draw(cropText);
+    WisdomUI::Theme::DrawCrispText(window, font, ":: MASTER EXPORT STUDIO ::", 14, modalBounds.left + 24.f, modalBounds.top + 26.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20));
 
-    window.draw(previewArea);
+    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Cancel", font, 11, false, closeBtnBounds.contains(mPos), false, 1.0f);
+
+    sf::RectangleShape previewFrame(sf::Vector2f(previewAreaBounds.width, previewAreaBounds.height));
+    previewFrame.setPosition(previewAreaBounds.left, previewAreaBounds.top);
+    previewFrame.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    previewFrame.setOutlineThickness(1.5f);
+    previewFrame.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(previewFrame);
 
     if (transparentBg) {
-        sf::RectangleShape check1(sf::Vector2f(20.f, 20.f)); check1.setFillColor(sf::Color(100, 100, 100));
-        sf::RectangleShape check2(sf::Vector2f(20.f, 20.f)); check2.setFillColor(sf::Color(150, 150, 150));
-        for (float y = previewArea.getPosition().y; y < previewArea.getPosition().y + previewArea.getSize().y; y += 20.f) {
-            for (float x = previewArea.getPosition().x; x < previewArea.getPosition().x + previewArea.getSize().x; x += 20.f) {
-                if (x + 20.f > previewArea.getPosition().x + previewArea.getSize().x || y + 20.f > previewArea.getPosition().y + previewArea.getSize().y) continue;
-                bool alt = (static_cast<int>((x - previewArea.getPosition().x) / 20.f) + static_cast<int>((y - previewArea.getPosition().y) / 20.f)) % 2 == 0;
-                sf::RectangleShape& r = alt ? check1 : check2;
+        float step = 16.f;
+        sf::RectangleShape c1(sf::Vector2f(step, step)); c1.setFillColor(sf::Color(32, 16, 44));
+        sf::RectangleShape c2(sf::Vector2f(step, step)); c2.setFillColor(sf::Color(44, 22, 58));
+
+        for (float y = previewAreaBounds.top; y < previewAreaBounds.top + previewAreaBounds.height; y += step) {
+            for (float x = previewAreaBounds.left; x < previewAreaBounds.left + previewAreaBounds.width; x += step) {
+                if (x + step > previewAreaBounds.left + previewAreaBounds.width || y + step > previewAreaBounds.top + previewAreaBounds.height) continue;
+                bool alt = (static_cast<int>((x - previewAreaBounds.left) / step) + static_cast<int>((y - previewAreaBounds.top) / step)) % 2 == 0;
+                sf::RectangleShape& r = alt ? c1 : c2;
                 r.setPosition(x, y);
                 window.draw(r);
             }
@@ -228,5 +157,25 @@ void ExportModal::draw(sf::RenderWindow& window) {
     }
 
     window.draw(previewSprite);
-    window.draw(infoText);
+
+    WisdomUI::Theme::DrawSunsetButton(window, transCheckboxBounds, transparentBg ? "[X] Transparent BG" : "[  ] Transparent BG", font, 12, transparentBg, transCheckboxBounds.contains(mPos), transparentBg, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, cropCheckboxBounds, autoCrop ? "[X] Auto Bounding Crop" : "[  ] Auto Bounding Crop", font, 12, autoCrop, cropCheckboxBounds.contains(mPos), autoCrop, 1.0f);
+
+    sf::FloatRect infoCard(modalBounds.left + 630.f, modalBounds.top + 240.f, 280.f, 200.f);
+    sf::RectangleShape infoBg(sf::Vector2f(infoCard.width, infoCard.height));
+    infoBg.setPosition(infoCard.left, infoCard.top);
+    infoBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    infoBg.setOutlineThickness(1.f);
+    infoBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(infoBg);
+
+    sf::Text iText(infoString, font, 11);
+    iText.setPosition(infoCard.left + 16.f, infoCard.top + 16.f);
+    iText.setFillColor(WisdomUI::Theme::TextSecondary);
+    iText.setLineSpacing(1.4f);
+    window.draw(iText);
+
+    std::string pngLabel = (linkedCanvas && linkedCanvas->getFrameCount() > 1) ? "EXPORT PNG SEQUENCE" : "EXPORT SINGLE PNG";
+    WisdomUI::Theme::DrawSunsetButton(window, exportPngBtnBounds, pngLabel, font, 12, false, exportPngBtnBounds.contains(mPos), true, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, exportSheetBtnBounds, "EXPORT SPRITE SHEET", font, 12, false, exportSheetBtnBounds.contains(mPos), true, 1.0f);
 }

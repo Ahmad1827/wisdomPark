@@ -45,6 +45,40 @@
 #include "../UI/Panels/TimelineHeader.h"
 #include "../UI/Panels/StatusBar.h"
 
+
+enum class ArcadeFruitType { Cherry, Orange, Grape, Star };
+
+struct ArcadeFruit {
+    sf::Vector2f pos;
+    ArcadeFruitType type;
+    int points;
+    bool collected;
+    float respawnTimer;
+    float animPhase;
+};
+
+struct ArcadeGateStation {
+    std::string id;
+    std::string title;
+    std::string sub;
+    std::string shortcut;
+    sf::FloatRect bounds;
+    sf::Color neonColor;
+    float hoverAlpha;
+    float triggerFlash;
+    bool isActivated;
+};
+
+struct ArcadeMazePlayer {
+    sf::Vector2f pos;
+    sf::Vector2f targetPos;
+    sf::Vector2f vel;
+    float speed;
+    float animTimer;
+    int facingDir;
+};
+
+
 enum class MenuState {
     Main,
     Projects,
@@ -81,6 +115,22 @@ struct LightRay {
 
 class UIManager {
 private:
+    ArcadeMazePlayer m_arcadePlayer;
+    std::vector<ArcadeFruit> m_arcadeFruits;
+    std::vector<ArcadeGateStation> m_arcadeGates;
+    std::vector<sf::FloatRect> m_mazeWalls;
+
+    int m_arcadeScore = 0;
+    int m_arcadeHighScore = 12850;
+    float m_arcadeGlobalTime = 0.0f;
+    std::string m_pendingAction = "";
+    float m_actionDelayTimer = 0.0f;
+
+    void initMinigame();
+    void updateMinigame(float dt, sf::Vector2f mousePos);
+    void triggerArcadeStation(const std::string& id);
+    void drawArcadeCrtFrame(sf::RenderWindow& window);
+    void drawPixelFruit(sf::RenderWindow& window, sf::Vector2f pos, ArcadeFruitType type, float anim);
     AssetManager assetManager;
     std::unique_ptr<AssetBrowserPanel> assetBrowser;
     GradientConfig m_gradientConfig;

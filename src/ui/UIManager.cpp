@@ -84,6 +84,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     rightProperties.init();
     bottomTimeline.init();
     audioPanel.init();
+    initMinigame();
 
     AIManager::getInstance().init();
     g_aiPanel.init();
@@ -450,76 +451,107 @@ void UIManager::drawStartMenu(sf::RenderWindow& window) {
 }
 
 void UIManager::drawMainMenu(sf::RenderWindow& window) {
-    sf::CircleShape glow(400.f);
-    glow.setOrigin(400.f, 400.f);
-    glow.setPosition(350.f, 250.f);
-    glow.setFillColor(sf::Color(255, 150, 50, static_cast<sf::Uint8>(15.f + std::sin(startupTime * 2.f) * 5.f)));
-    window.draw(glow, sf::RenderStates(sf::BlendAdd));
+    sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
+    sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
-    drawPremiumText(window, "WISDOM PARK", 350.f, 250.f, 75, sf::Color(255, 220, 100), sf::Color(100, 50, 10), sf::Color(0, 0, 0, 150));
+    for (const auto& wall : m_mazeWalls) {
+        sf::RectangleShape w(sf::Vector2f(wall.width, wall.height));
+        w.setPosition(wall.left, wall.top);
+        w.setFillColor(sf::Color(30, 240, 110));
+        window.draw(w);
 
-    sf::Text subTitle("CREATIVE STUDIO", font, 18);
-    subTitle.setFillColor(sf::Color(200, 200, 200));
-    subTitle.setLetterSpacing(4.0f);
-    subTitle.setPosition(350.f - subTitle.getLocalBounds().width / 2.f, 310.f);
-    window.draw(subTitle);
-
-    std::vector<std::string> buttons = { "Projects", "Settings", "Tutorials", "Keybinds", "Credits", "Exit" };
-    float by = 420.f;
-    for (const auto& btn : buttons) {
-        float hov = getHover("mm_" + btn);
-        sf::FloatRect bounds(150.f - hov * 10.f, by, 400.f + hov * 20.f, 60.f);
-        drawGlassPanel(window, bounds, hov);
-
-        sf::Text t(btn, font, 24);
-        sf::Uint8 cVal = static_cast<sf::Uint8>(230.f + hov * 25.f);
-        t.setFillColor(sf::Color(cVal, cVal, cVal));
-        t.setPosition(bounds.left + 30.f + hov * 15.f, bounds.top + 15.f);
-        window.draw(t);
-
-        by += 80.f;
+        sf::RectangleShape core(sf::Vector2f(std::max(1.f, wall.width - 2.f), std::max(1.f, wall.height - 2.f)));
+        core.setPosition(wall.left + 1.f, wall.top + 1.f);
+        core.setFillColor(sf::Color(220, 255, 230));
+        window.draw(core);
     }
 
-    sf::Text recTitle("Recent Projects", font, 24);
-    recTitle.setFillColor(sf::Color::White);
-    recTitle.setPosition(900.f, 200.f);
-    window.draw(recTitle);
-
-    sf::RectangleShape line(sf::Vector2f(800.f, 2.f));
-    line.setPosition(900.f, 240.f);
-    line.setFillColor(sf::Color(255, 255, 255, 40));
-    window.draw(line);
-
-    std::vector<std::string> recentDummies = { "Character Animation", "Walking Cycle", "Forest Scene", "Pixel RPG" };
-    std::vector<std::string> recentDetails = { "Normal  |  1920x1080  |  24 Frames  |  Modified Today",
-                                              "Pixel Art  |  64x64  |  8 Frames  |  Modified Yesterday",
-                                              "Normal  |  3840x2160  |  1 Frame  |  Modified 3 days ago",
-                                              "Pixel Art  |  128x128  |  12 Frames  |  Modified Last Week" };
-    float ry = 280.f;
-    for (size_t i = 0; i < recentDummies.size(); ++i) {
-        float hov = getHover("rec_" + std::to_string(i));
-        sf::FloatRect bounds(900.f, ry, 800.f, 100.f);
-        drawGlassPanel(window, bounds, hov);
-
-        sf::RectangleShape thumb(sf::Vector2f(140.f, 80.f));
-        thumb.setPosition(bounds.left + 10.f, bounds.top + 10.f);
-        thumb.setFillColor(sf::Color(15, 15, 20));
-        thumb.setOutlineThickness(1.f);
-        thumb.setOutlineColor(sf::Color(255, 255, 255, 50));
-        window.draw(thumb);
-
-        sf::Text pName(recentDummies[i], font, 24);
-        pName.setFillColor(sf::Color(255, 200, 100));
-        pName.setPosition(bounds.left + 170.f, bounds.top + 20.f);
-        window.draw(pName);
-
-        sf::Text pDet(recentDetails[i], font, 14);
-        pDet.setFillColor(sf::Color(180, 180, 180));
-        pDet.setPosition(bounds.left + 170.f, bounds.top + 60.f);
-        window.draw(pDet);
-
-        ry += 125.f;
+    for (const auto& fruit : m_arcadeFruits) {
+        if (!fruit.collected) {
+            drawPixelFruit(window, fruit.pos, fruit.type, fruit.animPhase);
+        }
     }
+
+    for (const auto& g : m_arcadeGates) {
+        sf::FloatRect b = g.bounds;
+        bool isLit = g.triggerFlash > 0.05f;
+        bool isHov = g.hoverAlpha > 0.2f;
+
+        sf::RectangleShape outer(sf::Vector2f(b.width, b.height));
+        outer.setPosition(b.left, b.top);
+
+        if (isLit) {
+            outer.setFillColor(sf::Color(255, 240, 180));
+            outer.setOutlineThickness(3.f);
+            outer.setOutlineColor(sf::Color::White);
+        }
+        else if (isHov) {
+            outer.setFillColor(g.id == "exit" ? sf::Color(140, 24, 44, 240) : sf::Color(44, 18, 58, 245));
+            outer.setOutlineThickness(2.5f);
+            outer.setOutlineColor(g.neonColor);
+        }
+        else {
+            outer.setFillColor(sf::Color(18, 10, 28, 230));
+            outer.setOutlineThickness(1.5f);
+            outer.setOutlineColor(g.neonColor);
+        }
+        window.draw(outer);
+
+        sf::Color tColor = isLit ? sf::Color(14, 4, 20) : (isHov ? WisdomUI::Theme::SunsetGold : g.neonColor);
+        WisdomUI::Theme::DrawCrispText(window, font, g.title, 16, b.left + b.width / 2.f, b.top + 18.f, tColor, sf::Color(12, 4, 16), true, true);
+        WisdomUI::Theme::DrawCrispText(window, font, g.sub, 11, b.left + b.width / 2.f, b.top + 46.f, isLit ? sf::Color(50, 10, 60) : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+
+        sf::FloatRect badge(b.left + b.width / 2.f - 46.f, b.top + b.height - 20.f, 92.f, 16.f);
+        sf::RectangleShape badgeBg(sf::Vector2f(badge.width, badge.height));
+        badgeBg.setPosition(badge.left, badge.top);
+        badgeBg.setFillColor(sf::Color(10, 4, 18));
+        badgeBg.setOutlineThickness(1.f);
+        badgeBg.setOutlineColor(g.neonColor);
+        window.draw(badgeBg);
+
+        WisdomUI::Theme::DrawCrispText(window, font, g.shortcut, 9, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+    }
+
+    float px = std::floor(m_arcadePlayer.pos.x);
+    float py = std::floor(m_arcadePlayer.pos.y);
+
+    float mouthM = std::abs(std::sin(m_arcadePlayer.animTimer)) * 8.f;
+
+    sf::CircleShape playerHead(18.f);
+    playerHead.setOrigin(18.f, 18.f);
+    playerHead.setPosition(px, py);
+    playerHead.setFillColor(WisdomUI::Theme::SunsetGold);
+    playerHead.setOutlineThickness(2.f);
+    playerHead.setOutlineColor(WisdomUI::Theme::SunsetCoralDark);
+    window.draw(playerHead);
+
+    sf::ConvexShape visor(4);
+    visor.setPoint(0, sf::Vector2f(-8.f, -4.f));
+    visor.setPoint(1, sf::Vector2f(8.f, -4.f));
+    visor.setPoint(2, sf::Vector2f(6.f + mouthM * 0.3f, 4.f));
+    visor.setPoint(3, sf::Vector2f(-6.f, 4.f));
+    visor.setPosition(px + (m_arcadePlayer.facingDir == 0 ? 6.f : (m_arcadePlayer.facingDir == 2 ? -6.f : 0.f)), py);
+    visor.setFillColor(sf::Color(20, 10, 30));
+    window.draw(visor);
+
+    sf::CircleShape eye(3.f);
+    eye.setOrigin(1.5f, 1.5f);
+    eye.setPosition(px + (m_arcadePlayer.facingDir == 0 ? 8.f : (m_arcadePlayer.facingDir == 2 ? -8.f : 0.f)), py - 5.f);
+    eye.setFillColor(sf::Color(80, 240, 255));
+    window.draw(eye);
+
+    drawArcadeCrtFrame(window);
+
+    WisdomUI::Theme::DrawCrispText(window, font, "1UP", 16, 260.f, 95.f, WisdomUI::Theme::SunsetCoral);
+    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(m_arcadeScore), 22, 260.f, 120.f, WisdomUI::Theme::SunsetGold);
+
+    WisdomUI::Theme::DrawCrispText(window, font, "HIGH SCORE", 16, 960.f, 95.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 4, 20), true, false);
+    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(m_arcadeHighScore), 22, 960.f, 120.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 4, 20), true, false);
+
+    WisdomUI::Theme::DrawCrispText(window, font, "CREDIT 00", 16, 1600.f, 95.f, WisdomUI::Theme::SunsetAmber);
+    WisdomUI::Theme::DrawCrispText(window, font, "STAGE 01", 16, 1600.f, 120.f, WisdomUI::Theme::SunsetGold);
+
+    WisdomUI::Theme::DrawCrispText(window, font, "NAVIGATE [WASD / ARROWS] TO STATION PORTALS  -  OR CLICK WITH MOUSE", 12, 960.f, 1025.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 4, 20), true, true);
 }
 
 void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hoverKey, float x, float y) {
@@ -921,36 +953,45 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     }
 
     if (currentState == AppState::Welcome) {
-        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            if (currentMenuState == MenuState::Settings && g_typingApiKey) {
-                if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Enter) {
-                    g_typingApiKey = false;
-                    AIManager::getInstance().saveSettingsLocally();
-                    showMessage("Key Applied Successfully!", sf::Color::Green);
+        if (currentMenuState == MenuState::Main) {
+            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                for (const auto& g : m_arcadeGates) {
+                    if (g.bounds.contains(mousePos)) {
+                        triggerArcadeStation(g.id);
+                        if (g.id == "exit") window.close();
+                        return;
+                    }
+                }
+            }
+            else if (event.type == sf::Event::KeyPressed) {
+                if (event.key.code == sf::Keyboard::Space || (event.key.code == sf::Keyboard::N && event.key.control)) {
+                    triggerArcadeStation("new_project");
+                    return;
+                }
+                if (event.key.code == sf::Keyboard::O) {
+                    triggerArcadeStation("projects");
+                    return;
+                }
+                if (event.key.code == sf::Keyboard::Escape) {
+                    triggerArcadeStation("settings");
+                    return;
+                }
+                if (event.key.code == sf::Keyboard::F1) {
+                    triggerArcadeStation("tutorials");
+                    return;
+                }
+                if (event.key.code == sf::Keyboard::K) {
+                    triggerArcadeStation("keybinds");
+                    return;
+                }
+                if (event.key.code == sf::Keyboard::C) {
+                    triggerArcadeStation("credits");
                     return;
                 }
             }
-            if (currentMenuState == MenuState::Main) {
-                std::vector<std::string> buttons = { "Projects", "Settings", "Tutorials", "Keybinds", "Credits", "Exit" };
-                float by = 420.f;
-                for (const auto& btn : buttons) {
-                    sf::FloatRect bBounds(150.f, by, 400.f, 60.f);
-                    if (bBounds.contains(mousePos)) {
-                        if (btn == "Projects") currentMenuState = MenuState::Projects;
-                        else if (btn == "Settings") currentMenuState = MenuState::Settings;
-                        else if (btn == "Tutorials") { currentMenuState = MenuState::Tutorials; activeTutorialIndex = -1; }
-                        else if (btn == "Credits") { currentMenuState = MenuState::Credits; easterEggClicks = 0; }
-                        else if (btn == "Keybinds") {
-                            keybindPanel.toggle();
-                            return;
-                        }
-                        else if (btn == "Exit") window.close();
-                        return;
-                    }
-                    by += 80.f;
-                }
-            }
-            else if (currentMenuState == MenuState::Projects) {
+        }
+        else if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            if (currentMenuState == MenuState::Projects) {
                 sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
                 if (backBounds.contains(mousePos)) {
                     currentMenuState = MenuState::Main;
@@ -959,7 +1000,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
                 ProjectMetadata meta;
                 std::string action = projectBrowser.handleClick(mousePos, meta);
-                if (action == "new_project") newProjectModal.open();
+                if (action == "new_project") {
+                    newProjectModal.open();
+                }
                 else if (action == "load_project") {
                     activeProjectName = meta.name;
                     activeProjectPath = meta.path;
@@ -971,7 +1014,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         currentState = AppState::Painting;
                         showMessage("Loaded Project: " + meta.name, sf::Color::Green);
                     }
-                    else showMessage("Failed to load project files.", sf::Color::Red);
+                    else {
+                        showMessage("Failed to load project files.", sf::Color::Red);
+                    }
                 }
                 else if (action == "open_native") {
                     std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
@@ -986,7 +1031,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             currentState = AppState::Painting;
                             showMessage("Loaded Native Project", sf::Color::Green);
                         }
-                        else showMessage("Failed to load native project.", sf::Color::Red);
+                        else {
+                            showMessage("Failed to load native project.", sf::Color::Red);
+                        }
                     }
                 }
             }
@@ -994,13 +1041,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (sf::FloatRect(1050.f + 200.f, 760.f - 10.f, 150.f, 40.f).contains(mousePos)) {
                     g_typingApiKey = true;
                 }
-                else {
-                    if (g_typingApiKey) {
-                        g_typingApiKey = false;
-                        AIManager::getInstance().saveSettingsLocally();
-                        showMessage("AI Configurations Applied and Saved", sf::Color::Green);
-                    }
+                else if (g_typingApiKey) {
+                    g_typingApiKey = false;
+                    AIManager::getInstance().saveSettingsLocally();
+                    showMessage("AI Configurations Applied and Saved", sf::Color::Green);
                 }
+
                 sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
                 if (backBounds.contains(mousePos)) {
                     currentMenuState = MenuState::Main;
@@ -1150,20 +1196,27 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (currentMenuState == MenuState::Settings && g_typingApiKey) {
-            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::V && event.key.control) {
-                std::string clipboardData = sf::Clipboard::getString().toAnsiString();
-
-                clipboardData.erase(std::remove(clipboardData.begin(), clipboardData.end(), '\n'), clipboardData.end());
-                clipboardData.erase(std::remove(clipboardData.begin(), clipboardData.end(), '\r'), clipboardData.end());
-                clipboardData.erase(std::remove(clipboardData.begin(), clipboardData.end(), ' '), clipboardData.end());
-
-                if (!clipboardData.empty()) {
-                    std::string prov = AIManager::getInstance().getActiveProvider();
-                    std::string existingKey = AIManager::getInstance().getApiKey(prov);
-                    AIManager::getInstance().setApiKey(prov, existingKey + clipboardData);
-                    showMessage("API Key Pasted From Clipboard", sf::Color::Green);
+            if (event.type == sf::Event::KeyPressed) {
+                if (event.key.code == sf::Keyboard::Enter) {
+                    g_typingApiKey = false;
+                    AIManager::getInstance().saveSettingsLocally();
+                    showMessage("Key Applied Successfully!", sf::Color::Green);
+                    return;
                 }
-                return;
+                if (event.key.code == sf::Keyboard::V && event.key.control) {
+                    std::string clipboardData = sf::Clipboard::getString().toAnsiString();
+                    clipboardData.erase(std::remove(clipboardData.begin(), clipboardData.end(), '\n'), clipboardData.end());
+                    clipboardData.erase(std::remove(clipboardData.begin(), clipboardData.end(), '\r'), clipboardData.end());
+                    clipboardData.erase(std::remove(clipboardData.begin(), clipboardData.end(), ' '), clipboardData.end());
+
+                    if (!clipboardData.empty()) {
+                        std::string prov = AIManager::getInstance().getActiveProvider();
+                        std::string existingKey = AIManager::getInstance().getApiKey(prov);
+                        AIManager::getInstance().setApiKey(prov, existingKey + clipboardData);
+                        showMessage("API Key Pasted From Clipboard", sf::Color::Green);
+                    }
+                    return;
+                }
             }
 
             if (event.type == sf::Event::TextEntered) {
@@ -1814,6 +1867,7 @@ void UIManager::update(sf::RenderWindow & window, AppState currentState, AppSett
         if (!keybindPanel.isVisible()) {
             projectBrowser.updateHover(mousePos);
             updateStartMenu(dt, mousePos);
+            updateMinigame(dt, mousePos);
 
             if (currentMenuState == MenuState::Main) {
                 std::vector<std::string> buttons = { "Projects", "Settings", "Tutorials", "Keybinds", "Credits", "Exit" };
@@ -2293,4 +2347,253 @@ bool loadStudioFont(sf::Font& font) {
     if (font.loadFromFile("../../Resources/font.ttf")) return true;
     if (font.loadFromFile("C:/Windows/Fonts/arial.ttf")) return true;
     return false;
+}
+
+void UIManager::initMinigame() {
+    m_arcadePlayer.pos = sf::Vector2f(960.f, 620.f);
+    m_arcadePlayer.targetPos = m_arcadePlayer.pos;
+    m_arcadePlayer.vel = sf::Vector2f(0.f, 0.f);
+    m_arcadePlayer.speed = 360.f;
+    m_arcadePlayer.animTimer = 0.f;
+    m_arcadePlayer.facingDir = 0;
+
+    m_arcadeScore = 0;
+    m_arcadeGlobalTime = 0.0f;
+    m_pendingAction = "";
+    m_actionDelayTimer = 0.0f;
+
+    m_arcadeGates.clear();
+    m_arcadeGates.push_back({ "new_project", "1P START", "Create Canvas", "SPACE / CLICK", sf::FloatRect(280.f, 300.f, 260.f, 85.f), WisdomUI::Theme::SunsetGold, 0.f, 0.f, false });
+    m_arcadeGates.push_back({ "projects", "CONTINUE", "Load Vault", "O", sf::FloatRect(1380.f, 300.f, 260.f, 85.f), WisdomUI::Theme::SunsetAmber, 0.f, 0.f, false });
+    m_arcadeGates.push_back({ "settings", "CONFIG", "Audio & GPU", "ESC", sf::FloatRect(280.f, 700.f, 260.f, 85.f), WisdomUI::Theme::SunsetCoral, 0.f, 0.f, false });
+    m_arcadeGates.push_back({ "tutorials", "HOW TO PLAY", "Guides & Codex", "F1", sf::FloatRect(1380.f, 700.f, 260.f, 85.f), WisdomUI::Theme::SunsetPeach, 0.f, 0.f, false });
+    m_arcadeGates.push_back({ "keybinds", "CONTROLS", "Key Matrix", "K", sf::FloatRect(730.f, 250.f, 220.f, 75.f), WisdomUI::Theme::SunsetGold, 0.f, 0.f, false });
+    m_arcadeGates.push_back({ "credits", "CREDITS", "Hall of Fame", "C", sf::FloatRect(970.f, 250.f, 220.f, 75.f), WisdomUI::Theme::SunsetAmber, 0.f, 0.f, false });
+    m_arcadeGates.push_back({ "exit", "POWER OFF", "Exit Suite", "ALT+F4", sf::FloatRect(830.f, 820.f, 260.f, 75.f), sf::Color(255, 70, 90), 0.f, 0.f, false });
+
+    m_mazeWalls.clear();
+    m_mazeWalls.push_back(sf::FloatRect(200.f, 180.f, 1520.f, 8.f));
+    m_mazeWalls.push_back(sf::FloatRect(200.f, 900.f, 1520.f, 8.f));
+    m_mazeWalls.push_back(sf::FloatRect(200.f, 180.f, 8.f, 728.f));
+    m_mazeWalls.push_back(sf::FloatRect(1712.f, 180.f, 8.f, 728.f));
+
+    m_mazeWalls.push_back(sf::FloatRect(580.f, 180.f, 8.f, 260.f));
+    m_mazeWalls.push_back(sf::FloatRect(1332.f, 180.f, 8.f, 260.f));
+    m_mazeWalls.push_back(sf::FloatRect(580.f, 640.f, 8.f, 268.f));
+    m_mazeWalls.push_back(sf::FloatRect(1332.f, 640.f, 8.f, 268.f));
+
+    m_mazeWalls.push_back(sf::FloatRect(580.f, 520.f, 240.f, 8.f));
+    m_mazeWalls.push_back(sf::FloatRect(1100.f, 520.f, 240.f, 8.f));
+
+    m_mazeWalls.push_back(sf::FloatRect(780.f, 400.f, 360.f, 8.f));
+    m_mazeWalls.push_back(sf::FloatRect(780.f, 720.f, 360.f, 8.f));
+
+    m_arcadeFruits.clear();
+    auto spawnFruitRow = [this](float startX, float endX, float y, ArcadeFruitType type, int pts, float step) {
+        for (float x = startX; x <= endX; x += step) {
+            m_arcadeFruits.push_back({ sf::Vector2f(x, y), type, pts, false, 0.f, static_cast<float>(rand() % 100) * 0.1f });
+        }
+        };
+
+    spawnFruitRow(250.f, 540.f, 240.f, ArcadeFruitType::Cherry, 100, 48.f);
+    spawnFruitRow(1380.f, 1660.f, 240.f, ArcadeFruitType::Cherry, 100, 48.f);
+    spawnFruitRow(250.f, 540.f, 640.f, ArcadeFruitType::Orange, 200, 48.f);
+    spawnFruitRow(1380.f, 1660.f, 640.f, ArcadeFruitType::Orange, 200, 48.f);
+    spawnFruitRow(630.f, 1280.f, 460.f, ArcadeFruitType::Grape, 300, 52.f);
+    spawnFruitRow(630.f, 1280.f, 660.f, ArcadeFruitType::Star, 500, 64.f);
+}
+
+void UIManager::triggerArcadeStation(const std::string& id) {
+    if (!m_pendingAction.empty()) return;
+    m_pendingAction = id;
+    m_actionDelayTimer = 0.25f;
+
+    for (auto& g : m_arcadeGates) {
+        if (g.id == id) {
+            g.triggerFlash = 1.0f;
+            g.isActivated = true;
+        }
+    }
+}
+
+void UIManager::updateMinigame(float dt, sf::Vector2f mousePos) {
+    m_arcadeGlobalTime += dt;
+
+    if (!m_pendingAction.empty()) {
+        m_actionDelayTimer -= dt;
+        if (m_actionDelayTimer <= 0.0f) {
+            std::string act = m_pendingAction;
+            m_pendingAction = "";
+
+            if (act == "new_project") newProjectModal.open();
+            else if (act == "projects") currentMenuState = MenuState::Projects;
+            else if (act == "settings") currentMenuState = MenuState::Settings;
+            else if (act == "tutorials") { currentMenuState = MenuState::Tutorials; activeTutorialIndex = -1; }
+            else if (act == "keybinds") keybindPanel.toggle();
+            else if (act == "credits") { currentMenuState = MenuState::Credits; easterEggClicks = 0; }
+            return;
+        }
+    }
+
+    sf::Vector2f moveInput(0.f, 0.f);
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) { moveInput.y -= 1.f; m_arcadePlayer.facingDir = 1; }
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::S) || sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) { moveInput.y += 1.f; m_arcadePlayer.facingDir = 3; }
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) { moveInput.x -= 1.f; m_arcadePlayer.facingDir = 2; }
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) { moveInput.x += 1.f; m_arcadePlayer.facingDir = 0; }
+
+    float inputLen = std::hypot(moveInput.x, moveInput.y);
+    if (inputLen > 0.001f) {
+        moveInput /= inputLen;
+        m_arcadePlayer.vel = moveInput * m_arcadePlayer.speed;
+        m_arcadePlayer.animTimer += dt * 10.f;
+    }
+    else {
+        m_arcadePlayer.vel = sf::Vector2f(0.f, 0.f);
+    }
+
+    sf::Vector2f nextPos = m_arcadePlayer.pos + m_arcadePlayer.vel * dt;
+    sf::FloatRect playerBox(nextPos.x - 18.f, nextPos.y - 18.f, 36.f, 36.f);
+
+    bool collided = false;
+    for (const auto& wall : m_mazeWalls) {
+        if (wall.intersects(playerBox)) {
+            collided = true;
+            break;
+        }
+    }
+
+    if (!collided) {
+        m_arcadePlayer.pos = nextPos;
+    }
+    else {
+        sf::FloatRect boxX(nextPos.x - 18.f, m_arcadePlayer.pos.y - 18.f, 36.f, 36.f);
+        bool colX = false;
+        for (const auto& wall : m_mazeWalls) { if (wall.intersects(boxX)) { colX = true; break; } }
+        if (!colX) m_arcadePlayer.pos.x = nextPos.x;
+
+        sf::FloatRect boxY(m_arcadePlayer.pos.x - 18.f, nextPos.y - 18.f, 36.f, 36.f);
+        bool colY = false;
+        for (const auto& wall : m_mazeWalls) { if (wall.intersects(boxY)) { colY = true; break; } }
+        if (!colY) m_arcadePlayer.pos.y = nextPos.y;
+    }
+
+    m_arcadePlayer.pos.x = std::clamp(m_arcadePlayer.pos.x, 220.f, 1700.f);
+    m_arcadePlayer.pos.y = std::clamp(m_arcadePlayer.pos.y, 200.f, 880.f);
+
+    sf::FloatRect pBounds(m_arcadePlayer.pos.x - 18.f, m_arcadePlayer.pos.y - 18.f, 36.f, 36.f);
+
+    for (auto& fruit : m_arcadeFruits) {
+        if (fruit.collected) {
+            fruit.respawnTimer -= dt;
+            if (fruit.respawnTimer <= 0.f) fruit.collected = false;
+        }
+        else {
+            fruit.animPhase += dt * 3.f;
+            sf::FloatRect fBounds(fruit.pos.x - 12.f, fruit.pos.y - 12.f, 24.f, 24.f);
+            if (pBounds.intersects(fBounds)) {
+                fruit.collected = true;
+                fruit.respawnTimer = 10.f;
+                m_arcadeScore += fruit.points;
+                if (m_arcadeScore > m_arcadeHighScore) m_arcadeHighScore = m_arcadeScore;
+            }
+        }
+    }
+
+    for (auto& g : m_arcadeGates) {
+        bool isHov = g.bounds.contains(mousePos);
+        bool playerInside = g.bounds.intersects(pBounds);
+        g.hoverAlpha += (((isHov || playerInside) ? 1.0f : 0.0f) - g.hoverAlpha) * 14.0f * dt;
+        g.triggerFlash = std::max(0.0f, g.triggerFlash - 3.5f * dt);
+
+        if (playerInside && m_pendingAction.empty() && !g.isActivated) {
+            triggerArcadeStation(g.id);
+            if (g.id == "exit") return;
+        }
+        else if (!playerInside && !isHov) {
+            g.isActivated = false;
+        }
+    }
+}
+
+void UIManager::drawArcadeCrtFrame(sf::RenderWindow& window) {
+    sf::RectangleShape topBezel(sf::Vector2f(1920.f, 70.f));
+    topBezel.setPosition(0.f, 0.f);
+    topBezel.setFillColor(sf::Color(18, 12, 10));
+    window.draw(topBezel);
+
+    sf::RectangleShape botBezel(sf::Vector2f(1920.f, 90.f));
+    botBezel.setPosition(0.f, 990.f);
+    botBezel.setFillColor(sf::Color(18, 12, 10));
+    window.draw(botBezel);
+
+    sf::RectangleShape leftBezel(sf::Vector2f(90.f, 1080.f));
+    leftBezel.setPosition(0.f, 0.f);
+    leftBezel.setFillColor(sf::Color(18, 12, 10));
+    window.draw(leftBezel);
+
+    sf::RectangleShape rightBezel(sf::Vector2f(90.f, 1080.f));
+    rightBezel.setPosition(1830.f, 0.f);
+    rightBezel.setFillColor(sf::Color(18, 12, 10));
+    window.draw(rightBezel);
+
+    sf::RectangleShape goldBorder(sf::Vector2f(1760.f, 940.f));
+    goldBorder.setPosition(80.f, 60.f);
+    goldBorder.setFillColor(sf::Color::Transparent);
+    goldBorder.setOutlineThickness(12.f);
+    goldBorder.setOutlineColor(sf::Color(190, 135, 45));
+    window.draw(goldBorder);
+
+    sf::RectangleShape innerGold(sf::Vector2f(1744.f, 924.f));
+    innerGold.setPosition(88.f, 68.f);
+    innerGold.setFillColor(sf::Color::Transparent);
+    innerGold.setOutlineThickness(3.f);
+    innerGold.setOutlineColor(sf::Color(255, 215, 110));
+    window.draw(innerGold);
+
+    sf::ConvexShape cornerGlass(4);
+    cornerGlass.setPoint(0, sf::Vector2f(1500.f, 68.f));
+    cornerGlass.setPoint(1, sf::Vector2f(1820.f, 68.f));
+    cornerGlass.setPoint(2, sf::Vector2f(1820.f, 320.f));
+    cornerGlass.setPoint(3, sf::Vector2f(1650.f, 68.f));
+    cornerGlass.setFillColor(sf::Color(255, 255, 255, 22));
+    window.draw(cornerGlass);
+
+    sf::RectangleShape scanline(sf::Vector2f(1730.f, 1.5f));
+    scanline.setFillColor(sf::Color(0, 0, 0, 50));
+    for (float y = 72.f; y < 990.f; y += 4.f) {
+        scanline.setPosition(95.f, y);
+        window.draw(scanline);
+    }
+}
+
+void UIManager::drawPixelFruit(sf::RenderWindow& window, sf::Vector2f pos, ArcadeFruitType type, float anim) {
+    float bob = std::sin(anim) * 3.f;
+    sf::Vector2f drawPos(std::floor(pos.x), std::floor(pos.y + bob));
+
+    if (type == ArcadeFruitType::Cherry) {
+        sf::CircleShape c1(6.f); c1.setPosition(drawPos.x - 8.f, drawPos.y - 2.f); c1.setFillColor(sf::Color(255, 30, 80)); window.draw(c1);
+        sf::CircleShape c2(6.f); c2.setPosition(drawPos.x + 1.f, drawPos.y); c2.setFillColor(sf::Color(255, 30, 80)); window.draw(c2);
+        sf::RectangleShape stem(sf::Vector2f(2.f, 8.f)); stem.setPosition(drawPos.x - 2.f, drawPos.y - 9.f); stem.setFillColor(sf::Color(80, 220, 90)); stem.setRotation(15.f); window.draw(stem);
+    }
+    else if (type == ArcadeFruitType::Orange) {
+        sf::CircleShape o(8.f); o.setPosition(drawPos.x - 8.f, drawPos.y - 6.f); o.setFillColor(sf::Color(255, 140, 30)); window.draw(o);
+        sf::RectangleShape leaf(sf::Vector2f(4.f, 3.f)); leaf.setPosition(drawPos.x - 2.f, drawPos.y - 9.f); leaf.setFillColor(sf::Color(90, 230, 90)); window.draw(leaf);
+    }
+    else if (type == ArcadeFruitType::Grape) {
+        sf::CircleShape g1(5.f); g1.setPosition(drawPos.x - 6.f, drawPos.y - 7.f); g1.setFillColor(sf::Color(180, 60, 255)); window.draw(g1);
+        sf::CircleShape g2(5.f); g2.setPosition(drawPos.x + 1.f, drawPos.y - 7.f); g2.setFillColor(sf::Color(180, 60, 255)); window.draw(g2);
+        sf::CircleShape g3(5.f); g3.setPosition(drawPos.x - 2.f, drawPos.y - 1.f); g3.setFillColor(sf::Color(160, 40, 235)); window.draw(g3);
+    }
+    else {
+        sf::ConvexShape star(4);
+        star.setPoint(0, sf::Vector2f(0.f, -9.f));
+        star.setPoint(1, sf::Vector2f(9.f, 0.f));
+        star.setPoint(2, sf::Vector2f(0.f, 9.f));
+        star.setPoint(3, sf::Vector2f(-9.f, 0.f));
+        star.setPosition(drawPos);
+        star.setFillColor(WisdomUI::Theme::SunsetGold);
+        star.setOutlineThickness(1.5f);
+        star.setOutlineColor(WisdomUI::Theme::SunsetCoral);
+        window.draw(star);
+    }
 }
