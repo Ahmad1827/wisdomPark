@@ -4,13 +4,13 @@
 #include <cmath>
 #include <filesystem>
 
-AudioPanel::AudioPanel() : position(64.f, 78.f), size(540.f, 320.f), isVisible(false) {}
+AudioPanel::AudioPanel() : position(1280.f, 78.f), size(580.f, 320.f), isVisible(false) {}
 
 AudioPanel::~AudioPanel() {}
 
 void AudioPanel::init() {
     font.loadFromFile("assets/font.otf");
-    position = sf::Vector2f(64.f, 78.f);
+    position = sf::Vector2f(1280.f, 78.f);
 
     tracks.clear();
     AudioTrack defaultTrack;

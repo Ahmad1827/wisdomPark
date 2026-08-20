@@ -6,7 +6,7 @@
 
 AssetBrowserPanel::AssetBrowserPanel(AssetManager& am, const sf::Font& f)
     : assetManager(am), font(f), currentCategory(AssetType::Image), viewMode(BrowserView::Grid),
-    selectedAssetId(""), position(64.f, 78.f), size(320.f, 540.f), isVisible(false), isDraggingAsset(false) {}
+    selectedAssetId(""), position(1460.f, 78.f), size(390.f, 540.f), isVisible(false), isDraggingAsset(false) {}
 
 void AssetBrowserPanel::toggle() {
     isVisible = !isVisible;
@@ -54,7 +54,7 @@ void AssetBrowserPanel::draw(sf::RenderWindow& window) {
 
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
-    importBtnBounds = sf::FloatRect(position.x + size.x - 84.f, position.y + 36.f, 72.f, 24.f);
+    importBtnBounds = sf::FloatRect(position.x + size.x - 88.f, position.y + 36.f, 76.f, 24.f);
     WisdomUI::Theme::DrawSunsetButton(window, importBtnBounds, "Import", font, 11, false, importBtnBounds.contains(mPos), true, 1.0f);
 
     categoryBounds.clear();
@@ -70,24 +70,24 @@ void AssetBrowserPanel::draw(sf::RenderWindow& window) {
     float catY = position.y + 66.f;
     for (const auto& cat : cats) {
         bool isSelected = (currentCategory == cat.second);
-        sf::FloatRect cBounds(position.x + 10.f, catY, 78.f, 24.f);
+        sf::FloatRect cBounds(position.x + 10.f, catY, 82.f, 24.f);
         categoryBounds.push_back({ cBounds, cat.second });
         WisdomUI::Theme::DrawSunsetButton(window, cBounds, cat.first, font, 10, isSelected, cBounds.contains(mPos), isSelected, 1.0f);
         catY += 28.f;
     }
 
     auto assets = assetManager.getAssetsByCategory(currentCategory);
-    float startX = position.x + 96.f;
+    float startX = position.x + 100.f;
     float startY = position.y + 66.f;
 
     for (size_t i = 0; i < assets.size(); ++i) {
-        float ax = startX + (i % 2) * 105.f;
+        float ax = startX + (i % 2) * 138.f;
         float ay = startY + (i / 2) * 115.f;
         if (ay + 100.f > position.y + size.y - 80.f) break;
 
         bool isSelected = (assets[i]->id == selectedAssetId);
 
-        sf::FloatRect cardRect(ax, ay, 95.f, 95.f);
+        sf::FloatRect cardRect(ax, ay, 130.f, 95.f);
         sf::RectangleShape frame(sf::Vector2f(cardRect.width, cardRect.height));
         frame.setPosition(cardRect.left, cardRect.top);
         frame.setFillColor(isSelected ? WisdomUI::Theme::SunsetSkyMid : WisdomUI::Theme::SunsetDeepDark);
@@ -95,7 +95,7 @@ void AssetBrowserPanel::draw(sf::RenderWindow& window) {
         frame.setOutlineColor(isSelected ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum);
         window.draw(frame);
 
-        sf::RectangleShape thumb(sf::Vector2f(85.f, 65.f));
+        sf::RectangleShape thumb(sf::Vector2f(120.f, 65.f));
         thumb.setPosition(ax + 5.f, ay + 5.f);
         if (assets[i]->thumbnailLoaded) {
             thumb.setTexture(&assets[i]->thumbnail);
@@ -106,8 +106,8 @@ void AssetBrowserPanel::draw(sf::RenderWindow& window) {
         window.draw(thumb);
 
         std::string nameStr = assets[i]->filename;
-        if (nameStr.length() > 11) nameStr = nameStr.substr(0, 9) + "..";
-        WisdomUI::Theme::DrawCrispText(window, font, nameStr, 10, ax + 47.f, ay + 82.f, isSelected ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+        if (nameStr.length() > 16) nameStr = nameStr.substr(0, 14) + "..";
+        WisdomUI::Theme::DrawCrispText(window, font, nameStr, 10, ax + 65.f, ay + 82.f, isSelected ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
     }
 
     sf::FloatRect propArea(position.x + 10.f, position.y + size.y - 75.f, size.x - 20.f, 65.f);
@@ -156,12 +156,12 @@ void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWind
         }
 
         auto assets = assetManager.getAssetsByCategory(currentCategory);
-        float startX = position.x + 96.f;
+        float startX = position.x + 100.f;
         float startY = position.y + 66.f;
         for (size_t i = 0; i < assets.size(); ++i) {
-            float ax = startX + (i % 2) * 105.f;
+            float ax = startX + (i % 2) * 138.f;
             float ay = startY + (i / 2) * 115.f;
-            if (sf::FloatRect(ax, ay, 95.f, 95.f).contains(mousePos)) {
+            if (sf::FloatRect(ax, ay, 130.f, 95.f).contains(mousePos)) {
                 selectedAssetId = assets[i]->id;
                 isDraggingAsset = true;
                 dragStart = mousePos;

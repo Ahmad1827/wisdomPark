@@ -145,7 +145,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     assetBrowser = std::make_unique<AssetBrowserPanel>(assetManager, font);
     assetBrowser->setProject("CurrentProject");
-    assetBrowser->setBounds(sf::FloatRect(1920.f - 44.f - 300.f, 68.f, 300.f, 1080.f - 68.f - 24.f));
+    assetBrowser->setBounds(sf::FloatRect(1440.f, 78.f, 390.f, 540.f));
 
     loadingOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
     loadingOverlay.setFillColor(sf::Color(10, 10, 15, 200));
@@ -253,24 +253,10 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
             m_activeRightTab = (m_activeRightTab == RightTabMode::Properties) ? RightTabMode::None : RightTabMode::Properties;
         },
         [this]() {
-            if (m_activeRightTab == RightTabMode::Assets) {
-                m_activeRightTab = RightTabMode::None;
-                if (assetBrowser && assetBrowser->getIsVisible()) assetBrowser->toggle();
-            }
-            else {
-                m_activeRightTab = RightTabMode::Assets;
-                if (assetBrowser && !assetBrowser->getIsVisible()) assetBrowser->toggle();
-            }
+            if (assetBrowser) assetBrowser->toggle();
         },
         [this]() {
-            if (m_activeRightTab == RightTabMode::Audio) {
-                m_activeRightTab = RightTabMode::None;
-                if (audioPanel.getIsVisible()) audioPanel.toggle();
-            }
-            else {
-                m_activeRightTab = RightTabMode::Audio;
-                if (!audioPanel.getIsVisible()) audioPanel.toggle();
-            }
+            audioPanel.toggle();
         }
     );
 
@@ -1271,29 +1257,20 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
             if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
         }
-        else if (m_activeRightTab == RightTabMode::Assets) {
-            if (assetBrowser) {
-                assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame());
-                if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
-            }
+        if (assetBrowser && assetBrowser->getIsVisible()) {
+            assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame());
         }
-        else if (m_activeRightTab == RightTabMode::Audio) {
-            if (audioPanel.getIsVisible()) {
+
+        if (audioPanel.getIsVisible()) {
+            if (audioPanel.handleEvent(event, mousePos)) {
                 if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
                     std::string action = audioPanel.handleClick(mousePos, timeline.getCurrentFrame());
                     if (action == "imported") {
                         showMessage("Audio Directory Scanned Successfully", sf::Color::Green);
-                        return;
                     }
-                    if (action == "closed") {
-                        m_activeRightTab = RightTabMode::None;
-                        if (audioPanel.getIsVisible()) audioPanel.toggle();
-                        return;
-                    }
-                    if (audioPanel.handleEvent(event, mousePos)) return;
                 }
+                return;
             }
-            if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
         }
 
         if (m_showTimeline) {
@@ -1619,14 +1596,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     showMessage("Merged Object Down", sf::Color::Green);
                 }
                 if (event.key.code == sf::Keyboard::B && event.key.control) {
-                    if (m_activeRightTab == RightTabMode::Assets) {
-                        m_activeRightTab = RightTabMode::None;
-                        if (assetBrowser && assetBrowser->getIsVisible()) assetBrowser->toggle();
-                    }
-                    else {
-                        m_activeRightTab = RightTabMode::Assets;
-                        if (assetBrowser && !assetBrowser->getIsVisible()) assetBrowser->toggle();
-                    }
+                    if (assetBrowser) assetBrowser->toggle();
                 }
                 if (keybindManager.isActionTriggered("edit_del_sel", event)) {
                     if (canvas.getActiveTool() == ToolType::Select) canvas.deleteSelection(timeline.getCurrentFrame());
@@ -1953,8 +1923,8 @@ void UIManager::update(sf::RenderWindow & window, AppState currentState, AppSett
         m_rightDockTabs.SetTabState("layers", m_activeRightTab == RightTabMode::Layers);
         m_rightDockTabs.SetTabState("palette", m_activeRightTab == RightTabMode::Palette);
         m_rightDockTabs.SetTabState("properties", m_activeRightTab == RightTabMode::Properties);
-        m_rightDockTabs.SetTabState("assets", m_activeRightTab == RightTabMode::Assets);
-        m_rightDockTabs.SetTabState("audio", m_activeRightTab == RightTabMode::Audio);
+        m_rightDockTabs.SetTabState("assets", assetBrowser&& assetBrowser->getIsVisible());
+        m_rightDockTabs.SetTabState("audio", audioPanel.getIsVisible());
         m_rightDockTabs.Update(dt, mousePos);
 
         if (m_activeRightTab == RightTabMode::Layers) {
@@ -1978,21 +1948,12 @@ void UIManager::update(sf::RenderWindow & window, AppState currentState, AppSett
             rightProperties.update(dt, focusMode, false);
         }
 
-        if (m_activeRightTab == RightTabMode::Assets && assetBrowser) {
-            if (!assetBrowser->getIsVisible()) assetBrowser->toggle();
-            assetBrowser->setBounds(sf::FloatRect(1920.f - 44.f - 280.f, 68.0f, 280.f, 1080.0f - 68.0f - 24.0f));
+        if (assetBrowser && assetBrowser->getIsVisible()) {
             assetBrowser->update(dt);
         }
-        else if (assetBrowser && assetBrowser->getIsVisible()) {
-            assetBrowser->toggle();
-        }
 
-        if (m_activeRightTab == RightTabMode::Audio) {
-            if (!audioPanel.getIsVisible()) audioPanel.toggle();
+        if (audioPanel.getIsVisible()) {
             audioPanel.update(dt);
-        }
-        else if (audioPanel.getIsVisible()) {
-            audioPanel.toggle();
         }
 
         if (m_showTimeline) {
@@ -2146,14 +2107,12 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         else if (m_activeRightTab == RightTabMode::Properties) {
             rightProperties.draw(window);
         }
-        else if (m_activeRightTab == RightTabMode::Assets && assetBrowser) {
-            sf::FloatRect abBounds(1920.f - 44.f - 300.f, 68.0f, 300.f, 1080.0f - 68.0f - 24.0f);
-            WisdomUI::Theme::DrawSunsetPanel(window, abBounds, 1.0f);
+
+        if (assetBrowser && assetBrowser->getIsVisible()) {
             assetBrowser->draw(window);
         }
-        else if (m_activeRightTab == RightTabMode::Audio) {
-            sf::FloatRect audBounds(1920.f - 44.f - 300.f, 68.0f, 300.f, 1080.0f - 68.0f - 24.0f);
-            WisdomUI::Theme::DrawSunsetPanel(window, audBounds, 1.0f);
+
+        if (audioPanel.getIsVisible()) {
             audioPanel.draw(window);
         }
 
