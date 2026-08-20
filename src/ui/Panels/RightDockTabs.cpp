@@ -1,6 +1,7 @@
 #include "RightDockTabs.h"
 #include "../UITheme.h"
 #include "../UIIcons.h"
+#include <cmath>
 
 namespace WisdomUI {
 
@@ -29,7 +30,7 @@ namespace WisdomUI {
         float startX = bounds.left + (bounds.width - btnSize) / 2.0f;
 
         for (auto& tab : m_tabs) {
-            tab.bounds = sf::FloatRect(startX, startY, btnSize, btnSize);
+            tab.bounds = sf::FloatRect(std::floor(startX), std::floor(startY), btnSize, btnSize);
             startY += btnSize + 8.0f;
         }
     }
@@ -47,14 +48,14 @@ namespace WisdomUI {
         for (auto& tab : m_tabs) {
             bool isHov = tab.bounds.contains(mousePos);
             tab.hoverAlpha += ((isHov ? 1.0f : 0.0f) - tab.hoverAlpha) * 14.0f * deltaTime;
-            tab.scale += ((isHov ? 1.10f : 1.0f) - tab.scale) * 16.0f * deltaTime;
+            tab.scale += ((isHov ? 1.08f : 1.0f) - tab.scale) * 16.0f * deltaTime;
 
             if (isHov) {
                 hasHover = true;
                 m_hoveredTooltip = tab.tooltip;
-                sf::Text t(tab.tooltip, m_font, 11);
-                float w = t.getLocalBounds().width + 16.0f;
-                m_tooltipPos = sf::Vector2f(tab.bounds.left - w - 6.0f, tab.bounds.top + 6.0f);
+                sf::Text t(tab.tooltip, m_font, 12);
+                float w = t.getLocalBounds().width + 24.0f;
+                m_tooltipPos = sf::Vector2f(std::floor(tab.bounds.left - w - 10.0f), std::floor(tab.bounds.top + 4.0f));
             }
         }
         m_tooltipAlpha += ((hasHover ? 1.0f : 0.0f) - m_tooltipAlpha) * 16.0f * deltaTime;
@@ -76,25 +77,28 @@ namespace WisdomUI {
     }
 
     void RightDockTabs::Render(sf::RenderWindow& window) {
-        Theme::DrawCarvedWoodPlank(window, m_bounds, true, 1.0f);
+        Theme::DrawSunsetPanel(window, m_bounds, 1.0f);
 
         for (const auto& tab : m_tabs) {
-            Theme::DrawThemedButton(window, tab.bounds, "", m_font, 11, tab.isToggled, tab.hoverAlpha > 0.5f, tab.isToggled, tab.scale);
+            Theme::DrawSunsetButton(window, tab.bounds, "", m_font, 11, tab.isToggled, tab.hoverAlpha > 0.5f, tab.isToggled, tab.scale);
 
-            sf::Color iconCol = tab.isToggled ? sf::Color::White : (tab.hoverAlpha > 0.5f ? Theme::Gold : Theme::Parchment);
-            Icons::Draw(window, tab.id, sf::Vector2f(tab.bounds.left + 8.0f, tab.bounds.top + 8.0f), 20.0f, iconCol);
+            sf::Color iconCol = tab.isToggled ? sf::Color::White : (tab.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
+            Icons::Draw(window, tab.id, sf::Vector2f(std::floor(tab.bounds.left + 8.0f), std::floor(tab.bounds.top + 8.0f)), 20.0f, iconCol);
         }
 
         if (m_tooltipAlpha > 0.02f) {
-            sf::Text tip(m_hoveredTooltip, m_font, 11);
-            sf::FloatRect tb = tip.getLocalBounds();
+            sf::Text t(m_hoveredTooltip, m_font, 12);
+            float tw = t.getLocalBounds().width + 24.0f;
+            float th = 28.0f;
 
-            sf::FloatRect tipBounds(m_tooltipPos.x, m_tooltipPos.y, tb.width + 16.0f, tb.height + 12.0f);
-            Theme::DrawParchmentPanel(window, tipBounds, m_tooltipAlpha);
+            sf::FloatRect tipBounds(m_tooltipPos.x, m_tooltipPos.y, tw, th);
+            Theme::DrawSunsetPanel(window, tipBounds, m_tooltipAlpha);
 
-            tip.setFillColor(Theme::TextParchment);
-            tip.setPosition(m_tooltipPos.x + 8.0f, m_tooltipPos.y + 4.0f);
-            window.draw(tip);
+            sf::Color tipTextCol = Theme::SunsetGold;
+            tipTextCol.a = static_cast<sf::Uint8>(255 * m_tooltipAlpha);
+            sf::Color shadowCol = sf::Color(14, 6, 20, static_cast<sf::Uint8>(230 * m_tooltipAlpha));
+
+            Theme::DrawCrispText(window, m_font, m_hoveredTooltip, 12, tipBounds.left + tw / 2.0f, tipBounds.top + th / 2.0f, tipTextCol, shadowCol, true, true);
         }
     }
 
