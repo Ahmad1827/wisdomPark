@@ -925,35 +925,34 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
                 for (const auto& portal : m_arcadePortals) {
                     if (portal.bounds.contains(mousePos)) {
-                        triggerArcadeStation(portal.id);
-                        if (portal.id == "exit") window.close();
+                        triggerArcadeStation(portal.id, window);
                         return;
                     }
                 }
             }
             else if (event.type == sf::Event::KeyPressed) {
                 if (event.key.code == sf::Keyboard::Space || (event.key.code == sf::Keyboard::N && event.key.control)) {
-                    triggerArcadeStation("new_project");
+                    triggerArcadeStation("new_project", window);
                     return;
                 }
                 if (event.key.code == sf::Keyboard::O) {
-                    triggerArcadeStation("projects");
+                    triggerArcadeStation("projects", window);
                     return;
                 }
                 if (event.key.code == sf::Keyboard::Escape) {
-                    triggerArcadeStation("settings");
+                    triggerArcadeStation("settings", window);
                     return;
                 }
                 if (event.key.code == sf::Keyboard::F1) {
-                    triggerArcadeStation("tutorials");
+                    triggerArcadeStation("tutorials", window);
                     return;
                 }
                 if (event.key.code == sf::Keyboard::K) {
-                    triggerArcadeStation("keybinds");
+                    triggerArcadeStation("keybinds", window);
                     return;
                 }
                 if (event.key.code == sf::Keyboard::C) {
-                    triggerArcadeStation("credits");
+                    triggerArcadeStation("credits", window);
                     return;
                 }
             }
@@ -1835,7 +1834,7 @@ void UIManager::update(sf::RenderWindow & window, AppState currentState, AppSett
         if (!keybindPanel.isVisible()) {
             projectBrowser.updateHover(mousePos);
             updateStartMenu(dt, mousePos);
-            updateMinigame(dt, mousePos);
+            updateMinigame(dt, mousePos, window);
 
             if (currentMenuState == MenuState::Main) {
                 std::vector<std::string> buttons = { "Projects", "Settings", "Tutorials", "Keybinds", "Credits", "Exit" };
@@ -2498,7 +2497,7 @@ void UIManager::addFloatingText(const std::string& str, sf::Vector2f pos, sf::Co
     m_arcadeFloaters.push_back(f);
 }
 
-void UIManager::triggerArcadeStation(const std::string& id) {
+void UIManager::triggerArcadeStation(const std::string& id, sf::RenderWindow& window) {
     m_isArcadePaused = true;
 
     for (auto& p : m_arcadePortals) {
@@ -2508,14 +2507,18 @@ void UIManager::triggerArcadeStation(const std::string& id) {
         }
     }
 
-    if (id == "new_project") newProjectModal.open();
+    if (id == "exit") {
+        window.close();
+    }
+    else if (id == "new_project") newProjectModal.open();
     else if (id == "projects") currentMenuState = MenuState::Projects;
     else if (id == "settings") currentMenuState = MenuState::Settings;
     else if (id == "tutorials") { currentMenuState = MenuState::Tutorials; activeTutorialIndex = -1; }
     else if (id == "keybinds") keybindPanel.toggle();
     else if (id == "credits") { currentMenuState = MenuState::Credits; easterEggClicks = 0; }
 }
-void UIManager::updateMinigame(float dt, sf::Vector2f mousePos) {
+
+void UIManager::updateMinigame(float dt, sf::Vector2f mousePos, sf::RenderWindow& window) {
     bool isAnyScreenOpen = (currentMenuState != MenuState::Main)
         || newProjectModal.getIsOpen()
         || keybindPanel.isVisible()
@@ -2712,7 +2715,7 @@ void UIManager::updateMinigame(float dt, sf::Vector2f mousePos) {
         if (heroInside) {
             if (portal.isArmed && !m_isArcadePaused) {
                 portal.isArmed = false;
-                triggerArcadeStation(portal.id);
+                triggerArcadeStation(portal.id, window);
             }
         }
         else {

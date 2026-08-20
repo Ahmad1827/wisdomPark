@@ -170,8 +170,8 @@ private:
     float m_arcadeActionDelay = 0.0f;
 
     void initMinigame();
-    void updateMinigame(float dt, sf::Vector2f mousePos);
-    void triggerArcadeStation(const std::string& id);
+    void updateMinigame(float dt, sf::Vector2f mousePos, sf::RenderWindow& window);
+    void triggerArcadeStation(const std::string& id, sf::RenderWindow& window);
     void spawnParticleBurst(sf::Vector2f pos, sf::Color col, int count, float spd);
     void addFloatingText(const std::string& str, sf::Vector2f pos, sf::Color col);
 
