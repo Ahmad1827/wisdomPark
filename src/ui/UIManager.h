@@ -46,36 +46,73 @@
 #include "../UI/Panels/StatusBar.h"
 
 
-enum class ArcadeFruitType { Cherry, Orange, Grape, Star };
+enum class GhostPersonality { Shadow, Speedy, Bashful, Pokey };
+enum class CollectibleType { Dot, PowerPellet, Cherry, Orange, Grape, Key };
 
-struct ArcadeFruit {
+struct ArcadeGhost {
     sf::Vector2f pos;
-    ArcadeFruitType type;
+    sf::Vector2f vel;
+    sf::Color baseColor;
+    GhostPersonality personality;
+    int dir;
+    float speed;
+    float animTimer;
+    bool isScared;
+    float scaredTimer;
+    bool isEaten;
+    sf::Vector2f spawnPos;
+};
+
+struct ArcadeCollectible {
+    sf::Vector2f pos;
+    CollectibleType type;
     int points;
     bool collected;
     float respawnTimer;
     float animPhase;
 };
 
-struct ArcadeGateStation {
+struct ArcadeStationPortal {
     std::string id;
     std::string title;
-    std::string sub;
-    std::string shortcut;
+    std::string subtitle;
+    std::string keyShortcut;
     sf::FloatRect bounds;
-    sf::Color neonColor;
+    sf::Color marqueeColor;
+    float pulse;
     float hoverAlpha;
     float triggerFlash;
-    bool isActivated;
 };
 
-struct ArcadeMazePlayer {
+struct ArcadePacHero {
     sf::Vector2f pos;
-    sf::Vector2f targetPos;
     sf::Vector2f vel;
+    int dir;
+    int nextDir;
     float speed;
-    float animTimer;
-    int facingDir;
+    float mouthAnim;
+    float deathAnim;
+    bool isDying;
+    int lives;
+    float invulnTimer;
+};
+
+struct ArcadeParticleFX {
+    sf::Vector2f pos;
+    sf::Vector2f vel;
+    float life;
+    float maxLife;
+    float size;
+    sf::Color color;
+};
+
+struct ArcadeScoreFloater {
+    std::string text;
+    sf::Vector2f pos;
+    sf::Vector2f vel;
+    float life;
+    float maxLife;
+    sf::Color color;
 };
 
 
@@ -115,22 +152,31 @@ struct LightRay {
 
 class UIManager {
 private:
-    ArcadeMazePlayer m_arcadePlayer;
-    std::vector<ArcadeFruit> m_arcadeFruits;
-    std::vector<ArcadeGateStation> m_arcadeGates;
-    std::vector<sf::FloatRect> m_mazeWalls;
+    ArcadePacHero m_arcadeHero;
+    std::vector<ArcadeGhost> m_arcadeGhosts;
+    std::vector<ArcadeCollectible> m_arcadeCollectibles;
+    std::vector<ArcadeStationPortal> m_arcadePortals;
+    std::vector<sf::FloatRect> m_arcadeMazeWalls;
+    std::vector<ArcadeParticleFX> m_arcadeFX;
+    std::vector<ArcadeScoreFloater> m_arcadeFloaters;
 
     int m_arcadeScore = 0;
-    int m_arcadeHighScore = 12850;
-    float m_arcadeGlobalTime = 0.0f;
-    std::string m_pendingAction = "";
-    float m_actionDelayTimer = 0.0f;
+    int m_arcadeHighScore = 25000;
+    float m_arcadeMasterTimer = 0.0f;
+    std::string m_arcadePendingAction = "";
+    float m_arcadeActionDelay = 0.0f;
 
     void initMinigame();
     void updateMinigame(float dt, sf::Vector2f mousePos);
     void triggerArcadeStation(const std::string& id);
-    void drawArcadeCrtFrame(sf::RenderWindow& window);
-    void drawPixelFruit(sf::RenderWindow& window, sf::Vector2f pos, ArcadeFruitType type, float anim);
+    void spawnParticleBurst(sf::Vector2f pos, sf::Color col, int count, float spd);
+    void addFloatingText(const std::string& str, sf::Vector2f pos, sf::Color col);
+
+    void drawPixelHero(sf::RenderWindow& window);
+    void drawPixelGhost(sf::RenderWindow& window, const ArcadeGhost& g);
+    void drawPixelItem(sf::RenderWindow& window, sf::Vector2f pos, CollectibleType type, float anim);
+    void drawStationPortal(sf::RenderWindow& window, const ArcadeStationPortal& p, sf::Vector2f mousePos);
+    void drawArcadeBezelOverlay(sf::RenderWindow& window);
     AssetManager assetManager;
     std::unique_ptr<AssetBrowserPanel> assetBrowser;
     GradientConfig m_gradientConfig;

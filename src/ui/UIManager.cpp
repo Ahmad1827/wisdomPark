@@ -454,7 +454,7 @@ void UIManager::drawMainMenu(sf::RenderWindow& window) {
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
-    for (const auto& wall : m_mazeWalls) {
+    for (const auto& wall : m_arcadeMazeWalls) {
         sf::RectangleShape w(sf::Vector2f(wall.width, wall.height));
         w.setPosition(wall.left, wall.top);
         w.setFillColor(sf::Color(30, 240, 110));
@@ -466,92 +466,55 @@ void UIManager::drawMainMenu(sf::RenderWindow& window) {
         window.draw(core);
     }
 
-    for (const auto& fruit : m_arcadeFruits) {
-        if (!fruit.collected) {
-            drawPixelFruit(window, fruit.pos, fruit.type, fruit.animPhase);
+    for (const auto& item : m_arcadeCollectibles) {
+        if (!item.collected) {
+            drawPixelItem(window, item.pos, item.type, item.animPhase);
         }
     }
 
-    for (const auto& g : m_arcadeGates) {
-        sf::FloatRect b = g.bounds;
-        bool isLit = g.triggerFlash > 0.05f;
-        bool isHov = g.hoverAlpha > 0.2f;
-
-        sf::RectangleShape outer(sf::Vector2f(b.width, b.height));
-        outer.setPosition(b.left, b.top);
-
-        if (isLit) {
-            outer.setFillColor(sf::Color(255, 240, 180));
-            outer.setOutlineThickness(3.f);
-            outer.setOutlineColor(sf::Color::White);
-        }
-        else if (isHov) {
-            outer.setFillColor(g.id == "exit" ? sf::Color(140, 24, 44, 240) : sf::Color(44, 18, 58, 245));
-            outer.setOutlineThickness(2.5f);
-            outer.setOutlineColor(g.neonColor);
-        }
-        else {
-            outer.setFillColor(sf::Color(18, 10, 28, 230));
-            outer.setOutlineThickness(1.5f);
-            outer.setOutlineColor(g.neonColor);
-        }
-        window.draw(outer);
-
-        sf::Color tColor = isLit ? sf::Color(14, 4, 20) : (isHov ? WisdomUI::Theme::SunsetGold : g.neonColor);
-        WisdomUI::Theme::DrawCrispText(window, font, g.title, 16, b.left + b.width / 2.f, b.top + 18.f, tColor, sf::Color(12, 4, 16), true, true);
-        WisdomUI::Theme::DrawCrispText(window, font, g.sub, 11, b.left + b.width / 2.f, b.top + 46.f, isLit ? sf::Color(50, 10, 60) : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
-
-        sf::FloatRect badge(b.left + b.width / 2.f - 46.f, b.top + b.height - 20.f, 92.f, 16.f);
-        sf::RectangleShape badgeBg(sf::Vector2f(badge.width, badge.height));
-        badgeBg.setPosition(badge.left, badge.top);
-        badgeBg.setFillColor(sf::Color(10, 4, 18));
-        badgeBg.setOutlineThickness(1.f);
-        badgeBg.setOutlineColor(g.neonColor);
-        window.draw(badgeBg);
-
-        WisdomUI::Theme::DrawCrispText(window, font, g.shortcut, 9, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+    for (const auto& portal : m_arcadePortals) {
+        drawStationPortal(window, portal, mousePos);
     }
 
-    float px = std::floor(m_arcadePlayer.pos.x);
-    float py = std::floor(m_arcadePlayer.pos.y);
+    for (const auto& g : m_arcadeGhosts) {
+        drawPixelGhost(window, g);
+    }
 
-    float mouthM = std::abs(std::sin(m_arcadePlayer.animTimer)) * 8.f;
+    drawPixelHero(window);
 
-    sf::CircleShape playerHead(18.f);
-    playerHead.setOrigin(18.f, 18.f);
-    playerHead.setPosition(px, py);
-    playerHead.setFillColor(WisdomUI::Theme::SunsetGold);
-    playerHead.setOutlineThickness(2.f);
-    playerHead.setOutlineColor(WisdomUI::Theme::SunsetCoralDark);
-    window.draw(playerHead);
+    for (const auto& fx : m_arcadeFX) {
+        sf::RectangleShape r(sf::Vector2f(fx.size, fx.size));
+        r.setPosition(fx.pos);
+        sf::Color c = fx.color;
+        c.a = static_cast<sf::Uint8>((fx.life / fx.maxLife) * 255.f);
+        r.setFillColor(c);
+        window.draw(r);
+    }
 
-    sf::ConvexShape visor(4);
-    visor.setPoint(0, sf::Vector2f(-8.f, -4.f));
-    visor.setPoint(1, sf::Vector2f(8.f, -4.f));
-    visor.setPoint(2, sf::Vector2f(6.f + mouthM * 0.3f, 4.f));
-    visor.setPoint(3, sf::Vector2f(-6.f, 4.f));
-    visor.setPosition(px + (m_arcadePlayer.facingDir == 0 ? 6.f : (m_arcadePlayer.facingDir == 2 ? -6.f : 0.f)), py);
-    visor.setFillColor(sf::Color(20, 10, 30));
-    window.draw(visor);
+    for (const auto& fl : m_arcadeFloaters) {
+        float a = (fl.life / fl.maxLife);
+        sf::Color c = fl.color;
+        c.a = static_cast<sf::Uint8>(a * 255.f);
+        WisdomUI::Theme::DrawCrispText(window, font, fl.text, 16, fl.pos.x, fl.pos.y, c, sf::Color(14, 4, 20, static_cast<sf::Uint8>(a * 255.f)), true, true);
+    }
 
-    sf::CircleShape eye(3.f);
-    eye.setOrigin(1.5f, 1.5f);
-    eye.setPosition(px + (m_arcadePlayer.facingDir == 0 ? 8.f : (m_arcadePlayer.facingDir == 2 ? -8.f : 0.f)), py - 5.f);
-    eye.setFillColor(sf::Color(80, 240, 255));
-    window.draw(eye);
+    drawArcadeBezelOverlay(window);
 
-    drawArcadeCrtFrame(window);
+    WisdomUI::Theme::DrawCrispText(window, font, "1UP", 16, 260.f, 85.f, WisdomUI::Theme::SunsetCoral);
+    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(m_arcadeScore), 22, 260.f, 108.f, WisdomUI::Theme::SunsetGold);
 
-    WisdomUI::Theme::DrawCrispText(window, font, "1UP", 16, 260.f, 95.f, WisdomUI::Theme::SunsetCoral);
-    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(m_arcadeScore), 22, 260.f, 120.f, WisdomUI::Theme::SunsetGold);
+    WisdomUI::Theme::DrawCrispText(window, font, "HIGH SCORE", 16, 960.f, 85.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 4, 20), true, false);
+    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(m_arcadeHighScore), 22, 960.f, 108.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 4, 20), true, false);
 
-    WisdomUI::Theme::DrawCrispText(window, font, "HIGH SCORE", 16, 960.f, 95.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 4, 20), true, false);
-    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(m_arcadeHighScore), 22, 960.f, 120.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 4, 20), true, false);
+    WisdomUI::Theme::DrawCrispText(window, font, "LIVES", 14, 1620.f, 85.f, WisdomUI::Theme::SunsetAmber);
+    for (int i = 0; i < m_arcadeHero.lives; ++i) {
+        sf::CircleShape lifeIcon(8.f);
+        lifeIcon.setPosition(1620.f + static_cast<float>(i) * 24.f, 112.f);
+        lifeIcon.setFillColor(WisdomUI::Theme::SunsetGold);
+        window.draw(lifeIcon);
+    }
 
-    WisdomUI::Theme::DrawCrispText(window, font, "CREDIT 00", 16, 1600.f, 95.f, WisdomUI::Theme::SunsetAmber);
-    WisdomUI::Theme::DrawCrispText(window, font, "STAGE 01", 16, 1600.f, 120.f, WisdomUI::Theme::SunsetGold);
-
-    WisdomUI::Theme::DrawCrispText(window, font, "NAVIGATE [WASD / ARROWS] TO STATION PORTALS  -  OR CLICK WITH MOUSE", 12, 960.f, 1025.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 4, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "CONTROL: [W, A, S, D / ARROWS] TO RUN MAZE  -  TOUCH STATIONS OR CLICK TO ENTER", 12, 960.f, 1030.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 4, 20), true, true);
 }
 
 void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hoverKey, float x, float y) {
@@ -955,10 +918,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     if (currentState == AppState::Welcome) {
         if (currentMenuState == MenuState::Main) {
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                for (const auto& g : m_arcadeGates) {
-                    if (g.bounds.contains(mousePos)) {
-                        triggerArcadeStation(g.id);
-                        if (g.id == "exit") window.close();
+                for (const auto& portal : m_arcadePortals) {
+                    if (portal.bounds.contains(mousePos)) {
+                        triggerArcadeStation(portal.id);
+                        if (portal.id == "exit") window.close();
                         return;
                     }
                 }
@@ -2350,80 +2313,137 @@ bool loadStudioFont(sf::Font& font) {
 }
 
 void UIManager::initMinigame() {
-    m_arcadePlayer.pos = sf::Vector2f(960.f, 620.f);
-    m_arcadePlayer.targetPos = m_arcadePlayer.pos;
-    m_arcadePlayer.vel = sf::Vector2f(0.f, 0.f);
-    m_arcadePlayer.speed = 360.f;
-    m_arcadePlayer.animTimer = 0.f;
-    m_arcadePlayer.facingDir = 0;
+    m_arcadeHero.pos = sf::Vector2f(960.f, 680.f);
+    m_arcadeHero.vel = sf::Vector2f(0.f, 0.f);
+    m_arcadeHero.dir = 0;
+    m_arcadeHero.nextDir = 0;
+    m_arcadeHero.speed = 280.f;
+    m_arcadeHero.mouthAnim = 0.f;
+    m_arcadeHero.deathAnim = 0.f;
+    m_arcadeHero.isDying = false;
+    m_arcadeHero.lives = 3;
+    m_arcadeHero.invulnTimer = 0.f;
 
     m_arcadeScore = 0;
-    m_arcadeGlobalTime = 0.0f;
-    m_pendingAction = "";
-    m_actionDelayTimer = 0.0f;
+    m_arcadeMasterTimer = 0.0f;
+    m_arcadePendingAction = "";
+    m_arcadeActionDelay = 0.0f;
 
-    m_arcadeGates.clear();
-    m_arcadeGates.push_back({ "new_project", "1P START", "Create Canvas", "SPACE / CLICK", sf::FloatRect(280.f, 300.f, 260.f, 85.f), WisdomUI::Theme::SunsetGold, 0.f, 0.f, false });
-    m_arcadeGates.push_back({ "projects", "CONTINUE", "Load Vault", "O", sf::FloatRect(1380.f, 300.f, 260.f, 85.f), WisdomUI::Theme::SunsetAmber, 0.f, 0.f, false });
-    m_arcadeGates.push_back({ "settings", "CONFIG", "Audio & GPU", "ESC", sf::FloatRect(280.f, 700.f, 260.f, 85.f), WisdomUI::Theme::SunsetCoral, 0.f, 0.f, false });
-    m_arcadeGates.push_back({ "tutorials", "HOW TO PLAY", "Guides & Codex", "F1", sf::FloatRect(1380.f, 700.f, 260.f, 85.f), WisdomUI::Theme::SunsetPeach, 0.f, 0.f, false });
-    m_arcadeGates.push_back({ "keybinds", "CONTROLS", "Key Matrix", "K", sf::FloatRect(730.f, 250.f, 220.f, 75.f), WisdomUI::Theme::SunsetGold, 0.f, 0.f, false });
-    m_arcadeGates.push_back({ "credits", "CREDITS", "Hall of Fame", "C", sf::FloatRect(970.f, 250.f, 220.f, 75.f), WisdomUI::Theme::SunsetAmber, 0.f, 0.f, false });
-    m_arcadeGates.push_back({ "exit", "POWER OFF", "Exit Suite", "ALT+F4", sf::FloatRect(830.f, 820.f, 260.f, 75.f), sf::Color(255, 70, 90), 0.f, 0.f, false });
+    m_arcadeGhosts.clear();
+    m_arcadeGhosts.push_back({ sf::Vector2f(900.f, 490.f), sf::Vector2f(-200.f, 0.f), sf::Color(255, 45, 85), GhostPersonality::Shadow, 2, 210.f, 0.f, false, 0.f, false, sf::Vector2f(900.f, 490.f) });
+    m_arcadeGhosts.push_back({ sf::Vector2f(940.f, 490.f), sf::Vector2f(0.f, -200.f), sf::Color(255, 140, 210), GhostPersonality::Speedy, 1, 220.f, 0.5f, false, 0.f, false, sf::Vector2f(940.f, 490.f) });
+    m_arcadeGhosts.push_back({ sf::Vector2f(980.f, 490.f), sf::Vector2f(200.f, 0.f), sf::Color(50, 220, 255), GhostPersonality::Bashful, 0, 195.f, 1.0f, false, 0.f, false, sf::Vector2f(980.f, 490.f) });
+    m_arcadeGhosts.push_back({ sf::Vector2f(1020.f, 490.f), sf::Vector2f(0.f, 200.f), sf::Color(255, 175, 45), GhostPersonality::Pokey, 3, 190.f, 1.5f, false, 0.f, false, sf::Vector2f(1020.f, 490.f) });
 
-    m_mazeWalls.clear();
-    m_mazeWalls.push_back(sf::FloatRect(200.f, 180.f, 1520.f, 8.f));
-    m_mazeWalls.push_back(sf::FloatRect(200.f, 900.f, 1520.f, 8.f));
-    m_mazeWalls.push_back(sf::FloatRect(200.f, 180.f, 8.f, 728.f));
-    m_mazeWalls.push_back(sf::FloatRect(1712.f, 180.f, 8.f, 728.f));
+    m_arcadeMazeWalls.clear();
+    m_arcadeMazeWalls.push_back(sf::FloatRect(140.f, 140.f, 1640.f, 12.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(140.f, 940.f, 1640.f, 12.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(140.f, 140.f, 12.f, 812.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(1768.f, 140.f, 12.f, 812.f));
 
-    m_mazeWalls.push_back(sf::FloatRect(580.f, 180.f, 8.f, 260.f));
-    m_mazeWalls.push_back(sf::FloatRect(1332.f, 180.f, 8.f, 260.f));
-    m_mazeWalls.push_back(sf::FloatRect(580.f, 640.f, 8.f, 268.f));
-    m_mazeWalls.push_back(sf::FloatRect(1332.f, 640.f, 8.f, 268.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(520.f, 140.f, 12.f, 240.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(1388.f, 140.f, 12.f, 240.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(520.f, 712.f, 12.f, 240.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(1388.f, 712.f, 12.f, 240.f));
 
-    m_mazeWalls.push_back(sf::FloatRect(580.f, 520.f, 240.f, 8.f));
-    m_mazeWalls.push_back(sf::FloatRect(1100.f, 520.f, 240.f, 8.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(840.f, 440.f, 240.f, 12.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(840.f, 550.f, 240.f, 12.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(840.f, 440.f, 12.f, 122.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(1068.f, 440.f, 12.f, 122.f));
 
-    m_mazeWalls.push_back(sf::FloatRect(780.f, 400.f, 360.f, 8.f));
-    m_mazeWalls.push_back(sf::FloatRect(780.f, 720.f, 360.f, 8.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(520.f, 480.f, 200.f, 12.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(1200.f, 480.f, 200.f, 12.f));
 
-    m_arcadeFruits.clear();
-    auto spawnFruitRow = [this](float startX, float endX, float y, ArcadeFruitType type, int pts, float step) {
-        for (float x = startX; x <= endX; x += step) {
-            m_arcadeFruits.push_back({ sf::Vector2f(x, y), type, pts, false, 0.f, static_cast<float>(rand() % 100) * 0.1f });
+    m_arcadeMazeWalls.push_back(sf::FloatRect(320.f, 590.f, 12.f, 160.f));
+    m_arcadeMazeWalls.push_back(sf::FloatRect(1588.f, 590.f, 12.f, 160.f));
+
+    m_arcadePortals.clear();
+    m_arcadePortals.push_back({ "new_project", "1P START", "NEW PROJECT", "SPACE / ENTER", sf::FloatRect(200.f, 220.f, 260.f, 96.f), WisdomUI::Theme::SunsetGold, 0.f, 0.f, 0.f });
+    m_arcadePortals.push_back({ "projects", "ARCHIVES", "PROJECT VAULT", "O", sf::FloatRect(1460.f, 220.f, 260.f, 96.f), WisdomUI::Theme::SunsetAmber, 1.2f, 0.f, 0.f });
+    m_arcadePortals.push_back({ "settings", "CONFIG", "STUDIO SETTINGS", "ESC", sf::FloatRect(200.f, 770.f, 260.f, 96.f), WisdomUI::Theme::SunsetCoral, 2.4f, 0.f, 0.f });
+    m_arcadePortals.push_back({ "tutorials", "HOW TO PLAY", "KNOWLEDGE CODEX", "F1", sf::FloatRect(1460.f, 770.f, 260.f, 96.f), WisdomUI::Theme::SunsetPeach, 3.6f, 0.f, 0.f });
+    m_arcadePortals.push_back({ "keybinds", "KEYS", "CONTROLS MATRIX", "K", sf::FloatRect(670.f, 220.f, 240.f, 84.f), WisdomUI::Theme::SunsetGold, 0.8f, 0.f, 0.f });
+    m_arcadePortals.push_back({ "credits", "FAMOUS", "HALL OF FAME", "C", sf::FloatRect(1010.f, 220.f, 240.f, 84.f), WisdomUI::Theme::SunsetAmber, 1.9f, 0.f, 0.f });
+    m_arcadePortals.push_back({ "exit", "POWER OFF", "TERMINATE SUITE", "ALT+F4", sf::FloatRect(830.f, 820.f, 260.f, 84.f), sf::Color(255, 60, 90), 4.2f, 0.f, 0.f });
+
+    m_arcadeCollectibles.clear();
+    auto spawnDotsAlongLine = [this](float x1, float y1, float x2, float y2, float step) {
+        float len = std::hypot(x2 - x1, y2 - y1);
+        int count = static_cast<int>(len / step);
+        for (int i = 0; i <= count; ++i) {
+            float t = static_cast<float>(i) / std::max(1, count);
+            m_arcadeCollectibles.push_back({ sf::Vector2f(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t), CollectibleType::Dot, 10, false, 0.f, static_cast<float>(rand() % 100) * 0.1f });
         }
         };
 
-    spawnFruitRow(250.f, 540.f, 240.f, ArcadeFruitType::Cherry, 100, 48.f);
-    spawnFruitRow(1380.f, 1660.f, 240.f, ArcadeFruitType::Cherry, 100, 48.f);
-    spawnFruitRow(250.f, 540.f, 640.f, ArcadeFruitType::Orange, 200, 48.f);
-    spawnFruitRow(1380.f, 1660.f, 640.f, ArcadeFruitType::Orange, 200, 48.f);
-    spawnFruitRow(630.f, 1280.f, 460.f, ArcadeFruitType::Grape, 300, 52.f);
-    spawnFruitRow(630.f, 1280.f, 660.f, ArcadeFruitType::Star, 500, 64.f);
+    spawnDotsAlongLine(200.f, 180.f, 1720.f, 180.f, 44.f);
+    spawnDotsAlongLine(200.f, 900.f, 1720.f, 900.f, 44.f);
+    spawnDotsAlongLine(480.f, 220.f, 480.f, 860.f, 44.f);
+    spawnDotsAlongLine(1440.f, 220.f, 1440.f, 860.f, 44.f);
+    spawnDotsAlongLine(560.f, 360.f, 1360.f, 360.f, 48.f);
+    spawnDotsAlongLine(560.f, 620.f, 1360.f, 620.f, 48.f);
+
+    m_arcadeCollectibles.push_back({ sf::Vector2f(180.f, 180.f), CollectibleType::PowerPellet, 50, false, 0.f, 0.f });
+    m_arcadeCollectibles.push_back({ sf::Vector2f(1740.f, 180.f), CollectibleType::PowerPellet, 50, false, 0.f, 1.f });
+    m_arcadeCollectibles.push_back({ sf::Vector2f(180.f, 900.f), CollectibleType::PowerPellet, 50, false, 0.f, 2.f });
+    m_arcadeCollectibles.push_back({ sf::Vector2f(1740.f, 900.f), CollectibleType::PowerPellet, 50, false, 0.f, 3.f });
+
+    m_arcadeCollectibles.push_back({ sf::Vector2f(330.f, 500.f), CollectibleType::Cherry, 100, false, 0.f, 0.5f });
+    m_arcadeCollectibles.push_back({ sf::Vector2f(1590.f, 500.f), CollectibleType::Orange, 500, false, 0.f, 1.5f });
+    m_arcadeCollectibles.push_back({ sf::Vector2f(960.f, 360.f), CollectibleType::Grape, 1000, false, 0.f, 2.5f });
+    m_arcadeCollectibles.push_back({ sf::Vector2f(960.f, 760.f), CollectibleType::Key, 3000, false, 0.f, 3.5f });
+
+    m_arcadeFX.clear();
+    m_arcadeFloaters.clear();
+}
+
+void UIManager::spawnParticleBurst(sf::Vector2f pos, sf::Color col, int count, float spd) {
+    for (int i = 0; i < count; ++i) {
+        ArcadeParticleFX p;
+        p.pos = pos;
+        float ang = static_cast<float>(rand() % 360) * 3.14159f / 180.f;
+        float s = (spd * 0.4f) + static_cast<float>(rand() % static_cast<int>(spd * 0.8f + 1.f));
+        p.vel = sf::Vector2f(std::cos(ang) * s, std::sin(ang) * s);
+        p.maxLife = 0.35f + static_cast<float>(rand() % 10) * 0.03f;
+        p.life = p.maxLife;
+        p.size = 2.f + static_cast<float>(rand() % 4);
+        p.color = col;
+        m_arcadeFX.push_back(p);
+    }
+}
+
+void UIManager::addFloatingText(const std::string& str, sf::Vector2f pos, sf::Color col) {
+    ArcadeScoreFloater f;
+    f.text = str;
+    f.pos = pos;
+    f.vel = sf::Vector2f(0.f, -70.f);
+    f.maxLife = 0.85f;
+    f.life = f.maxLife;
+    f.color = col;
+    m_arcadeFloaters.push_back(f);
 }
 
 void UIManager::triggerArcadeStation(const std::string& id) {
-    if (!m_pendingAction.empty()) return;
-    m_pendingAction = id;
-    m_actionDelayTimer = 0.25f;
+    if (!m_arcadePendingAction.empty()) return;
+    m_arcadePendingAction = id;
+    m_arcadeActionDelay = 0.3f;
 
-    for (auto& g : m_arcadeGates) {
-        if (g.id == id) {
-            g.triggerFlash = 1.0f;
-            g.isActivated = true;
+    for (auto& p : m_arcadePortals) {
+        if (p.id == id) {
+            p.triggerFlash = 1.0f;
+            spawnParticleBurst(sf::Vector2f(p.bounds.left + p.bounds.width / 2.f, p.bounds.top + p.bounds.height / 2.f), p.marqueeColor, 32, 340.f);
         }
     }
 }
 
 void UIManager::updateMinigame(float dt, sf::Vector2f mousePos) {
-    m_arcadeGlobalTime += dt;
+    m_arcadeMasterTimer += dt;
 
-    if (!m_pendingAction.empty()) {
-        m_actionDelayTimer -= dt;
-        if (m_actionDelayTimer <= 0.0f) {
-            std::string act = m_pendingAction;
-            m_pendingAction = "";
+    if (!m_arcadePendingAction.empty()) {
+        m_arcadeActionDelay -= dt;
+        if (m_arcadeActionDelay <= 0.0f) {
+            std::string act = m_arcadePendingAction;
+            m_arcadePendingAction = "";
 
             if (act == "new_project") newProjectModal.open();
             else if (act == "projects") currentMenuState = MenuState::Projects;
@@ -2435,165 +2455,438 @@ void UIManager::updateMinigame(float dt, sf::Vector2f mousePos) {
         }
     }
 
-    sf::Vector2f moveInput(0.f, 0.f);
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) { moveInput.y -= 1.f; m_arcadePlayer.facingDir = 1; }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::S) || sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) { moveInput.y += 1.f; m_arcadePlayer.facingDir = 3; }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) { moveInput.x -= 1.f; m_arcadePlayer.facingDir = 2; }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) { moveInput.x += 1.f; m_arcadePlayer.facingDir = 0; }
+    if (m_arcadeHero.invulnTimer > 0.f) m_arcadeHero.invulnTimer -= dt;
 
-    float inputLen = std::hypot(moveInput.x, moveInput.y);
-    if (inputLen > 0.001f) {
-        moveInput /= inputLen;
-        m_arcadePlayer.vel = moveInput * m_arcadePlayer.speed;
-        m_arcadePlayer.animTimer += dt * 10.f;
-    }
-    else {
-        m_arcadePlayer.vel = sf::Vector2f(0.f, 0.f);
-    }
-
-    sf::Vector2f nextPos = m_arcadePlayer.pos + m_arcadePlayer.vel * dt;
-    sf::FloatRect playerBox(nextPos.x - 18.f, nextPos.y - 18.f, 36.f, 36.f);
-
-    bool collided = false;
-    for (const auto& wall : m_mazeWalls) {
-        if (wall.intersects(playerBox)) {
-            collided = true;
-            break;
+    if (m_arcadeHero.isDying) {
+        m_arcadeHero.deathAnim += dt * 3.f;
+        if (m_arcadeHero.deathAnim >= 3.14159f) {
+            m_arcadeHero.isDying = false;
+            m_arcadeHero.deathAnim = 0.f;
+            m_arcadeHero.pos = sf::Vector2f(960.f, 680.f);
+            m_arcadeHero.vel = sf::Vector2f(0.f, 0.f);
+            m_arcadeHero.invulnTimer = 2.0f;
+            if (m_arcadeHero.lives <= 0) {
+                m_arcadeHero.lives = 3;
+                m_arcadeScore = 0;
+            }
         }
     }
-
-    if (!collided) {
-        m_arcadePlayer.pos = nextPos;
-    }
     else {
-        sf::FloatRect boxX(nextPos.x - 18.f, m_arcadePlayer.pos.y - 18.f, 36.f, 36.f);
-        bool colX = false;
-        for (const auto& wall : m_mazeWalls) { if (wall.intersects(boxX)) { colX = true; break; } }
-        if (!colX) m_arcadePlayer.pos.x = nextPos.x;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) m_arcadeHero.nextDir = 0;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) m_arcadeHero.nextDir = 1;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) m_arcadeHero.nextDir = 2;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::S) || sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) m_arcadeHero.nextDir = 3;
 
-        sf::FloatRect boxY(m_arcadePlayer.pos.x - 18.f, nextPos.y - 18.f, 36.f, 36.f);
-        bool colY = false;
-        for (const auto& wall : m_mazeWalls) { if (wall.intersects(boxY)) { colY = true; break; } }
-        if (!colY) m_arcadePlayer.pos.y = nextPos.y;
-    }
+        auto getDirVector = [](int d) -> sf::Vector2f {
+            if (d == 0) return sf::Vector2f(1.f, 0.f);
+            if (d == 1) return sf::Vector2f(0.f, -1.f);
+            if (d == 2) return sf::Vector2f(-1.f, 0.f);
+            return sf::Vector2f(0.f, 1.f);
+            };
 
-    m_arcadePlayer.pos.x = std::clamp(m_arcadePlayer.pos.x, 220.f, 1700.f);
-    m_arcadePlayer.pos.y = std::clamp(m_arcadePlayer.pos.y, 200.f, 880.f);
+        sf::Vector2f desiredVel = getDirVector(m_arcadeHero.nextDir) * m_arcadeHero.speed;
+        sf::FloatRect checkNext(m_arcadeHero.pos.x + desiredVel.x * dt - 16.f, m_arcadeHero.pos.y + desiredVel.y * dt - 16.f, 32.f, 32.f);
+        bool nextBlocked = false;
+        for (const auto& w : m_arcadeMazeWalls) {
+            if (w.intersects(checkNext)) { nextBlocked = true; break; }
+        }
 
-    sf::FloatRect pBounds(m_arcadePlayer.pos.x - 18.f, m_arcadePlayer.pos.y - 18.f, 36.f, 36.f);
+        if (!nextBlocked) {
+            m_arcadeHero.dir = m_arcadeHero.nextDir;
+            m_arcadeHero.vel = desiredVel;
+        }
 
-    for (auto& fruit : m_arcadeFruits) {
-        if (fruit.collected) {
-            fruit.respawnTimer -= dt;
-            if (fruit.respawnTimer <= 0.f) fruit.collected = false;
+        sf::FloatRect checkCurrent(m_arcadeHero.pos.x + m_arcadeHero.vel.x * dt - 16.f, m_arcadeHero.pos.y + m_arcadeHero.vel.y * dt - 16.f, 32.f, 32.f);
+        bool curBlocked = false;
+        for (const auto& w : m_arcadeMazeWalls) {
+            if (w.intersects(checkCurrent)) { curBlocked = true; break; }
+        }
+
+        if (!curBlocked) {
+            m_arcadeHero.pos += m_arcadeHero.vel * dt;
+            m_arcadeHero.mouthAnim += dt * 14.f;
         }
         else {
-            fruit.animPhase += dt * 3.f;
-            sf::FloatRect fBounds(fruit.pos.x - 12.f, fruit.pos.y - 12.f, 24.f, 24.f);
-            if (pBounds.intersects(fBounds)) {
-                fruit.collected = true;
-                fruit.respawnTimer = 10.f;
-                m_arcadeScore += fruit.points;
+            m_arcadeHero.vel = sf::Vector2f(0.f, 0.f);
+        }
+
+        m_arcadeHero.pos.x = std::clamp(m_arcadeHero.pos.x, 160.f, 1750.f);
+        m_arcadeHero.pos.y = std::clamp(m_arcadeHero.pos.y, 160.f, 920.f);
+    }
+
+    sf::FloatRect heroBounds(m_arcadeHero.pos.x - 16.f, m_arcadeHero.pos.y - 16.f, 32.f, 32.f);
+
+    for (auto& item : m_arcadeCollectibles) {
+        if (item.collected) {
+            item.respawnTimer -= dt;
+            if (item.respawnTimer <= 0.f) item.collected = false;
+        }
+        else {
+            item.animPhase += dt * 4.f;
+            float pickRadius = (item.type == CollectibleType::Dot) ? 14.f : 24.f;
+            sf::FloatRect itemRect(item.pos.x - pickRadius / 2.f, item.pos.y - pickRadius / 2.f, pickRadius, pickRadius);
+
+            if (heroBounds.intersects(itemRect) && !m_arcadeHero.isDying) {
+                item.collected = true;
+                item.respawnTimer = (item.type == CollectibleType::Dot) ? 12.f : 25.f;
+                m_arcadeScore += item.points;
                 if (m_arcadeScore > m_arcadeHighScore) m_arcadeHighScore = m_arcadeScore;
+
+                if (item.type == CollectibleType::PowerPellet) {
+                    for (auto& g : m_arcadeGhosts) {
+                        g.isScared = true;
+                        g.scaredTimer = 8.0f;
+                    }
+                    spawnParticleBurst(item.pos, WisdomUI::Theme::SunsetGold, 20, 240.f);
+                    addFloatingText("POWER UP!", item.pos, WisdomUI::Theme::SunsetGold);
+                }
+                else if (item.type != CollectibleType::Dot) {
+                    spawnParticleBurst(item.pos, WisdomUI::Theme::SunsetAmber, 16, 180.f);
+                    addFloatingText("+" + std::to_string(item.points), item.pos, WisdomUI::Theme::SunsetAmber);
+                }
             }
         }
     }
 
-    for (auto& g : m_arcadeGates) {
-        bool isHov = g.bounds.contains(mousePos);
-        bool playerInside = g.bounds.intersects(pBounds);
-        g.hoverAlpha += (((isHov || playerInside) ? 1.0f : 0.0f) - g.hoverAlpha) * 14.0f * dt;
-        g.triggerFlash = std::max(0.0f, g.triggerFlash - 3.5f * dt);
+    for (auto& g : m_arcadeGhosts) {
+        g.animTimer += dt * 8.f;
+        if (g.isScared) {
+            g.scaredTimer -= dt;
+            if (g.scaredTimer <= 0.f) g.isScared = false;
+        }
 
-        if (playerInside && m_pendingAction.empty() && !g.isActivated) {
-            triggerArcadeStation(g.id);
-            if (g.id == "exit") return;
+        if (g.isEaten) {
+            sf::Vector2f toSpawn = g.spawnPos - g.pos;
+            float dist = std::hypot(toSpawn.x, toSpawn.y);
+            if (dist < 10.f) {
+                g.isEaten = false;
+                g.isScared = false;
+                g.pos = g.spawnPos;
+            }
+            else {
+                g.pos += (toSpawn / dist) * 450.f * dt;
+            }
+            continue;
         }
-        else if (!playerInside && !isHov) {
-            g.isActivated = false;
+
+        auto tryGhostDirection = [&](int dirChoice) -> bool {
+            sf::Vector2f dirV(0.f, 0.f);
+            if (dirChoice == 0) dirV.x = 1.f;
+            else if (dirChoice == 1) dirV.y = -1.f;
+            else if (dirChoice == 2) dirV.x = -1.f;
+            else dirV.y = 1.f;
+
+            float curSpd = g.isScared ? (g.speed * 0.65f) : g.speed;
+            sf::FloatRect checkStep(g.pos.x + dirV.x * curSpd * dt - 16.f, g.pos.y + dirV.y * curSpd * dt - 16.f, 32.f, 32.f);
+            for (const auto& w : m_arcadeMazeWalls) {
+                if (w.intersects(checkStep)) return false;
+            }
+            g.dir = dirChoice;
+            g.vel = dirV * curSpd;
+            return true;
+            };
+
+        if (!tryGhostDirection(g.dir) || (rand() % 80 == 0)) {
+            std::vector<int> candidates = { 0, 1, 2, 3 };
+            int opposite = (g.dir + 2) % 4;
+            candidates.erase(std::remove(candidates.begin(), candidates.end(), opposite), candidates.end());
+            static std::mt19937 rng(std::random_device{}());
+            std::shuffle(candidates.begin(), candidates.end(), rng);
+
+            bool found = false;
+            for (int d : candidates) {
+                if (tryGhostDirection(d)) { found = true; break; }
+            }
+            if (!found) tryGhostDirection(opposite);
         }
+
+        g.pos += g.vel * dt;
+        g.pos.x = std::clamp(g.pos.x, 160.f, 1750.f);
+        g.pos.y = std::clamp(g.pos.y, 160.f, 920.f);
+
+        sf::FloatRect ghostBounds(g.pos.x - 16.f, g.pos.y - 16.f, 32.f, 32.f);
+        if (ghostBounds.intersects(heroBounds) && !m_arcadeHero.isDying && m_arcadeHero.invulnTimer <= 0.f) {
+            if (g.isScared) {
+                g.isEaten = true;
+                m_arcadeScore += 400;
+                spawnParticleBurst(g.pos, sf::Color(80, 200, 255), 24, 280.f);
+                addFloatingText("+400", g.pos, sf::Color(80, 200, 255));
+            }
+            else {
+                m_arcadeHero.isDying = true;
+                m_arcadeHero.deathAnim = 0.f;
+                m_arcadeHero.lives--;
+                spawnParticleBurst(m_arcadeHero.pos, WisdomUI::Theme::SunsetGold, 36, 320.f);
+                addFloatingText("OUCH!", m_arcadeHero.pos, sf::Color(255, 60, 60));
+            }
+        }
+    }
+
+    for (auto& portal : m_arcadePortals) {
+        bool hov = portal.bounds.contains(mousePos);
+        bool heroInside = portal.bounds.intersects(heroBounds);
+        portal.hoverAlpha += (((hov || heroInside) ? 1.0f : 0.0f) - portal.hoverAlpha) * 16.0f * dt;
+        portal.triggerFlash = std::max(0.0f, portal.triggerFlash - 3.0f * dt);
+        portal.pulse += dt * 3.f;
+
+        if (heroInside && m_arcadePendingAction.empty()) {
+            triggerArcadeStation(portal.id);
+        }
+    }
+
+    for (auto& p : m_arcadeFX) {
+        p.life -= dt;
+        p.pos += p.vel * dt;
+    }
+    m_arcadeFX.erase(std::remove_if(m_arcadeFX.begin(), m_arcadeFX.end(), [](const ArcadeParticleFX& p) { return p.life <= 0.f; }), m_arcadeFX.end());
+
+    for (auto& f : m_arcadeFloaters) {
+        f.life -= dt;
+        f.pos += f.vel * dt;
+    }
+    m_arcadeFloaters.erase(std::remove_if(m_arcadeFloaters.begin(), m_arcadeFloaters.end(), [](const ArcadeScoreFloater& f) { return f.life <= 0.f; }), m_arcadeFloaters.end());
+}
+
+void UIManager::drawPixelHero(sf::RenderWindow& window) {
+    if (m_arcadeHero.isDying) {
+        float angle = m_arcadeHero.deathAnim * 180.f;
+        sf::CircleShape deathShape(18.f);
+        deathShape.setOrigin(18.f, 18.f);
+        deathShape.setPosition(m_arcadeHero.pos);
+        deathShape.setFillColor(WisdomUI::Theme::SunsetGold);
+        deathShape.setScale(std::max(0.05f, 1.0f - m_arcadeHero.deathAnim / 3.14159f), std::max(0.05f, 1.0f - m_arcadeHero.deathAnim / 3.14159f));
+        deathShape.setRotation(angle);
+        window.draw(deathShape);
+        return;
+    }
+
+    if (m_arcadeHero.invulnTimer > 0.f && static_cast<int>(m_arcadeMasterTimer * 15.f) % 2 == 0) return;
+
+    float px = std::floor(m_arcadeHero.pos.x);
+    float py = std::floor(m_arcadeHero.pos.y);
+    float mouth = std::abs(std::sin(m_arcadeHero.mouthAnim)) * 12.f;
+
+    sf::CircleShape body(18.f);
+    body.setOrigin(18.f, 18.f);
+    body.setPosition(px, py);
+    body.setFillColor(WisdomUI::Theme::SunsetGold);
+    body.setOutlineThickness(2.f);
+    body.setOutlineColor(WisdomUI::Theme::SunsetCoralDark);
+    window.draw(body);
+
+    sf::ConvexShape wedge(3);
+    wedge.setPoint(0, sf::Vector2f(0.f, 0.f));
+    wedge.setPoint(1, sf::Vector2f(24.f, -mouth));
+    wedge.setPoint(2, sf::Vector2f(24.f, mouth));
+    wedge.setPosition(px, py);
+    wedge.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+
+    float rot = 0.f;
+    if (m_arcadeHero.dir == 1) rot = 270.f;
+    else if (m_arcadeHero.dir == 2) rot = 180.f;
+    else if (m_arcadeHero.dir == 3) rot = 90.f;
+    wedge.setRotation(rot);
+    window.draw(wedge);
+
+    sf::CircleShape eye(3.5f);
+    eye.setOrigin(1.75f, 1.75f);
+    float eyeX = px + (m_arcadeHero.dir == 2 ? -4.f : 4.f);
+    float eyeY = py - 8.f;
+    eye.setPosition(eyeX, eyeY);
+    eye.setFillColor(sf::Color(14, 4, 20));
+    window.draw(eye);
+}
+
+void UIManager::drawPixelGhost(sf::RenderWindow& window, const ArcadeGhost& g) {
+    float gx = std::floor(g.pos.x);
+    float gy = std::floor(g.pos.y);
+
+    if (g.isEaten) {
+        sf::CircleShape eyeL(5.f); eyeL.setPosition(gx - 10.f, gy - 6.f); eyeL.setFillColor(sf::Color::White); window.draw(eyeL);
+        sf::CircleShape eyeR(5.f); eyeR.setPosition(gx + 2.f, gy - 6.f); eyeR.setFillColor(sf::Color::White); window.draw(eyeR);
+        sf::CircleShape pupL(2.5f); pupL.setPosition(gx - 8.f, gy - 4.f); pupL.setFillColor(sf::Color(20, 60, 220)); window.draw(pupL);
+        sf::CircleShape pupR(2.5f); pupR.setPosition(gx + 4.f, gy - 4.f); pupR.setFillColor(sf::Color(20, 60, 220)); window.draw(pupR);
+        return;
+    }
+
+    sf::Color bodyCol = g.baseColor;
+    if (g.isScared) {
+        bool flash = (g.scaredTimer < 2.5f) && (static_cast<int>(m_arcadeMasterTimer * 8.f) % 2 == 0);
+        bodyCol = flash ? sf::Color(255, 255, 255) : sf::Color(40, 80, 230);
+    }
+
+    sf::CircleShape head(16.f);
+    head.setOrigin(16.f, 16.f);
+    head.setPosition(gx, gy - 4.f);
+    head.setFillColor(bodyCol);
+    window.draw(head);
+
+    sf::RectangleShape torso(sf::Vector2f(32.f, 18.f));
+    torso.setOrigin(16.f, 0.f);
+    torso.setPosition(gx, gy - 4.f);
+    torso.setFillColor(bodyCol);
+    window.draw(torso);
+
+    float skirtWave = std::sin(g.animTimer) * 3.f;
+    for (int i = 0; i < 3; ++i) {
+        sf::ConvexShape tentacle(3);
+        float tx = gx - 16.f + static_cast<float>(i) * 11.f;
+        tentacle.setPoint(0, sf::Vector2f(tx, gy + 14.f));
+        tentacle.setPoint(1, sf::Vector2f(tx + 10.f, gy + 14.f));
+        tentacle.setPoint(2, sf::Vector2f(tx + 5.f, gy + 20.f + (i % 2 == 0 ? skirtWave : -skirtWave)));
+        tentacle.setFillColor(bodyCol);
+        window.draw(tentacle);
+    }
+
+    if (!g.isScared) {
+        float lookX = (g.dir == 0) ? 3.f : ((g.dir == 2) ? -3.f : 0.f);
+        float lookY = (g.dir == 3) ? 3.f : ((g.dir == 1) ? -3.f : 0.f);
+
+        sf::CircleShape scleraL(5.f); scleraL.setPosition(gx - 10.f, gy - 8.f); scleraL.setFillColor(sf::Color::White); window.draw(scleraL);
+        sf::CircleShape scleraR(5.f); scleraR.setPosition(gx + 2.f, gy - 8.f); scleraR.setFillColor(sf::Color::White); window.draw(scleraR);
+        sf::CircleShape pupL(2.5f); pupL.setPosition(gx - 8.f + lookX, gy - 6.f + lookY); pupL.setFillColor(sf::Color(20, 30, 90)); window.draw(pupL);
+        sf::CircleShape pupR(2.5f); pupR.setPosition(gx + 4.f + lookX, gy - 6.f + lookY); pupR.setFillColor(sf::Color(20, 30, 90)); window.draw(pupR);
+    }
+    else {
+        sf::CircleShape scaredEyeL(3.f); scaredEyeL.setPosition(gx - 8.f, gy - 6.f); scaredEyeL.setFillColor(sf::Color(255, 180, 180)); window.draw(scaredEyeL);
+        sf::CircleShape scaredEyeR(3.f); scaredEyeR.setPosition(gx + 4.f, gy - 6.f); scaredEyeR.setFillColor(sf::Color(255, 180, 180)); window.draw(scaredEyeR);
     }
 }
 
-void UIManager::drawArcadeCrtFrame(sf::RenderWindow& window) {
-    sf::RectangleShape topBezel(sf::Vector2f(1920.f, 70.f));
+void UIManager::drawPixelItem(sf::RenderWindow& window, sf::Vector2f pos, CollectibleType type, float anim) {
+    float px = std::floor(pos.x);
+    float py = std::floor(pos.y);
+
+    if (type == CollectibleType::Dot) {
+        sf::RectangleShape dot(sf::Vector2f(6.f, 6.f));
+        dot.setOrigin(3.f, 3.f);
+        dot.setPosition(px, py);
+        dot.setFillColor(sf::Color(255, 215, 160));
+        window.draw(dot);
+        return;
+    }
+
+    if (type == CollectibleType::PowerPellet) {
+        float pulse = std::sin(anim) * 3.f;
+        sf::CircleShape pellet(9.f + pulse);
+        pellet.setOrigin(pellet.getRadius(), pellet.getRadius());
+        pellet.setPosition(px, py);
+        pellet.setFillColor(WisdomUI::Theme::SunsetGold);
+        pellet.setOutlineThickness(1.5f);
+        pellet.setOutlineColor(WisdomUI::Theme::SunsetAmber);
+        window.draw(pellet);
+        return;
+    }
+
+    float bob = std::sin(anim) * 3.f;
+    sf::Vector2f drawPos(px, py + bob);
+
+    if (type == CollectibleType::Cherry) {
+        sf::CircleShape c1(7.f); c1.setPosition(drawPos.x - 9.f, drawPos.y - 2.f); c1.setFillColor(sf::Color(255, 30, 70)); window.draw(c1);
+        sf::CircleShape c2(7.f); c2.setPosition(drawPos.x + 1.f, drawPos.y); c2.setFillColor(sf::Color(255, 30, 70)); window.draw(c2);
+        sf::RectangleShape stem(sf::Vector2f(2.f, 10.f)); stem.setPosition(drawPos.x - 2.f, drawPos.y - 10.f); stem.setFillColor(sf::Color(80, 220, 90)); stem.setRotation(18.f); window.draw(stem);
+    }
+    else if (type == CollectibleType::Orange) {
+        sf::CircleShape o(9.f); o.setPosition(drawPos.x - 9.f, drawPos.y - 7.f); o.setFillColor(sf::Color(255, 140, 30)); window.draw(o);
+        sf::RectangleShape leaf(sf::Vector2f(5.f, 4.f)); leaf.setPosition(drawPos.x - 2.f, drawPos.y - 11.f); leaf.setFillColor(sf::Color(90, 230, 90)); window.draw(leaf);
+    }
+    else if (type == CollectibleType::Grape) {
+        sf::CircleShape g1(6.f); g1.setPosition(drawPos.x - 7.f, drawPos.y - 8.f); g1.setFillColor(sf::Color(180, 60, 255)); window.draw(g1);
+        sf::CircleShape g2(6.f); g2.setPosition(drawPos.x + 1.f, drawPos.y - 8.f); g2.setFillColor(sf::Color(180, 60, 255)); window.draw(g2);
+        sf::CircleShape g3(6.f); g3.setPosition(drawPos.x - 3.f, drawPos.y - 1.f); g3.setFillColor(sf::Color(150, 40, 235)); window.draw(g3);
+    }
+    else if (type == CollectibleType::Key) {
+        sf::CircleShape kHead(7.f); kHead.setPosition(drawPos.x - 7.f, drawPos.y - 10.f); kHead.setFillColor(WisdomUI::Theme::SunsetGold); window.draw(kHead);
+        sf::RectangleShape kShaft(sf::Vector2f(4.f, 14.f)); kShaft.setPosition(drawPos.x - 2.f, drawPos.y - 2.f); kShaft.setFillColor(WisdomUI::Theme::SunsetGold); window.draw(kShaft);
+        sf::RectangleShape kTooth(sf::Vector2f(6.f, 3.f)); kTooth.setPosition(drawPos.x + 2.f, drawPos.y + 4.f); kTooth.setFillColor(WisdomUI::Theme::SunsetGold); window.draw(kTooth);
+    }
+}
+
+void UIManager::drawStationPortal(sf::RenderWindow& window, const ArcadeStationPortal& p, sf::Vector2f mousePos) {
+    sf::FloatRect b = p.bounds;
+    bool isLit = p.triggerFlash > 0.05f;
+    bool isHov = p.hoverAlpha > 0.2f;
+
+    sf::RectangleShape marqueeGlow(sf::Vector2f(b.width + 12.f, b.height + 12.f));
+    marqueeGlow.setPosition(b.left - 6.f, b.top - 6.f);
+    sf::Color gCol = p.marqueeColor;
+    gCol.a = static_cast<sf::Uint8>(std::clamp(180.f * std::max(p.hoverAlpha, p.triggerFlash), 0.f, 255.f));
+    marqueeGlow.setFillColor(gCol);
+    window.draw(marqueeGlow);
+
+    sf::RectangleShape box(sf::Vector2f(b.width, b.height));
+    box.setPosition(b.left, b.top);
+    if (isLit) {
+        box.setFillColor(sf::Color(255, 245, 200));
+        box.setOutlineThickness(3.f);
+        box.setOutlineColor(sf::Color::White);
+    }
+    else if (isHov) {
+        box.setFillColor(p.id == "exit" ? sf::Color(140, 24, 44, 245) : sf::Color(52, 22, 68, 245));
+        box.setOutlineThickness(2.f);
+        box.setOutlineColor(p.marqueeColor);
+    }
+    else {
+        box.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+        box.setOutlineThickness(1.5f);
+        box.setOutlineColor(p.marqueeColor);
+    }
+    window.draw(box);
+
+    sf::Color txtColor = isLit ? sf::Color(16, 4, 22) : (isHov ? WisdomUI::Theme::SunsetGold : p.marqueeColor);
+    WisdomUI::Theme::DrawCrispText(window, font, p.title, 16, b.left + b.width / 2.f, b.top + 20.f, txtColor, sf::Color(12, 4, 18), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, p.subtitle, 11, b.left + b.width / 2.f, b.top + 48.f, isLit ? sf::Color(50, 10, 60) : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+
+    sf::FloatRect badge(b.left + b.width / 2.f - 55.f, b.top + b.height - 20.f, 110.f, 16.f);
+    sf::RectangleShape badgeBg(sf::Vector2f(badge.width, badge.height));
+    badgeBg.setPosition(badge.left, badge.top);
+    badgeBg.setFillColor(sf::Color(10, 4, 18));
+    badgeBg.setOutlineThickness(1.f);
+    badgeBg.setOutlineColor(p.marqueeColor);
+    window.draw(badgeBg);
+
+    WisdomUI::Theme::DrawCrispText(window, font, p.keyShortcut, 9, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+}
+
+void UIManager::drawArcadeBezelOverlay(sf::RenderWindow& window) {
+    sf::RectangleShape topBezel(sf::Vector2f(1920.f, 60.f));
     topBezel.setPosition(0.f, 0.f);
-    topBezel.setFillColor(sf::Color(18, 12, 10));
+    topBezel.setFillColor(sf::Color(14, 8, 12));
     window.draw(topBezel);
 
-    sf::RectangleShape botBezel(sf::Vector2f(1920.f, 90.f));
-    botBezel.setPosition(0.f, 990.f);
-    botBezel.setFillColor(sf::Color(18, 12, 10));
+    sf::RectangleShape botBezel(sf::Vector2f(1920.f, 80.f));
+    botBezel.setPosition(0.f, 1000.f);
+    botBezel.setFillColor(sf::Color(14, 8, 12));
     window.draw(botBezel);
 
-    sf::RectangleShape leftBezel(sf::Vector2f(90.f, 1080.f));
+    sf::RectangleShape leftBezel(sf::Vector2f(80.f, 1080.f));
     leftBezel.setPosition(0.f, 0.f);
-    leftBezel.setFillColor(sf::Color(18, 12, 10));
+    leftBezel.setFillColor(sf::Color(14, 8, 12));
     window.draw(leftBezel);
 
-    sf::RectangleShape rightBezel(sf::Vector2f(90.f, 1080.f));
-    rightBezel.setPosition(1830.f, 0.f);
-    rightBezel.setFillColor(sf::Color(18, 12, 10));
+    sf::RectangleShape rightBezel(sf::Vector2f(80.f, 1080.f));
+    rightBezel.setPosition(1840.f, 0.f);
+    rightBezel.setFillColor(sf::Color(14, 8, 12));
     window.draw(rightBezel);
 
-    sf::RectangleShape goldBorder(sf::Vector2f(1760.f, 940.f));
-    goldBorder.setPosition(80.f, 60.f);
-    goldBorder.setFillColor(sf::Color::Transparent);
-    goldBorder.setOutlineThickness(12.f);
-    goldBorder.setOutlineColor(sf::Color(190, 135, 45));
-    window.draw(goldBorder);
+    sf::RectangleShape outerGold(sf::Vector2f(1780.f, 960.f));
+    outerGold.setPosition(70.f, 50.f);
+    outerGold.setFillColor(sf::Color::Transparent);
+    outerGold.setOutlineThickness(10.f);
+    outerGold.setOutlineColor(sf::Color(190, 130, 45));
+    window.draw(outerGold);
 
-    sf::RectangleShape innerGold(sf::Vector2f(1744.f, 924.f));
-    innerGold.setPosition(88.f, 68.f);
+    sf::RectangleShape innerGold(sf::Vector2f(1764.f, 944.f));
+    innerGold.setPosition(78.f, 58.f);
     innerGold.setFillColor(sf::Color::Transparent);
     innerGold.setOutlineThickness(3.f);
     innerGold.setOutlineColor(sf::Color(255, 215, 110));
     window.draw(innerGold);
 
-    sf::ConvexShape cornerGlass(4);
-    cornerGlass.setPoint(0, sf::Vector2f(1500.f, 68.f));
-    cornerGlass.setPoint(1, sf::Vector2f(1820.f, 68.f));
-    cornerGlass.setPoint(2, sf::Vector2f(1820.f, 320.f));
-    cornerGlass.setPoint(3, sf::Vector2f(1650.f, 68.f));
-    cornerGlass.setFillColor(sf::Color(255, 255, 255, 22));
-    window.draw(cornerGlass);
-
-    sf::RectangleShape scanline(sf::Vector2f(1730.f, 1.5f));
-    scanline.setFillColor(sf::Color(0, 0, 0, 50));
-    for (float y = 72.f; y < 990.f; y += 4.f) {
-        scanline.setPosition(95.f, y);
+    sf::RectangleShape scanline(sf::Vector2f(1760.f, 1.5f));
+    scanline.setFillColor(sf::Color(0, 0, 0, 45));
+    for (float y = 60.f; y < 1000.f; y += 4.f) {
+        scanline.setPosition(80.f, y);
         window.draw(scanline);
-    }
-}
-
-void UIManager::drawPixelFruit(sf::RenderWindow& window, sf::Vector2f pos, ArcadeFruitType type, float anim) {
-    float bob = std::sin(anim) * 3.f;
-    sf::Vector2f drawPos(std::floor(pos.x), std::floor(pos.y + bob));
-
-    if (type == ArcadeFruitType::Cherry) {
-        sf::CircleShape c1(6.f); c1.setPosition(drawPos.x - 8.f, drawPos.y - 2.f); c1.setFillColor(sf::Color(255, 30, 80)); window.draw(c1);
-        sf::CircleShape c2(6.f); c2.setPosition(drawPos.x + 1.f, drawPos.y); c2.setFillColor(sf::Color(255, 30, 80)); window.draw(c2);
-        sf::RectangleShape stem(sf::Vector2f(2.f, 8.f)); stem.setPosition(drawPos.x - 2.f, drawPos.y - 9.f); stem.setFillColor(sf::Color(80, 220, 90)); stem.setRotation(15.f); window.draw(stem);
-    }
-    else if (type == ArcadeFruitType::Orange) {
-        sf::CircleShape o(8.f); o.setPosition(drawPos.x - 8.f, drawPos.y - 6.f); o.setFillColor(sf::Color(255, 140, 30)); window.draw(o);
-        sf::RectangleShape leaf(sf::Vector2f(4.f, 3.f)); leaf.setPosition(drawPos.x - 2.f, drawPos.y - 9.f); leaf.setFillColor(sf::Color(90, 230, 90)); window.draw(leaf);
-    }
-    else if (type == ArcadeFruitType::Grape) {
-        sf::CircleShape g1(5.f); g1.setPosition(drawPos.x - 6.f, drawPos.y - 7.f); g1.setFillColor(sf::Color(180, 60, 255)); window.draw(g1);
-        sf::CircleShape g2(5.f); g2.setPosition(drawPos.x + 1.f, drawPos.y - 7.f); g2.setFillColor(sf::Color(180, 60, 255)); window.draw(g2);
-        sf::CircleShape g3(5.f); g3.setPosition(drawPos.x - 2.f, drawPos.y - 1.f); g3.setFillColor(sf::Color(160, 40, 235)); window.draw(g3);
-    }
-    else {
-        sf::ConvexShape star(4);
-        star.setPoint(0, sf::Vector2f(0.f, -9.f));
-        star.setPoint(1, sf::Vector2f(9.f, 0.f));
-        star.setPoint(2, sf::Vector2f(0.f, 9.f));
-        star.setPoint(3, sf::Vector2f(-9.f, 0.f));
-        star.setPosition(drawPos);
-        star.setFillColor(WisdomUI::Theme::SunsetGold);
-        star.setOutlineThickness(1.5f);
-        star.setOutlineColor(WisdomUI::Theme::SunsetCoral);
-        window.draw(star);
     }
 }
