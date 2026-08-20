@@ -145,7 +145,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     assetBrowser = std::make_unique<AssetBrowserPanel>(assetManager, font);
     assetBrowser->setProject("CurrentProject");
-    assetBrowser->setBounds(sf::FloatRect(1920.f - 44.f - 280.f, 68.f, 280.f, 1080.f - 68.f - 24.f));
+    assetBrowser->setBounds(sf::FloatRect(1920.f - 44.f - 300.f, 68.f, 300.f, 1080.f - 68.f - 24.f));
 
     loadingOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
     loadingOverlay.setFillColor(sf::Color(10, 10, 15, 200));
@@ -229,8 +229,12 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         [this, baseCanvas]() { baseCanvas->redo(); },
         [this]() { uiFullscreen = !uiFullscreen; },
         [this, baseCanvas]() {
-            if (baseCanvas->getIsDirty()) showUnsavedWarning = true;
-            else { currentMenuState = MenuState::Main; }
+            if (baseCanvas->getIsDirty()) {
+                showUnsavedWarning = true;
+            }
+            else {
+                currentMenuState = MenuState::Main;
+            }
         }
     );
 
@@ -829,7 +833,7 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
     }
 }
 
-void UIManager::handleEvent(const sf::Event & event, sf::RenderWindow & window, AppState & currentState, AppSettings & settings, Canvas & canvas, Timeline & timeline, AIHelper & aiHelper, ProjectManager & pm) {
+void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
     if (AIManager::getInstance().isProcessingAsync()) {
         auto killAiProcess = [&]() {
             AIManager::getInstance().abortTask();
@@ -1195,7 +1199,18 @@ void UIManager::handleEvent(const sf::Event & event, sf::RenderWindow & window, 
         }
     }
     else if (currentState == AppState::Painting) {
-        if (m_topBar.HandleEvent(event, window)) return;
+        if (m_topBar.HandleEvent(event, window)) {
+            if (currentMenuState == MenuState::Main && !showUnsavedWarning) {
+                currentState = AppState::Welcome;
+            }
+            return;
+        }
+
+        if (currentMenuState == MenuState::Main && !showUnsavedWarning) {
+            currentState = AppState::Welcome;
+            return;
+        }
+
         if (m_toolOptionsBar.HandleEvent(event, window,
             [&](float sz) {
                 if (canvas.getPixelMode()) canvas.setPixelBrushSize(static_cast<int>(sz));
@@ -1224,7 +1239,7 @@ void UIManager::handleEvent(const sf::Event & event, sf::RenderWindow & window, 
                     return;
                 }
             }
-            if (mousePos.x > 1920.f - 44.f - 280.f && mousePos.x < 1920.f - 44.f) return;
+            if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
         }
         else if (m_activeRightTab == RightTabMode::Palette) {
             if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
@@ -1232,7 +1247,7 @@ void UIManager::handleEvent(const sf::Event & event, sf::RenderWindow & window, 
                 std::string cpAction = colorPalettePanel.processClick(mousePos, canvas);
                 if (cpAction == "color_close") { m_activeRightTab = RightTabMode::None; return; }
             }
-            if (mousePos.x > 1920.f - 44.f - 280.f && mousePos.x < 1920.f - 44.f) return;
+            if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
         }
         else if (m_activeRightTab == RightTabMode::Properties) {
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
@@ -1254,12 +1269,12 @@ void UIManager::handleEvent(const sf::Event & event, sf::RenderWindow & window, 
                     return;
                 }
             }
-            if (mousePos.x > 1920.f - 44.f - 280.f && mousePos.x < 1920.f - 44.f) return;
+            if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
         }
         else if (m_activeRightTab == RightTabMode::Assets) {
             if (assetBrowser) {
                 assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame());
-                if (mousePos.x > 1920.f - 44.f - 280.f && mousePos.x < 1920.f - 44.f) return;
+                if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
             }
         }
         else if (m_activeRightTab == RightTabMode::Audio) {
@@ -1278,7 +1293,7 @@ void UIManager::handleEvent(const sf::Event & event, sf::RenderWindow & window, 
                     if (audioPanel.handleEvent(event, mousePos)) return;
                 }
             }
-            if (mousePos.x > 1920.f - 44.f - 280.f && mousePos.x < 1920.f - 44.f) return;
+            if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
         }
 
         if (m_showTimeline) {

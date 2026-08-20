@@ -1,6 +1,8 @@
 #include "TopBar.h"
 #include "../UITheme.h"
 #include "../UIIcons.h"
+#include <algorithm>
+#include <cmath>
 
 namespace WisdomUI {
 
@@ -19,21 +21,21 @@ namespace WisdomUI {
 
         m_menus.clear();
         m_menus.push_back({ "File", {}, {
-            {"New Project (Ctrl+N)", onNew, 0.0f},
-            {"Open Project... (Ctrl+O)", onOpen, 0.0f},
-            {"Save Project (Ctrl+S)", onSave, 0.0f},
-            {"Export PNG / Sheet...", onExport, 0.0f},
-            {"Exit to Menu", onExit, 0.0f}
-        }, 0.0f, false });
+            {"New Project (Ctrl+N)", onNew, 0.0f, {}},
+            {"Open Project... (Ctrl+O)", onOpen, 0.0f, {}},
+            {"Save Project (Ctrl+S)", onSave, 0.0f, {}},
+            {"Export PNG / Sheet...", onExport, 0.0f, {}},
+            {"Exit to Menu", onExit, 0.0f, {}}
+        }, 0.0f, false, 240.0f });
 
         m_menus.push_back({ "Edit", {}, {
-            {"Undo (Ctrl+Z)", onUndo, 0.0f},
-            {"Redo (Ctrl+Y)", onRedo, 0.0f}
-        }, 0.0f, false });
+            {"Undo (Ctrl+Z)", onUndo, 0.0f, {}},
+            {"Redo (Ctrl+Y)", onRedo, 0.0f, {}}
+        }, 0.0f, false, 200.0f });
 
         m_menus.push_back({ "View", {}, {
-            {"Toggle Fullscreen (F11)", onToggleFullscreen, 0.0f}
-        }, 0.0f, false });
+            {"Toggle Fullscreen (F11)", onToggleFullscreen, 0.0f, {}}
+        }, 0.0f, false, 220.0f });
 
         m_quickBtns.clear();
         m_quickBtns.push_back({ "undo", "Undo (Ctrl+Z)", {}, onUndo, 0.0f, 1.0f });
@@ -47,21 +49,51 @@ namespace WisdomUI {
         m_isDirty = isDirty;
     }
 
+    sf::FloatRect TopBar::getDropdownPanelBounds(int menuIndex) const {
+        if (menuIndex < 0 || menuIndex >= static_cast<int>(m_menus.size())) return {};
+        const auto& menu = m_menus[menuIndex];
+        float itemH = 30.0f;
+        float totalH = menu.actions.size() * itemH + 12.0f;
+        float currentH = totalH * menu.openProgress;
+        return sf::FloatRect(std::floor(menu.bounds.left), std::floor(m_bounds.top + m_bounds.height + 3.0f), menu.dropdownWidth, currentH);
+    }
+
+    sf::FloatRect TopBar::getDropdownItemBounds(int menuIndex, int actionIndex) const {
+        if (menuIndex < 0 || menuIndex >= static_cast<int>(m_menus.size())) return {};
+        const auto& menu = m_menus[menuIndex];
+        if (actionIndex < 0 || actionIndex >= static_cast<int>(menu.actions.size())) return {};
+
+        float dropX = std::floor(menu.bounds.left);
+        float dropY = std::floor(m_bounds.top + m_bounds.height + 3.0f);
+        float itemH = 30.0f;
+        float itemY = dropY + 6.0f + actionIndex * itemH;
+        float itemW = menu.dropdownWidth - 12.0f;
+
+        return sf::FloatRect(dropX + 6.0f, itemY, itemW, itemH);
+    }
+
     void TopBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
 
-        float menuX = 220.0f;
+        float logoRight = bounds.left + 140.0f;
+
+        sf::Text projMeasure(m_projectName + (m_isDirty ? " *" : ""), m_font, 12);
+        float projBadgeW = std::clamp(projMeasure.getLocalBounds().width + 24.0f, 90.0f, 220.0f);
+        float menuStartX = logoRight + projBadgeW + 20.0f;
+
         for (auto& menu : m_menus) {
-            sf::Text t(menu.title, m_font, 13);
+            sf::Text t(menu.title, m_font, 12);
             float w = t.getLocalBounds().width + 24.0f;
-            menu.bounds = sf::FloatRect(menuX, bounds.top + 4.0f, w, bounds.height - 8.0f);
-            menuX += w + 6.0f;
+            menu.bounds = sf::FloatRect(std::floor(menuStartX), std::floor(bounds.top + 5.0f), std::floor(w), 26.0f);
+            menuStartX += w + 8.0f;
         }
 
-        float qX = bounds.left + bounds.width - 155.0f;
-        float btnSize = bounds.height - 10.0f;
+        float btnSize = 26.0f;
+        float totalQuickW = m_quickBtns.size() * (btnSize + 6.0f) - 6.0f;
+        float qX = bounds.left + bounds.width - totalQuickW - 14.0f;
+
         for (auto& qb : m_quickBtns) {
-            qb.bounds = sf::FloatRect(qX, bounds.top + 5.0f, btnSize, btnSize);
+            qb.bounds = sf::FloatRect(std::floor(qX), std::floor(bounds.top + 5.0f), btnSize, btnSize);
             qX += btnSize + 6.0f;
         }
     }
@@ -77,18 +109,14 @@ namespace WisdomUI {
             auto& menu = m_menus[i];
             bool isTargetOpen = (m_openMenuIndex == static_cast<int>(i));
             float target = isTargetOpen ? 1.0f : 0.0f;
-            menu.openProgress += (target - menu.openProgress) * 16.0f * deltaTime;
+            menu.openProgress += (target - menu.openProgress) * 18.0f * deltaTime;
             menu.openProgress = std::clamp(menu.openProgress, 0.0f, 1.0f);
 
-            if (isTargetOpen) {
-                float itemY = m_bounds.top + m_bounds.height + 4.0f;
-                float itemW = 200.0f;
-                float itemH = 26.0f;
-                for (auto& act : menu.actions) {
-                    sf::FloatRect actBounds(menu.bounds.left, itemY, itemW, itemH);
+            if (isTargetOpen && menu.openProgress > 0.1f) {
+                for (size_t j = 0; j < menu.actions.size(); ++j) {
+                    sf::FloatRect actBounds = getDropdownItemBounds(static_cast<int>(i), static_cast<int>(j));
                     bool actHover = actBounds.contains(mousePos);
-                    act.hoverAlpha += ((actHover ? 1.0f : 0.0f) - act.hoverAlpha) * 20.0f * deltaTime;
-                    itemY += itemH;
+                    menu.actions[j].hoverAlpha += ((actHover ? 1.0f : 0.0f) - menu.actions[j].hoverAlpha) * 20.0f * deltaTime;
                 }
             }
         }
@@ -96,7 +124,7 @@ namespace WisdomUI {
         for (auto& qb : m_quickBtns) {
             bool hover = qb.bounds.contains(mousePos);
             qb.hoverAlpha += ((hover ? 1.0f : 0.0f) - qb.hoverAlpha) * 14.0f * deltaTime;
-            qb.scale += ((hover ? 1.12f : 1.0f) - qb.scale) * 16.0f * deltaTime;
+            qb.scale += ((hover ? 1.10f : 1.0f) - qb.scale) * 16.0f * deltaTime;
         }
     }
 
@@ -106,18 +134,14 @@ namespace WisdomUI {
 
             if (m_openMenuIndex != -1) {
                 auto& openMenu = m_menus[m_openMenuIndex];
-                float itemY = m_bounds.top + m_bounds.height + 6.0f;
-                float itemW = 200.0f;
-                float itemH = 26.0f;
-
-                for (const auto& act : openMenu.actions) {
-                    sf::FloatRect itemBounds(openMenu.bounds.left, itemY, itemW, itemH);
+                for (size_t j = 0; j < openMenu.actions.size(); ++j) {
+                    sf::FloatRect itemBounds = getDropdownItemBounds(m_openMenuIndex, static_cast<int>(j));
                     if (itemBounds.contains(mousePos)) {
-                        if (act.callback) act.callback();
+                        auto cb = openMenu.actions[j].callback;
                         m_openMenuIndex = -1;
+                        if (cb) cb();
                         return true;
                     }
-                    itemY += itemH;
                 }
             }
 
@@ -130,8 +154,9 @@ namespace WisdomUI {
 
             for (auto& qb : m_quickBtns) {
                 if (qb.bounds.contains(mousePos)) {
-                    if (qb.onClick) qb.onClick();
+                    auto cb = qb.onClick;
                     m_openMenuIndex = -1;
+                    if (cb) cb();
                     return true;
                 }
             }
@@ -150,32 +175,42 @@ namespace WisdomUI {
         Theme::DrawSunsetPanel(window, m_bounds, 1.0f);
 
         sf::RectangleShape crest(sf::Vector2f(10.0f, 10.0f));
-        crest.setPosition(m_bounds.left + 16.0f, m_bounds.top + 13.0f);
+        crest.setPosition(m_bounds.left + 14.0f, m_bounds.top + 13.0f);
         crest.setRotation(45.0f);
         crest.setFillColor(Theme::SunsetAmber);
         crest.setOutlineThickness(1.0f);
         crest.setOutlineColor(Theme::SunsetCoralDark);
         window.draw(crest);
 
-        Theme::DrawCrispText(window, m_font, "WISDOM PARK", 13, m_bounds.left + 36.0f, m_bounds.top + 10.0f, Theme::SunsetAmber, sf::Color(14, 6, 20));
+        Theme::DrawCrispText(window, m_font, "WISDOM PARK", 13, m_bounds.left + 32.0f, m_bounds.top + 10.0f, Theme::SunsetAmber, sf::Color(14, 6, 20));
 
-        std::string projTitle = "|  " + m_projectName + (m_isDirty ? " *" : "");
-        Theme::DrawCrispText(window, m_font, projTitle, 12, m_bounds.left + 144.0f, m_bounds.top + 11.0f, m_isDirty ? Theme::SunsetPeach : Theme::TextSecondary);
+        float logoRight = m_bounds.left + 140.0f;
+        sf::Text projMeasure(m_projectName + (m_isDirty ? " *" : ""), m_font, 12);
+        float projBadgeW = std::clamp(projMeasure.getLocalBounds().width + 24.0f, 90.0f, 220.0f);
+        sf::FloatRect badgeBounds(logoRight, m_bounds.top + 5.0f, projBadgeW, 26.0f);
+
+        sf::RectangleShape badge(sf::Vector2f(badgeBounds.width, badgeBounds.height));
+        badge.setPosition(badgeBounds.left, badgeBounds.top);
+        badge.setFillColor(Theme::SunsetDeepDark);
+        badge.setOutlineThickness(1.0f);
+        badge.setOutlineColor(m_isDirty ? Theme::SunsetCoral : Theme::SunsetPlum);
+        window.draw(badge);
+
+        Theme::DrawCrispText(window, m_font, m_projectName + (m_isDirty ? " *" : ""), 11, badgeBounds.left + badgeBounds.width / 2.0f, badgeBounds.top + badgeBounds.height / 2.0f, m_isDirty ? Theme::SunsetGold : Theme::TextSecondary, sf::Color::Transparent, true, true);
+
+        sf::Vector2i mPosI = sf::Mouse::getPosition(window);
+        sf::Vector2f mPos = window.mapPixelToCoords(mPosI);
 
         for (size_t i = 0; i < m_menus.size(); ++i) {
             const auto& menu = m_menus[i];
             bool isOpen = (m_openMenuIndex == static_cast<int>(i));
-
-            sf::Vector2i mPosI = sf::Mouse::getPosition(window);
-            sf::Vector2f mPos = window.mapPixelToCoords(mPosI);
             bool hovered = menu.bounds.contains(mPos);
 
             Theme::DrawSunsetButton(window, menu.bounds, menu.title, m_font, 12, isOpen, hovered, false, 1.0f);
         }
 
         for (const auto& qb : m_quickBtns) {
-            bool active = false;
-            Theme::DrawSunsetButton(window, qb.bounds, "", m_font, 11, active, qb.hoverAlpha > 0.5f, false, qb.scale);
+            Theme::DrawSunsetButton(window, qb.bounds, "", m_font, 11, false, qb.hoverAlpha > 0.5f, false, qb.scale);
 
             sf::Vector2f iconPos(qb.bounds.left + 4.0f, qb.bounds.top + 4.0f);
             Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
@@ -184,28 +219,29 @@ namespace WisdomUI {
         for (size_t i = 0; i < m_menus.size(); ++i) {
             const auto& menu = m_menus[i];
             if (menu.openProgress > 0.02f) {
-                float itemW = 200.0f;
-                float itemH = 28.0f;
-                float totalH = menu.actions.size() * itemH + 12.0f;
-                float currentH = totalH * menu.openProgress;
+                sf::FloatRect dropPanel = getDropdownPanelBounds(static_cast<int>(i));
+                Theme::DrawSunsetPanel(window, dropPanel, menu.openProgress);
 
-                sf::FloatRect dropBounds(menu.bounds.left, m_bounds.top + m_bounds.height + 2.0f, itemW, currentH);
-                Theme::DrawSunsetPanel(window, dropBounds, menu.openProgress);
+                if (menu.openProgress > 0.35f) {
+                    for (size_t j = 0; j < menu.actions.size(); ++j) {
+                        const auto& act = menu.actions[j];
+                        sf::FloatRect itemRect = getDropdownItemBounds(static_cast<int>(i), static_cast<int>(j));
 
-                if (menu.openProgress > 0.4f) {
-                    float itemY = dropBounds.top + 6.0f;
-                    for (const auto& act : menu.actions) {
                         if (act.hoverAlpha > 0.01f) {
-                            sf::RectangleShape hovBg(sf::Vector2f(itemW - 12.0f, itemH));
-                            hovBg.setPosition(dropBounds.left + 6.0f, itemY);
-                            sf::Color hCol = Theme::SunsetSkyMid;
-                            hCol.a = static_cast<sf::Uint8>(220 * act.hoverAlpha * menu.openProgress);
+                            sf::RectangleShape hovBg(sf::Vector2f(itemRect.width, itemRect.height));
+                            hovBg.setPosition(itemRect.left, itemRect.top);
+                            sf::Color hCol = Theme::SunsetPlum;
+                            hCol.a = static_cast<sf::Uint8>(240 * act.hoverAlpha * menu.openProgress);
                             hovBg.setFillColor(hCol);
+                            hovBg.setOutlineThickness(1.0f);
+                            sf::Color hBorder = Theme::SunsetCoral;
+                            hBorder.a = static_cast<sf::Uint8>(255 * act.hoverAlpha * menu.openProgress);
+                            hovBg.setOutlineColor(hBorder);
                             window.draw(hovBg);
                         }
 
-                        Theme::DrawCrispText(window, m_font, act.label, 12, dropBounds.left + 14.0f, itemY + 5.0f, Theme::TextPrimary);
-                        itemY += itemH;
+                        sf::Color txtColor = (act.hoverAlpha > 0.5f) ? Theme::SunsetGold : Theme::TextPrimary;
+                        Theme::DrawCrispText(window, m_font, act.label, 12, itemRect.left + 10.0f, itemRect.top + 6.0f, txtColor, sf::Color(14, 6, 20));
                     }
                 }
             }
