@@ -73,12 +73,12 @@ namespace WisdomUI {
     void TimelineHeader::Render(sf::RenderWindow& window) {
         sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
         bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::Panel);
+        bg.setFillColor(Theme::WoodDark);
         window.draw(bg);
 
-        sf::RectangleShape border(sf::Vector2f(m_bounds.width, Theme::BorderThickness));
+        sf::RectangleShape border(sf::Vector2f(m_bounds.width, 2.0f));
         border.setPosition(m_bounds.left, m_bounds.top);
-        border.setFillColor(Theme::Border);
+        border.setFillColor(Theme::Brass);
         window.draw(border);
 
         sf::Text label("TIMELINE", m_font, 12);
@@ -89,10 +89,10 @@ namespace WisdomUI {
         auto drawBtn = [&](sf::FloatRect b, const std::string& str, float hov, bool active = false) {
             sf::RectangleShape r(sf::Vector2f(b.width, b.height));
             r.setPosition(b.left, b.top);
-            sf::Color fill = active ? Theme::Accent : Animation::InterpolateColor(Theme::PanelInset, Theme::PanelHover, hov);
+            sf::Color fill = active ? Theme::RubyAccent : Animation::InterpolateColor(Theme::WoodMedium, Theme::WoodLight, hov);
             r.setFillColor(fill);
             r.setOutlineThickness(1.0f);
-            r.setOutlineColor(active ? Theme::BorderHighlight : Animation::InterpolateColor(Theme::Border, Theme::Gold, hov));
+            r.setOutlineColor(active ? Theme::Gold : Animation::InterpolateColor(Theme::Brass, Theme::Gold, hov));
             window.draw(r);
 
             sf::Text t(str, m_font, 11);

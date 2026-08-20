@@ -82,12 +82,12 @@ namespace WisdomUI {
     void ToolDock::Render(sf::RenderWindow& window) {
         sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
         bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::Background);
+        bg.setFillColor(Theme::WoodMedium);
         window.draw(bg);
 
-        sf::RectangleShape border(sf::Vector2f(Theme::BorderThickness * 2.0f, m_bounds.height));
-        border.setPosition(m_bounds.left + m_bounds.width - Theme::BorderThickness * 2.0f, m_bounds.top);
-        border.setFillColor(Theme::Border);
+        sf::RectangleShape border(sf::Vector2f(2.0f, m_bounds.height));
+        border.setPosition(m_bounds.left + m_bounds.width - 2.0f, m_bounds.top);
+        border.setFillColor(Theme::Brass);
         window.draw(border);
 
         if (!m_tools.empty()) {
@@ -95,15 +95,15 @@ namespace WisdomUI {
             float startX = m_bounds.left + (m_bounds.width - btnSize) / 2.0f;
             sf::RectangleShape activeIndicator(sf::Vector2f(btnSize, btnSize));
             activeIndicator.setPosition(startX, m_selectionSliderY.current);
-            activeIndicator.setFillColor(Theme::Accent);
+            activeIndicator.setFillColor(Theme::RubyAccent);
             activeIndicator.setOutlineThickness(1.0f);
-            activeIndicator.setOutlineColor(Theme::BorderHighlight);
+            activeIndicator.setOutlineColor(Theme::Gold);
             window.draw(activeIndicator);
 
             float pulseGlow = Animation::Pulse(m_globalTime, 3.5f, 0.4f, 0.9f);
             sf::RectangleShape glowRibbon(sf::Vector2f(3.0f, btnSize - 6.0f));
             glowRibbon.setPosition(m_bounds.left + 2.0f, m_selectionSliderY.current + 3.0f);
-            sf::Color glowCol = Theme::BorderHighlight;
+            sf::Color glowCol = Theme::Gold;
             glowCol.a = static_cast<sf::Uint8>(255 * pulseGlow);
             glowRibbon.setFillColor(glowCol);
             window.draw(glowRibbon);
@@ -118,17 +118,17 @@ namespace WisdomUI {
                 hovBtn.setPosition(tool.bounds.left + tool.bounds.width / 2.0f, tool.bounds.top + tool.bounds.height / 2.0f);
                 hovBtn.setScale(tool.scale, tool.scale);
 
-                sf::Color hovCol = Theme::PanelHover;
+                sf::Color hovCol = Theme::WoodLight;
                 hovCol.a = static_cast<sf::Uint8>(220 * tool.hoverAlpha);
                 hovBtn.setFillColor(hovCol);
                 hovBtn.setOutlineThickness(1.0f);
-                sf::Color hovBrd = Theme::Border;
+                sf::Color hovBrd = Theme::Brass;
                 hovBrd.a = static_cast<sf::Uint8>(255 * tool.hoverAlpha);
                 hovBtn.setOutlineColor(hovBrd);
                 window.draw(hovBtn);
             }
 
-            sf::Color iconColor = isActive ? sf::Color::White : (tool.hoverAlpha > 0.5f ? Theme::Gold : Theme::TextPrimary);
+            sf::Color iconColor = isActive ? sf::Color::White : (tool.hoverAlpha > 0.5f ? Theme::Gold : Theme::Parchment);
             Icons::Draw(window, tool.id, sf::Vector2f(tool.bounds.left + 8.0f, tool.bounds.top + 8.0f), 20.0f, iconColor);
         }
 
@@ -137,9 +137,9 @@ namespace WisdomUI {
             sf::FloatRect tb = tip.getLocalBounds();
 
             sf::FloatRect tipBounds(m_tooltipPos.x, m_tooltipPos.y, tb.width + 16.0f, tb.height + 12.0f);
-            Theme::DrawFiligreePanel(window, tipBounds, m_tooltipAlpha);
+            Theme::DrawParchmentPanel(window, tipBounds, m_tooltipAlpha);
 
-            tip.setFillColor(Theme::Gold);
+            tip.setFillColor(Theme::TextParchment);
             tip.setPosition(m_tooltipPos.x + 8.0f, m_tooltipPos.y + 4.0f);
             window.draw(tip);
         }

@@ -45,12 +45,12 @@ namespace WisdomUI {
     void StatusBar::Render(sf::RenderWindow& window) {
         sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
         bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::Panel);
+        bg.setFillColor(Theme::WoodDark);
         window.draw(bg);
 
-        sf::RectangleShape border(sf::Vector2f(m_bounds.width, Theme::BorderThickness));
+        sf::RectangleShape border(sf::Vector2f(m_bounds.width, 2.0f));
         border.setPosition(m_bounds.left, m_bounds.top);
-        border.setFillColor(Theme::Border);
+        border.setFillColor(Theme::Brass);
         window.draw(border);
 
         float jewelPulse = Animation::Pulse(m_globalTime, 3.0f, 0.5f, 1.0f);
@@ -74,10 +74,10 @@ namespace WisdomUI {
 
         sf::RectangleShape btn(sf::Vector2f(m_timelineToggleBtn.width, m_timelineToggleBtn.height));
         btn.setPosition(m_timelineToggleBtn.left, m_timelineToggleBtn.top);
-        sf::Color btnCol = m_isTimelineOpen ? Theme::Accent : Animation::InterpolateColor(Theme::PanelInset, Theme::PanelHover, m_toggleHoverAlpha);
+        sf::Color btnCol = m_isTimelineOpen ? Theme::RubyAccent : Animation::InterpolateColor(Theme::WoodMedium, Theme::WoodLight, m_toggleHoverAlpha);
         btn.setFillColor(btnCol);
         btn.setOutlineThickness(1.0f);
-        btn.setOutlineColor(m_isTimelineOpen ? Theme::BorderHighlight : Animation::InterpolateColor(Theme::Border, Theme::Gold, m_toggleHoverAlpha));
+        btn.setOutlineColor(m_isTimelineOpen ? Theme::Gold : Animation::InterpolateColor(Theme::Brass, Theme::Gold, m_toggleHoverAlpha));
         window.draw(btn);
 
         std::string btnStr = m_isTimelineOpen ? "[ v ] TIMELINE" : "[ ^ ] TIMELINE";

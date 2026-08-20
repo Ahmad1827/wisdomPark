@@ -78,12 +78,12 @@ namespace WisdomUI {
     void RightDockTabs::Render(sf::RenderWindow& window) {
         sf::RectangleShape bg(sf::Vector2f(m_bounds.width, m_bounds.height));
         bg.setPosition(m_bounds.left, m_bounds.top);
-        bg.setFillColor(Theme::Background);
+        bg.setFillColor(Theme::WoodMedium);
         window.draw(bg);
 
-        sf::RectangleShape border(sf::Vector2f(Theme::BorderThickness * 2.0f, m_bounds.height));
+        sf::RectangleShape border(sf::Vector2f(2.0f, m_bounds.height));
         border.setPosition(m_bounds.left, m_bounds.top);
-        border.setFillColor(Theme::Border);
+        border.setFillColor(Theme::Brass);
         window.draw(border);
 
         for (const auto& tab : m_tabs) {
@@ -92,13 +92,13 @@ namespace WisdomUI {
             btn.setPosition(tab.bounds.left + tab.bounds.width / 2.0f, tab.bounds.top + tab.bounds.height / 2.0f);
             btn.setScale(tab.scale, tab.scale);
 
-            sf::Color fillCol = tab.isToggled ? Theme::Accent : Animation::InterpolateColor(Theme::Panel, Theme::PanelHover, tab.hoverAlpha);
+            sf::Color fillCol = tab.isToggled ? Theme::RubyAccent : Animation::InterpolateColor(Theme::WoodDark, Theme::WoodLight, tab.hoverAlpha);
             btn.setFillColor(fillCol);
             btn.setOutlineThickness(1.0f);
-            btn.setOutlineColor(tab.isToggled ? Theme::BorderHighlight : Animation::InterpolateColor(Theme::Border, Theme::Gold, tab.hoverAlpha));
+            btn.setOutlineColor(tab.isToggled ? Theme::Gold : Animation::InterpolateColor(Theme::Brass, Theme::Gold, tab.hoverAlpha));
             window.draw(btn);
 
-            sf::Color iconCol = tab.isToggled ? sf::Color::White : (tab.hoverAlpha > 0.5f ? Theme::Gold : Theme::TextPrimary);
+            sf::Color iconCol = tab.isToggled ? sf::Color::White : (tab.hoverAlpha > 0.5f ? Theme::Gold : Theme::Parchment);
             Icons::Draw(window, tab.id, sf::Vector2f(tab.bounds.left + 8.0f, tab.bounds.top + 8.0f), 20.0f, iconCol);
         }
 
@@ -107,9 +107,9 @@ namespace WisdomUI {
             sf::FloatRect tb = tip.getLocalBounds();
 
             sf::FloatRect tipBounds(m_tooltipPos.x, m_tooltipPos.y, tb.width + 16.0f, tb.height + 12.0f);
-            Theme::DrawFiligreePanel(window, tipBounds, m_tooltipAlpha);
+            Theme::DrawParchmentPanel(window, tipBounds, m_tooltipAlpha);
 
-            tip.setFillColor(Theme::Gold);
+            tip.setFillColor(Theme::TextParchment);
             tip.setPosition(m_tooltipPos.x + 8.0f, m_tooltipPos.y + 4.0f);
             window.draw(tip);
         }
