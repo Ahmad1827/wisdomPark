@@ -2545,13 +2545,15 @@ void UIManager::updateMinigame(float dt, sf::Vector2f mousePos, sf::RenderWindow
         if (m_arcadeHero.deathAnim >= 3.14159f) {
             m_arcadeHero.isDying = false;
             m_arcadeHero.deathAnim = 0.f;
+
+            if (m_arcadeHero.lives <= 0) {
+                window.close();
+                return;
+            }
+
             m_arcadeHero.pos = sf::Vector2f(960.f, 660.f);
             m_arcadeHero.vel = sf::Vector2f(0.f, 0.f);
             m_arcadeHero.invulnTimer = 2.0f;
-            if (m_arcadeHero.lives <= 0) {
-                m_arcadeHero.lives = 3;
-                m_arcadeScore = 0;
-            }
         }
     }
     else {
