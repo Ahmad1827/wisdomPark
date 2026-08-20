@@ -50,69 +50,70 @@ enum class GhostPersonality { Shadow, Speedy, Bashful, Pokey };
 enum class CollectibleType { Dot, PowerPellet, Cherry, Orange, Grape, Key };
 
 struct ArcadeGhost {
-    sf::Vector2f pos;
-    sf::Vector2f vel;
-    sf::Color baseColor;
-    GhostPersonality personality;
-    int dir;
-    float speed;
-    float animTimer;
-    bool isScared;
-    float scaredTimer;
-    bool isEaten;
-    sf::Vector2f spawnPos;
+    sf::Vector2f pos = { 0.f, 0.f };
+    sf::Vector2f vel = { 0.f, 0.f };
+    sf::Color baseColor = sf::Color::White;
+    GhostPersonality personality = GhostPersonality::Shadow;
+    int dir = 1;
+    float speed = 210.f;
+    float animTimer = 0.f;
+    bool isScared = false;
+    float scaredTimer = 0.f;
+    bool isEaten = false;
+    sf::Vector2f spawnPos = { 0.f, 0.f };
 };
 
 struct ArcadeCollectible {
-    sf::Vector2f pos;
-    CollectibleType type;
-    int points;
-    bool collected;
-    float respawnTimer;
-    float animPhase;
+    sf::Vector2f pos = { 0.f, 0.f };
+    CollectibleType type = CollectibleType::Dot;
+    int points = 10;
+    bool collected = false;
+    float respawnTimer = 0.f;
+    float animPhase = 0.f;
 };
 
 struct ArcadeStationPortal {
-    std::string id;
-    std::string title;
-    std::string subtitle;
-    std::string keyShortcut;
-    sf::FloatRect bounds;
-    sf::Color marqueeColor;
-    float pulse;
-    float hoverAlpha;
-    float triggerFlash;
+    std::string id = "";
+    std::string title = "";
+    std::string subtitle = "";
+    std::string keyShortcut = "";
+    sf::FloatRect bounds = { 0.f, 0.f, 0.f, 0.f };
+    sf::Color marqueeColor = sf::Color::White;
+    float pulse = 0.f;
+    float hoverAlpha = 0.f;
+    float triggerFlash = 0.f;
+    bool isArmed = true;
 };
 
 struct ArcadePacHero {
-    sf::Vector2f pos;
-    sf::Vector2f vel;
-    int dir;
-    int nextDir;
-    float speed;
-    float mouthAnim;
-    float deathAnim;
-    bool isDying;
-    int lives;
-    float invulnTimer;
+    sf::Vector2f pos = { 960.f, 680.f };
+    sf::Vector2f vel = { 0.f, 0.f };
+    int dir = 0;
+    int nextDir = 0;
+    float speed = 280.f;
+    float mouthAnim = 0.f;
+    float deathAnim = 0.f;
+    bool isDying = false;
+    int lives = 3;
+    float invulnTimer = 0.f;
 };
 
 struct ArcadeParticleFX {
-    sf::Vector2f pos;
-    sf::Vector2f vel;
-    float life;
-    float maxLife;
-    float size;
-    sf::Color color;
+    sf::Vector2f pos = { 0.f, 0.f };
+    sf::Vector2f vel = { 0.f, 0.f };
+    float life = 0.f;
+    float maxLife = 1.0f;
+    float size = 3.0f;
+    sf::Color color = sf::Color::White;
 };
 
 struct ArcadeScoreFloater {
-    std::string text;
-    sf::Vector2f pos;
-    sf::Vector2f vel;
-    float life;
-    float maxLife;
-    sf::Color color;
+    std::string text = "";
+    sf::Vector2f pos = { 0.f, 0.f };
+    sf::Vector2f vel = { 0.f, -70.f };
+    float life = 0.85f;
+    float maxLife = 0.85f;
+    sf::Color color = sf::Color::White;
 };
 
 
@@ -152,6 +153,7 @@ struct LightRay {
 
 class UIManager {
 private:
+    bool m_isArcadePaused = false;
     ArcadePacHero m_arcadeHero;
     std::vector<ArcadeGhost> m_arcadeGhosts;
     std::vector<ArcadeCollectible> m_arcadeCollectibles;
@@ -160,9 +162,10 @@ private:
     std::vector<ArcadeParticleFX> m_arcadeFX;
     std::vector<ArcadeScoreFloater> m_arcadeFloaters;
 
+    float m_arcadeGlobalTime = 0.0f;
+    float m_arcadeMasterTimer = 0.0f;
     int m_arcadeScore = 0;
     int m_arcadeHighScore = 25000;
-    float m_arcadeMasterTimer = 0.0f;
     std::string m_arcadePendingAction = "";
     float m_arcadeActionDelay = 0.0f;
 
