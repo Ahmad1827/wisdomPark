@@ -378,6 +378,9 @@
     <ClInclude Include="src\ui\Widgets\IconButton.h" />
     <ClInclude Include="src\ui\WorkspaceLayout.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="E:\my files\Downloads\landofmakebelieve2.jfif" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

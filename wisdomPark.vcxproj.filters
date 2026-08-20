@@ -708,4 +708,7 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="E:\my files\Downloads\landofmakebelieve2.jfif" />
+  </ItemGroup>
 </Project>

@@ -68,7 +68,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     projManager = pm;
     keybindManager.init();
 
-    bgTexture.loadFromFile("assets/landofwisdompark.png");
+    bgTexture.loadFromFile("assets/landofwisdompark2.jfif");
     bgSprite.setTexture(bgTexture);
 
     font.loadFromFile("assets/font.otf");
@@ -2093,6 +2093,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
     bgSprite.setPosition(0.f, 0.f);
     bgSprite.setScale(1920.f / bgTexture.getSize().x, 1080.f / bgTexture.getSize().y);
+    bgSprite.setColor(sf::Color::White);
     window.draw(bgSprite);
 
     if (currentState == AppState::Welcome) {
@@ -2131,13 +2132,13 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             rightProperties.draw(window);
         }
         else if (m_activeRightTab == RightTabMode::Assets && assetBrowser) {
-            sf::FloatRect abBounds(1920.f - 44.f - 280.f, 68.0f, 280.f, 1080.0f - 68.0f - 24.0f);
-            WisdomUI::Theme::DrawParchmentPanel(window, abBounds, 1.0f);
+            sf::FloatRect abBounds(1920.f - 44.f - 300.f, 68.0f, 300.f, 1080.0f - 68.0f - 24.0f);
+            WisdomUI::Theme::DrawSunsetPanel(window, abBounds, 1.0f);
             assetBrowser->draw(window);
         }
         else if (m_activeRightTab == RightTabMode::Audio) {
-            sf::FloatRect audBounds(1920.f - 44.f - 280.f, 68.0f, 280.f, 1080.0f - 68.0f - 24.0f);
-            WisdomUI::Theme::DrawParchmentPanel(window, audBounds, 1.0f);
+            sf::FloatRect audBounds(1920.f - 44.f - 300.f, 68.0f, 300.f, 1080.0f - 68.0f - 24.0f);
+            WisdomUI::Theme::DrawSunsetPanel(window, audBounds, 1.0f);
             audioPanel.draw(window);
         }
 
@@ -2149,14 +2150,14 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             float timelineY = 1080.0f - WisdomUI::Theme::StatusBarHeight - WisdomUI::Theme::TimelineHeight;
             sf::FloatRect timelineBounds(0.0f, timelineY, 1920.0f, WisdomUI::Theme::TimelineHeight);
 
-            WisdomUI::Theme::DrawCarvedWoodPlank(window, timelineBounds, false, 1.0f);
+            WisdomUI::Theme::DrawSunsetPanel(window, timelineBounds, 1.0f);
 
             sf::FloatRect trayBounds(12.0f, timelineY + 32.0f, 1920.0f - 24.0f, WisdomUI::Theme::TimelineHeight - 40.0f);
             sf::RectangleShape trayBg(sf::Vector2f(trayBounds.width, trayBounds.height));
             trayBg.setPosition(trayBounds.left, trayBounds.top);
-            trayBg.setFillColor(WisdomUI::Theme::WoodDeepShadow);
-            trayBg.setOutlineThickness(1.5f);
-            trayBg.setOutlineColor(WisdomUI::Theme::BrassDark);
+            trayBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+            trayBg.setOutlineThickness(1.0f);
+            trayBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
             window.draw(trayBg);
 
             m_timelineHeader.Render(window);
@@ -2175,12 +2176,12 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
                 bool isSelected = (i == curFrame);
 
                 sf::FloatRect cardBounds(startX, cardY, cardW, cardH);
-                if (isSelected) {
-                    WisdomUI::Theme::DrawParchmentPanel(window, cardBounds, 1.0f);
-                }
-                else {
-                    WisdomUI::Theme::DrawCarvedWoodPlank(window, cardBounds, false, 1.0f);
-                }
+                sf::RectangleShape card(sf::Vector2f(cardW, cardH));
+                card.setPosition(startX, cardY);
+                card.setFillColor(isSelected ? WisdomUI::Theme::SunsetSkyMid : WisdomUI::Theme::SunsetSkyTop);
+                card.setOutlineThickness(isSelected ? 2.0f : 1.0f);
+                card.setOutlineColor(isSelected ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum);
+                window.draw(card);
 
                 float boxW = cardW - 14.0f;
                 float boxH = cardH - 36.0f;
@@ -2189,9 +2190,9 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
                 sf::RectangleShape thumbBase(sf::Vector2f(boxW, boxH));
                 thumbBase.setPosition(boxX, boxY);
-                thumbBase.setFillColor(sf::Color(220, 220, 220));
-                thumbBase.setOutlineThickness(1.0f);
-                thumbBase.setOutlineColor(WisdomUI::Theme::BrassDark);
+                thumbBase.setFillColor(sf::Color(210, 210, 210));
+                thumbBase.setOutlineThickness(1.f);
+                thumbBase.setOutlineColor(WisdomUI::Theme::SunsetCoralDark);
                 window.draw(thumbBase);
 
                 int gridCols = 8;
@@ -2240,16 +2241,12 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
                     }
                 }
 
-                sf::Text fNum(std::to_string(i + 1), font, 11);
-                fNum.setFillColor(isSelected ? WisdomUI::Theme::TextParchment : WisdomUI::Theme::TextGold);
-                sf::FloatRect nb = fNum.getLocalBounds();
-                fNum.setPosition(startX + (cardW - nb.width) / 2.0f, cardY + cardH - 22.0f);
-                window.draw(fNum);
+                WisdomUI::Theme::DrawCrispText(window, font, std::to_string(i + 1), 12, startX + cardW / 2.0f, cardY + cardH - 14.0f, isSelected ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
 
                 if (isSelected) {
                     sf::RectangleShape selTag(sf::Vector2f(cardW - 12.0f, 2.0f));
                     selTag.setPosition(startX + 6.0f, cardY + 3.0f);
-                    selTag.setFillColor(WisdomUI::Theme::RubyAccent);
+                    selTag.setFillColor(WisdomUI::Theme::SunsetCoral);
                     window.draw(selTag);
                 }
 
@@ -2297,17 +2294,10 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             float cy = (1080.f - boxHeight) / 2.f;
 
             sf::FloatRect warnBounds(cx, cy, boxWidth, boxHeight);
-            WisdomUI::Theme::DrawParchmentPanel(window, warnBounds, 1.0f);
+            WisdomUI::Theme::DrawSunsetPanel(window, warnBounds, 1.0f);
 
-            sf::Text warnTitleText("UNSAVED CHANGES", font, 20);
-            warnTitleText.setFillColor(WisdomUI::Theme::TextParchment);
-            warnTitleText.setPosition(cx + (boxWidth - warnTitleText.getLocalBounds().width) / 2.f, cy + 25.f);
-            window.draw(warnTitleText);
-
-            sf::Text warnSubText("Would you like to save before leaving?", font, 14);
-            warnSubText.setFillColor(WisdomUI::Theme::TextParchmentMuted);
-            warnSubText.setPosition(cx + (boxWidth - warnSubText.getLocalBounds().width) / 2.f, cy + 65.f);
-            window.draw(warnSubText);
+            WisdomUI::Theme::DrawCrispText(window, font, "UNSAVED CHANGES", 20, cx + boxWidth / 2.0f, cy + 30.f, WisdomUI::Theme::SunsetAmber, sf::Color(10, 4, 16), true, true);
+            WisdomUI::Theme::DrawCrispText(window, font, "Would you like to save before leaving?", 14, cx + boxWidth / 2.0f, cy + 70.f, WisdomUI::Theme::TextSecondary, sf::Color(10, 4, 16), true, true);
 
             sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
             sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);

@@ -147,44 +147,20 @@ namespace WisdomUI {
     }
 
     void TopBar::Render(sf::RenderWindow& window) {
-        Theme::DrawCarvedWoodPlank(window, m_bounds, false, 1.0f);
-
-        sf::RectangleShape brassLine(sf::Vector2f(m_bounds.width, 2.0f));
-        brassLine.setPosition(m_bounds.left, m_bounds.top + m_bounds.height - 2.0f);
-        brassLine.setFillColor(Theme::Brass);
-        window.draw(brassLine);
-
-        float glintX = m_bounds.left + m_shimmerOffset;
-        if (glintX >= m_bounds.left && glintX <= m_bounds.left + m_bounds.width) {
-            sf::RectangleShape glint(sf::Vector2f(45.0f, 2.0f));
-            glint.setPosition(glintX, m_bounds.top + m_bounds.height - 2.0f);
-            glint.setFillColor(Theme::GoldHighlight);
-            window.draw(glint);
-        }
+        Theme::DrawSunsetPanel(window, m_bounds, 1.0f);
 
         sf::RectangleShape crest(sf::Vector2f(10.0f, 10.0f));
         crest.setPosition(m_bounds.left + 16.0f, m_bounds.top + 13.0f);
         crest.setRotation(45.0f);
-        crest.setFillColor(Theme::Gold);
+        crest.setFillColor(Theme::SunsetAmber);
         crest.setOutlineThickness(1.0f);
-        crest.setOutlineColor(Theme::BrassDark);
+        crest.setOutlineColor(Theme::SunsetCoralDark);
         window.draw(crest);
 
-        sf::Text shadowLogo("WISDOM PARK", m_font, 13);
-        shadowLogo.setFillColor(Theme::WoodDeepShadow);
-        shadowLogo.setPosition(m_bounds.left + 35.0f, m_bounds.top + 10.0f);
-        window.draw(shadowLogo);
+        Theme::DrawCrispText(window, m_font, "WISDOM PARK", 13, m_bounds.left + 36.0f, m_bounds.top + 10.0f, Theme::SunsetAmber, sf::Color(14, 6, 20));
 
-        sf::Text logo("WISDOM PARK", m_font, 13);
-        logo.setFillColor(Theme::Gold);
-        logo.setPosition(m_bounds.left + 34.0f, m_bounds.top + 9.0f);
-        window.draw(logo);
-
-        std::string projTitle = "|   " + m_projectName + (m_isDirty ? " *" : "");
-        sf::Text projText(projTitle, m_font, 12);
-        projText.setFillColor(m_isDirty ? Theme::GoldHighlight : Theme::TextSecondary);
-        projText.setPosition(m_bounds.left + 144.0f, m_bounds.top + 10.0f);
-        window.draw(projText);
+        std::string projTitle = "|  " + m_projectName + (m_isDirty ? " *" : "");
+        Theme::DrawCrispText(window, m_font, projTitle, 12, m_bounds.left + 144.0f, m_bounds.top + 11.0f, m_isDirty ? Theme::SunsetPeach : Theme::TextSecondary);
 
         for (size_t i = 0; i < m_menus.size(); ++i) {
             const auto& menu = m_menus[i];
@@ -194,44 +170,41 @@ namespace WisdomUI {
             sf::Vector2f mPos = window.mapPixelToCoords(mPosI);
             bool hovered = menu.bounds.contains(mPos);
 
-            Theme::DrawThemedButton(window, menu.bounds, menu.title, m_font, 11, isOpen, hovered, false, 1.0f);
+            Theme::DrawSunsetButton(window, menu.bounds, menu.title, m_font, 12, isOpen, hovered, false, 1.0f);
         }
 
         for (const auto& qb : m_quickBtns) {
             bool active = false;
-            Theme::DrawThemedButton(window, qb.bounds, "", m_font, 11, active, qb.hoverAlpha > 0.5f, false, qb.scale);
+            Theme::DrawSunsetButton(window, qb.bounds, "", m_font, 11, active, qb.hoverAlpha > 0.5f, false, qb.scale);
 
             sf::Vector2f iconPos(qb.bounds.left + 4.0f, qb.bounds.top + 4.0f);
-            Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::Gold : Theme::Parchment);
+            Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
         }
 
         for (size_t i = 0; i < m_menus.size(); ++i) {
             const auto& menu = m_menus[i];
             if (menu.openProgress > 0.02f) {
                 float itemW = 200.0f;
-                float itemH = 26.0f;
+                float itemH = 28.0f;
                 float totalH = menu.actions.size() * itemH + 12.0f;
                 float currentH = totalH * menu.openProgress;
 
                 sf::FloatRect dropBounds(menu.bounds.left, m_bounds.top + m_bounds.height + 2.0f, itemW, currentH);
-                Theme::DrawParchmentPanel(window, dropBounds, menu.openProgress);
+                Theme::DrawSunsetPanel(window, dropBounds, menu.openProgress);
 
                 if (menu.openProgress > 0.4f) {
                     float itemY = dropBounds.top + 6.0f;
                     for (const auto& act : menu.actions) {
                         if (act.hoverAlpha > 0.01f) {
-                            sf::RectangleShape hovBg(sf::Vector2f(itemW - 14.0f, itemH));
-                            hovBg.setPosition(dropBounds.left + 7.0f, itemY);
-                            sf::Color hCol = Theme::ParchmentDark;
-                            hCol.a = static_cast<sf::Uint8>(255 * act.hoverAlpha * menu.openProgress);
+                            sf::RectangleShape hovBg(sf::Vector2f(itemW - 12.0f, itemH));
+                            hovBg.setPosition(dropBounds.left + 6.0f, itemY);
+                            sf::Color hCol = Theme::SunsetSkyMid;
+                            hCol.a = static_cast<sf::Uint8>(220 * act.hoverAlpha * menu.openProgress);
                             hovBg.setFillColor(hCol);
                             window.draw(hovBg);
                         }
 
-                        sf::Text actText(act.label, m_font, 11);
-                        actText.setFillColor(Theme::TextParchment);
-                        actText.setPosition(dropBounds.left + 14.0f, itemY + 4.0f);
-                        window.draw(actText);
+                        Theme::DrawCrispText(window, m_font, act.label, 12, dropBounds.left + 14.0f, itemY + 5.0f, Theme::TextPrimary);
                         itemY += itemH;
                     }
                 }

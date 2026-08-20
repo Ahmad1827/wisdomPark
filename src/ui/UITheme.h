@@ -7,255 +7,257 @@
 namespace WisdomUI {
 
     struct Theme {
-        static inline const sf::Color WoodDeepShadow = sf::Color(22, 12, 6);
-        static inline const sf::Color WoodDark = sf::Color(46, 26, 14);
-        static inline const sf::Color WoodMedium = sf::Color(78, 46, 26);
-        static inline const sf::Color WoodLight = sf::Color(118, 74, 42);
-        static inline const sf::Color WoodHighlight = sf::Color(156, 104, 62);
+        static inline const sf::Color SunsetDeepDark = sf::Color(20, 10, 28);
+        static inline const sf::Color SunsetSkyTop = sf::Color(34, 16, 46);
+        static inline const sf::Color SunsetSkyMid = sf::Color(64, 26, 72);
+        static inline const sf::Color SunsetPlum = sf::Color(96, 38, 92);
+        static inline const sf::Color SunsetViolet = sf::Color(142, 62, 140);
+        static inline const sf::Color SunsetCoralDark = sf::Color(168, 48, 72);
+        static inline const sf::Color SunsetCoral = sf::Color(230, 82, 98);
+        static inline const sf::Color SunsetPeach = sf::Color(255, 154, 118);
+        static inline const sf::Color SunsetAmber = sf::Color(248, 190, 68);
+        static inline const sf::Color SunsetGold = sf::Color(255, 226, 110);
+        static inline const sf::Color SunsetGlow = sf::Color(255, 246, 175);
 
-        static inline const sf::Color Parchment = sf::Color(236, 220, 188);
-        static inline const sf::Color ParchmentDark = sf::Color(204, 180, 140);
-        static inline const sf::Color ParchmentShadow = sf::Color(168, 142, 104);
-        static inline const sf::Color ParchmentInset = sf::Color(190, 166, 128);
-
-        static inline const sf::Color BrassDark = sf::Color(110, 76, 22);
-        static inline const sf::Color Brass = sf::Color(180, 130, 44);
-        static inline const sf::Color Gold = sf::Color(246, 202, 68);
-        static inline const sf::Color GoldHighlight = sf::Color(255, 240, 150);
-
-        static inline const sf::Color RubyDark = sf::Color(120, 24, 18);
-        static inline const sf::Color RubyAccent = sf::Color(182, 42, 32);
-        static inline const sf::Color RubyHighlight = sf::Color(226, 72, 58);
-
-        static inline const sf::Color TextParchment = sf::Color(44, 26, 12);
-        static inline const sf::Color TextParchmentMuted = sf::Color(108, 80, 52);
-        static inline const sf::Color TextGold = sf::Color(255, 224, 110);
-        static inline const sf::Color TextPrimary = sf::Color(252, 242, 226);
-        static inline const sf::Color TextSecondary = sf::Color(218, 190, 150);
-        static inline const sf::Color TextMuted = sf::Color(144, 118, 88);
+        static inline const sf::Color TextPrimary = sf::Color(255, 245, 235);
+        static inline const sf::Color TextSecondary = sf::Color(238, 192, 198);
+        static inline const sf::Color TextGold = sf::Color(255, 226, 110);
+        static inline const sf::Color TextPeach = sf::Color(255, 174, 140);
+        static inline const sf::Color TextMuted = sf::Color(160, 118, 152);
         static inline const sf::Color Transparent = sf::Color(0, 0, 0, 0);
 
-        static inline const sf::Color Background = WoodDark;
-        static inline const sf::Color Panel = WoodMedium;
-        static inline const sf::Color PanelHover = WoodLight;
-        static inline const sf::Color PanelInset = sf::Color(28, 16, 9);
-        static inline const sf::Color Border = Brass;
-        static inline const sf::Color BorderHighlight = Gold;
-        static inline const sf::Color BorderShadow = BrassDark;
-        static inline const sf::Color Accent = RubyAccent;
-        static inline const sf::Color AccentHover = RubyHighlight;
-        static inline const sf::Color AccentGlow = sf::Color(255, 120, 80, 120);
+        static inline const sf::Color Background = SunsetDeepDark;
+        static inline const sf::Color Panel = SunsetSkyTop;
+        static inline const sf::Color PanelHover = SunsetSkyMid;
+        static inline const sf::Color PanelInset = SunsetDeepDark;
+        static inline const sf::Color Border = SunsetCoralDark;
+        static inline const sf::Color BorderHighlight = SunsetAmber;
+        static inline const sf::Color BorderShadow = SunsetDeepDark;
+        static inline const sf::Color Accent = SunsetCoral;
+        static inline const sf::Color AccentHover = SunsetPeach;
+        static inline const sf::Color AccentGlow = sf::Color(255, 154, 118, 90);
+
+        static inline const sf::Color WoodDeepShadow = SunsetDeepDark;
+        static inline const sf::Color WoodDark = SunsetSkyTop;
+        static inline const sf::Color WoodMedium = SunsetSkyMid;
+        static inline const sf::Color WoodLight = SunsetPlum;
+        static inline const sf::Color WoodHighlight = SunsetViolet;
+        static inline const sf::Color Parchment = sf::Color(245, 225, 215);
+        static inline const sf::Color ParchmentDark = sf::Color(215, 185, 180);
+        static inline const sf::Color ParchmentShadow = sf::Color(170, 130, 140);
+        static inline const sf::Color ParchmentInset = sf::Color(195, 155, 165);
+        static inline const sf::Color BrassDark = SunsetCoralDark;
+        static inline const sf::Color Brass = SunsetCoral;
+        static inline const sf::Color Gold = SunsetAmber;
+        static inline const sf::Color GoldHighlight = SunsetGold;
+        static inline const sf::Color RubyDark = SunsetCoralDark;
+        static inline const sf::Color RubyMuted = SunsetCoralDark;
+        static inline const sf::Color RubyAccent = SunsetCoral;
+        static inline const sf::Color RubyHighlight = SunsetPeach;
+        static inline const sf::Color TextParchment = sf::Color(36, 14, 32);
+        static inline const sf::Color TextParchmentMuted = sf::Color(110, 60, 80);
 
         static inline const float TopBarHeight = 36.0f;
         static inline const float OptionsBarHeight = 32.0f;
         static inline const float ToolDockWidth = 52.0f;
-        static inline const float RightDockWidth = 280.0f;
+        static inline const float RightDockWidth = 300.0f;
         static inline const float TimelineHeight = 200.0f;
         static inline const float StatusBarHeight = 24.0f;
         static inline const float BorderThickness = 1.0f;
 
-        static void DrawRivet(sf::RenderWindow& window, float x, float y, float alphaMult = 1.0f) {
-            sf::CircleShape base(2.5f);
-            base.setOrigin(2.5f, 2.5f);
-            base.setPosition(x, y);
-            sf::Color cBase = BrassDark;
-            cBase.a = static_cast<sf::Uint8>(cBase.a * alphaMult);
-            base.setFillColor(cBase);
-            window.draw(base);
+        static void DrawCrispText(sf::RenderWindow& window, const sf::Font& font, const std::string& str, unsigned int size, float x, float y, sf::Color color, sf::Color shadowColor = sf::Color::Transparent, bool centerH = false, bool centerV = false) {
+            sf::Text txt(str, font, size);
+            sf::FloatRect tb = txt.getLocalBounds();
 
-            sf::CircleShape head(1.5f);
-            head.setOrigin(1.5f, 1.5f);
-            head.setPosition(x - 0.5f, y - 0.5f);
-            sf::Color cHead = Gold;
-            cHead.a = static_cast<sf::Uint8>(cHead.a * alphaMult);
-            head.setFillColor(cHead);
-            window.draw(head);
+            float drawX = std::floor(x);
+            float drawY = std::floor(y);
+
+            if (centerH) drawX = std::floor(x - (tb.left + tb.width / 2.0f));
+            if (centerV) drawY = std::floor(y - (tb.top + tb.height / 2.0f));
+
+            if (shadowColor != sf::Color::Transparent) {
+                txt.setPosition(drawX + 1.0f, drawY + 1.0f);
+                txt.setFillColor(shadowColor);
+                window.draw(txt);
+            }
+
+            txt.setPosition(drawX, drawY);
+            txt.setFillColor(color);
+            window.draw(txt);
         }
 
-        static void DrawCornerOrnament(sf::RenderWindow& window, float x, float y, float sx, float sy, float alphaMult = 1.0f) {
-            sf::ConvexShape corner;
-            corner.setPointCount(6);
-            corner.setPoint(0, sf::Vector2f(0.0f, 0.0f));
-            corner.setPoint(1, sf::Vector2f(14.0f * sx, 0.0f));
-            corner.setPoint(2, sf::Vector2f(14.0f * sx, 4.0f * sy));
-            corner.setPoint(3, sf::Vector2f(4.0f * sx, 4.0f * sy));
-            corner.setPoint(4, sf::Vector2f(4.0f * sx, 14.0f * sy));
-            corner.setPoint(5, sf::Vector2f(0.0f, 14.0f * sy));
-            corner.setPosition(x, y);
+        static void DrawSunsetPanel(sf::RenderWindow& window, sf::FloatRect bounds, float alphaMult = 1.0f) {
+            float x = std::floor(bounds.left);
+            float y = std::floor(bounds.top);
+            float w = std::floor(bounds.width);
+            float h = std::floor(bounds.height);
+            float c = 6.0f;
 
-            sf::Color c = Gold;
-            c.a = static_cast<sf::Uint8>(c.a * alphaMult);
-            corner.setFillColor(c);
-            corner.setOutlineThickness(1.0f);
-            sf::Color oc = BrassDark;
-            oc.a = static_cast<sf::Uint8>(oc.a * alphaMult);
-            corner.setOutlineColor(oc);
-            window.draw(corner);
+            sf::ConvexShape shadow(8);
+            shadow.setPoint(0, sf::Vector2f(x - 2.0f + c, y - 2.0f));
+            shadow.setPoint(1, sf::Vector2f(x + w + 2.0f - c, y - 2.0f));
+            shadow.setPoint(2, sf::Vector2f(x + w + 2.0f, y - 2.0f + c));
+            shadow.setPoint(3, sf::Vector2f(x + w + 2.0f, y + h + 2.0f - c));
+            shadow.setPoint(4, sf::Vector2f(x + w + 2.0f - c, y + h + 2.0f));
+            shadow.setPoint(5, sf::Vector2f(x - 2.0f + c, y + h + 2.0f));
+            shadow.setPoint(6, sf::Vector2f(x - 2.0f, y + h + 2.0f - c));
+            shadow.setPoint(7, sf::Vector2f(x - 2.0f, y - 2.0f + c));
+            shadow.setFillColor(sf::Color(10, 4, 16, static_cast<sf::Uint8>(210 * alphaMult)));
+            window.draw(shadow);
 
-            DrawRivet(window, x + 7.0f * sx, y + 7.0f * sy, alphaMult);
-        }
+            sf::ConvexShape base(8);
+            base.setPoint(0, sf::Vector2f(x + c, y));
+            base.setPoint(1, sf::Vector2f(x + w - c, y));
+            base.setPoint(2, sf::Vector2f(x + w, y + c));
+            base.setPoint(3, sf::Vector2f(x + w, y + h - c));
+            base.setPoint(4, sf::Vector2f(x + w - c, y + h));
+            base.setPoint(5, sf::Vector2f(x + c, y + h));
+            base.setPoint(6, sf::Vector2f(x, y + h - c));
+            base.setPoint(7, sf::Vector2f(x, y + c));
 
-        static void DrawCarvedWoodPlank(sf::RenderWindow& window, sf::FloatRect bounds, bool vertical = false, float alphaMult = 1.0f) {
-            sf::RectangleShape dropShadow(sf::Vector2f(bounds.width + 4.0f, bounds.height + 4.0f));
-            dropShadow.setPosition(bounds.left - 2.0f, bounds.top - 2.0f);
-            dropShadow.setFillColor(sf::Color(10, 5, 2, static_cast<sf::Uint8>(190 * alphaMult)));
-            window.draw(dropShadow);
-
-            sf::RectangleShape base(sf::Vector2f(bounds.width, bounds.height));
-            base.setPosition(bounds.left, bounds.top);
-            sf::Color wColor = WoodMedium;
-            wColor.a = static_cast<sf::Uint8>(wColor.a * alphaMult);
-            base.setFillColor(wColor);
-            base.setOutlineThickness(2.0f);
-            sf::Color bCol = BrassDark;
-            bCol.a = static_cast<sf::Uint8>(bCol.a * alphaMult);
-            base.setOutlineColor(bCol);
+            sf::Color bgCol = SunsetSkyTop;
+            bgCol.a = static_cast<sf::Uint8>(248 * alphaMult);
+            base.setFillColor(bgCol);
+            base.setOutlineThickness(1.5f);
+            sf::Color borderCol = SunsetCoralDark;
+            borderCol.a = static_cast<sf::Uint8>(255 * alphaMult);
+            base.setOutlineColor(borderCol);
             window.draw(base);
 
-            if (!vertical) {
-                float step = 14.0f;
-                for (float y = bounds.top + 4.0f; y < bounds.top + bounds.height - 4.0f; y += step) {
-                    sf::RectangleShape groove(sf::Vector2f(bounds.width - 8.0f, 1.0f));
-                    groove.setPosition(bounds.left + 4.0f, y);
-                    sf::Color gCol = WoodDeepShadow;
-                    gCol.a = static_cast<sf::Uint8>(90 * alphaMult);
-                    groove.setFillColor(gCol);
-                    window.draw(groove);
+            sf::RectangleShape topEdge(sf::Vector2f(w - c * 2.0f, 1.0f));
+            topEdge.setPosition(x + c, y + 1.0f);
+            sf::Color glowCol = SunsetPeach;
+            glowCol.a = static_cast<sf::Uint8>(180 * alphaMult);
+            topEdge.setFillColor(glowCol);
+            window.draw(topEdge);
 
-                    sf::RectangleShape highlight(sf::Vector2f(bounds.width - 8.0f, 1.0f));
-                    highlight.setPosition(bounds.left + 4.0f, y + 1.0f);
-                    sf::Color hCol = WoodHighlight;
-                    hCol.a = static_cast<sf::Uint8>(60 * alphaMult);
-                    highlight.setFillColor(hCol);
-                    window.draw(highlight);
-                }
+            auto drawPixelDiamond = [&](float px, float py) {
+                sf::ConvexShape d(4);
+                d.setPoint(0, sf::Vector2f(0.0f, -2.5f));
+                d.setPoint(1, sf::Vector2f(2.5f, 0.0f));
+                d.setPoint(2, sf::Vector2f(0.0f, 2.5f));
+                d.setPoint(3, sf::Vector2f(-2.5f, 0.0f));
+                d.setPosition(std::floor(px), std::floor(py));
+                sf::Color dc = SunsetAmber;
+                dc.a = static_cast<sf::Uint8>(240 * alphaMult);
+                d.setFillColor(dc);
+                window.draw(d);
+                };
+
+            drawPixelDiamond(x + c, y + c);
+            drawPixelDiamond(x + w - c, y + c);
+            drawPixelDiamond(x + c, y + h - c);
+            drawPixelDiamond(x + w - c, y + h - c);
+        }
+
+        static void DrawSunsetButton(sf::RenderWindow& window, sf::FloatRect bounds, const std::string& label, const sf::Font& font, unsigned int charSize, bool active, bool hovered, bool isRuby = false, float scale = 1.0f) {
+            float x = std::floor(bounds.left);
+            float y = std::floor(bounds.top);
+            float w = std::floor(bounds.width);
+            float h = std::floor(bounds.height);
+            float c = 4.0f;
+
+            sf::ConvexShape btn(8);
+            btn.setPoint(0, sf::Vector2f(x + c, y));
+            btn.setPoint(1, sf::Vector2f(x + w - c, y));
+            btn.setPoint(2, sf::Vector2f(x + w, y + c));
+            btn.setPoint(3, sf::Vector2f(x + w, y + h - c));
+            btn.setPoint(4, sf::Vector2f(x + w - c, y + h));
+            btn.setPoint(5, sf::Vector2f(x + c, y + h));
+            btn.setPoint(6, sf::Vector2f(x, y + h - c));
+            btn.setPoint(7, sf::Vector2f(x, y + c));
+
+            btn.setOrigin(x + w / 2.0f, y + h / 2.0f);
+            btn.setPosition(x + w / 2.0f, y + h / 2.0f);
+            btn.setScale(scale, scale);
+
+            sf::Color fillCol;
+            sf::Color outCol;
+
+            if (active) {
+                fillCol = isRuby ? SunsetCoral : SunsetAmber;
+                outCol = SunsetGold;
+            }
+            else if (hovered) {
+                fillCol = isRuby ? SunsetCoralDark : SunsetPlum;
+                outCol = SunsetPeach;
             }
             else {
-                float step = 14.0f;
-                for (float x = bounds.left + 4.0f; x < bounds.left + bounds.width - 4.0f; x += step) {
-                    sf::RectangleShape groove(sf::Vector2f(1.0f, bounds.height - 8.0f));
-                    groove.setPosition(x, bounds.top + 4.0f);
-                    sf::Color gCol = WoodDeepShadow;
-                    gCol.a = static_cast<sf::Uint8>(90 * alphaMult);
-                    groove.setFillColor(gCol);
-                    window.draw(groove);
-
-                    sf::RectangleShape highlight(sf::Vector2f(1.0f, bounds.height - 8.0f));
-                    highlight.setPosition(x + 1.0f, bounds.top + 4.0f);
-                    sf::Color hCol = WoodHighlight;
-                    hCol.a = static_cast<sf::Uint8>(60 * alphaMult);
-                    highlight.setFillColor(hCol);
-                    window.draw(highlight);
-                }
+                fillCol = isRuby ? sf::Color(110, 24, 48) : SunsetSkyMid;
+                outCol = SunsetCoralDark;
             }
 
-            sf::RectangleShape hTop(sf::Vector2f(bounds.width - 4.0f, 2.0f));
-            hTop.setPosition(bounds.left + 2.0f, bounds.top + 2.0f);
-            sf::Color topCol = WoodHighlight;
-            topCol.a = static_cast<sf::Uint8>(180 * alphaMult);
-            hTop.setFillColor(topCol);
-            window.draw(hTop);
+            btn.setFillColor(fillCol);
+            btn.setOutlineThickness(1.0f);
+            btn.setOutlineColor(outCol);
+            window.draw(btn);
 
-            sf::RectangleShape hLeft(sf::Vector2f(2.0f, bounds.height - 4.0f));
-            hLeft.setPosition(bounds.left + 2.0f, bounds.top + 2.0f);
-            hLeft.setFillColor(topCol);
-            window.draw(hLeft);
+            sf::RectangleShape hShelf(sf::Vector2f(w - c * 2.0f, 1.0f));
+            hShelf.setOrigin((w - c * 2.0f) / 2.0f, 0.5f);
+            hShelf.setPosition(x + w / 2.0f, y + 1.5f);
+            hShelf.setScale(scale, scale);
+            hShelf.setFillColor(active ? sf::Color(255, 255, 255, 170) : sf::Color(255, 255, 255, 50));
+            window.draw(hShelf);
 
-            sf::RectangleShape inner(sf::Vector2f(bounds.width - 8.0f, bounds.height - 8.0f));
-            inner.setPosition(bounds.left + 4.0f, bounds.top + 4.0f);
-            inner.setFillColor(Transparent);
-            inner.setOutlineThickness(1.0f);
-            sf::Color inCol = Brass;
-            inCol.a = static_cast<sf::Uint8>(inCol.a * alphaMult);
-            inner.setOutlineColor(inCol);
-            window.draw(inner);
+            if (!label.empty()) {
+                sf::Color textColor = active ? (isRuby ? sf::Color::White : SunsetDeepDark) : (hovered ? SunsetGold : TextPrimary);
+                sf::Color textShadow = (active && !isRuby) ? Transparent : sf::Color(14, 6, 20, 230);
+                DrawCrispText(window, font, label, charSize, x + w / 2.0f, y + h / 2.0f, textColor, textShadow, true, true);
+            }
+        }
 
-            DrawCornerOrnament(window, bounds.left + 2.0f, bounds.top + 2.0f, 1.0f, 1.0f, alphaMult);
-            DrawCornerOrnament(window, bounds.left + bounds.width - 2.0f, bounds.top + 2.0f, -1.0f, 1.0f, alphaMult);
-            DrawCornerOrnament(window, bounds.left + 2.0f, bounds.top + bounds.height - 2.0f, 1.0f, -1.0f, alphaMult);
-            DrawCornerOrnament(window, bounds.left + bounds.width - 2.0f, bounds.top + bounds.height - 2.0f, -1.0f, -1.0f, alphaMult);
+        static void DrawThemedButton(sf::RenderWindow& window, sf::FloatRect bounds, const std::string& label, const sf::Font& font, unsigned int charSize, bool active, bool hovered, bool isRuby = false, float scale = 1.0f) {
+            DrawSunsetButton(window, bounds, label, font, charSize, active, hovered, isRuby, scale);
+        }
+
+        static void DrawLoFiButton(sf::RenderWindow& window, sf::FloatRect bounds, const std::string& label, const sf::Font& font, unsigned int charSize, bool active, bool hovered, bool isRuby = false, float scale = 1.0f) {
+            DrawSunsetButton(window, bounds, label, font, charSize, active, hovered, isRuby, scale);
+        }
+
+        static void DrawLoFiPanel(sf::RenderWindow& window, sf::FloatRect bounds, float alphaMult = 1.0f) {
+            DrawSunsetPanel(window, bounds, alphaMult);
         }
 
         static void DrawParchmentPanel(sf::RenderWindow& window, sf::FloatRect bounds, float alphaMult = 1.0f) {
-            DrawCarvedWoodPlank(window, bounds, false, alphaMult);
-
-            sf::FloatRect pb(bounds.left + 8.0f, bounds.top + 8.0f, bounds.width - 16.0f, bounds.height - 16.0f);
-            sf::RectangleShape pBg(sf::Vector2f(pb.width, pb.height));
-            pBg.setPosition(pb.left, pb.top);
-            sf::Color pCol = Parchment;
-            pCol.a = static_cast<sf::Uint8>(255 * alphaMult);
-            pBg.setFillColor(pCol);
-            pBg.setOutlineThickness(1.0f);
-            sf::Color pbCol = ParchmentShadow;
-            pbCol.a = static_cast<sf::Uint8>(255 * alphaMult);
-            pBg.setOutlineColor(pbCol);
-            window.draw(pBg);
-
-            sf::RectangleShape vTop(sf::Vector2f(pb.width, 4.0f));
-            vTop.setPosition(pb.left, pb.top);
-            vTop.setFillColor(sf::Color(140, 110, 70, static_cast<sf::Uint8>(90 * alphaMult)));
-            window.draw(vTop);
-
-            sf::RectangleShape vBot(sf::Vector2f(pb.width, 4.0f));
-            vBot.setPosition(pb.left, pb.top + pb.height - 4.0f);
-            vBot.setFillColor(sf::Color(140, 110, 70, static_cast<sf::Uint8>(90 * alphaMult)));
-            window.draw(vBot);
-
-            sf::RectangleShape pinLine(sf::Vector2f(pb.width - 8.0f, 1.0f));
-            pinLine.setPosition(pb.left + 4.0f, pb.top + 3.0f);
-            pinLine.setFillColor(sf::Color(160, 120, 75, static_cast<sf::Uint8>(120 * alphaMult)));
-            window.draw(pinLine);
-        }
-
-        static void DrawThemedButton(sf::RenderWindow& window, sf::FloatRect bounds, const std::string& label, const sf::Font& font, int charSize, bool active, bool hovered, bool isRuby = false, float scale = 1.0f) {
-            sf::RectangleShape btn(sf::Vector2f(bounds.width, bounds.height));
-            btn.setOrigin(bounds.width / 2.0f, bounds.height / 2.0f);
-            btn.setPosition(bounds.left + bounds.width / 2.0f, bounds.top + bounds.height / 2.0f);
-            btn.setScale(scale, scale);
-
-            sf::Color baseCol;
-            if (active) {
-                baseCol = isRuby ? RubyHighlight : Gold;
-            }
-            else if (hovered) {
-                baseCol = isRuby ? RubyAccent : WoodHighlight;
-            }
-            else {
-                baseCol = isRuby ? RubyDark : WoodMedium;
-            }
-
-            btn.setFillColor(baseCol);
-            btn.setOutlineThickness(1.5f);
-            btn.setOutlineColor(active ? GoldHighlight : (hovered ? Gold : Brass));
-            window.draw(btn);
-
-            sf::RectangleShape h(sf::Vector2f(bounds.width - 4.0f, 2.0f));
-            h.setOrigin((bounds.width - 4.0f) / 2.0f, 1.0f);
-            h.setPosition(bounds.left + bounds.width / 2.0f, bounds.top + 3.0f);
-            h.setScale(scale, scale);
-            h.setFillColor(active ? sf::Color(255, 255, 255, 140) : sf::Color(255, 255, 255, 60));
-            window.draw(h);
-
-            if (!label.empty()) {
-                sf::Text shadow(label, font, charSize);
-                sf::FloatRect tb = shadow.getLocalBounds();
-                shadow.setOrigin(tb.left + tb.width / 2.0f, tb.top + tb.height / 2.0f);
-                shadow.setPosition(bounds.left + bounds.width / 2.0f + 1.0f, bounds.top + bounds.height / 2.0f + 1.0f);
-                shadow.setScale(scale, scale);
-                shadow.setFillColor(sf::Color(10, 5, 2, 220));
-                window.draw(shadow);
-
-                sf::Text txt(label, font, charSize);
-                txt.setOrigin(tb.left + tb.width / 2.0f, tb.top + tb.height / 2.0f);
-                txt.setPosition(bounds.left + bounds.width / 2.0f, bounds.top + bounds.height / 2.0f);
-                txt.setScale(scale, scale);
-                txt.setFillColor(active ? sf::Color::White : (hovered ? GoldHighlight : TextPrimary));
-                window.draw(txt);
-            }
+            DrawSunsetPanel(window, bounds, alphaMult);
         }
 
         static void DrawFiligreePanel(sf::RenderWindow& window, sf::FloatRect bounds, float alphaMult = 1.0f) {
-            DrawCarvedWoodPlank(window, bounds, false, alphaMult);
+            DrawSunsetPanel(window, bounds, alphaMult);
+        }
+
+        static void DrawCarvedWoodPlank(sf::RenderWindow& window, sf::FloatRect bounds, bool vertical = false, float alphaMult = 1.0f) {
+            DrawSunsetPanel(window, bounds, alphaMult);
+        }
+
+        static void DrawWoodPanel(sf::RenderWindow& window, sf::FloatRect bounds, float alphaMult = 1.0f) {
+            DrawSunsetPanel(window, bounds, alphaMult);
+        }
+
+        static void DrawCornerBrackets(sf::RenderWindow& window, sf::FloatRect bounds, float alphaMult = 1.0f) {
+            float x = std::floor(bounds.left);
+            float y = std::floor(bounds.top);
+            float w = std::floor(bounds.width);
+            float h = std::floor(bounds.height);
+            float c = 6.0f;
+
+            auto drawDiamond = [&](float px, float py) {
+                sf::ConvexShape d(4);
+                d.setPoint(0, sf::Vector2f(0.0f, -2.5f));
+                d.setPoint(1, sf::Vector2f(2.5f, 0.0f));
+                d.setPoint(2, sf::Vector2f(0.0f, 2.5f));
+                d.setPoint(3, sf::Vector2f(-2.5f, 0.0f));
+                d.setPosition(std::floor(px), std::floor(py));
+                sf::Color dc = SunsetAmber;
+                dc.a = static_cast<sf::Uint8>(240 * alphaMult);
+                d.setFillColor(dc);
+                window.draw(d);
+                };
+
+            drawDiamond(x + c, y + c);
+            drawDiamond(x + w - c, y + c);
+            drawDiamond(x + c, y + h - c);
+            drawDiamond(x + w - c, y + h - c);
         }
     };
 
