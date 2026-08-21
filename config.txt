@@ -1,10 +1,10 @@
 none
-fullscreen=1
+fullscreen=0
 borderless=0
 vsync=1
 fpsLimit=60
-resWidth=1280
-resHeight=720
+resWidth=1920
+resHeight=1080
 autoBackup=1
 hwAccel=1
 animFps=12

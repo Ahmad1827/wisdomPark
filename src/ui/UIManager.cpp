@@ -749,34 +749,13 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         WisdomUI::Theme::DrawSunsetButton(window, btnR, ">", font, 14, false, btnR.contains(mousePos), false, 1.0f);
         };
 
-    auto drawDropdown = [&](float x, float y, float w, const std::string& label, const std::string& currentVal, bool isOpen, const std::vector<std::string>& options) {
+    auto drawDropdownButton = [&](float x, float y, float w, const std::string& label, const std::string& currentVal, bool isOpen) -> sf::FloatRect {
         sf::FloatRect rowRect(x, y, w, 48.f);
         WisdomUI::Theme::DrawCrispText(window, font, label, 17, x + 16.f, y + 14.f, WisdomUI::Theme::TextPrimary);
 
         sf::FloatRect dropBtn(x + w - 240.f, y + 6.f, 224.f, 36.f);
         WisdomUI::Theme::DrawSunsetButton(window, dropBtn, currentVal + "  " + (isOpen ? "^" : "v"), font, 14, false, dropBtn.contains(mousePos), isOpen, 1.0f);
-
-        if (isOpen) {
-            sf::FloatRect menu(dropBtn.left, dropBtn.top + dropBtn.height + 4.f, dropBtn.width, static_cast<float>(options.size()) * 36.f);
-            sf::RectangleShape mBg(sf::Vector2f(menu.width, menu.height));
-            mBg.setPosition(menu.left, menu.top);
-            mBg.setFillColor(sf::Color(14, 6, 20));
-            mBg.setOutlineThickness(1.5f);
-            mBg.setOutlineColor(WisdomUI::Theme::SunsetGold);
-            window.draw(mBg);
-
-            for (size_t i = 0; i < options.size(); ++i) {
-                sf::FloatRect optRect(menu.left, menu.top + static_cast<float>(i) * 36.f, menu.width, 36.f);
-                bool hovOpt = optRect.contains(mousePos);
-                if (hovOpt) {
-                    sf::RectangleShape hBox(sf::Vector2f(optRect.width, optRect.height));
-                    hBox.setPosition(optRect.left, optRect.top);
-                    hBox.setFillColor(WisdomUI::Theme::SunsetSkyMid);
-                    window.draw(hBox);
-                }
-                WisdomUI::Theme::DrawCrispText(window, font, options[i], 14, optRect.left + 14.f, optRect.top + 9.f, hovOpt ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
-            }
-        }
+        return dropBtn;
         };
 
     float cardW = 710.f;
@@ -794,7 +773,7 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
 
     std::string resStr = std::to_string(g_resW) + " x " + std::to_string(g_resH);
     std::vector<std::string> resOpts = { "1280 x 720", "1600 x 900", "1920 x 1080" };
-    drawDropdown(c1X + 16.f, r1Y + 240.f, rowW, "Display Resolution", resStr, g_resDropdownOpen, resOpts);
+    sf::FloatRect resDropBtnRect = drawDropdownButton(c1X + 16.f, r1Y + 240.f, rowW, "Display Resolution", resStr, g_resDropdownOpen);
     drawStepper(c1X + 16.f, r1Y + 300.f, rowW, "UI Palette Theme", "Sunset Arcade");
 
     drawCard(sf::FloatRect(c2X, r1Y, cardW, cardH), ":: ARCHIVE PERSISTENCE & AUTO-SAVING ::");
@@ -829,6 +808,34 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
     window.draw(kBox);
 
     WisdomUI::Theme::DrawCrispText(window, font, keyDisplay, 14, keyBox.left + 12.f, keyBox.top + 9.f, g_typingApiKey ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach);
+
+    if (g_resDropdownOpen) {
+        sf::FloatRect menu(resDropBtnRect.left, resDropBtnRect.top + resDropBtnRect.height + 4.f, resDropBtnRect.width, static_cast<float>(resOpts.size()) * 36.f);
+
+        sf::RectangleShape shadow(sf::Vector2f(menu.width + 6.f, menu.height + 6.f));
+        shadow.setPosition(menu.left - 3.f, menu.top - 3.f);
+        shadow.setFillColor(sf::Color(0, 0, 0, 160));
+        window.draw(shadow);
+
+        sf::RectangleShape mBg(sf::Vector2f(menu.width, menu.height));
+        mBg.setPosition(menu.left, menu.top);
+        mBg.setFillColor(sf::Color(14, 6, 20, 250));
+        mBg.setOutlineThickness(1.5f);
+        mBg.setOutlineColor(WisdomUI::Theme::SunsetGold);
+        window.draw(mBg);
+
+        for (size_t i = 0; i < resOpts.size(); ++i) {
+            sf::FloatRect optRect(menu.left, menu.top + static_cast<float>(i) * 36.f, menu.width, 36.f);
+            bool hovOpt = optRect.contains(mousePos);
+            if (hovOpt) {
+                sf::RectangleShape hBox(sf::Vector2f(optRect.width, optRect.height));
+                hBox.setPosition(optRect.left, optRect.top);
+                hBox.setFillColor(WisdomUI::Theme::SunsetSkyMid);
+                window.draw(hBox);
+            }
+            WisdomUI::Theme::DrawCrispText(window, font, resOpts[i], 14, optRect.left + 14.f, optRect.top + 9.f, hovOpt ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
+        }
+    }
 }
 
 void UIManager::drawTutorialsMenu(sf::RenderWindow& window) {
