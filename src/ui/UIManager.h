@@ -153,6 +153,16 @@ struct LightRay {
 
 class UIManager {
 private:
+    bool m_showKeybinds = false;
+    std::string m_listeningKeyActionId = "";
+    std::string m_keybindSearchQuery = "";
+    bool m_isTypingKeybindSearch = false;
+    std::string m_selectedKeybindCategory = "All";
+    float m_keybindScrollOffset = 0.0f;
+    float m_keybindMaxScroll = 0.0f;
+
+    void drawKeybindModal(sf::RenderWindow& window);
+    void handleKeybindModalEvent(const sf::Event& event, sf::RenderWindow& window);
     bool m_useMinigameWelcome = false;
     sf::FloatRect m_welcomeModeToggleBounds = sf::FloatRect(1600.f, 35.f, 240.f, 42.f);
     void drawStandardMainMenu(sf::RenderWindow& window);
