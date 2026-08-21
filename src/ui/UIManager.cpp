@@ -450,76 +450,150 @@ void UIManager::drawStartMenu(sf::RenderWindow& window) {
     else if (currentMenuState == MenuState::Credits) drawCreditsMenu(window);
 }
 
+void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
+    sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
+    sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
+
+    float floatAnim = std::sin(startupTime * 2.2f) * 6.0f;
+    float titleY = 150.f + floatAnim;
+
+    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK", 58, 960.f, titleY, WisdomUI::Theme::SunsetGold, sf::Color(12, 4, 18), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "ANIMATION STUDIO & PIXEL ART SUITE", 13, 960.f, titleY + 52.f, WisdomUI::Theme::SunsetPeach, sf::Color(12, 4, 18), true, true);
+
+    sf::FloatRect menuPod(720.f, 320.f, 480.f, 540.f);
+    WisdomUI::Theme::DrawSunsetPanel(window, menuPod, 1.0f);
+
+    sf::FloatRect bannerGrip(menuPod.left + 16.f, menuPod.top + 14.f, menuPod.width - 32.f, 30.f);
+    sf::RectangleShape bannerBg(sf::Vector2f(bannerGrip.width, bannerGrip.height));
+    bannerBg.setPosition(bannerGrip.left, bannerGrip.top);
+    bannerBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    bannerBg.setOutlineThickness(1.f);
+    bannerBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(bannerBg);
+
+    WisdomUI::Theme::DrawCrispText(window, font, ":: MAIN LAUNCHPAD ::", 11, bannerGrip.left + bannerGrip.width / 2.f, bannerGrip.top + bannerGrip.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+
+    std::vector<std::pair<std::string, std::string>> menuItems = {
+        {"New Project", "Ctrl+N"},
+        {"Project Vault", "Ctrl+O"},
+        {"Studio Settings", "ESC"},
+        {"Knowledge Codex", "F1"},
+        {"Keybind Matrix", "K"},
+        {"Studio Credits", ""},
+        {"Exit Software", "Alt+F4"}
+    };
+
+    float btnY = menuPod.top + 60.f;
+    for (size_t i = 0; i < menuItems.size(); ++i) {
+        sf::FloatRect btnBounds(menuPod.left + 24.f, btnY, menuPod.width - 48.f, 54.f);
+        bool isHovered = btnBounds.contains(mousePos);
+        bool isAccent = (i == 0);
+        bool isExit = (menuItems[i].first == "Exit Software");
+
+        WisdomUI::Theme::DrawSunsetButton(window, btnBounds, "", font, 13, false, isHovered, isAccent || isExit, 1.0f);
+
+        sf::Color titleColor = isHovered ? WisdomUI::Theme::SunsetGold : (isAccent ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextPrimary);
+        WisdomUI::Theme::DrawCrispText(window, font, menuItems[i].first, 15, btnBounds.left + 20.f, btnBounds.top + 18.f, titleColor, sf::Color(14, 6, 20));
+
+        if (!menuItems[i].second.empty()) {
+            sf::FloatRect hintBadge(btnBounds.left + btnBounds.width - 78.f, btnBounds.top + 14.f, 64.f, 24.f);
+            sf::RectangleShape badge(sf::Vector2f(hintBadge.width, hintBadge.height));
+            badge.setPosition(hintBadge.left, hintBadge.top);
+            badge.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+            badge.setOutlineThickness(1.f);
+            badge.setOutlineColor(isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
+            window.draw(badge);
+
+            WisdomUI::Theme::DrawCrispText(window, font, menuItems[i].second, 10, hintBadge.left + hintBadge.width / 2.f, hintBadge.top + hintBadge.height / 2.f, WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+        }
+
+        btnY += 66.f;
+    }
+
+    sf::FloatRect tickerBounds(360.f, 920.f, 1200.f, 38.f);
+    WisdomUI::Theme::DrawSunsetPanel(window, tickerBounds, 1.0f);
+    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK STUDIO  |  v2.6.0 RETRO ENGINE  |  DIRECT HARDWARE ACCELERATION ON", 11, tickerBounds.left + tickerBounds.width / 2.f, tickerBounds.top + tickerBounds.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+}
+
 void UIManager::drawMainMenu(sf::RenderWindow& window) {
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
-    for (const auto& wall : m_arcadeMazeWalls) {
-        sf::RectangleShape glow(sf::Vector2f(wall.width + 6.f, wall.height + 6.f));
-        glow.setPosition(wall.left - 3.f, wall.top - 3.f);
-        glow.setFillColor(sf::Color(0, 120, 255, 40));
-        window.draw(glow);
-
-        sf::RectangleShape w(sf::Vector2f(wall.width, wall.height));
-        w.setPosition(wall.left, wall.top);
-        w.setFillColor(sf::Color(25, 90, 255));
-        window.draw(w);
-
-        sf::RectangleShape core(sf::Vector2f(std::max(1.f, wall.width - 2.f), std::max(1.f, wall.height - 2.f)));
-        core.setPosition(wall.left + 1.f, wall.top + 1.f);
-        core.setFillColor(sf::Color(190, 225, 255));
-        window.draw(core);
+    if (!m_useMinigameWelcome) {
+        drawStandardMainMenu(window);
     }
+    else {
+        for (const auto& wall : m_arcadeMazeWalls) {
+            sf::RectangleShape glow(sf::Vector2f(wall.width + 6.f, wall.height + 6.f));
+            glow.setPosition(wall.left - 3.f, wall.top - 3.f);
+            glow.setFillColor(sf::Color(0, 120, 255, 40));
+            window.draw(glow);
 
-    for (const auto& item : m_arcadeCollectibles) {
-        if (!item.collected) {
-            drawPixelItem(window, item.pos, item.type, item.animPhase);
+            sf::RectangleShape w(sf::Vector2f(wall.width, wall.height));
+            w.setPosition(wall.left, wall.top);
+            w.setFillColor(sf::Color(25, 90, 255));
+            window.draw(w);
+
+            sf::RectangleShape core(sf::Vector2f(std::max(1.f, wall.width - 2.f), std::max(1.f, wall.height - 2.f)));
+            core.setPosition(wall.left + 1.f, wall.top + 1.f);
+            core.setFillColor(sf::Color(190, 225, 255));
+            window.draw(core);
         }
+
+        for (const auto& item : m_arcadeCollectibles) {
+            if (!item.collected) {
+                drawPixelItem(window, item.pos, item.type, item.animPhase);
+            }
+        }
+
+        for (const auto& portal : m_arcadePortals) {
+            drawStationPortal(window, portal, mousePos);
+        }
+
+        for (const auto& g : m_arcadeGhosts) {
+            drawPixelGhost(window, g);
+        }
+
+        drawPixelHero(window);
+
+        for (const auto& fx : m_arcadeFX) {
+            sf::RectangleShape r(sf::Vector2f(fx.size, fx.size));
+            r.setPosition(fx.pos);
+            sf::Color c = fx.color;
+            c.a = static_cast<sf::Uint8>((fx.life / fx.maxLife) * 255.f);
+            r.setFillColor(c);
+            window.draw(r);
+        }
+
+        for (const auto& fl : m_arcadeFloaters) {
+            float a = (fl.life / fl.maxLife);
+            sf::Color c = fl.color;
+            c.a = static_cast<sf::Uint8>(a * 255.f);
+            WisdomUI::Theme::DrawCrispText(window, font, fl.text, 16, fl.pos.x, fl.pos.y, c, sf::Color(14, 4, 20, static_cast<sf::Uint8>(a * 255.f)), true, true);
+        }
+
+        drawArcadeBezelOverlay(window);
+
+        WisdomUI::Theme::DrawCrispText(window, font, "1UP", 15, 240.f, 52.f, sf::Color(255, 60, 90), sf::Color(14, 4, 20));
+        WisdomUI::Theme::DrawCrispText(window, font, std::to_string(m_arcadeScore), 20, 240.f, 74.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 4, 20));
+
+        WisdomUI::Theme::DrawCrispText(window, font, "HIGH SCORE", 15, 960.f, 52.f, sf::Color(255, 60, 90), sf::Color(14, 4, 20), true, false);
+        WisdomUI::Theme::DrawCrispText(window, font, std::to_string(m_arcadeHighScore), 20, 960.f, 74.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 4, 20), true, false);
+
+        WisdomUI::Theme::DrawCrispText(window, font, "LIVES", 14, 1640.f, 52.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 4, 20));
+        for (int i = 0; i < m_arcadeHero.lives; ++i) {
+            sf::CircleShape lifeIcon(7.f);
+            lifeIcon.setPosition(1640.f + static_cast<float>(i) * 20.f, 76.f);
+            lifeIcon.setFillColor(WisdomUI::Theme::SunsetGold);
+            window.draw(lifeIcon);
+        }
+
+        WisdomUI::Theme::DrawCrispText(window, font, "NAVIGATE [WASD / ARROWS] TO ROOM ENTRANCES  -  OR CLICK BOOTHS DIRECTLY", 12, 960.f, 975.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 4, 20), true, true);
     }
 
-    for (const auto& portal : m_arcadePortals) {
-        drawStationPortal(window, portal, mousePos);
-    }
-
-    for (const auto& g : m_arcadeGhosts) {
-        drawPixelGhost(window, g);
-    }
-
-    drawPixelHero(window);
-
-    for (const auto& fx : m_arcadeFX) {
-        sf::RectangleShape r(sf::Vector2f(fx.size, fx.size));
-        r.setPosition(fx.pos);
-        sf::Color c = fx.color;
-        c.a = static_cast<sf::Uint8>((fx.life / fx.maxLife) * 255.f);
-        r.setFillColor(c);
-        window.draw(r);
-    }
-
-    for (const auto& fl : m_arcadeFloaters) {
-        float a = (fl.life / fl.maxLife);
-        sf::Color c = fl.color;
-        c.a = static_cast<sf::Uint8>(a * 255.f);
-        WisdomUI::Theme::DrawCrispText(window, font, fl.text, 16, fl.pos.x, fl.pos.y, c, sf::Color(14, 4, 20, static_cast<sf::Uint8>(a * 255.f)), true, true);
-    }
-
-    drawArcadeBezelOverlay(window);
-
-    WisdomUI::Theme::DrawCrispText(window, font, "1UP", 15, 240.f, 52.f, sf::Color(255, 60, 90), sf::Color(14, 4, 20));
-    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(m_arcadeScore), 20, 240.f, 74.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 4, 20));
-
-    WisdomUI::Theme::DrawCrispText(window, font, "HIGH SCORE", 15, 960.f, 52.f, sf::Color(255, 60, 90), sf::Color(14, 4, 20), true, false);
-    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(m_arcadeHighScore), 20, 960.f, 74.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 4, 20), true, false);
-
-    WisdomUI::Theme::DrawCrispText(window, font, "LIVES", 14, 1640.f, 52.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 4, 20));
-    for (int i = 0; i < m_arcadeHero.lives; ++i) {
-        sf::CircleShape lifeIcon(7.f);
-        lifeIcon.setPosition(1640.f + static_cast<float>(i) * 20.f, 76.f);
-        lifeIcon.setFillColor(WisdomUI::Theme::SunsetGold);
-        window.draw(lifeIcon);
-    }
-
-    WisdomUI::Theme::DrawCrispText(window, font, "NAVIGATE [WASD / ARROWS] TO ROOM ENTRANCES  -  OR CLICK BOOTHS DIRECTLY", 12, 960.f, 975.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 4, 20), true, true);
+    bool isToggleHov = m_welcomeModeToggleBounds.contains(mousePos);
+    std::string toggleLabel = m_useMinigameWelcome ? "Mode: Arcade Minigame" : "Mode: Standard Menu";
+    WisdomUI::Theme::DrawSunsetButton(window, m_welcomeModeToggleBounds, toggleLabel, font, 11, false, isToggleHov, m_useMinigameWelcome, 1.0f);
 }
 
 void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hoverKey, float x, float y) {
@@ -923,37 +997,80 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     if (currentState == AppState::Welcome) {
         if (currentMenuState == MenuState::Main) {
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                for (const auto& portal : m_arcadePortals) {
-                    if (portal.bounds.contains(mousePos)) {
-                        triggerArcadeStation(portal.id, window);
-                        return;
+                if (m_welcomeModeToggleBounds.contains(mousePos)) {
+                    m_useMinigameWelcome = !m_useMinigameWelcome;
+                    if (m_useMinigameWelcome) {
+                        initMinigame();
+                    }
+                    return;
+                }
+
+                if (m_useMinigameWelcome) {
+                    for (const auto& portal : m_arcadePortals) {
+                        if (portal.bounds.contains(mousePos)) {
+                            triggerArcadeStation(portal.id, window);
+                            return;
+                        }
+                    }
+                }
+                else {
+                    float menuPodLeft = 720.f;
+                    float menuPodTop = 320.f;
+                    float menuPodWidth = 480.f;
+
+                    std::vector<std::string> buttonKeys = {
+                        "New Project",
+                        "Project Vault",
+                        "Studio Settings",
+                        "Knowledge Codex",
+                        "Keybind Matrix",
+                        "Studio Credits",
+                        "Exit Software"
+                    };
+
+                    float btnY = menuPodTop + 60.f;
+                    for (const auto& btnKey : buttonKeys) {
+                        sf::FloatRect btnBounds(menuPodLeft + 24.f, btnY, menuPodWidth - 48.f, 54.f);
+                        if (btnBounds.contains(mousePos)) {
+                            if (btnKey == "New Project") newProjectModal.open();
+                            else if (btnKey == "Project Vault") currentMenuState = MenuState::Projects;
+                            else if (btnKey == "Studio Settings") currentMenuState = MenuState::Settings;
+                            else if (btnKey == "Knowledge Codex") { currentMenuState = MenuState::Tutorials; activeTutorialIndex = -1; }
+                            else if (btnKey == "Keybind Matrix") keybindPanel.toggle();
+                            else if (btnKey == "Studio Credits") { currentMenuState = MenuState::Credits; easterEggClicks = 0; }
+                            else if (btnKey == "Exit Software") window.close();
+                            return;
+                        }
+                        btnY += 66.f;
                     }
                 }
             }
             else if (event.type == sf::Event::KeyPressed) {
-                if (event.key.code == sf::Keyboard::Space || (event.key.code == sf::Keyboard::N && event.key.control)) {
-                    triggerArcadeStation("new_project", window);
-                    return;
-                }
-                if (event.key.code == sf::Keyboard::O) {
-                    triggerArcadeStation("projects", window);
-                    return;
-                }
-                if (event.key.code == sf::Keyboard::Escape) {
-                    triggerArcadeStation("settings", window);
-                    return;
-                }
-                if (event.key.code == sf::Keyboard::F1) {
-                    triggerArcadeStation("tutorials", window);
-                    return;
-                }
-                if (event.key.code == sf::Keyboard::K) {
-                    triggerArcadeStation("keybinds", window);
-                    return;
-                }
-                if (event.key.code == sf::Keyboard::C) {
-                    triggerArcadeStation("credits", window);
-                    return;
+                if (m_useMinigameWelcome) {
+                    if (event.key.code == sf::Keyboard::Space || (event.key.code == sf::Keyboard::N && event.key.control)) {
+                        triggerArcadeStation("new_project", window);
+                        return;
+                    }
+                    if (event.key.code == sf::Keyboard::O) {
+                        triggerArcadeStation("projects", window);
+                        return;
+                    }
+                    if (event.key.code == sf::Keyboard::Escape) {
+                        triggerArcadeStation("settings", window);
+                        return;
+                    }
+                    if (event.key.code == sf::Keyboard::F1) {
+                        triggerArcadeStation("tutorials", window);
+                        return;
+                    }
+                    if (event.key.code == sf::Keyboard::K) {
+                        triggerArcadeStation("keybinds", window);
+                        return;
+                    }
+                    if (event.key.code == sf::Keyboard::C) {
+                        triggerArcadeStation("credits", window);
+                        return;
+                    }
                 }
             }
         }
@@ -1834,7 +1951,9 @@ void UIManager::update(sf::RenderWindow & window, AppState currentState, AppSett
         if (!keybindPanel.isVisible()) {
             projectBrowser.updateHover(mousePos);
             updateStartMenu(dt, mousePos);
-            updateMinigame(dt, mousePos, window);
+            if(m_useMinigameWelcome) {
+                updateMinigame(dt, mousePos, window);
+            }
 
             if (currentMenuState == MenuState::Main) {
                 std::vector<std::string> buttons = { "Projects", "Settings", "Tutorials", "Keybinds", "Credits", "Exit" };

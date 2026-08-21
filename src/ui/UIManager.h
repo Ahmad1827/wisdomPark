@@ -153,6 +153,9 @@ struct LightRay {
 
 class UIManager {
 private:
+    bool m_useMinigameWelcome = false;
+    sf::FloatRect m_welcomeModeToggleBounds = sf::FloatRect(1600.f, 35.f, 240.f, 42.f);
+    void drawStandardMainMenu(sf::RenderWindow& window);
     bool m_isArcadePaused = false;
     ArcadePacHero m_arcadeHero;
     std::vector<ArcadeGhost> m_arcadeGhosts;
