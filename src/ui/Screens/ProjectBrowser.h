@@ -12,6 +12,7 @@ private:
     bool showDeleteConfirm;
     std::string projectToDelete;
 
+    sf::FloatRect containerBounds;
     sf::FloatRect newProjectBtnBounds;
     sf::FloatRect openFileBtnBounds;
     sf::FloatRect confirmBtnBounds;
@@ -21,6 +22,9 @@ private:
     std::vector<sf::FloatRect> cardBoundsList;
     std::vector<sf::FloatRect> deleteBtnsList;
 
+    float scrollOffset;
+    float maxScroll;
+
     void refreshList();
 
 public:
@@ -28,5 +32,6 @@ public:
     void init(ProjectManager* projectManager);
     void updateHover(sf::Vector2f mousePos);
     std::string handleClick(sf::Vector2f mousePos, ProjectMetadata& outMeta);
+    void handleScroll(float delta);
     void draw(sf::RenderWindow& window);
 };

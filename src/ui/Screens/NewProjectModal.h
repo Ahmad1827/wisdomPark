@@ -17,6 +17,7 @@ private:
     sf::FloatRect heightInputBounds;
     sf::FloatRect nameInputBounds;
     sf::FloatRect createBtnBounds;
+    sf::FloatRect previewFrameBounds;
 
     std::vector<sf::FloatRect> presetBounds;
 
