@@ -86,7 +86,7 @@ static sf::CircleShape loadingSpinner;
 static sf::RectangleShape loadingCancelBtn;
 static sf::Text loadingCancelText;
 
-UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(false), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0), m_debugUseSpriteStudio(false) {}
+UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(true), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0), m_debugUseSpriteStudio(false) {}
 
 void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     projManager = pm;
@@ -122,8 +122,8 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     uiText.setOutlineColor(sf::Color(0, 0, 0, 150));
     uiText.setOutlineThickness(2.0f);
 
-    uiFullscreen = false;
-    uiBorderless = true;
+    uiFullscreen = true;
+    uiBorderless = false;
 
     promptBox.setSize(sf::Vector2f(600.f, 50.f));
     promptBox.setPosition(1920.f / 2.f - 300.f, 1080.f - 300.f);
@@ -252,7 +252,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         [this, baseCanvas]() { exportModal.open(*baseCanvas, 0); },
         [this, baseCanvas]() { baseCanvas->undo(); },
         [this, baseCanvas]() { baseCanvas->redo(); },
-        [this]() { uiFullscreen = !uiFullscreen; },
+        [this]() { m_fullscreenToggleRequested = true; },
         [this, baseCanvas]() {
             if (baseCanvas->getIsDirty()) {
                 showUnsavedWarning = true;
@@ -1549,7 +1549,19 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             return;
         }
 
-        if (m_topBar.HandleEvent(event, window)) return;
+        if (m_topBar.HandleEvent(event, window)) {
+            if (m_fullscreenToggleRequested) {
+                m_fullscreenToggleRequested = false;
+                toggleFullscreen(window, settings);
+            }
+            return;
+        }
+
+        if (m_fullscreenToggleRequested) {
+            m_fullscreenToggleRequested = false;
+            toggleFullscreen(window, settings);
+            return;
+        }
         if (m_toolDock.HandleEvent(event, window)) return;
         if (m_rightDockTabs.HandleEvent(event, window)) return;
         if (m_statusBar.HandleEvent(event, window)) return;
@@ -1992,6 +2004,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 }
 
 void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
+    static bool s_syncedInitialSettings = false;
+    if (!s_syncedInitialSettings) {
+        uiFullscreen = settings.fullscreen;
+        s_syncedInitialSettings = true;
+    }
 #if defined(_WIN32)
     static HWND s_lastHwnd = nullptr;
     HWND hwnd = window.getSystemHandle();
@@ -3541,7 +3558,7 @@ void UIManager::toggleFullscreen(sf::RenderWindow& window, AppSettings& settings
     window.setVerticalSyncEnabled(uiVsync);
     window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(window.getSize()));
     SettingsManager::saveSettings(settings);
-    showMessage(uiFullscreen ? "Fullscreen Mode Enabled" : "Windowed Mode Enabled", sf::Color::Cyan);
+    showMessage(uiFullscreen ? "Fullscreen: ON" : "Fullscreen: OFF", sf::Color::Cyan);
 }
 
 void UIManager::drawEscapeMenu(sf::RenderWindow& window, Canvas& canvas, Timeline& timeline) {

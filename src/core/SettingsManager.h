@@ -7,7 +7,7 @@ struct AppSettings {
     std::string activeProvider = "none";
     std::map<std::string, std::string> apiKeys;
 
-    bool fullscreen = false;
+    bool fullscreen = true;
     bool borderless = false;
     bool vsync = true;
     int fpsLimit = 60;

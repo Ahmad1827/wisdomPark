@@ -188,6 +188,7 @@ private:
     void toggleFullscreen(sf::RenderWindow& window, AppSettings& settings);
     void drawEscapeMenu(sf::RenderWindow& window, Canvas& canvas, Timeline& timeline);
     bool handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline);
+    bool m_fullscreenToggleRequested = false;
 
     void initMinigame();
     void updateMinigame(float dt, sf::Vector2f mousePos, sf::RenderWindow& window);
