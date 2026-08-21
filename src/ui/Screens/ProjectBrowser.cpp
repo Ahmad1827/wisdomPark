@@ -121,16 +121,50 @@ void ProjectBrowser::draw(sf::RenderWindow& window) {
         window.draw(cardBg);
 
         sf::FloatRect thumbRect(cx + 12.f, cy + 12.f, 150.f, 102.f);
-        sf::RectangleShape thumb(sf::Vector2f(thumbRect.width, thumbRect.height));
-        thumb.setPosition(thumbRect.left, thumbRect.top);
-        thumb.setFillColor(sf::Color(10, 4, 18));
-        thumb.setOutlineThickness(1.f);
-        thumb.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+        sf::RectangleShape thumbFrame(sf::Vector2f(thumbRect.width, thumbRect.height));
+        thumbFrame.setPosition(thumbRect.left, thumbRect.top);
+        thumbFrame.setFillColor(sf::Color(18, 8, 28));
+        thumbFrame.setOutlineThickness(1.f);
+        thumbFrame.setOutlineColor(isHov ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum);
+        window.draw(thumbFrame);
 
-        if (projects[i].thumbnail.getSize().x > 0) {
-            thumb.setTexture(&projects[i].thumbnail);
+        float chkSize = 8.f;
+        sf::RectangleShape chk1(sf::Vector2f(chkSize, chkSize)); chk1.setFillColor(sf::Color(28, 14, 40));
+        sf::RectangleShape chk2(sf::Vector2f(chkSize, chkSize)); chk2.setFillColor(sf::Color(38, 20, 52));
+        for (float ty = thumbRect.top; ty < thumbRect.top + thumbRect.height; ty += chkSize) {
+            for (float tx = thumbRect.left; tx < thumbRect.left + thumbRect.width; tx += chkSize) {
+                float tw = std::min(chkSize, thumbRect.left + thumbRect.width - tx);
+                float th = std::min(chkSize, thumbRect.top + thumbRect.height - ty);
+                bool alt = (static_cast<int>((tx - thumbRect.left) / chkSize) + static_cast<int>((ty - thumbRect.top) / chkSize)) % 2 == 0;
+                sf::RectangleShape& r = alt ? chk1 : chk2;
+                r.setSize(sf::Vector2f(tw, th));
+                r.setPosition(tx, ty);
+                window.draw(r);
+            }
         }
-        window.draw(thumb);
+
+        if (projects[i].thumbnail.getSize().x > 0 && projects[i].thumbnail.getSize().y > 0) {
+            sf::Sprite thumbSprite;
+            thumbSprite.setTexture(projects[i].thumbnail, true);
+
+            float scaleX = (thumbRect.width - 8.f) / static_cast<float>(projects[i].thumbnail.getSize().x);
+            float scaleY = (thumbRect.height - 8.f) / static_cast<float>(projects[i].thumbnail.getSize().y);
+            float scale = std::min(scaleX, scaleY);
+
+            thumbSprite.setScale(scale, scale);
+            thumbSprite.setColor(sf::Color::White);
+
+            float sprW = static_cast<float>(projects[i].thumbnail.getSize().x) * scale;
+            float sprH = static_cast<float>(projects[i].thumbnail.getSize().y) * scale;
+            float posX = thumbRect.left + (thumbRect.width - sprW) / 2.f;
+            float posY = thumbRect.top + (thumbRect.height - sprH) / 2.f;
+
+            thumbSprite.setPosition(std::floor(posX), std::floor(posY));
+            window.draw(thumbSprite);
+        }
+        else {
+            WisdomUI::Theme::DrawCrispText(window, font, "NO PREVIEW", 11, thumbRect.left + thumbRect.width / 2.f, thumbRect.top + thumbRect.height / 2.f, WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+        }
 
         sf::Color titleColor = isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber;
         WisdomUI::Theme::DrawCrispText(window, font, projects[i].name, 20, cx + 176.f, cy + 16.f, titleColor, sf::Color(14, 6, 20));
