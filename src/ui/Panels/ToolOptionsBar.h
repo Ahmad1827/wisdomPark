@@ -2,9 +2,17 @@
 #include <SFML/Graphics.hpp>
 #include <functional>
 #include <string>
+#include <vector>
 #include "../UIAnimation.h"
 
 namespace WisdomUI {
+
+    struct SelectionToolButton {
+        std::string id;
+        std::string label;
+        sf::FloatRect bounds;
+        float hoverAlpha{ 0.0f };
+    };
 
     class ToolOptionsBar {
     public:
@@ -15,7 +23,8 @@ namespace WisdomUI {
 
         bool HandleEvent(const sf::Event& event, const sf::RenderWindow& window,
             std::function<void(float)> onSizeChange,
-            std::function<void()> onTogglePixelPerfect);
+            std::function<void()> onTogglePixelPerfect,
+            std::function<void(const std::string&)> onSelectAction = nullptr);
 
         void Update(float deltaTime, const sf::Vector2f& mousePos);
         void Render(sf::RenderWindow& window);
@@ -32,10 +41,14 @@ namespace WisdomUI {
         sf::FloatRect m_sliderBounds;
         sf::FloatRect m_perfBtnBounds;
 
+        std::vector<SelectionToolButton> m_selectionButtons;
+
         float m_perfHoverAlpha{ 0.0f };
         float m_perfToggleProgress{ 0.0f };
         float m_sliderThumbScale{ 1.0f };
         float m_globalTime{ 0.0f };
+
+        void updateSelectionButtonLayout();
     };
 
 }

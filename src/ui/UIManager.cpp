@@ -1521,13 +1521,23 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             return;
         }
 
-        if (m_toolOptionsBar.HandleEvent(event, window,
+        m_toolOptionsBar.HandleEvent(event, window,
             [&](float sz) {
                 if (canvas.getPixelMode()) canvas.setPixelBrushSize(static_cast<int>(sz));
                 else canvas.setBrushSize(sz);
             },
-            [&]() { canvas.togglePixelPerfect(); }
-        )) return;
+            [&]() {
+                canvas.togglePixelPerfect();
+            },
+            [&](const std::string& action) {
+                int curFrame = static_cast<int>(timeline.getCurrentFrame());
+                if (action == "flip_h") canvas.flipSelectionHorizontal(curFrame);
+                else if (action == "flip_v") canvas.flipSelectionVertical(curFrame);
+                else if (action == "duplicate") canvas.duplicateSelection(curFrame);
+                else if (action == "crop") canvas.cropSelection(curFrame);
+                else if (action == "delete") canvas.deleteSelection(curFrame);
+            }
+        );
         if (m_toolDock.HandleEvent(event, window)) return;
         if (m_rightDockTabs.HandleEvent(event, window)) return;
         if (m_statusBar.HandleEvent(event, window)) return;
