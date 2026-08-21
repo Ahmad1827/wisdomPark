@@ -642,6 +642,10 @@ void UIManager::drawMainMenu(sf::RenderWindow& window) {
     bool isToggleHov = m_welcomeModeToggleBounds.contains(mousePos);
     std::string toggleLabel = m_useMinigameWelcome ? "Mode: Arcade Minigame" : "Mode: Standard Menu";
     WisdomUI::Theme::DrawSunsetButton(window, m_welcomeModeToggleBounds, toggleLabel, font, 11, false, isToggleHov, m_useMinigameWelcome, 1.0f);
+
+    bool isFsHov = m_startMenuFullscreenBtnBounds.contains(mousePos);
+    std::string fsLabel = uiFullscreen ? "Fullscreen: ON" : "Fullscreen: OFF";
+    WisdomUI::Theme::DrawSunsetButton(window, m_startMenuFullscreenBtnBounds, fsLabel, font, 11, uiFullscreen, isFsHov, uiFullscreen, 1.0f);
 }
 
 void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hoverKey, float x, float y) {
@@ -1086,6 +1090,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     if (event.type == sf::Event::Resized) {
         window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(sf::Vector2u(event.size.width, event.size.height)));
     }
+
+    if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F11) {
+        toggleFullscreen(window, settings);
+        return;
+    }
+
     if (AIManager::getInstance().isProcessingAsync()) {
         auto killAiProcess = [&]() {
             AIManager::getInstance().abortTask();
@@ -1120,6 +1130,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
     window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(window.getSize()));
     sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
+    if (event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::MouseButtonReleased) {
+        pixelPos = sf::Vector2i(event.mouseButton.x, event.mouseButton.y);
+    }
     sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
     sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
 
@@ -1187,37 +1200,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     }
 
     if (currentState == AppState::Welcome) {
-        if (newProjectModal.getIsOpen()) {
-            std::string res = newProjectModal.handleEvent(event, window);
-            if (res == "create") {
-                int w = newProjectModal.getWidth();
-                int h = newProjectModal.getHeight();
-                bool isPix = newProjectModal.getIsPixelMode();
-                std::string pName = newProjectModal.getProjectName();
-                if (pName.empty()) pName = "Untitled_Project";
-
-                activeProjectName = pName;
-                canvas.initCustom(w, h);
-                canvas.setPixelMode(isPix);
-
-                timeline.setFrame(0);
-                canvas.clearIsDirty();
-                currentState = AppState::Painting;
-                showMessage("Created Canvas: " + pName, sf::Color::Green);
-            }
-            return;
-        }
-
         if (m_showKeybinds) {
             handleKeybindModalEvent(event, window);
             return;
         }
-
-        sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
-        if (event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::MouseButtonReleased) {
-            pixelPos = sf::Vector2i(event.mouseButton.x, event.mouseButton.y);
-        }
-        sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
 
         if (currentMenuState == MenuState::Main) {
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
@@ -1226,6 +1212,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     if (m_useMinigameWelcome) {
                         initMinigame();
                     }
+                    return;
+                }
+
+                if (m_startMenuFullscreenBtnBounds.contains(mousePos)) {
+                    toggleFullscreen(window, settings);
                     return;
                 }
 
@@ -1378,11 +1369,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
                 else {
                     if (checkToggle(c1X + 16.f, r1Y + 60.f)) {
-                        uiFullscreen = !uiFullscreen;
-                        uiBorderless = false;
-                        settings.fullscreen = uiFullscreen;
-                        settings.borderless = false;
-                        displayChanged = true;
+                        toggleFullscreen(window, settings);
                     }
 
                     if (checkToggle(c1X + 16.f, r1Y + 120.f)) {
@@ -1536,19 +1523,38 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
     }
     else if (currentState == AppState::Painting) {
-        if (m_topBar.HandleEvent(event, window)) {
-            if (currentMenuState == MenuState::Main && !showUnsavedWarning) {
-                currentState = AppState::Welcome;
+        if (m_showEscapeMenu) {
+            if (handleEscapeMenuEvent(event, window, currentState, settings, canvas, timeline)) return;
+        }
+
+        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+            if (g_aiPanel.getIsVisible()) {
+                g_aiPanel.toggle();
+                return;
             }
+            if (assetBrowser && assetBrowser->getIsVisible()) {
+                assetBrowser->toggle();
+                return;
+            }
+            if (audioPanel.getIsVisible()) {
+                audioPanel.toggle();
+                return;
+            }
+            if (m_activeRightTab != RightTabMode::None) {
+                m_activeRightTab = RightTabMode::None;
+                return;
+            }
+
+            m_showEscapeMenu = !m_showEscapeMenu;
             return;
         }
 
-        if (currentMenuState == MenuState::Main && !showUnsavedWarning) {
-            currentState = AppState::Welcome;
-            return;
-        }
+        if (m_topBar.HandleEvent(event, window)) return;
+        if (m_toolDock.HandleEvent(event, window)) return;
+        if (m_rightDockTabs.HandleEvent(event, window)) return;
+        if (m_statusBar.HandleEvent(event, window)) return;
 
-        m_toolOptionsBar.HandleEvent(event, window,
+        if (m_toolOptionsBar.HandleEvent(event, window,
             [&](float sz) {
                 if (canvas.getPixelMode()) canvas.setPixelBrushSize(static_cast<int>(sz));
                 else canvas.setBrushSize(sz);
@@ -1564,10 +1570,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 else if (action == "crop") canvas.cropSelection(curFrame);
                 else if (action == "delete") canvas.deleteSelection(curFrame);
             }
-        );
-        if (m_toolDock.HandleEvent(event, window)) return;
-        if (m_rightDockTabs.HandleEvent(event, window)) return;
-        if (m_statusBar.HandleEvent(event, window)) return;
+        )) return;
 
         if (m_activeRightTab == RightTabMode::Layers) {
             if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
@@ -1586,7 +1589,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     return;
                 }
             }
-            if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
         }
         else if (m_activeRightTab == RightTabMode::Palette) {
             if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
@@ -1594,7 +1596,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 std::string cpAction = colorPalettePanel.processClick(mousePos, canvas);
                 if (cpAction == "color_close") { m_activeRightTab = RightTabMode::None; return; }
             }
-            if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
         }
         else if (m_activeRightTab == RightTabMode::Properties) {
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
@@ -1616,8 +1617,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     return;
                 }
             }
-            if (mousePos.x > 1920.f - 44.f - 300.f && mousePos.x < 1920.f - 44.f) return;
         }
+
         if (assetBrowser && assetBrowser->getIsVisible()) {
             assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame());
         }
@@ -1728,25 +1729,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (g_aiPanel.handleEvent(event, mousePos)) {
                 if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
                     std::string action = g_aiPanel.handleClick(mousePos);
-                    if (colorPalettePanel.getIsEyedropperActive()) {
-                        if (canvas.getDrawArea().contains(logicalMousePos)) {
-                            sf::Image flat = ExportManager::flattenFrame(canvas, timeline.getCurrentFrame());
-                            sf::Vector2f texScale(static_cast<float>(canvas.getCanvasSize().x) / canvas.getDrawArea().width, static_cast<float>(canvas.getCanvasSize().y) / canvas.getDrawArea().height);
-                            int px = static_cast<int>((logicalMousePos.x - canvas.getDrawArea().left) * texScale.x);
-                            int py = static_cast<int>((logicalMousePos.y - canvas.getDrawArea().top) * texScale.y);
-
-                            if (px >= 0 && px < static_cast<int>(flat.getSize().x) && py >= 0 && py < static_cast<int>(flat.getSize().y)) {
-                                sf::Color picked = flat.getPixel(px, py);
-                                canvas.setPrimaryColor(picked);
-                                colorPalettePanel.setColors(picked, canvas.getSecondaryColor());
-                                colorPalettePanel.getColorManager().addRecentColor(picked);
-
-                                colorPalettePanel.setEyedropperActive(false);
-                                showMessage("Color Picked", sf::Color::Green);
-                            }
-                        }
-                        return;
-                    }
                     if (action == "execute") {
                         sf::Image currentCanvas = ExportManager::flattenFrame(canvas, timeline.getCurrentFrame());
                         AIRequest req = g_aiPanel.buildRequestFromCanvasContext(canvas.getCanvasSize().x, canvas.getCanvasSize().y, canvas.getPixelMode(), 1.0f, canvas.getActiveTool() == ToolType::Select);
@@ -1839,37 +1821,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         timeline.nextFrame();
                     }
                     else {
-                        bool isFrameEmpty = true;
-                        const Frame* curFrame = canvas.getFrameReadOnly(timeline.getCurrentFrame());
-                        if (curFrame) {
-                            for (const auto& layer : curFrame->layers) {
-                                sf::Image img = layer.texture->getTexture().copyToImage();
-                                const sf::Uint8* pixels = img.getPixelsPtr();
-                                size_t totalPixels = static_cast<size_t>(img.getSize().x) * static_cast<size_t>(img.getSize().y) * 4;
-                                for (size_t i = 3; i < totalPixels; i += 4) {
-                                    if (pixels[i] > 0) {
-                                        isFrameEmpty = false;
-                                        break;
-                                    }
-                                }
-                                if (!isFrameEmpty) break;
-                            }
-                        }
-
-                        if (isFrameEmpty) {
-                            if (showingText && uiText.getString() == sf::String("Current frame is empty. Press Right again to create another.") && textClock.getElapsedTime().asSeconds() < 2.0f) {
-                                canvas.addFrame(timeline.getCurrentFrame());
-                                timeline.addFrameAfter(timeline.getCurrentFrame());
-                                timeline.nextFrame();
-                                showingText = false;
-                            }
-                            else showMessage("Current frame is empty. Press Right again to create another.", sf::Color::Yellow);
-                        }
-                        else {
-                            canvas.addFrame(timeline.getCurrentFrame());
-                            timeline.addFrameAfter(timeline.getCurrentFrame());
-                            timeline.nextFrame();
-                        }
+                        canvas.addFrame(timeline.getCurrentFrame());
+                        timeline.addFrameAfter(timeline.getCurrentFrame());
+                        timeline.nextFrame();
                     }
                 }
 
@@ -1878,37 +1832,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         timeline.prevFrame();
                     }
                     else {
-                        bool isFrameEmpty = true;
-                        const Frame* curFrame = canvas.getFrameReadOnly(timeline.getCurrentFrame());
-                        if (curFrame) {
-                            for (const auto& layer : curFrame->layers) {
-                                sf::Image img = layer.texture->getTexture().copyToImage();
-                                const sf::Uint8* pixels = img.getPixelsPtr();
-                                size_t totalPixels = static_cast<size_t>(img.getSize().x) * static_cast<size_t>(img.getSize().y) * 4;
-                                for (size_t i = 3; i < totalPixels; i += 4) {
-                                    if (pixels[i] > 0) {
-                                        isFrameEmpty = false;
-                                        break;
-                                    }
-                                }
-                                if (!isFrameEmpty) break;
-                            }
-                        }
-
-                        if (isFrameEmpty) {
-                            if (showingText && uiText.getString() == sf::String("Current frame is empty. Press Left again to create another.") && textClock.getElapsedTime().asSeconds() < 2.0f) {
-                                canvas.addFrame(-1);
-                                timeline.addFrameAfter(-1);
-                                timeline.setFrame(0);
-                                showingText = false;
-                            }
-                            else showMessage("Current frame is empty. Press Left again to create another.", sf::Color::Yellow);
-                        }
-                        else {
-                            canvas.addFrame(-1);
-                            timeline.addFrameAfter(-1);
-                            timeline.setFrame(0);
-                        }
+                        canvas.addFrame(-1);
+                        timeline.addFrameAfter(-1);
+                        timeline.setFrame(0);
                     }
                 }
 
@@ -1941,14 +1867,14 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     int curL = canvas.getActiveLayer();
                     if (curL < static_cast<int>(canvas.getFrameReadOnly(timeline.getCurrentFrame())->layers.size()) - 1) {
                         canvas.moveLayer(timeline.getCurrentFrame(), curL, curL + 1);
-                        showMessage("Object Z-Coordinate +1 (Moved Up)", sf::Color::Cyan);
+                        showMessage("Layer +1 (Up)", sf::Color::Cyan);
                     }
                 }
                 if (event.key.code == sf::Keyboard::PageDown) {
                     int curL = canvas.getActiveLayer();
                     if (curL > 0) {
                         canvas.moveLayer(timeline.getCurrentFrame(), curL, curL - 1);
-                        showMessage("Object Z-Coordinate -1 (Moved Down)", sf::Color::Cyan);
+                        showMessage("Layer -1 (Down)", sf::Color::Cyan);
                     }
                 }
                 if (event.key.code == sf::Keyboard::E && event.key.control) {
@@ -2005,6 +1931,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         sf::Vector2f texScale(static_cast<float>(canvas.getCanvasSize().x) / canvas.getDrawArea().width, static_cast<float>(canvas.getCanvasSize().y) / canvas.getDrawArea().height);
                         int px = static_cast<int>((logicalMousePos.x - canvas.getDrawArea().left) * texScale.x);
                         int py = static_cast<int>((logicalMousePos.y - canvas.getDrawArea().top) * texScale.y);
+
                         if (px >= 0 && px < static_cast<int>(flat.getSize().x) && py >= 0 && py < static_cast<int>(flat.getSize().y)) {
                             sf::Color picked = flat.getPixel(px, py);
                             canvas.setPrimaryColor(picked);
@@ -2701,6 +2628,10 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             WisdomUI::Theme::DrawThemedButton(window, saveBounds, "Save", font, 14, false, saveBounds.contains(mousePos), false, 1.0f);
             WisdomUI::Theme::DrawThemedButton(window, discardBounds, "Discard", font, 14, false, discardBounds.contains(mousePos), true, 1.0f);
             WisdomUI::Theme::DrawThemedButton(window, cancelBounds, "Cancel", font, 14, false, cancelBounds.contains(mousePos), false, 1.0f);
+        }
+
+        if (m_showEscapeMenu) {
+            drawEscapeMenu(window, canvas, timeline);
         }
 
         m_toolDock.RenderTooltip(window);
@@ -3587,4 +3518,154 @@ void UIManager::drawKeybindModal(sf::RenderWindow& window) {
     }
 
     m_keybindMaxScroll = std::max(0.0f, totalH - listArea.height);
+}
+
+void UIManager::toggleFullscreen(sf::RenderWindow& window, AppSettings& settings) {
+    uiFullscreen = !uiFullscreen;
+    settings.fullscreen = uiFullscreen;
+    settings.borderless = false;
+
+    if (uiFullscreen) {
+        window.create(sf::VideoMode::getDesktopMode(), "Wisdom Park", sf::Style::Fullscreen);
+    }
+    else {
+        window.create(sf::VideoMode(settings.resWidth, settings.resHeight), "Wisdom Park", sf::Style::Default);
+        sf::VideoMode desktop = sf::VideoMode::getDesktopMode();
+        window.setPosition(sf::Vector2i(
+            std::max(0, static_cast<int>((desktop.width - settings.resWidth) / 2)),
+            std::max(0, static_cast<int>((desktop.height - settings.resHeight) / 2))
+        ));
+    }
+
+    window.setFramerateLimit(uiFpsLimit);
+    window.setVerticalSyncEnabled(uiVsync);
+    window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(window.getSize()));
+    SettingsManager::saveSettings(settings);
+    showMessage(uiFullscreen ? "Fullscreen Mode Enabled" : "Windowed Mode Enabled", sf::Color::Cyan);
+}
+
+void UIManager::drawEscapeMenu(sf::RenderWindow& window, Canvas& canvas, Timeline& timeline) {
+    sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
+    overlay.setFillColor(sf::Color(10, 4, 16, 225));
+    window.draw(overlay);
+
+    sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+    float modalW = 480.f;
+    float modalH = 580.f;
+    float modalX = (1920.f - modalW) / 2.f;
+    float modalY = (1080.f - modalH) / 2.f;
+
+    sf::FloatRect menuBounds(modalX, modalY, modalW, modalH);
+    WisdomUI::Theme::DrawSunsetPanel(window, menuBounds, 1.0f);
+
+    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO PAUSED", 24, modalX + modalW / 2.f, modalY + 36.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, activeProjectName + (canvas.getIsDirty() ? " *" : ""), 13, modalX + modalW / 2.f, modalY + 66.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 6, 20), true, true);
+
+    sf::RectangleShape div(sf::Vector2f(modalW - 56.f, 2.f));
+    div.setPosition(modalX + 28.f, modalY + 90.f);
+    div.setFillColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(div);
+
+    std::vector<std::pair<std::string, std::string>> menuItems = {
+        { "resume", "Resume Studio" },
+        { "save", "Save Project (Ctrl+S)" },
+        { "save_as", "Save Project As..." },
+        { "export", "Export Sequence (Ctrl+E)" },
+        { "fullscreen", std::string("Fullscreen: ") + (uiFullscreen ? "ON" : "OFF") },
+        { "main_menu", "Return to Main Menu" },
+        { "exit", "Exit Application" }
+    };
+
+    float btnX = modalX + 36.f;
+    float btnY = modalY + 112.f;
+    float btnW = modalW - 72.f;
+    float btnH = 46.f;
+    float spacing = 12.f;
+
+    for (size_t i = 0; i < menuItems.size(); ++i) {
+        sf::FloatRect bRect(btnX, btnY + static_cast<float>(i) * (btnH + spacing), btnW, btnH);
+        bool isHov = bRect.contains(mousePos);
+        bool isExit = (menuItems[i].first == "exit" || menuItems[i].first == "main_menu");
+        bool isResume = (menuItems[i].first == "resume");
+
+        WisdomUI::Theme::DrawSunsetButton(window, bRect, menuItems[i].second, font, 14, isResume, isHov, isExit, 1.0f);
+    }
+}
+
+bool UIManager::handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline) {
+    if (!m_showEscapeMenu) return false;
+
+    if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+        m_showEscapeMenu = false;
+        return true;
+    }
+
+    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+        float modalW = 480.f;
+        float modalH = 580.f;
+        float modalX = (1920.f - modalW) / 2.f;
+        float modalY = (1080.f - modalH) / 2.f;
+
+        float btnX = modalX + 36.f;
+        float btnY = modalY + 112.f;
+        float btnW = modalW - 72.f;
+        float btnH = 46.f;
+        float spacing = 12.f;
+
+        std::vector<std::string> actions = { "resume", "save", "save_as", "export", "fullscreen", "main_menu", "exit" };
+
+        for (size_t i = 0; i < actions.size(); ++i) {
+            sf::FloatRect bRect(btnX, btnY + static_cast<float>(i) * (btnH + spacing), btnW, btnH);
+            if (bRect.contains(mousePos)) {
+                std::string action = actions[i];
+
+                if (action == "resume") {
+                    m_showEscapeMenu = false;
+                }
+                else if (action == "save") {
+                    if (triggerSave(canvas, timeline)) {
+                        showMessage("Project Saved Successfully!", sf::Color::Green);
+                    }
+                    else {
+                        showMessage("Error Saving Project!", sf::Color::Red);
+                    }
+                }
+                else if (action == "save_as") {
+                    std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
+                    if (!file.empty() && projManager) {
+                        activeProjectPath = file;
+                        if (projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
+                            canvas.clearIsDirty();
+                            showMessage("Project Saved As Successfully!", sf::Color::Green);
+                        }
+                    }
+                }
+                else if (action == "export") {
+                    m_showEscapeMenu = false;
+                    exportModal.open(canvas, timeline.getCurrentFrame());
+                }
+                else if (action == "fullscreen") {
+                    toggleFullscreen(window, settings);
+                }
+                else if (action == "main_menu") {
+                    m_showEscapeMenu = false;
+                    if (canvas.getIsDirty()) {
+                        showUnsavedWarning = true;
+                    }
+                    else {
+                        currentState = AppState::Welcome;
+                        currentMenuState = MenuState::Main;
+                    }
+                }
+                else if (action == "exit") {
+                    window.close();
+                }
+                return true;
+            }
+        }
+    }
+    return true;
 }

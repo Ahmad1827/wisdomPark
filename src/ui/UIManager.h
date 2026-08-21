@@ -182,6 +182,13 @@ private:
     std::string m_arcadePendingAction = "";
     float m_arcadeActionDelay = 0.0f;
 
+    bool m_showEscapeMenu = false;
+    sf::FloatRect m_startMenuFullscreenBtnBounds = sf::FloatRect(1440.f, 35.f, 150.f, 42.f);
+
+    void toggleFullscreen(sf::RenderWindow& window, AppSettings& settings);
+    void drawEscapeMenu(sf::RenderWindow& window, Canvas& canvas, Timeline& timeline);
+    bool handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline);
+
     void initMinigame();
     void updateMinigame(float dt, sf::Vector2f mousePos, sf::RenderWindow& window);
     void triggerArcadeStation(const std::string& id, sf::RenderWindow& window);
