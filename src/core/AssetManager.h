@@ -21,6 +21,7 @@ struct AssetRecord {
 
 class AssetManager {
 public:
+    void removeAsset(const std::string& id);
     AssetManager();
     void init(const std::string& projectPath);
     void scanAssets();

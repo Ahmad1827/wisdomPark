@@ -1083,6 +1083,9 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
 }
 
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
+    if (event.type == sf::Event::Resized) {
+        window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(sf::Vector2u(event.size.width, event.size.height)));
+    }
     if (AIManager::getInstance().isProcessingAsync()) {
         auto killAiProcess = [&]() {
             AIManager::getInstance().abortTask();

@@ -148,3 +148,13 @@ void AssetManager::requestThumbnail(AssetRecord* record) {
 std::string AssetManager::getAssetsPath() const {
     return rootPath;
 }
+
+void AssetManager::removeAsset(const std::string& id) {
+    auto it = std::remove_if(assets.begin(), assets.end(), [&](const AssetRecord& a) {
+        return a.id == id;
+        });
+
+    if (it != assets.end()) {
+        assets.erase(it, assets.end());
+    }
+}

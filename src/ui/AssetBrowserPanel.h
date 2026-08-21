@@ -26,8 +26,13 @@ private:
     bool isDraggingAsset = false;
     sf::Vector2f dragStart;
 
+    float scrollY = 0.0f;
+    float maxScrollY = 0.0f;
+
     sf::FloatRect importBtnBounds;
+    sf::FloatRect gridAreaBounds;
     std::vector<std::pair<sf::FloatRect, AssetType>> categoryBounds;
+    std::vector<std::pair<sf::FloatRect, std::string>> deleteBtnBounds;
 
     void triggerImport();
     void handleDragAndDrop(const sf::Vector2f& dropPos, const sf::RenderWindow& window, Canvas& canvas, int currentFrame);

@@ -6,7 +6,8 @@
 
 AssetBrowserPanel::AssetBrowserPanel(AssetManager& am, const sf::Font& f)
     : assetManager(am), font(f), currentCategory(AssetType::Image), viewMode(BrowserView::Grid),
-    selectedAssetId(""), position(1460.f, 78.f), size(390.f, 540.f), isVisible(false), isDraggingAsset(false) {}
+    selectedAssetId(""), position(1460.f, 78.f), size(390.f, 540.f), isVisible(false), isDraggingAsset(false),
+    scrollY(0.0f), maxScrollY(0.0f) {}
 
 void AssetBrowserPanel::toggle() {
     isVisible = !isVisible;
@@ -76,14 +77,25 @@ void AssetBrowserPanel::draw(sf::RenderWindow& window) {
         catY += 28.f;
     }
 
+    gridAreaBounds = sf::FloatRect(position.x + 98.f, position.y + 66.f, size.x - 108.f, size.y - 146.f);
+
     auto assets = assetManager.getAssetsByCategory(currentCategory);
-    float startX = position.x + 100.f;
-    float startY = position.y + 66.f;
+    float startX = gridAreaBounds.left;
+    float startY = gridAreaBounds.top - scrollY;
+
+    deleteBtnBounds.clear();
+
+    float totalGridHeight = std::ceil(static_cast<float>(assets.size()) / 2.0f) * 105.0f;
+    maxScrollY = std::max(0.0f, totalGridHeight - gridAreaBounds.height);
+    scrollY = std::clamp(scrollY, 0.0f, maxScrollY);
 
     for (size_t i = 0; i < assets.size(); ++i) {
-        float ax = startX + (i % 2) * 138.f;
-        float ay = startY + (i / 2) * 115.f;
-        if (ay + 100.f > position.y + size.y - 80.f) break;
+        float ax = startX + (i % 2) * 136.f;
+        float ay = startY + (i / 2) * 105.f;
+
+        if (ay + 95.f < gridAreaBounds.top || ay > gridAreaBounds.top + gridAreaBounds.height) {
+            continue;
+        }
 
         bool isSelected = (assets[i]->id == selectedAssetId);
 
@@ -105,9 +117,37 @@ void AssetBrowserPanel::draw(sf::RenderWindow& window) {
         }
         window.draw(thumb);
 
+        sf::FloatRect delRect(ax + cardRect.width - 20.f, ay + 4.f, 16.f, 16.f);
+        deleteBtnBounds.push_back({ delRect, assets[i]->id });
+
+        sf::RectangleShape delBg(sf::Vector2f(delRect.width, delRect.height));
+        delBg.setPosition(delRect.left, delRect.top);
+        delBg.setFillColor(delRect.contains(mPos) ? sf::Color(220, 40, 60, 240) : sf::Color(14, 6, 20, 200));
+        delBg.setOutlineThickness(1.f);
+        delBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+        window.draw(delBg);
+
+        WisdomUI::Theme::DrawCrispText(window, font, "x", 11, delRect.left + delRect.width / 2.0f, delRect.top + delRect.height / 2.0f - 1.f, sf::Color::White, sf::Color::Transparent, true, true);
+
         std::string nameStr = assets[i]->filename;
         if (nameStr.length() > 16) nameStr = nameStr.substr(0, 14) + "..";
-        WisdomUI::Theme::DrawCrispText(window, font, nameStr, 10, ax + 65.f, ay + 82.f, isSelected ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+        WisdomUI::Theme::DrawCrispText(window, font, nameStr, 10, ax + 65.f, ay + 80.f, isSelected ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+    }
+
+    if (maxScrollY > 0.0f) {
+        float scrollTrackH = gridAreaBounds.height;
+        float thumbH = std::max(20.0f, (gridAreaBounds.height / totalGridHeight) * scrollTrackH);
+        float thumbY = gridAreaBounds.top + (scrollY / maxScrollY) * (scrollTrackH - thumbH);
+
+        sf::RectangleShape scrollTrack(sf::Vector2f(4.f, scrollTrackH));
+        scrollTrack.setPosition(gridAreaBounds.left + gridAreaBounds.width - 6.f, gridAreaBounds.top);
+        scrollTrack.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+        window.draw(scrollTrack);
+
+        sf::RectangleShape scrollThumb(sf::Vector2f(4.f, thumbH));
+        scrollThumb.setPosition(gridAreaBounds.left + gridAreaBounds.width - 6.f, thumbY);
+        scrollThumb.setFillColor(WisdomUI::Theme::SunsetGold);
+        window.draw(scrollThumb);
     }
 
     sf::FloatRect propArea(position.x + 10.f, position.y + size.y - 75.f, size.x - 20.f, 65.f);
@@ -135,7 +175,24 @@ void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWind
     sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
     sf::FloatRect headerGrip(position.x, position.y, size.x, 34.f);
 
+    if (event.type == sf::Event::MouseWheelScrolled) {
+        if (gridAreaBounds.contains(mousePos)) {
+            scrollY = std::clamp(scrollY - event.mouseWheelScroll.delta * 35.0f, 0.0f, maxScrollY);
+            return;
+        }
+    }
+
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        for (const auto& delItem : deleteBtnBounds) {
+            if (delItem.first.contains(mousePos)) {
+                if (selectedAssetId == delItem.second) {
+                    selectedAssetId = "";
+                }
+                assetManager.removeAsset(delItem.second);
+                return;
+            }
+        }
+
         if (headerGrip.contains(mousePos)) {
             isDraggingPanel = true;
             dragOffset = mousePos - position;
@@ -151,16 +208,23 @@ void AssetBrowserPanel::handleEvent(const sf::Event& event, const sf::RenderWind
             if (cb.first.contains(mousePos)) {
                 currentCategory = cb.second;
                 selectedAssetId = "";
+                scrollY = 0.0f;
                 return;
             }
         }
 
         auto assets = assetManager.getAssetsByCategory(currentCategory);
-        float startX = position.x + 100.f;
-        float startY = position.y + 66.f;
+        float startX = gridAreaBounds.left;
+        float startY = gridAreaBounds.top - scrollY;
+
         for (size_t i = 0; i < assets.size(); ++i) {
-            float ax = startX + (i % 2) * 138.f;
-            float ay = startY + (i / 2) * 115.f;
+            float ax = startX + (i % 2) * 136.f;
+            float ay = startY + (i / 2) * 105.f;
+
+            if (ay + 95.f < gridAreaBounds.top || ay > gridAreaBounds.top + gridAreaBounds.height) {
+                continue;
+            }
+
             if (sf::FloatRect(ax, ay, 130.f, 95.f).contains(mousePos)) {
                 selectedAssetId = assets[i]->id;
                 isDraggingAsset = true;
@@ -195,7 +259,7 @@ void AssetBrowserPanel::handleDragAndDrop(const sf::Vector2f& dropPos, const sf:
 }
 
 void AssetBrowserPanel::triggerImport() {
-    std::string file = NativeDialogs::openFileDialog("Image Files\0*.png;*.jpg;*.jpeg;*.bmp;*.webp\0All Files\0*.*\0");
+    std::string file = NativeDialogs::openFileDialog("Image Files\0*.png;*.jpg;*.jpeg;*.jfif;*.bmp;*.webp\0All Files\0*.*\0");
     if (!file.empty()) {
         assetManager.importAssets({ file });
     }
