@@ -2073,16 +2073,27 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     if (!g_droppedFiles.empty()) {
         for (const auto& dropItem : g_droppedFiles) {
             const std::string& filePath = dropItem.first;
+            sf::Vector2i dropPixel = dropItem.second;
+            sf::Vector2f dropPos = window.mapPixelToCoords(dropPixel);
+
             std::string ext = std::filesystem::path(filePath).extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
+            bool isImage = (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".jfif" || ext == ".bmp" || ext == ".tga" || ext == ".webp");
+            bool isAudio = (ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac");
+            bool isProject = (ext == ".wpk");
+
             if (currentState == AppState::Painting) {
-                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga") {
-                    int curFrame = static_cast<int>(timeline.getCurrentFrame());
-                    canvas.importImageToActiveLayer(filePath, curFrame);
-                    showMessage("Imported to Canvas: " + std::filesystem::path(filePath).filename().string(), sf::Color::Green);
+                sf::FloatRect assetBrowserRect(1440.f, 78.f, 390.f, 540.f);
+                bool droppedInAssetBrowser = (assetBrowser && assetBrowser->getIsVisible() && assetBrowserRect.contains(dropPos));
+
+                if (droppedInAssetBrowser) {
+                    std::vector<std::string> fileList = { filePath };
+                    assetManager.importAssets(fileList);
+                    m_activeRightTab = RightTabMode::Assets;
+                    showMessage("Loaded to Asset Vault: " + std::filesystem::path(filePath).filename().string(), sf::Color::Green);
                 }
-                else if (ext == ".wpk") {
+                else if (isProject) {
                     int loadedFps = 12;
                     bool isPix = false;
                     if (projManager && projManager->loadProject(filePath, canvas, loadedFps, isPix)) {
@@ -2093,16 +2104,25 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                         showMessage("Opened Project: " + activeProjectName, sf::Color::Green);
                     }
                 }
-                else if (ext == ".wav" || ext == ".ogg" || ext == ".mp3") {
+                else if (isImage) {
+                    int curFrame = static_cast<int>(timeline.getCurrentFrame());
+                    canvas.importImageToActiveLayer(filePath, curFrame);
+                    showMessage("Placed on Canvas: " + std::filesystem::path(filePath).filename().string(), sf::Color::Green);
+                }
+                else if (isAudio) {
                     std::vector<std::string> audioFile = { filePath };
                     assetManager.importAssets(audioFile);
                     m_activeRightTab = RightTabMode::Audio;
+                    if (audioPanel.getIsVisible()) audioPanel.toggle();
+                    audioPanel.toggle();
+                    showMessage("Loaded Audio Track: " + std::filesystem::path(filePath).filename().string(), sf::Color::Green);
                 }
                 else {
-                    std::vector<std::string> singleFile = { filePath };
-                    assetManager.importAssets(singleFile);
+                    std::vector<std::string> generalFile = { filePath };
+                    assetManager.importAssets(generalFile);
                     m_activeRightTab = RightTabMode::Assets;
                     if (assetBrowser && !assetBrowser->getIsVisible()) assetBrowser->toggle();
+                    showMessage("Imported File to Assets", sf::Color::Green);
                 }
             }
         }
