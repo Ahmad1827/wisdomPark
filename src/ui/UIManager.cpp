@@ -455,37 +455,42 @@ void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
     float floatAnim = std::sin(startupTime * 2.0f) * 4.0f;
-    float titleY = 95.f + floatAnim;
+    float titleY = 70.f + floatAnim;
 
-    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK", 52, 960.f, titleY, WisdomUI::Theme::SunsetGold, sf::Color(12, 4, 18), true, true);
-    WisdomUI::Theme::DrawCrispText(window, font, "CREATIVE ANIMATION STUDIO & PIXEL ART SUITE", 13, 960.f, titleY + 48.f, WisdomUI::Theme::SunsetPeach, sf::Color(12, 4, 18), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK", 56, 960.f, titleY, WisdomUI::Theme::SunsetGold, sf::Color(12, 4, 18), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "CREATIVE ANIMATION STUDIO & PIXEL ART SUITE", 16, 960.f, titleY + 52.f, WisdomUI::Theme::SunsetPeach, sf::Color(12, 4, 18), true, true);
 
-    sf::FloatRect menuPod(460.f, 190.f, 1000.f, 740.f);
+    sf::FloatRect menuPod(440.f, 145.f, 1040.f, 790.f);
     WisdomUI::Theme::DrawSunsetPanel(window, menuPod, 1.0f);
 
-    sf::FloatRect bannerGrip(menuPod.left + 20.f, menuPod.top + 14.f, menuPod.width - 40.f, 32.f);
+    sf::FloatRect bannerGrip(menuPod.left + 20.f, menuPod.top + 14.f, menuPod.width - 40.f, 38.f);
     sf::RectangleShape bannerBg(sf::Vector2f(bannerGrip.width, bannerGrip.height));
     bannerBg.setPosition(bannerGrip.left, bannerGrip.top);
     bannerBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-    bannerBg.setOutlineThickness(1.f);
+    bannerBg.setOutlineThickness(1.5f);
     bannerBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(bannerBg);
 
-    WisdomUI::Theme::DrawCrispText(window, font, ":: MAIN LAUNCHPAD ::", 12, bannerGrip.left + bannerGrip.width / 2.f, bannerGrip.top + bannerGrip.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, ":: MAIN LAUNCHPAD ::", 15, bannerGrip.left + bannerGrip.width / 2.f, bannerGrip.top + bannerGrip.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
     std::vector<std::pair<std::string, std::pair<std::string, std::string>>> menuCards = {
-        {"New Project", {"Initialize dynamic canvas or pixel grid", "Ctrl+N"}},
-        {"Project Vault", {"Browse recent project files and disk archives", "Ctrl+O"}},
-        {"Studio Settings", {"Configure display resolution, vsync and drivers", "ESC"}},
-        {"Knowledge Codex", {"Interactive guides, tutorials and technique manuals", "F1"}},
-        {"Keybind Matrix", {"Customize keyboard shortcuts and tool bindings", "K"}},
-        {"Studio Credits", {"Engine architecture and contribution roll", "C"}},
-        {"Exit Software", {"Close application safely", "Alt+F4"}}
+        {"NEW PROJECT", {"Initialize dynamic canvas or pixel grid", "CTRL+N"}},
+        {"PROJECT VAULT", {"Browse recent project files and disk archives", "CTRL+O"}},
+        {"STUDIO SETTINGS", {"Configure display resolution, vsync and drivers", "ESC"}},
+        {"KNOWLEDGE CODEX", {"Interactive guides, tutorials and technique manuals", "F1"}},
+        {"KEYBIND MATRIX", {"Customize keyboard shortcuts and tool bindings", "K"}},
+        {"STUDIO CREDITS", {"Engine architecture and contribution roll", "C"}},
+        {"EXIT SOFTWARE", {"Close application safely", "ALT+F4"}}
     };
 
-    float cardY = menuPod.top + 58.f;
+    float startX = menuPod.left + 24.f;
+    float startY = menuPod.top + 66.f;
+    float btnW = menuPod.width - 48.f;
+    float btnH = 80.f;
+    float spacing = 14.f;
+
     for (size_t i = 0; i < menuCards.size(); ++i) {
-        sf::FloatRect cardRect(menuPod.left + 24.f, cardY, menuPod.width - 48.f, 80.f);
+        sf::FloatRect cardRect(startX, startY + static_cast<float>(i) * (btnH + spacing), btnW, btnH);
         bool isHovered = cardRect.contains(mousePos);
         bool isAccent = (i == 0);
         bool isExit = (i == menuCards.size() - 1);
@@ -494,46 +499,44 @@ void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
         card.setPosition(cardRect.left, cardRect.top);
 
         if (isHovered) {
-            card.setFillColor(isExit ? sf::Color(140, 24, 44, 230) : WisdomUI::Theme::SunsetSkyMid);
+            card.setFillColor(isExit ? sf::Color(150, 24, 44, 240) : WisdomUI::Theme::SunsetSkyMid);
             card.setOutlineThickness(2.0f);
-            card.setOutlineColor(isAccent ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber);
+            card.setOutlineColor(isAccent ? WisdomUI::Theme::SunsetGold : (isExit ? sf::Color(255, 70, 90) : WisdomUI::Theme::SunsetAmber));
         }
         else {
             card.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-            card.setOutlineThickness(1.0f);
+            card.setOutlineThickness(1.2f);
             card.setOutlineColor(isAccent ? WisdomUI::Theme::SunsetCoral : WisdomUI::Theme::SunsetPlum);
         }
         window.draw(card);
 
         if (isHovered) {
-            sf::RectangleShape accentStrip(sf::Vector2f(4.f, cardRect.height - 12.f));
-            accentStrip.setPosition(cardRect.left + 6.f, cardRect.top + 6.f);
-            accentStrip.setFillColor(isAccent ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber);
+            sf::RectangleShape accentStrip(sf::Vector2f(6.f, cardRect.height - 16.f));
+            accentStrip.setPosition(cardRect.left + 8.f, cardRect.top + 8.f);
+            accentStrip.setFillColor(isAccent ? WisdomUI::Theme::SunsetGold : (isExit ? sf::Color(255, 70, 90) : WisdomUI::Theme::SunsetAmber));
             window.draw(accentStrip);
         }
 
         sf::Color titleColor = isHovered ? WisdomUI::Theme::SunsetGold : (isAccent ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextPrimary);
-        WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].first, 17, cardRect.left + 26.f, cardRect.top + 18.f, titleColor, sf::Color(14, 6, 20));
-        WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].second.first, 12, cardRect.left + 26.f, cardRect.top + 46.f, isHovered ? sf::Color::White : WisdomUI::Theme::TextSecondary);
+        WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].first, 22, cardRect.left + 30.f, cardRect.top + 14.f, titleColor, sf::Color(14, 6, 20));
+        WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].second.first, 14, cardRect.left + 30.f, cardRect.top + 46.f, isHovered ? sf::Color::White : WisdomUI::Theme::TextSecondary);
 
         if (!menuCards[i].second.second.empty()) {
-            sf::FloatRect badge(cardRect.left + cardRect.width - 110.f, cardRect.top + (cardRect.height - 32.f) / 2.f, 90.f, 32.f);
+            sf::FloatRect badge(cardRect.left + cardRect.width - 130.f, cardRect.top + (cardRect.height - 40.f) / 2.f, 110.f, 40.f);
             sf::RectangleShape badgeBg(sf::Vector2f(badge.width, badge.height));
             badgeBg.setPosition(badge.left, badge.top);
             badgeBg.setFillColor(sf::Color(10, 4, 18));
-            badgeBg.setOutlineThickness(1.f);
+            badgeBg.setOutlineThickness(1.5f);
             badgeBg.setOutlineColor(isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
             window.draw(badgeBg);
 
-            WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].second.second, 11, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+            WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].second.second, 14, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
         }
-
-        cardY += 92.f;
     }
 
-    sf::FloatRect tickerBounds(360.f, 955.f, 1200.f, 40.f);
+    sf::FloatRect tickerBounds(340.f, 950.f, 1240.f, 48.f);
     WisdomUI::Theme::DrawSunsetPanel(window, tickerBounds, 1.0f);
-    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK STUDIO  |  v2.6.0 RETRO ENGINE  |  DIRECT HARDWARE ACCELERATION READY", 12, tickerBounds.left + tickerBounds.width / 2.f, tickerBounds.top + tickerBounds.height / 2.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK STUDIO  |  v2.6.0 RETRO ENGINE  |  DIRECT HARDWARE ACCELERATION READY", 14, tickerBounds.left + tickerBounds.width / 2.f, tickerBounds.top + tickerBounds.height / 2.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
 }
 
 void UIManager::drawMainMenu(sf::RenderWindow& window) {
@@ -1158,7 +1161,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (pName.empty()) pName = "Untitled_Project";
 
                 activeProjectName = pName;
-
                 canvas.initCustom(w, h);
                 canvas.setPixelMode(isPix);
 
@@ -1204,22 +1206,16 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                 }
                 else {
-                    float podLeft = 460.f;
-                    float podTop = 190.f;
-                    float podWidth = 1000.f;
-
-                    float startX = podLeft + 24.f;
-                    float startY = podTop + 58.f;
-                    float cardW = podWidth - 48.f;
-                    float cardH = 80.f;
-                    float stepY = 92.f;
+                    float startX = 440.f + 24.f;
+                    float startY = 145.f + 66.f;
+                    float btnW = 1040.f - 48.f;
+                    float btnH = 80.f;
+                    float spacing = 14.f;
 
                     for (int i = 0; i < 7; ++i) {
-                        sf::FloatRect cardRect(startX, startY + static_cast<float>(i) * stepY, cardW, cardH);
+                        sf::FloatRect cardRect(startX, startY + static_cast<float>(i) * (btnH + spacing), btnW, btnH);
                         if (cardRect.contains(mousePos)) {
-                            if (i == 0) {
-                                newProjectModal.open();
-                            }
+                            if (i == 0) newProjectModal.open();
                             else if (i == 1) currentMenuState = MenuState::Projects;
                             else if (i == 2) currentMenuState = MenuState::Settings;
                             else if (i == 3) { currentMenuState = MenuState::Tutorials; activeTutorialIndex = -1; }
@@ -1351,7 +1347,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         displayChanged = true;
                     }
 
-                    if (checkToggle(c1X + 16.f, r1Y + 95.f)) {
+                    if (checkToggle(c1X + 16.f, r1Y + 112.f)) {
                         uiBorderless = !uiBorderless;
                         if (uiBorderless) uiFullscreen = false;
                         settings.fullscreen = uiFullscreen;
@@ -1359,7 +1355,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         displayChanged = true;
                     }
 
-                    if (checkToggle(c1X + 16.f, r1Y + 140.f)) {
+                    if (checkToggle(c1X + 16.f, r1Y + 168.f)) {
                         uiVsync = !uiVsync;
                         settings.vsync = uiVsync;
                         window.setVerticalSyncEnabled(uiVsync);
