@@ -3323,10 +3323,10 @@ void UIManager::handleKeybindModalEvent(const sf::Event& event, sf::RenderWindow
     }
 
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        sf::FloatRect modalBounds(360.f, 90.f, 1200.f, 900.f);
-        sf::FloatRect closeBtn(modalBounds.left + modalBounds.width - 114.f, modalBounds.top + 20.f, 94.f, 34.f);
-        sf::FloatRect restoreBtn(modalBounds.left + modalBounds.width - 274.f, modalBounds.top + 20.f, 144.f, 34.f);
-        sf::FloatRect searchBox(modalBounds.left + 30.f, modalBounds.top + 78.f, 300.f, 36.f);
+        sf::FloatRect modalBounds(280.f, 70.f, 1360.f, 940.f);
+        sf::FloatRect closeBtn(modalBounds.left + modalBounds.width - 130.f, modalBounds.top + 20.f, 106.f, 44.f);
+        sf::FloatRect restoreBtn(modalBounds.left + modalBounds.width - 320.f, modalBounds.top + 20.f, 174.f, 44.f);
+        sf::FloatRect searchBox(modalBounds.left + 32.f, modalBounds.top + 84.f, 320.f, 44.f);
 
         if (closeBtn.contains(mousePos)) {
             m_showKeybinds = false;
@@ -3346,20 +3346,20 @@ void UIManager::handleKeybindModalEvent(const sf::Event& event, sf::RenderWindow
         }
 
         std::vector<std::string> cats = { "All", "Tools", "Project", "Edit", "Selection", "Timeline", "Layers", "View", "UI" };
-        float tabX = modalBounds.left + 348.f;
+        float tabX = modalBounds.left + 372.f;
         for (const auto& cat : cats) {
-            sf::FloatRect tRect(tabX, modalBounds.top + 78.f, 84.f, 36.f);
+            sf::FloatRect tRect(tabX, modalBounds.top + 84.f, 98.f, 44.f);
             if (tRect.contains(mousePos)) {
                 m_selectedKeybindCategory = cat;
                 m_keybindScrollOffset = 0.0f;
                 return;
             }
-            tabX += 90.f;
+            tabX += 106.f;
         }
 
-        sf::FloatRect listArea(modalBounds.left + 30.f, modalBounds.top + 135.f, modalBounds.width - 60.f, modalBounds.height - 165.f);
+        sf::FloatRect listArea(modalBounds.left + 32.f, modalBounds.top + 156.f, modalBounds.width - 64.f, modalBounds.height - 188.f);
         float rowY = listArea.top - m_keybindScrollOffset;
-        float rowH = 46.f;
+        float rowH = 56.f;
 
         for (const auto& id : keybindManager.getActionOrder()) {
             const auto& act = keybindManager.getAction(id);
@@ -3374,25 +3374,25 @@ void UIManager::handleKeybindModalEvent(const sf::Event& event, sf::RenderWindow
             }
 
             if (rowY + rowH >= listArea.top && rowY <= listArea.top + listArea.height) {
-                sf::FloatRect bindBtn(listArea.left + listArea.width - 210.f, rowY + 8.f, 194.f, 30.f);
+                sf::FloatRect bindBtn(listArea.left + listArea.width - 240.f, rowY + 8.f, 220.f, 40.f);
                 if (bindBtn.contains(mousePos)) {
                     m_listeningKeyActionId = id;
                     return;
                 }
             }
-            rowY += rowH + 8.f;
+            rowY += rowH + 10.f;
         }
     }
 
     if (event.type == sf::Event::MouseWheelScrolled) {
-        m_keybindScrollOffset = std::clamp(m_keybindScrollOffset - event.mouseWheelScroll.delta * 45.0f, 0.0f, m_keybindMaxScroll);
+        m_keybindScrollOffset = std::clamp(m_keybindScrollOffset - event.mouseWheelScroll.delta * 55.0f, 0.0f, m_keybindMaxScroll);
     }
 
     if (event.type == sf::Event::TextEntered && m_isTypingKeybindSearch) {
         if (event.text.unicode == '\b') {
             if (!m_keybindSearchQuery.empty()) m_keybindSearchQuery.pop_back();
         }
-        else if (event.text.unicode >= 32 && event.text.unicode < 127 && m_keybindSearchQuery.length() < 20) {
+        else if (event.text.unicode >= 32 && event.text.unicode < 127 && m_keybindSearchQuery.length() < 24) {
             m_keybindSearchQuery += static_cast<char>(event.text.unicode);
         }
     }
@@ -3408,19 +3408,19 @@ void UIManager::drawKeybindModal(sf::RenderWindow& window) {
     overlay.setFillColor(sf::Color(10, 4, 16, 225));
     window.draw(overlay);
 
-    sf::FloatRect modalBounds(360.f, 90.f, 1200.f, 900.f);
+    sf::FloatRect modalBounds(280.f, 70.f, 1360.f, 940.f);
     WisdomUI::Theme::DrawSunsetPanel(window, modalBounds, 1.0f);
 
-    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO KEYBIND MATRIX", 20, modalBounds.left + 30.f, modalBounds.top + 22.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
-    WisdomUI::Theme::DrawCrispText(window, font, "CUSTOMIZE & REBIND WORKSPACE HOTKEYS", 11, modalBounds.left + 32.f, modalBounds.top + 48.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO KEYBIND MATRIX", 28, modalBounds.left + 32.f, modalBounds.top + 20.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
+    WisdomUI::Theme::DrawCrispText(window, font, "CUSTOMIZE & REBIND WORKSPACE HOTKEYS", 14, modalBounds.left + 34.f, modalBounds.top + 54.f, WisdomUI::Theme::TextSecondary);
 
-    sf::FloatRect closeBtn(modalBounds.left + modalBounds.width - 114.f, modalBounds.top + 20.f, 94.f, 34.f);
-    sf::FloatRect restoreBtn(modalBounds.left + modalBounds.width - 274.f, modalBounds.top + 20.f, 144.f, 34.f);
+    sf::FloatRect closeBtn(modalBounds.left + modalBounds.width - 130.f, modalBounds.top + 20.f, 106.f, 44.f);
+    sf::FloatRect restoreBtn(modalBounds.left + modalBounds.width - 320.f, modalBounds.top + 20.f, 174.f, 44.f);
 
-    WisdomUI::Theme::DrawSunsetButton(window, restoreBtn, "Reset Defaults", font, 11, false, restoreBtn.contains(mousePos), false, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, closeBtn, "Close", font, 11, false, closeBtn.contains(mousePos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, restoreBtn, "Reset Defaults", font, 15, false, restoreBtn.contains(mousePos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, closeBtn, "Close", font, 15, false, closeBtn.contains(mousePos), false, 1.0f);
 
-    sf::FloatRect searchBox(modalBounds.left + 30.f, modalBounds.top + 78.f, 300.f, 36.f);
+    sf::FloatRect searchBox(modalBounds.left + 32.f, modalBounds.top + 84.f, 320.f, 44.f);
     sf::RectangleShape sBox(sf::Vector2f(searchBox.width, searchBox.height));
     sBox.setPosition(searchBox.left, searchBox.top);
     sBox.setFillColor(WisdomUI::Theme::SunsetDeepDark);
@@ -3430,26 +3430,26 @@ void UIManager::drawKeybindModal(sf::RenderWindow& window) {
 
     std::string searchDisplay = m_keybindSearchQuery.empty() ? (m_isTypingKeybindSearch ? "_" : "Search shortcuts...") : (m_keybindSearchQuery + (m_isTypingKeybindSearch ? "_" : ""));
     sf::Color searchColor = m_keybindSearchQuery.empty() && !m_isTypingKeybindSearch ? WisdomUI::Theme::SunsetPlum : WisdomUI::Theme::TextPrimary;
-    WisdomUI::Theme::DrawCrispText(window, font, searchDisplay, 11, searchBox.left + 12.f, searchBox.top + 10.f, searchColor);
+    WisdomUI::Theme::DrawCrispText(window, font, searchDisplay, 15, searchBox.left + 14.f, searchBox.top + 12.f, searchColor);
 
     std::vector<std::string> cats = { "All", "Tools", "Project", "Edit", "Selection", "Timeline", "Layers", "View", "UI" };
-    float tabX = modalBounds.left + 348.f;
+    float tabX = modalBounds.left + 372.f;
     for (const auto& cat : cats) {
-        sf::FloatRect tRect(tabX, modalBounds.top + 78.f, 84.f, 36.f);
+        sf::FloatRect tRect(tabX, modalBounds.top + 84.f, 98.f, 44.f);
         bool isSel = (m_selectedKeybindCategory == cat);
-        WisdomUI::Theme::DrawSunsetButton(window, tRect, cat, font, 10, isSel, tRect.contains(mousePos), isSel, 1.0f);
-        tabX += 90.f;
+        WisdomUI::Theme::DrawSunsetButton(window, tRect, cat, font, 14, isSel, tRect.contains(mousePos), isSel, 1.0f);
+        tabX += 106.f;
     }
 
-    sf::RectangleShape div(sf::Vector2f(modalBounds.width - 60.f, 1.5f));
-    div.setPosition(modalBounds.left + 30.f, modalBounds.top + 124.f);
+    sf::RectangleShape div(sf::Vector2f(modalBounds.width - 64.f, 2.f));
+    div.setPosition(modalBounds.left + 32.f, modalBounds.top + 142.f);
     div.setFillColor(WisdomUI::Theme::SunsetPlum);
     window.draw(div);
 
-    sf::FloatRect listArea(modalBounds.left + 30.f, modalBounds.top + 135.f, modalBounds.width - 60.f, modalBounds.height - 165.f);
+    sf::FloatRect listArea(modalBounds.left + 32.f, modalBounds.top + 156.f, modalBounds.width - 64.f, modalBounds.height - 188.f);
 
     float rowY = listArea.top - m_keybindScrollOffset;
-    float rowH = 46.f;
+    float rowH = 56.f;
     float totalH = 0.0f;
 
     for (const auto& id : keybindManager.getActionOrder()) {
@@ -3465,7 +3465,7 @@ void UIManager::drawKeybindModal(sf::RenderWindow& window) {
             if (n.find(q) == std::string::npos) continue;
         }
 
-        totalH += rowH + 8.f;
+        totalH += rowH + 10.f;
 
         if (rowY + rowH >= listArea.top && rowY <= listArea.top + listArea.height) {
             sf::FloatRect rowRect(listArea.left, rowY, listArea.width, rowH);
@@ -3475,13 +3475,13 @@ void UIManager::drawKeybindModal(sf::RenderWindow& window) {
             sf::RectangleShape rBg(sf::Vector2f(rowRect.width, rowRect.height));
             rBg.setPosition(rowRect.left, rowRect.top);
             rBg.setFillColor(isListening ? WisdomUI::Theme::SunsetSkyMid : (isHov ? WisdomUI::Theme::SunsetSkyTop : WisdomUI::Theme::SunsetDeepDark));
-            rBg.setOutlineThickness(1.f);
+            rBg.setOutlineThickness(1.5f);
             rBg.setOutlineColor(isListening ? WisdomUI::Theme::SunsetGold : (isHov ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum));
             window.draw(rBg);
 
-            WisdomUI::Theme::DrawCrispText(window, font, act.name, 13, rowRect.left + 16.f, rowRect.top + 14.f, isListening ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
+            WisdomUI::Theme::DrawCrispText(window, font, act.name, 18, rowRect.left + 22.f, rowRect.top + 16.f, isListening ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
 
-            sf::FloatRect catTag(rowRect.left + 340.f, rowRect.top + 12.f, 90.f, 22.f);
+            sf::FloatRect catTag(rowRect.left + 420.f, rowRect.top + 14.f, 110.f, 28.f);
             sf::RectangleShape cBg(sf::Vector2f(catTag.width, catTag.height));
             cBg.setPosition(catTag.left, catTag.top);
             cBg.setFillColor(sf::Color(14, 6, 20));
@@ -3489,16 +3489,16 @@ void UIManager::drawKeybindModal(sf::RenderWindow& window) {
             cBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
             window.draw(cBg);
 
-            WisdomUI::Theme::DrawCrispText(window, font, act.category, 9, catTag.left + catTag.width / 2.f, catTag.top + catTag.height / 2.f, WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+            WisdomUI::Theme::DrawCrispText(window, font, act.category, 12, catTag.left + catTag.width / 2.f, catTag.top + catTag.height / 2.f, WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
 
-            sf::FloatRect bindBtn(rowRect.left + rowRect.width - 210.f, rowRect.top + 8.f, 194.f, 30.f);
+            sf::FloatRect bindBtn(rowRect.left + rowRect.width - 240.f, rowRect.top + 8.f, 220.f, 40.f);
             std::string keyStr = isListening ? "Press Key..." : keybindManager.getActionString(id);
             if (keyStr.empty()) keyStr = "[Unbound]";
 
-            WisdomUI::Theme::DrawSunsetButton(window, bindBtn, keyStr, font, 11, isListening, bindBtn.contains(mousePos), isListening, 1.0f);
+            WisdomUI::Theme::DrawSunsetButton(window, bindBtn, keyStr, font, 15, isListening, bindBtn.contains(mousePos), isListening, 1.0f);
         }
 
-        rowY += rowH + 8.f;
+        rowY += rowH + 10.f;
     }
 
     m_keybindMaxScroll = std::max(0.0f, totalH - listArea.height);
