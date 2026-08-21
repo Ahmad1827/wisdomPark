@@ -13,6 +13,7 @@ private:
     std::string projectToDelete;
 
     sf::FloatRect containerBounds;
+    sf::FloatRect backBtnBounds;
     sf::FloatRect newProjectBtnBounds;
     sf::FloatRect openFileBtnBounds;
     sf::FloatRect confirmBtnBounds;

@@ -454,16 +454,16 @@ void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
-    float floatAnim = std::sin(startupTime * 2.2f) * 6.0f;
-    float titleY = 150.f + floatAnim;
+    float floatAnim = std::sin(startupTime * 2.0f) * 4.0f;
+    float titleY = 95.f + floatAnim;
 
-    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK", 58, 960.f, titleY, WisdomUI::Theme::SunsetGold, sf::Color(12, 4, 18), true, true);
-    WisdomUI::Theme::DrawCrispText(window, font, "ANIMATION STUDIO & PIXEL ART SUITE", 13, 960.f, titleY + 52.f, WisdomUI::Theme::SunsetPeach, sf::Color(12, 4, 18), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK", 52, 960.f, titleY, WisdomUI::Theme::SunsetGold, sf::Color(12, 4, 18), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "CREATIVE ANIMATION STUDIO & PIXEL ART SUITE", 13, 960.f, titleY + 48.f, WisdomUI::Theme::SunsetPeach, sf::Color(12, 4, 18), true, true);
 
-    sf::FloatRect menuPod(720.f, 320.f, 480.f, 540.f);
+    sf::FloatRect menuPod(460.f, 190.f, 1000.f, 740.f);
     WisdomUI::Theme::DrawSunsetPanel(window, menuPod, 1.0f);
 
-    sf::FloatRect bannerGrip(menuPod.left + 16.f, menuPod.top + 14.f, menuPod.width - 32.f, 30.f);
+    sf::FloatRect bannerGrip(menuPod.left + 20.f, menuPod.top + 14.f, menuPod.width - 40.f, 32.f);
     sf::RectangleShape bannerBg(sf::Vector2f(bannerGrip.width, bannerGrip.height));
     bannerBg.setPosition(bannerGrip.left, bannerGrip.top);
     bannerBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
@@ -471,48 +471,69 @@ void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
     bannerBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(bannerBg);
 
-    WisdomUI::Theme::DrawCrispText(window, font, ":: MAIN LAUNCHPAD ::", 11, bannerGrip.left + bannerGrip.width / 2.f, bannerGrip.top + bannerGrip.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, ":: MAIN LAUNCHPAD ::", 12, bannerGrip.left + bannerGrip.width / 2.f, bannerGrip.top + bannerGrip.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
-    std::vector<std::pair<std::string, std::string>> menuItems = {
-        {"New Project", "Ctrl+N"},
-        {"Project Vault", "Ctrl+O"},
-        {"Studio Settings", "ESC"},
-        {"Knowledge Codex", "F1"},
-        {"Keybind Matrix", "K"},
-        {"Studio Credits", ""},
-        {"Exit Software", "Alt+F4"}
+    std::vector<std::pair<std::string, std::pair<std::string, std::string>>> menuCards = {
+        {"New Project", {"Initialize dynamic canvas or pixel grid", "Ctrl+N"}},
+        {"Project Vault", {"Browse recent project files and disk archives", "Ctrl+O"}},
+        {"Studio Settings", {"Configure display resolution, vsync and drivers", "ESC"}},
+        {"Knowledge Codex", {"Interactive guides, tutorials and technique manuals", "F1"}},
+        {"Keybind Matrix", {"Customize keyboard shortcuts and tool bindings", "K"}},
+        {"Studio Credits", {"Engine architecture and contribution roll", "C"}},
+        {"Exit Software", {"Close application safely", "Alt+F4"}}
     };
 
-    float btnY = menuPod.top + 60.f;
-    for (size_t i = 0; i < menuItems.size(); ++i) {
-        sf::FloatRect btnBounds(menuPod.left + 24.f, btnY, menuPod.width - 48.f, 54.f);
-        bool isHovered = btnBounds.contains(mousePos);
+    float cardY = menuPod.top + 58.f;
+    for (size_t i = 0; i < menuCards.size(); ++i) {
+        sf::FloatRect cardRect(menuPod.left + 24.f, cardY, menuPod.width - 48.f, 80.f);
+        bool isHovered = cardRect.contains(mousePos);
         bool isAccent = (i == 0);
-        bool isExit = (menuItems[i].first == "Exit Software");
+        bool isExit = (i == menuCards.size() - 1);
 
-        WisdomUI::Theme::DrawSunsetButton(window, btnBounds, "", font, 13, false, isHovered, isAccent || isExit, 1.0f);
+        sf::RectangleShape card(sf::Vector2f(cardRect.width, cardRect.height));
+        card.setPosition(cardRect.left, cardRect.top);
 
-        sf::Color titleColor = isHovered ? WisdomUI::Theme::SunsetGold : (isAccent ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextPrimary);
-        WisdomUI::Theme::DrawCrispText(window, font, menuItems[i].first, 15, btnBounds.left + 20.f, btnBounds.top + 18.f, titleColor, sf::Color(14, 6, 20));
+        if (isHovered) {
+            card.setFillColor(isExit ? sf::Color(140, 24, 44, 230) : WisdomUI::Theme::SunsetSkyMid);
+            card.setOutlineThickness(2.0f);
+            card.setOutlineColor(isAccent ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber);
+        }
+        else {
+            card.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+            card.setOutlineThickness(1.0f);
+            card.setOutlineColor(isAccent ? WisdomUI::Theme::SunsetCoral : WisdomUI::Theme::SunsetPlum);
+        }
+        window.draw(card);
 
-        if (!menuItems[i].second.empty()) {
-            sf::FloatRect hintBadge(btnBounds.left + btnBounds.width - 78.f, btnBounds.top + 14.f, 64.f, 24.f);
-            sf::RectangleShape badge(sf::Vector2f(hintBadge.width, hintBadge.height));
-            badge.setPosition(hintBadge.left, hintBadge.top);
-            badge.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-            badge.setOutlineThickness(1.f);
-            badge.setOutlineColor(isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
-            window.draw(badge);
-
-            WisdomUI::Theme::DrawCrispText(window, font, menuItems[i].second, 10, hintBadge.left + hintBadge.width / 2.f, hintBadge.top + hintBadge.height / 2.f, WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+        if (isHovered) {
+            sf::RectangleShape accentStrip(sf::Vector2f(4.f, cardRect.height - 12.f));
+            accentStrip.setPosition(cardRect.left + 6.f, cardRect.top + 6.f);
+            accentStrip.setFillColor(isAccent ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber);
+            window.draw(accentStrip);
         }
 
-        btnY += 66.f;
+        sf::Color titleColor = isHovered ? WisdomUI::Theme::SunsetGold : (isAccent ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextPrimary);
+        WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].first, 17, cardRect.left + 26.f, cardRect.top + 18.f, titleColor, sf::Color(14, 6, 20));
+        WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].second.first, 12, cardRect.left + 26.f, cardRect.top + 46.f, isHovered ? sf::Color::White : WisdomUI::Theme::TextSecondary);
+
+        if (!menuCards[i].second.second.empty()) {
+            sf::FloatRect badge(cardRect.left + cardRect.width - 110.f, cardRect.top + (cardRect.height - 32.f) / 2.f, 90.f, 32.f);
+            sf::RectangleShape badgeBg(sf::Vector2f(badge.width, badge.height));
+            badgeBg.setPosition(badge.left, badge.top);
+            badgeBg.setFillColor(sf::Color(10, 4, 18));
+            badgeBg.setOutlineThickness(1.f);
+            badgeBg.setOutlineColor(isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
+            window.draw(badgeBg);
+
+            WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].second.second, 11, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+        }
+
+        cardY += 92.f;
     }
 
-    sf::FloatRect tickerBounds(360.f, 920.f, 1200.f, 38.f);
+    sf::FloatRect tickerBounds(360.f, 955.f, 1200.f, 40.f);
     WisdomUI::Theme::DrawSunsetPanel(window, tickerBounds, 1.0f);
-    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK STUDIO  |  v2.6.0 RETRO ENGINE  |  DIRECT HARDWARE ACCELERATION ON", 11, tickerBounds.left + tickerBounds.width / 2.f, tickerBounds.top + tickerBounds.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK STUDIO  |  v2.6.0 RETRO ENGINE  |  DIRECT HARDWARE ACCELERATION READY", 12, tickerBounds.left + tickerBounds.width / 2.f, tickerBounds.top + tickerBounds.height / 2.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
 }
 
 void UIManager::drawMainMenu(sf::RenderWindow& window) {
@@ -1127,10 +1148,38 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     }
 
     if (currentState == AppState::Welcome) {
+        if (newProjectModal.getIsOpen()) {
+            std::string res = newProjectModal.handleEvent(event, window);
+            if (res == "create") {
+                int w = newProjectModal.getWidth();
+                int h = newProjectModal.getHeight();
+                bool isPix = newProjectModal.getIsPixelMode();
+                std::string pName = newProjectModal.getProjectName();
+                if (pName.empty()) pName = "Untitled_Project";
+
+                activeProjectName = pName;
+
+                canvas.initCustom(w, h);
+                canvas.setPixelMode(isPix);
+
+                timeline.setFrame(0);
+                canvas.clearIsDirty();
+                currentState = AppState::Painting;
+                showMessage("Created Canvas: " + pName, sf::Color::Green);
+            }
+            return;
+        }
+
         if (m_showKeybinds) {
             handleKeybindModalEvent(event, window);
             return;
         }
+
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
+        if (event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::MouseButtonReleased) {
+            pixelPos = sf::Vector2i(event.mouseButton.x, event.mouseButton.y);
+        }
+        sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
 
         if (currentMenuState == MenuState::Main) {
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
@@ -1155,34 +1204,30 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                 }
                 else {
-                    float menuPodLeft = 460.f;
-                    float menuPodTop = 210.f;
-                    float menuPodWidth = 1000.f;
+                    float podLeft = 460.f;
+                    float podTop = 190.f;
+                    float podWidth = 1000.f;
 
-                    std::vector<std::string> buttonKeys = {
-                        "New Project",
-                        "Project Vault",
-                        "Studio Settings",
-                        "Knowledge Codex",
-                        "Keybind Matrix",
-                        "Studio Credits",
-                        "Exit Software"
-                    };
+                    float startX = podLeft + 24.f;
+                    float startY = podTop + 58.f;
+                    float cardW = podWidth - 48.f;
+                    float cardH = 80.f;
+                    float stepY = 92.f;
 
-                    float cardY = menuPodTop + 64.f;
-                    for (const auto& btnKey : buttonKeys) {
-                        sf::FloatRect cardRect(menuPodLeft + 24.f, cardY, menuPodWidth - 48.f, 76.f);
+                    for (int i = 0; i < 7; ++i) {
+                        sf::FloatRect cardRect(startX, startY + static_cast<float>(i) * stepY, cardW, cardH);
                         if (cardRect.contains(mousePos)) {
-                            if (btnKey == "New Project") newProjectModal.open();
-                            else if (btnKey == "Project Vault") currentMenuState = MenuState::Projects;
-                            else if (btnKey == "Studio Settings") currentMenuState = MenuState::Settings;
-                            else if (btnKey == "Knowledge Codex") { currentMenuState = MenuState::Tutorials; activeTutorialIndex = -1; }
-                            else if (btnKey == "Keybind Matrix") m_showKeybinds = true;
-                            else if (btnKey == "Studio Credits") { currentMenuState = MenuState::Credits; easterEggClicks = 0; }
-                            else if (btnKey == "Exit Software") window.close();
+                            if (i == 0) {
+                                newProjectModal.open();
+                            }
+                            else if (i == 1) currentMenuState = MenuState::Projects;
+                            else if (i == 2) currentMenuState = MenuState::Settings;
+                            else if (i == 3) { currentMenuState = MenuState::Tutorials; activeTutorialIndex = -1; }
+                            else if (i == 4) m_showKeybinds = true;
+                            else if (i == 5) { currentMenuState = MenuState::Credits; easterEggClicks = 0; }
+                            else if (i == 6) window.close();
                             return;
                         }
-                        cardY += 88.f;
                     }
                 }
             }
@@ -1217,15 +1262,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
         else if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
             if (currentMenuState == MenuState::Projects) {
-                sf::FloatRect backBtn(304.f, 160.f, 130.f, 38.f);
-                if (backBtn.contains(mousePos)) {
+                ProjectMetadata meta;
+                std::string action = projectBrowser.handleClick(mousePos, meta);
+                if (action == "back") {
                     currentMenuState = MenuState::Main;
                     return;
                 }
-
-                ProjectMetadata meta;
-                std::string action = projectBrowser.handleClick(mousePos, meta);
-                if (action == "new_project") {
+                else if (action == "new_project") {
                     newProjectModal.open();
                 }
                 else if (action == "load_project") {
@@ -1308,7 +1351,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         displayChanged = true;
                     }
 
-                    if (checkToggle(c1X + 16.f, r1Y + 112.f)) {
+                    if (checkToggle(c1X + 16.f, r1Y + 95.f)) {
                         uiBorderless = !uiBorderless;
                         if (uiBorderless) uiFullscreen = false;
                         settings.fullscreen = uiFullscreen;
@@ -1316,7 +1359,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         displayChanged = true;
                     }
 
-                    if (checkToggle(c1X + 16.f, r1Y + 168.f)) {
+                    if (checkToggle(c1X + 16.f, r1Y + 140.f)) {
                         uiVsync = !uiVsync;
                         settings.vsync = uiVsync;
                         window.setVerticalSyncEnabled(uiVsync);
@@ -1400,7 +1443,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                 }
                 else {
-                    sf::FloatRect returnBtn(200.f + 36.f + (1520.f - 72.f) - 260.f, 60.f + 110.f + (960.f - 146.f) - 72.f, 224.f, 50.f);
+                    sf::FloatRect returnBtn(1424.f, 912.f, 224.f, 50.f);
                     if (returnBtn.contains(mousePos)) {
                         activeTutorialIndex = -1;
                         return;
@@ -1414,54 +1457,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     return;
                 }
 
-                sf::FloatRect eggPod(320.f + 32.f, 80.f + 106.f + 584.f, 1280.f - 64.f, 90.f);
-                if (eggPod.contains(mousePos)) {
-                    easterEggClicks++;
-                }
-            }
-            else if (currentMenuState == MenuState::Tutorials) {
-                sf::FloatRect backBtn(244.f, 100.f, 130.f, 38.f);
-                if (backBtn.contains(mousePos)) {
-                    if (activeTutorialIndex != -1) activeTutorialIndex = -1;
-                    else currentMenuState = MenuState::Main;
-                    return;
-                }
-
-                if (activeTutorialIndex == -1) {
-                    float startX = 220.f + 32.f;
-                    float startY = 80.f + 104.f;
-                    float cardW = (1480.f - 96.f) / 3.f;
-                    float cardH = 240.f;
-
-                    for (int i = 0; i < 9; ++i) {
-                        float col = static_cast<float>(i % 3);
-                        float row = static_cast<float>(i / 3);
-                        float cx = startX + col * (cardW + 16.f);
-                        float cy = startY + row * (cardH + 16.f);
-
-                        sf::FloatRect bounds(cx, cy, cardW, cardH);
-                        if (bounds.contains(mousePos)) {
-                            activeTutorialIndex = i;
-                            return;
-                        }
-                    }
-                }
-                else {
-                    sf::FloatRect returnBtn(220.f + 32.f + (1480.f - 64.f) - 240.f, 80.f + 104.f + (920.f - 136.f) - 64.f, 208.f, 44.f);
-                    if (returnBtn.contains(mousePos)) {
-                        activeTutorialIndex = -1;
-                        return;
-                    }
-                }
-            }
-            else if (currentMenuState == MenuState::Credits) {
-                sf::FloatRect backBtn(404.f, 130.f, 130.f, 38.f);
-                if (backBtn.contains(mousePos)) {
-                    currentMenuState = MenuState::Main;
-                    return;
-                }
-
-                sf::FloatRect eggPod(380.f + 32.f, 110.f + 104.f + 518.f, 1160.f - 64.f, 74.f);
+                sf::FloatRect eggPod(352.f, 770.f, 1216.f, 90.f);
                 if (eggPod.contains(mousePos)) {
                     easterEggClicks++;
                 }
@@ -2414,6 +2410,9 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         if (m_showKeybinds) {
             drawKeybindModal(window);
+        }
+        if (newProjectModal.getIsOpen()) {
+            newProjectModal.draw(window);
         }
     }
     else if (currentState == AppState::Painting) {
