@@ -15,6 +15,7 @@ struct ToolItem {
 
 class LeftToolbar {
 public:
+    void drawTooltip(sf::RenderWindow& window);
     LeftToolbar();
     void init();
     void update(float dt, bool focusMode);

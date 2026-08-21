@@ -20,7 +20,8 @@ namespace WisdomUI {
         for (auto& tool : m_tools) {
             tool.bounds = sf::FloatRect(std::floor(startX), std::floor(startY), btnSize, btnSize);
             if (tool.id == m_activeToolId) {
-                m_selectionSliderY.SetImmediate(startY);
+                m_selectionSliderY = startY;
+                m_targetSelectionSliderY = startY;
             }
             startY += btnSize + 6.0f;
         }
@@ -39,7 +40,7 @@ namespace WisdomUI {
         m_activeToolId = id;
         for (const auto& tool : m_tools) {
             if (tool.id == id) {
-                m_selectionSliderY.target = tool.bounds.top;
+                m_targetSelectionSliderY = tool.bounds.top;
                 break;
             }
         }
@@ -47,7 +48,7 @@ namespace WisdomUI {
 
     void ToolDock::Update(float deltaTime, const sf::Vector2f& mousePos) {
         m_globalTime += deltaTime;
-        m_selectionSliderY.Update(deltaTime);
+        m_selectionSliderY += (m_targetSelectionSliderY - m_selectionSliderY) * 18.0f * deltaTime;
 
         bool hasHover = false;
         for (auto& tool : m_tools) {
@@ -58,8 +59,6 @@ namespace WisdomUI {
             if (isHov) {
                 hasHover = true;
                 m_hoveredTooltip = tool.tooltip;
-                sf::Text dummy(tool.tooltip, m_font, 12);
-                float tipW = dummy.getLocalBounds().width + 24.0f;
                 m_tooltipPos = sf::Vector2f(std::floor(tool.bounds.left + tool.bounds.width + 10.0f), std::floor(tool.bounds.top + 4.0f));
             }
         }
@@ -88,12 +87,12 @@ namespace WisdomUI {
         if (!m_tools.empty()) {
             float btnSize = 36.0f;
             float startX = m_bounds.left + (m_bounds.width - btnSize) / 2.0f;
-            sf::FloatRect activeIndicatorBounds(std::floor(startX), std::floor(m_selectionSliderY.current), btnSize, btnSize);
+            sf::FloatRect activeIndicatorBounds(std::floor(startX), std::floor(m_selectionSliderY), btnSize, btnSize);
             Theme::DrawSunsetButton(window, activeIndicatorBounds, "", m_font, 11, true, false, true, 1.0f);
 
-            float pulseGlow = Animation::Pulse(m_globalTime, 3.5f, 0.4f, 0.9f);
+            float pulseGlow = std::sin(m_globalTime * 3.5f) * 0.25f + 0.65f;
             sf::RectangleShape glowRibbon(sf::Vector2f(3.0f, btnSize - 6.0f));
-            glowRibbon.setPosition(std::floor(m_bounds.left + 3.0f), std::floor(m_selectionSliderY.current + 3.0f));
+            glowRibbon.setPosition(std::floor(m_bounds.left + 3.0f), std::floor(m_selectionSliderY + 3.0f));
             sf::Color glowCol = Theme::SunsetAmber;
             glowCol.a = static_cast<sf::Uint8>(255 * pulseGlow);
             glowRibbon.setFillColor(glowCol);
@@ -110,7 +109,9 @@ namespace WisdomUI {
             sf::Color iconColor = isActive ? sf::Color::White : (tool.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
             Icons::Draw(window, tool.id, sf::Vector2f(std::floor(tool.bounds.left + 8.0f), std::floor(tool.bounds.top + 8.0f)), 20.0f, iconColor);
         }
+    }
 
+    void ToolDock::RenderTooltip(sf::RenderWindow& window) {
         if (m_tooltipAlpha > 0.02f) {
             sf::Text dummy(m_hoveredTooltip, m_font, 12);
             float tw = dummy.getLocalBounds().width + 24.0f;

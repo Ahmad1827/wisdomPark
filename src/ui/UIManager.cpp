@@ -2626,6 +2626,8 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             WisdomUI::Theme::DrawThemedButton(window, discardBounds, "Discard", font, 14, false, discardBounds.contains(mousePos), true, 1.0f);
             WisdomUI::Theme::DrawThemedButton(window, cancelBounds, "Cancel", font, 14, false, cancelBounds.contains(mousePos), false, 1.0f);
         }
+
+        m_toolDock.RenderTooltip(window);
     }
 }
 

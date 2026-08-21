@@ -1,9 +1,8 @@
 #pragma once
 #include <SFML/Graphics.hpp>
-#include <vector>
-#include <string>
 #include <functional>
-#include "../UIAnimation.h"
+#include <string>
+#include <vector>
 
 namespace WisdomUI {
 
@@ -11,9 +10,9 @@ namespace WisdomUI {
         std::string id;
         std::string tooltip;
         sf::FloatRect bounds;
-        std::function<void()> onSelect;
         float hoverAlpha{ 0.0f };
         float scale{ 1.0f };
+        std::function<void()> onSelect;
     };
 
     class ToolDock {
@@ -27,6 +26,7 @@ namespace WisdomUI {
         bool HandleEvent(const sf::Event& event, const sf::RenderWindow& window);
         void Update(float deltaTime, const sf::Vector2f& mousePos);
         void Render(sf::RenderWindow& window);
+        void RenderTooltip(sf::RenderWindow& window);
 
     private:
         sf::FloatRect m_bounds;
@@ -34,9 +34,11 @@ namespace WisdomUI {
         std::vector<ToolItem> m_tools;
         std::string m_activeToolId{ "brush" };
 
-        SpringFloat m_selectionSliderY;
+        float m_selectionSliderY{ 0.0f };
+        float m_targetSelectionSliderY{ 0.0f };
+
         std::string m_hoveredTooltip{ "" };
-        sf::Vector2f m_tooltipPos;
+        sf::Vector2f m_tooltipPos{ 0.0f, 0.0f };
         float m_tooltipAlpha{ 0.0f };
         float m_globalTime{ 0.0f };
     };
