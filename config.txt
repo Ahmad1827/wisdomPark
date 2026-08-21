@@ -1,5 +1,5 @@
 none
-fullscreen=1
+fullscreen=0
 borderless=0
 vsync=1
 fpsLimit=60

@@ -4,10 +4,12 @@
 #include "core/Canvas.h"
 #include "core/Timeline.h"
 #include "ai/AIHelper.h"
+#include "core/DragDropHandler.h"
 
 int main() {
     sf::VideoMode desktopMode = sf::VideoMode::getDesktopMode();
     sf::RenderWindow window(desktopMode, "Wisdom Park", sf::Style::Fullscreen);
+    DragDropHandler::Attach(window);
     window.setVerticalSyncEnabled(true);
     window.setFramerateLimit(60);
 

@@ -24,33 +24,57 @@
 #include "../UI/Panels/ToolOptionsBar.h"
 #include "../UI/Panels/ToolDock.h"
 #include "../UI/Panels/StatusBar.h"
+static int g_resW = 1920;
+static int g_resH = 1080;
+static bool g_resDropdownOpen = false;
 #if defined(_WIN32)
 #include <windows.h>
 #include <shellapi.h>
 
-
-static bool g_resDropdownOpen = false;
-static int g_resW = 1280;
-static int g_resH = 720;
 static WNDPROC g_originalWndProc = nullptr;
-static std::vector<std::string> g_droppedFiles;
+static std::vector<std::pair<std::string, sf::Vector2i>> g_droppedFiles;
 
-static LRESULT CALLBACK DropHookProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    if (uMsg == WM_DROPFILES) {
-        HDROP hDrop = (HDROP)wParam;
-        UINT count = DragQueryFileA(hDrop, 0xFFFFFFFF, NULL, 0);
+static LRESULT CALLBACK DropHookProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_DROPFILES) {
+        HDROP hDrop = reinterpret_cast<HDROP>(wParam);
+        POINT pt;
+        DragQueryPoint(hDrop, &pt);
+
+        UINT count = DragQueryFileA(hDrop, 0xFFFFFFFF, nullptr, 0);
+        char filePath[MAX_PATH];
         for (UINT i = 0; i < count; ++i) {
-            char path[MAX_PATH];
-            if (DragQueryFileA(hDrop, i, path, MAX_PATH)) {
-                g_droppedFiles.push_back(std::string(path));
+            if (DragQueryFileA(hDrop, i, filePath, MAX_PATH)) {
+                g_droppedFiles.push_back({ std::string(filePath), sf::Vector2i(pt.x, pt.y) });
             }
         }
         DragFinish(hDrop);
         return 0;
     }
-    return CallWindowProc(g_originalWndProc, hwnd, uMsg, wParam, lParam);
+    return CallWindowProc(g_originalWndProc, hwnd, msg, wParam, lParam);
+}
+
+static void SetupDragDrop(HWND hwnd) {
+    if (!hwnd) return;
+
+    LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+    SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle | WS_EX_ACCEPTFILES);
+    DragAcceptFiles(hwnd, TRUE);
+
+    g_originalWndProc = (WNDPROC)SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)DropHookProc);
+
+    HMODULE hUser32 = GetModuleHandleA("user32.dll");
+    if (hUser32) {
+        typedef BOOL(WINAPI* PFN_ChangeWindowMessageFilterEx)(HWND, UINT, DWORD, void*);
+        PFN_ChangeWindowMessageFilterEx pFilterEx = (PFN_ChangeWindowMessageFilterEx)GetProcAddress(hUser32, "ChangeWindowMessageFilterEx");
+        if (pFilterEx) {
+            pFilterEx(hwnd, WM_DROPFILES, 1, NULL);
+            pFilterEx(hwnd, WM_COPYDATA, 1, NULL);
+            pFilterEx(hwnd, 0x0049, 1, NULL);
+        }
+    }
 }
 #endif
+
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -2037,22 +2061,52 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     }
 }
 
-void UIManager::update(sf::RenderWindow & window, AppState currentState, AppSettings & settings, float dt, Canvas & canvas, Timeline & timeline) {
+void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
 #if defined(_WIN32)
-    static bool s_dragDropHooked = false;
-    if (!s_dragDropHooked) {
-        HWND hwnd = window.getSystemHandle();
-        DragAcceptFiles(hwnd, TRUE);
-        g_originalWndProc = (WNDPROC)SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)DropHookProc);
-        s_dragDropHooked = true;
+    static HWND s_lastHwnd = nullptr;
+    HWND hwnd = window.getSystemHandle();
+    if (hwnd != s_lastHwnd) {
+        SetupDragDrop(hwnd);
+        s_lastHwnd = hwnd;
     }
 
     if (!g_droppedFiles.empty()) {
-        assetManager.importAssets(g_droppedFiles);
-        g_droppedFiles.clear();
+        for (const auto& dropItem : g_droppedFiles) {
+            const std::string& filePath = dropItem.first;
+            std::string ext = std::filesystem::path(filePath).extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-        m_activeRightTab = RightTabMode::Assets;
-        if (assetBrowser && !assetBrowser->getIsVisible()) assetBrowser->toggle();
+            if (currentState == AppState::Painting) {
+                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga") {
+                    int curFrame = static_cast<int>(timeline.getCurrentFrame());
+                    canvas.importImageToActiveLayer(filePath, curFrame);
+                    showMessage("Imported to Canvas: " + std::filesystem::path(filePath).filename().string(), sf::Color::Green);
+                }
+                else if (ext == ".wpk") {
+                    int loadedFps = 12;
+                    bool isPix = false;
+                    if (projManager && projManager->loadProject(filePath, canvas, loadedFps, isPix)) {
+                        activeProjectPath = filePath;
+                        activeProjectName = std::filesystem::path(filePath).stem().string();
+                        timeline.setFrame(0);
+                        canvas.clearIsDirty();
+                        showMessage("Opened Project: " + activeProjectName, sf::Color::Green);
+                    }
+                }
+                else if (ext == ".wav" || ext == ".ogg" || ext == ".mp3") {
+                    std::vector<std::string> audioFile = { filePath };
+                    assetManager.importAssets(audioFile);
+                    m_activeRightTab = RightTabMode::Audio;
+                }
+                else {
+                    std::vector<std::string> singleFile = { filePath };
+                    assetManager.importAssets(singleFile);
+                    m_activeRightTab = RightTabMode::Assets;
+                    if (assetBrowser && !assetBrowser->getIsVisible()) assetBrowser->toggle();
+                }
+            }
+        }
+        g_droppedFiles.clear();
     }
 #endif
 
@@ -2148,7 +2202,7 @@ void UIManager::update(sf::RenderWindow & window, AppState currentState, AppSett
         if (!keybindPanel.isVisible()) {
             projectBrowser.updateHover(mousePos);
             updateStartMenu(dt, mousePos);
-            if(m_useMinigameWelcome) {
+            if (m_useMinigameWelcome) {
                 updateMinigame(dt, mousePos, window);
             }
 
@@ -2260,10 +2314,9 @@ void UIManager::update(sf::RenderWindow & window, AppState currentState, AppSett
         m_rightDockTabs.SetTabState("layers", m_activeRightTab == RightTabMode::Layers);
         m_rightDockTabs.SetTabState("palette", m_activeRightTab == RightTabMode::Palette);
         m_rightDockTabs.SetTabState("properties", m_activeRightTab == RightTabMode::Properties);
-        m_rightDockTabs.SetTabState("assets", assetBrowser&& assetBrowser->getIsVisible());
+        m_rightDockTabs.SetTabState("assets", assetBrowser && assetBrowser->getIsVisible());
         m_rightDockTabs.SetTabState("audio", audioPanel.getIsVisible());
         m_rightDockTabs.Update(dt, mousePos);
-
         if (m_activeRightTab == RightTabMode::Layers) {
             layerPanel.update(dt, focusMode, true);
         }

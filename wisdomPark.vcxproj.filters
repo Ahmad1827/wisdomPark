@@ -707,6 +707,9 @@
     <ClInclude Include="src\ui\Panels\TimelineHeader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\core\DragDropHandler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="E:\my files\Downloads\landofmakebelieve2.jfif" />

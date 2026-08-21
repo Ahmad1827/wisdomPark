@@ -6,7 +6,7 @@
 #include <memory>
 #include <chrono>
 #include <SFML/Network.hpp>
-
+#include "../core/DragDropHandler.h"
 #include "../core/TextSystem.h"
 #include "../ui/TextPanel.h"
 #include "../core/PerspectiveSystem.h"
