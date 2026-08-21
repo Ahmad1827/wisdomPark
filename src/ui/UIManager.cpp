@@ -666,8 +666,8 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         WisdomUI::Theme::DrawCrispText(window, font, title, 14, headerGrip.left + 16.f, headerGrip.top + 8.f, WisdomUI::Theme::SunsetAmber);
         };
 
-    auto drawToggle = [&](float x, float y, const std::string& label, bool active) {
-        sf::FloatRect rowRect(x, y, 680.f, 48.f);
+    auto drawToggle = [&](float x, float y, float w, const std::string& label, bool active) {
+        sf::FloatRect rowRect(x, y, w, 48.f);
         bool isHov = rowRect.contains(mousePos);
 
         sf::RectangleShape checkBg(sf::Vector2f(28.f, 28.f));
@@ -686,20 +686,29 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
 
         WisdomUI::Theme::DrawCrispText(window, font, label, 17, x + 58.f, y + 14.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
 
+        sf::FloatRect badge(x + w - 120.f, y + 8.f, 104.f, 32.f);
+        sf::RectangleShape badgeBg(sf::Vector2f(badge.width, badge.height));
+        badgeBg.setPosition(badge.left, badge.top);
+        badgeBg.setFillColor(sf::Color(10, 4, 18));
+        badgeBg.setOutlineThickness(1.f);
+        badgeBg.setOutlineColor(active ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
+        window.draw(badgeBg);
+
         std::string stateStr = active ? "ENABLED" : "DISABLED";
-        WisdomUI::Theme::DrawCrispText(window, font, stateStr, 15, x + rowRect.width - 24.f, y + 14.f, active ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, false, false);
+        sf::Color badgeCol = active ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextSecondary;
+        WisdomUI::Theme::DrawCrispText(window, font, stateStr, 12, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, badgeCol, sf::Color::Transparent, true, true);
         };
 
-    auto drawStepper = [&](float x, float y, const std::string& label, const std::string& val) {
-        sf::FloatRect rowRect(x, y, 680.f, 48.f);
+    auto drawStepper = [&](float x, float y, float w, const std::string& label, const std::string& val) {
+        sf::FloatRect rowRect(x, y, w, 48.f);
         WisdomUI::Theme::DrawCrispText(window, font, label, 17, x + 16.f, y + 14.f, WisdomUI::Theme::TextPrimary);
 
-        sf::FloatRect btnL(x + rowRect.width - 240.f, y + 6.f, 40.f, 36.f);
-        sf::FloatRect btnR(x + rowRect.width - 56.f, y + 6.f, 40.f, 36.f);
+        sf::FloatRect btnL(x + w - 240.f, y + 6.f, 40.f, 36.f);
+        sf::FloatRect btnR(x + w - 56.f, y + 6.f, 40.f, 36.f);
 
         WisdomUI::Theme::DrawSunsetButton(window, btnL, "<", font, 14, false, btnL.contains(mousePos), false, 1.0f);
 
-        sf::FloatRect valBg(x + rowRect.width - 192.f, y + 6.f, 128.f, 36.f);
+        sf::FloatRect valBg(x + w - 192.f, y + 6.f, 128.f, 36.f);
         sf::RectangleShape vBox(sf::Vector2f(valBg.width, valBg.height));
         vBox.setPosition(valBg.left, valBg.top);
         vBox.setFillColor(sf::Color(14, 6, 20));
@@ -712,11 +721,11 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         WisdomUI::Theme::DrawSunsetButton(window, btnR, ">", font, 14, false, btnR.contains(mousePos), false, 1.0f);
         };
 
-    auto drawDropdown = [&](float x, float y, const std::string& label, const std::string& currentVal, bool isOpen, const std::vector<std::string>& options) {
-        sf::FloatRect rowRect(x, y, 680.f, 48.f);
+    auto drawDropdown = [&](float x, float y, float w, const std::string& label, const std::string& currentVal, bool isOpen, const std::vector<std::string>& options) {
+        sf::FloatRect rowRect(x, y, w, 48.f);
         WisdomUI::Theme::DrawCrispText(window, font, label, 17, x + 16.f, y + 14.f, WisdomUI::Theme::TextPrimary);
 
-        sf::FloatRect dropBtn(x + rowRect.width - 240.f, y + 6.f, 224.f, 36.f);
+        sf::FloatRect dropBtn(x + w - 240.f, y + 6.f, 224.f, 36.f);
         WisdomUI::Theme::DrawSunsetButton(window, dropBtn, currentVal + "  " + (isOpen ? "^" : "v"), font, 14, false, dropBtn.contains(mousePos), isOpen, 1.0f);
 
         if (isOpen) {
@@ -744,46 +753,46 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
 
     float cardW = 710.f;
     float cardH = 410.f;
+    float rowW = cardW - 32.f;
     float c1X = container.left + 32.f;
     float c2X = container.left + 778.f;
     float r1Y = container.top + 104.f;
     float r2Y = container.top + 530.f;
 
     drawCard(sf::FloatRect(c1X, r1Y, cardW, cardH), ":: DISPLAY & GRAPHICS INTERFACE ::");
-    drawToggle(c1X + 16.f, r1Y + 56.f, "Fullscreen Mode", uiFullscreen);
-    drawToggle(c1X + 16.f, r1Y + 112.f, "Borderless Window", uiBorderless);
-    drawToggle(c1X + 16.f, r1Y + 168.f, "Vertical Sync (VSync)", uiVsync);
-    drawStepper(c1X + 16.f, r1Y + 224.f, "FPS Target Limit", std::to_string(uiFpsLimit));
+    drawToggle(c1X + 16.f, r1Y + 60.f, rowW, "Fullscreen Mode", uiFullscreen);
+    drawToggle(c1X + 16.f, r1Y + 120.f, rowW, "Vertical Sync (VSync)", uiVsync);
+    drawStepper(c1X + 16.f, r1Y + 180.f, rowW, "FPS Target Limit", std::to_string(uiFpsLimit));
 
     std::string resStr = std::to_string(g_resW) + " x " + std::to_string(g_resH);
     std::vector<std::string> resOpts = { "1280 x 720", "1600 x 900", "1920 x 1080" };
-    drawDropdown(c1X + 16.f, r1Y + 280.f, "Display Resolution", resStr, g_resDropdownOpen, resOpts);
-    drawStepper(c1X + 16.f, r1Y + 336.f, "UI Palette Theme", "Sunset Arcade");
+    drawDropdown(c1X + 16.f, r1Y + 240.f, rowW, "Display Resolution", resStr, g_resDropdownOpen, resOpts);
+    drawStepper(c1X + 16.f, r1Y + 300.f, rowW, "UI Palette Theme", "Sunset Arcade");
 
     drawCard(sf::FloatRect(c2X, r1Y, cardW, cardH), ":: ARCHIVE PERSISTENCE & AUTO-SAVING ::");
-    drawToggle(c2X + 16.f, r1Y + 56.f, "Enable Auto-Backup Vault", uiAutoBackup);
-    drawStepper(c2X + 16.f, r1Y + 112.f, "Autosave Frequency", "5 Mins");
-    drawStepper(c2X + 16.f, r1Y + 168.f, "Default Vault Directory", "/Projects");
-    drawStepper(c2X + 16.f, r1Y + 224.f, "Export Output Format", "PNG / Sheet");
+    drawToggle(c2X + 16.f, r1Y + 60.f, rowW, "Enable Auto-Backup Vault", uiAutoBackup);
+    drawStepper(c2X + 16.f, r1Y + 120.f, rowW, "Autosave Frequency", "5 Mins");
+    drawStepper(c2X + 16.f, r1Y + 180.f, rowW, "Default Vault Directory", "/Projects");
+    drawStepper(c2X + 16.f, r1Y + 240.f, rowW, "Export Output Format", "PNG / Sheet");
 
     drawCard(sf::FloatRect(c1X, r2Y, cardW, cardH), ":: CANVASES & TIMELINE MEMORY ::");
-    drawToggle(c1X + 16.f, r2Y + 56.f, "Hardware GPU Acceleration", uiHwAccel);
-    drawStepper(c1X + 16.f, r2Y + 112.f, "Animation Preview Rate", std::to_string(uiAnimFps) + " FPS");
-    drawStepper(c1X + 16.f, r2Y + 168.f, "Undo Stack History Size", std::to_string(uiHistorySize) + " Steps");
-    drawStepper(c1X + 16.f, r2Y + 224.f, "Pixel Grid Contrast", "High");
+    drawToggle(c1X + 16.f, r2Y + 60.f, rowW, "Hardware GPU Acceleration", uiHwAccel);
+    drawStepper(c1X + 16.f, r2Y + 120.f, rowW, "Animation Preview Rate", std::to_string(uiAnimFps) + " FPS");
+    drawStepper(c1X + 16.f, r2Y + 180.f, rowW, "Undo Stack History Size", std::to_string(uiHistorySize) + " Steps");
+    drawStepper(c1X + 16.f, r2Y + 240.f, rowW, "Pixel Grid Contrast", "High");
 
     drawCard(sf::FloatRect(c2X, r2Y, cardW, cardH), ":: AI GENERATION CORE MATRIX ::");
-    drawStepper(c2X + 16.f, r2Y + 56.f, "Active AI Provider", AIManager::getInstance().getActiveProvider());
+    drawStepper(c2X + 16.f, r2Y + 60.f, rowW, "Active AI Provider", AIManager::getInstance().getActiveProvider());
 
     std::string keyDisplay = AIManager::getInstance().getApiKey(AIManager::getInstance().getActiveProvider());
     if (keyDisplay.empty()) keyDisplay = "Click to enter token key...";
     else keyDisplay = std::string(std::min(static_cast<size_t>(16), keyDisplay.length()), '*');
     if (g_typingApiKey) keyDisplay += "_";
 
-    sf::FloatRect keyRow(c2X + 16.f, r2Y + 112.f, 680.f, 48.f);
+    sf::FloatRect keyRow(c2X + 16.f, r2Y + 120.f, rowW, 48.f);
     WisdomUI::Theme::DrawCrispText(window, font, "API Access Token", 17, keyRow.left + 16.f, keyRow.top + 14.f, WisdomUI::Theme::TextPrimary);
 
-    sf::FloatRect keyBox(c2X + keyRow.width - 320.f, keyRow.top + 6.f, 304.f, 36.f);
+    sf::FloatRect keyBox(c2X + 16.f + rowW - 320.f, keyRow.top + 6.f, 304.f, 36.f);
     sf::RectangleShape kBox(sf::Vector2f(keyBox.width, keyBox.height));
     kBox.setPosition(keyBox.left, keyBox.top);
     kBox.setFillColor(sf::Color(14, 6, 20));
@@ -1308,18 +1317,20 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     return;
                 }
 
+                float cardW = 710.f;
+                float rowW = cardW - 32.f;
                 float c1X = 232.f;
                 float c2X = 978.f;
                 float r1Y = 164.f;
                 float r2Y = 590.f;
 
-                auto checkToggle = [&](float x, float y) { return sf::FloatRect(x, y, 680.f, 48.f).contains(mousePos); };
-                auto checkStepperL = [&](float x, float y) { return sf::FloatRect(x + 680.f - 240.f, y + 6.f, 40.f, 36.f).contains(mousePos); };
-                auto checkStepperR = [&](float x, float y) { return sf::FloatRect(x + 680.f - 56.f, y + 6.f, 40.f, 36.f).contains(mousePos); };
+                auto checkToggle = [&](float x, float y) { return sf::FloatRect(x, y, rowW, 48.f).contains(mousePos); };
+                auto checkStepperL = [&](float x, float y) { return sf::FloatRect(x + rowW - 240.f, y + 6.f, 40.f, 36.f).contains(mousePos); };
+                auto checkStepperR = [&](float x, float y) { return sf::FloatRect(x + rowW - 56.f, y + 6.f, 40.f, 36.f).contains(mousePos); };
 
                 bool displayChanged = false;
 
-                sf::FloatRect dropBtn(c1X + 16.f + 680.f - 240.f, r1Y + 280.f + 6.f, 224.f, 36.f);
+                sf::FloatRect dropBtn(c1X + 16.f + rowW - 240.f, r1Y + 240.f + 6.f, 224.f, 36.f);
 
                 if (g_resDropdownOpen) {
                     sf::FloatRect dropMenu(dropBtn.left, dropBtn.top + dropBtn.height + 4.f, dropBtn.width, 3 * 36.f);
@@ -1339,44 +1350,39 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     g_resDropdownOpen = true;
                 }
                 else {
-                    if (checkToggle(c1X + 16.f, r1Y + 56.f)) {
+                    if (checkToggle(c1X + 16.f, r1Y + 60.f)) {
                         uiFullscreen = !uiFullscreen;
-                        if (uiFullscreen) uiBorderless = false;
+                        uiBorderless = false;
                         settings.fullscreen = uiFullscreen;
-                        settings.borderless = uiBorderless;
+                        settings.borderless = false;
                         displayChanged = true;
                     }
 
-                    if (checkToggle(c1X + 16.f, r1Y + 112.f)) {
-                        uiBorderless = !uiBorderless;
-                        if (uiBorderless) uiFullscreen = false;
-                        settings.fullscreen = uiFullscreen;
-                        settings.borderless = uiBorderless;
-                        displayChanged = true;
-                    }
-
-                    if (checkToggle(c1X + 16.f, r1Y + 168.f)) {
+                    if (checkToggle(c1X + 16.f, r1Y + 120.f)) {
                         uiVsync = !uiVsync;
                         settings.vsync = uiVsync;
                         window.setVerticalSyncEnabled(uiVsync);
                     }
 
-                    if (checkStepperL(c1X + 16.f, r1Y + 224.f)) { uiFpsLimit = (uiFpsLimit == 60) ? 240 : ((uiFpsLimit == 144) ? 60 : 144); settings.fpsLimit = uiFpsLimit; window.setFramerateLimit(uiFpsLimit); }
-                    if (checkStepperR(c1X + 16.f, r1Y + 224.f)) { uiFpsLimit = (uiFpsLimit == 60) ? 144 : ((uiFpsLimit == 144) ? 240 : 60); settings.fpsLimit = uiFpsLimit; window.setFramerateLimit(uiFpsLimit); }
+                    if (checkStepperL(c1X + 16.f, r1Y + 180.f)) { uiFpsLimit = (uiFpsLimit == 60) ? 240 : ((uiFpsLimit == 144) ? 60 : 144); settings.fpsLimit = uiFpsLimit; window.setFramerateLimit(uiFpsLimit); }
+                    if (checkStepperR(c1X + 16.f, r1Y + 180.f)) { uiFpsLimit = (uiFpsLimit == 60) ? 144 : ((uiFpsLimit == 144) ? 240 : 60); settings.fpsLimit = uiFpsLimit; window.setFramerateLimit(uiFpsLimit); }
 
-                    if (checkToggle(c2X + 16.f, r1Y + 56.f)) { uiAutoBackup = !uiAutoBackup; settings.autoBackup = uiAutoBackup; }
-                    if (checkToggle(c1X + 16.f, r2Y + 56.f)) { uiHwAccel = !uiHwAccel; settings.hwAccel = uiHwAccel; }
+                    if (checkToggle(c2X + 16.f, r1Y + 60.f)) { uiAutoBackup = !uiAutoBackup; settings.autoBackup = uiAutoBackup; }
+                    if (checkStepperL(c2X + 16.f, r1Y + 120.f)) {}
+                    if (checkStepperR(c2X + 16.f, r1Y + 120.f)) {}
 
-                    if (checkStepperL(c1X + 16.f, r2Y + 112.f)) { uiAnimFps = (uiAnimFps == 12) ? 60 : ((uiAnimFps == 24) ? 12 : 24); settings.animFps = uiAnimFps; }
-                    if (checkStepperR(c1X + 16.f, r2Y + 112.f)) { uiAnimFps = (uiAnimFps == 12) ? 24 : ((uiAnimFps == 24) ? 60 : 12); settings.animFps = uiAnimFps; }
+                    if (checkToggle(c1X + 16.f, r2Y + 60.f)) { uiHwAccel = !uiHwAccel; settings.hwAccel = uiHwAccel; }
 
-                    if (checkStepperL(c1X + 16.f, r2Y + 168.f)) { uiHistorySize = (uiHistorySize == 15) ? 50 : ((uiHistorySize == 30) ? 15 : 30); settings.historySize = uiHistorySize; }
-                    if (checkStepperR(c1X + 16.f, r2Y + 168.f)) { uiHistorySize = (uiHistorySize == 15) ? 30 : ((uiHistorySize == 30) ? 50 : 15); settings.historySize = uiHistorySize; }
+                    if (checkStepperL(c1X + 16.f, r2Y + 120.f)) { uiAnimFps = (uiAnimFps == 12) ? 60 : ((uiAnimFps == 24) ? 12 : 24); settings.animFps = uiAnimFps; }
+                    if (checkStepperR(c1X + 16.f, r2Y + 120.f)) { uiAnimFps = (uiAnimFps == 12) ? 24 : ((uiAnimFps == 24) ? 60 : 12); settings.animFps = uiAnimFps; }
 
-                    if (checkStepperL(c2X + 16.f, r2Y + 56.f)) AIManager::getInstance().cycleProvider(-1);
-                    if (checkStepperR(c2X + 16.f, r2Y + 56.f)) AIManager::getInstance().cycleProvider(1);
+                    if (checkStepperL(c1X + 16.f, r2Y + 180.f)) { uiHistorySize = (uiHistorySize == 15) ? 50 : ((uiHistorySize == 30) ? 15 : 30); settings.historySize = uiHistorySize; }
+                    if (checkStepperR(c1X + 16.f, r2Y + 180.f)) { uiHistorySize = (uiHistorySize == 15) ? 30 : ((uiHistorySize == 30) ? 50 : 15); settings.historySize = uiHistorySize; }
 
-                    sf::FloatRect keyInputBox(c2X + 680.f - 320.f, r2Y + 112.f + 6.f, 304.f, 36.f);
+                    if (checkStepperL(c2X + 16.f, r2Y + 60.f)) AIManager::getInstance().cycleProvider(-1);
+                    if (checkStepperR(c2X + 16.f, r2Y + 60.f)) AIManager::getInstance().cycleProvider(1);
+
+                    sf::FloatRect keyInputBox(c2X + 16.f + rowW - 320.f, r2Y + 120.f + 6.f, 304.f, 36.f);
                     if (keyInputBox.contains(mousePos)) {
                         g_typingApiKey = true;
                     }
@@ -1392,10 +1398,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (displayChanged) {
                     if (uiFullscreen) {
                         window.create(sf::VideoMode::getDesktopMode(), "Wisdom Park", sf::Style::Fullscreen);
-                    }
-                    else if (uiBorderless) {
-                        window.create(sf::VideoMode::getDesktopMode(), "Wisdom Park", sf::Style::None);
-                        window.setPosition(sf::Vector2i(0, 0));
                     }
                     else {
                         window.create(sf::VideoMode(settings.resWidth, settings.resHeight), "Wisdom Park", sf::Style::Default);
