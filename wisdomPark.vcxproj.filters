@@ -333,6 +333,15 @@
     <ClCompile Include="src\ui\Panels\TimelineHeader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\Core\Source\StudioEngineFacade.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\UI\Source\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\UI\Source\SpriteSheetStudioPanel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\ai\AIHelper.h">

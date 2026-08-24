@@ -119,6 +119,84 @@ std::vector<std::shared_ptr<SpriteDefinition>> SpriteDetector::Detect(
         progress = 0.5f + 0.4f * ((float)y / height);
     }
 
+    auto SubdivideWideComponent = [&](const ComponentStats& s) {
+        std::vector<Rect> subRects;
+        int bw = (s.maxX - s.minX) + 1;
+        int bh = (s.maxY - s.minY) + 1;
+
+        std::vector<int> colDensity(bw, 0);
+        for (int x = s.minX; x <= s.maxX; ++x) {
+            for (int y = s.minY; y <= s.maxY; ++y) {
+                if (mask[y * width + x]) {
+                    colDensity[x - s.minX]++;
+                }
+            }
+        }
+
+        std::vector<float> smoothed(bw, 0.0f);
+        int kernel = 5;
+        for (int i = 0; i < bw; ++i) {
+            float sum = 0;
+            int count = 0;
+            for (int k = -kernel; k <= kernel; ++k) {
+                if (i + k >= 0 && i + k < bw) {
+                    sum += colDensity[i + k];
+                    count++;
+                }
+            }
+            smoothed[i] = sum / count;
+        }
+
+        std::vector<int> splits;
+        splits.push_back(s.minX);
+
+        int minDistance = std::max(30, bh / 2);
+        int lastSplit = s.minX;
+
+        for (int i = minDistance; i < bw - minDistance; ++i) {
+            bool isMin = true;
+            for (int k = -5; k <= 5; ++k) {
+                if (i + k >= 0 && i + k < bw) {
+                    if (smoothed[i + k] < smoothed[i]) {
+                        isMin = false;
+                        break;
+                    }
+                }
+            }
+            if (isMin && (s.minX + i - lastSplit >= minDistance)) {
+                splits.push_back(s.minX + i);
+                lastSplit = s.minX + i;
+            }
+        }
+
+        if (splits.size() == 1) {
+            int targetWidth = bh > 0 ? std::max(32, bh) : 64;
+            int numChunks = std::max(2, static_cast<int>(std::round(static_cast<float>(bw) / targetWidth)));
+            int step = bw / numChunks;
+            splits.clear();
+            splits.push_back(s.minX);
+            for (int c = 1; c < numChunks; ++c) {
+                splits.push_back(s.minX + c * step);
+            }
+        }
+        splits.push_back(s.maxX + 1);
+
+        for (size_t i = 0; i < splits.size() - 1; ++i) {
+            int x1 = splits[i];
+            int x2 = splits[i + 1] - 1;
+            int w = (x2 - x1) + 1;
+            if (w >= config.minSpriteSize) {
+                subRects.push_back(Rect{
+                    static_cast<float>(std::max(0, x1 - config.padding)),
+                    static_cast<float>(std::max(0, s.minY - config.padding)),
+                    static_cast<float>(std::min(width - x1, w + config.padding * 2)),
+                    static_cast<float>(std::min(height - s.minY, bh + config.padding * 2))
+                });;
+            }
+        }
+        return subRects;
+    };
+
     int idCounter = 1;
     for (const auto& kv : statsMap) {
         if (cancelToken) return {};
@@ -127,20 +205,28 @@ std::vector<std::shared_ptr<SpriteDefinition>> SpriteDetector::Detect(
         int bw = (s.maxX - s.minX) + 1;
         int bh = (s.maxY - s.minY) + 1;
 
-        if (bw >= config.minSpriteSize && bh >= config.minSpriteSize &&
-            bw <= config.maxSpriteSize && bh <= config.maxSpriteSize) {
-            
-            Rect rect{
-                std::max(0, s.minX - config.padding),
-                std::max(0, s.minY - config.padding),
-                std::min(width - s.minX, bw + config.padding * 2),
-                std::min(height - s.minY, bh + config.padding * 2)
-            };
+        if (bw >= config.minSpriteSize && bh >= config.minSpriteSize) {
+            bool isContinuousWideBlock = (bw >= width * 0.5f) || (bw > bh * 1.8f && bw > 150);
 
-            auto def = std::make_shared<SpriteDefinition>("sprite_" + std::to_string(idCounter++), rect);
-            def->SetPixelCount(s.pixelCount);
-            def->SetCenter(Point{static_cast<float>(s.sumX / s.pixelCount), static_cast<float>(s.sumY / s.pixelCount)});
-            results.push_back(def);
+            if (isContinuousWideBlock) {
+                auto subRects = SubdivideWideComponent(s);
+                for (const auto& rect : subRects) {
+                    auto def = std::make_shared<SpriteDefinition>("sprite_" + std::to_string(idCounter++), rect);
+                    results.push_back(def);
+                }
+            } else if (bw <= config.maxSpriteSize && bh <= config.maxSpriteSize) {
+                Rect rect{
+                    static_cast<float>(std::max(0, s.minX - config.padding)),
+                    static_cast<float>(std::max(0, s.minY - config.padding)),
+                    static_cast<float>(std::min(width - s.minX, bw + config.padding * 2)),
+                    static_cast<float>(std::min(height - s.minY, bh + config.padding * 2))
+                };
+
+                auto def = std::make_shared<SpriteDefinition>("sprite_" + std::to_string(idCounter++), rect);
+                def->SetPixelCount(s.pixelCount);
+                def->SetCenter(Point{static_cast<float>(s.sumX / s.pixelCount), static_cast<float>(s.sumY / s.pixelCount)});
+                results.push_back(def);
+            }
         }
     }
 
