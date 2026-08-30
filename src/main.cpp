@@ -1,4 +1,14 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#if defined(_WIN32)
+#pragma comment(linker, "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
+#include <windows.h>
+#endif
+
 #include <SFML/Graphics.hpp>
+#include <iostream>
 #include "ui/UIManager.h"
 #include "core/ProjectManager.h"
 #include "core/Canvas.h"
@@ -6,9 +16,47 @@
 #include "ai/AIHelper.h"
 #include "core/DragDropHandler.h"
 
+static sf::Image DownscaleIcon(const sf::Image& src, unsigned int targetSize = 32) {
+    sf::Image dest;
+    dest.create(targetSize, targetSize);
+    unsigned int srcW = src.getSize().x;
+    unsigned int srcH = src.getSize().y;
+
+    for (unsigned int y = 0; y < targetSize; ++y) {
+        for (unsigned int x = 0; x < targetSize; ++x) {
+            unsigned int srcX = (x * srcW) / targetSize;
+            unsigned int srcY = (y * srcH) / targetSize;
+            dest.setPixel(x, y, src.getPixel(srcX, srcY));
+        }
+    }
+    return dest;
+}
+
+void ApplyWindowIcon(sf::RenderWindow& window) {
+    sf::Image appIcon;
+    bool loaded = appIcon.loadFromFile("wisdomParkicon.png") ||
+        appIcon.loadFromFile("wisdomParkicon.jpg") ||
+        appIcon.loadFromFile("Resources/wisdomParkicon.png") ||
+        appIcon.loadFromFile("Resources/wisdomParkicon.jpg") ||
+        appIcon.loadFromFile("assets/wisdomParkicon.png") ||
+        appIcon.loadFromFile("assets/wisdomParkicon.jpg");
+
+    if (loaded) {
+        sf::Image safeIcon = DownscaleIcon(appIcon, 32);
+        window.setIcon(safeIcon.getSize().x, safeIcon.getSize().y, safeIcon.getPixelsPtr());
+    }
+}
+
 int main() {
+#if defined(_WIN32)
+    FreeConsole();
+#endif
+
     sf::VideoMode desktopMode = sf::VideoMode::getDesktopMode();
     sf::RenderWindow window(desktopMode, "Wisdom Park", sf::Style::Fullscreen);
+
+    ApplyWindowIcon(window);
+
     DragDropHandler::Attach(window);
     window.setVerticalSyncEnabled(true);
     window.setFramerateLimit(60);

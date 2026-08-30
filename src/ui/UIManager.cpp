@@ -1,3 +1,7 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "UIManager.h"
 #include "../core/NativeDialogs.h"
 #include "../core/ExportManager.h"
@@ -24,9 +28,11 @@
 #include "../UI/Panels/ToolOptionsBar.h"
 #include "../UI/Panels/ToolDock.h"
 #include "../UI/Panels/StatusBar.h"
+
 static int g_resW = 1920;
 static int g_resH = 1080;
 static bool g_resDropdownOpen = false;
+
 #if defined(_WIN32)
 #include <windows.h>
 #include <shellapi.h>
@@ -75,6 +81,36 @@ static void SetupDragDrop(HWND hwnd) {
 }
 #endif
 
+static sf::Image DownscaleIcon(const sf::Image& src, unsigned int targetSize = 32) {
+    sf::Image dest;
+    dest.create(targetSize, targetSize);
+    unsigned int srcW = src.getSize().x;
+    unsigned int srcH = src.getSize().y;
+
+    for (unsigned int y = 0; y < targetSize; ++y) {
+        for (unsigned int x = 0; x < targetSize; ++x) {
+            unsigned int srcX = (x * srcW) / targetSize;
+            unsigned int srcY = (y * srcH) / targetSize;
+            dest.setPixel(x, y, src.getPixel(srcX, srcY));
+        }
+    }
+    return dest;
+}
+
+static void ApplyWindowIcon(sf::RenderWindow& window) {
+    sf::Image appIcon;
+    bool loaded = appIcon.loadFromFile("wisdomParkicon.png") ||
+        appIcon.loadFromFile("wisdomParkicon.jpg") ||
+        appIcon.loadFromFile("Resources/wisdomParkicon.png") ||
+        appIcon.loadFromFile("Resources/wisdomParkicon.jpg") ||
+        appIcon.loadFromFile("assets/wisdomParkicon.png") ||
+        appIcon.loadFromFile("assets/wisdomParkicon.jpg");
+
+    if (loaded) {
+        sf::Image safeIcon = DownscaleIcon(appIcon, 32);
+        window.setIcon(safeIcon.getSize().x, safeIcon.getSize().y, safeIcon.getPixelsPtr());
+    }
+}
 
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
@@ -1429,6 +1465,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         ));
                     }
 
+                    ApplyWindowIcon(window);
+
                     window.setFramerateLimit(uiFpsLimit);
                     window.setVerticalSyncEnabled(uiVsync);
                     window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(window.getSize()));
@@ -2705,69 +2743,59 @@ void UIManager::initMinigame() {
 
     m_arcadeMazeWalls.clear();
 
-    // 1. Outer Border
     m_arcadeMazeWalls.push_back(sf::FloatRect(120.f, 100.f, 1680.f, 10.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(120.f, 950.f, 1680.f, 10.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(120.f, 100.f, 10.f, 860.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1790.f, 100.f, 10.f, 860.f));
 
-    // 2. Top-Left Booth (1P START) - Entrance at Bottom
     m_arcadeMazeWalls.push_back(sf::FloatRect(190.f, 170.f, 240.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(190.f, 170.f, 8.f, 100.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(422.f, 170.f, 8.f, 100.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(190.f, 270.f, 75.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(355.f, 270.f, 75.f, 8.f));
 
-    // 3. Top-Right Booth (ARCHIVES) - Entrance at Bottom
     m_arcadeMazeWalls.push_back(sf::FloatRect(1490.f, 170.f, 240.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1490.f, 170.f, 8.f, 100.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1722.f, 170.f, 8.f, 100.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1490.f, 270.f, 75.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1655.f, 270.f, 75.f, 8.f));
 
-    // 4. Top-Middle Left (KEYS) - Entrance at Bottom
     m_arcadeMazeWalls.push_back(sf::FloatRect(670.f, 170.f, 230.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(670.f, 170.f, 8.f, 95.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(892.f, 170.f, 8.f, 95.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(670.f, 265.f, 75.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(825.f, 265.f, 75.f, 8.f));
 
-    // 5. Top-Middle Right (FAMOUS) - Entrance at Bottom
     m_arcadeMazeWalls.push_back(sf::FloatRect(1020.f, 170.f, 230.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1020.f, 170.f, 8.f, 95.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1242.f, 170.f, 8.f, 95.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1020.f, 265.f, 75.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1175.f, 265.f, 75.f, 8.f));
 
-    // 6. Bottom-Left Booth (CONFIG) - Entrance at Top
     m_arcadeMazeWalls.push_back(sf::FloatRect(190.f, 870.f, 240.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(190.f, 770.f, 8.f, 108.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(422.f, 770.f, 8.f, 108.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(190.f, 770.f, 75.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(355.f, 770.f, 75.f, 8.f));
 
-    // 7. Bottom-Right Booth (HOW TO PLAY) - Entrance at Top
     m_arcadeMazeWalls.push_back(sf::FloatRect(1490.f, 870.f, 240.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1490.f, 770.f, 8.f, 108.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1722.f, 770.f, 8.f, 108.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1490.f, 770.f, 75.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1655.f, 770.f, 75.f, 8.f));
 
-    // 8. Bottom-Middle Booth (POWER OFF) - Entrance at Top
     m_arcadeMazeWalls.push_back(sf::FloatRect(840.f, 870.f, 240.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(840.f, 770.f, 8.f, 108.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1072.f, 770.f, 8.f, 108.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(840.f, 770.f, 75.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1005.f, 770.f, 75.f, 8.f));
 
-    // 9. Ghost Pen (Center)
     m_arcadeMazeWalls.push_back(sf::FloatRect(870.f, 470.f, 60.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(990.f, 470.f, 60.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(870.f, 570.f, 180.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(870.f, 470.f, 8.f, 108.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1042.f, 470.f, 8.f, 108.f));
 
-    // 10. Mid-Labyrinth Wide Dividers
     m_arcadeMazeWalls.push_back(sf::FloatRect(530.f, 340.f, 8.f, 140.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(530.f, 560.f, 8.f, 140.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1382.f, 340.f, 8.f, 140.f));
@@ -2781,7 +2809,6 @@ void UIManager::initMinigame() {
     m_arcadeMazeWalls.push_back(sf::FloatRect(650.f, 650.f, 170.f, 8.f));
     m_arcadeMazeWalls.push_back(sf::FloatRect(1100.f, 650.f, 170.f, 8.f));
 
-    // 11. Collectibles Setup
     m_arcadeCollectibles.clear();
     auto spawnDotsAlongLine = [this](float x1, float y1, float x2, float y2, float step) {
         float len = std::hypot(x2 - x1, y2 - y1);
@@ -2792,7 +2819,6 @@ void UIManager::initMinigame() {
         }
         };
 
-    // Outer Margins & Central Lines
     spawnDotsAlongLine(155.f, 135.f, 1765.f, 135.f, 40.f);
     spawnDotsAlongLine(155.f, 915.f, 1765.f, 915.f, 40.f);
     spawnDotsAlongLine(155.f, 140.f, 155.f, 910.f, 40.f);
@@ -2809,13 +2835,11 @@ void UIManager::initMinigame() {
     spawnDotsAlongLine(590.f, 590.f, 770.f, 590.f, 38.f);
     spawnDotsAlongLine(1150.f, 590.f, 1330.f, 590.f, 38.f);
 
-    // Power Pellets at 4 Outer Corners
     m_arcadeCollectibles.push_back({ sf::Vector2f(155.f, 135.f), CollectibleType::PowerPellet, 50, false, 0.f, 0.f });
     m_arcadeCollectibles.push_back({ sf::Vector2f(1765.f, 135.f), CollectibleType::PowerPellet, 50, false, 0.f, 1.f });
     m_arcadeCollectibles.push_back({ sf::Vector2f(155.f, 915.f), CollectibleType::PowerPellet, 50, false, 0.f, 2.f });
     m_arcadeCollectibles.push_back({ sf::Vector2f(1765.f, 915.f), CollectibleType::PowerPellet, 50, false, 0.f, 3.f });
 
-    // Special Fruits
     m_arcadeCollectibles.push_back({ sf::Vector2f(475.f, 520.f), CollectibleType::Cherry, 100, false, 0.f, 0.5f });
     m_arcadeCollectibles.push_back({ sf::Vector2f(1445.f, 520.f), CollectibleType::Orange, 500, false, 0.f, 1.5f });
     m_arcadeCollectibles.push_back({ sf::Vector2f(960.f, 380.f), CollectibleType::Grape, 1000, false, 0.f, 2.5f });
@@ -3560,6 +3584,8 @@ void UIManager::toggleFullscreen(sf::RenderWindow& window, AppSettings& settings
             std::max(0, static_cast<int>((desktop.height - settings.resHeight) / 2))
         ));
     }
+
+    ApplyWindowIcon(window);
 
     window.setFramerateLimit(uiFpsLimit);
     window.setVerticalSyncEnabled(uiVsync);
