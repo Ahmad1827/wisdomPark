@@ -1,6 +1,4 @@
-﻿<p align="center">
-  <img src="testlogo.jpg" alt="Wisdom Park Logo" width="650"/>
-</p>
+﻿# wisdomPark
 
 <p align="center">
   <img src="preview.jpg" alt="Wisdom Park Studio Workspace" width="100%"/>
