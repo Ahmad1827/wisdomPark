@@ -1,4 +1,4 @@
-﻿# Wisdom Park Studio
+﻿# Wisdom Park
 
 <p align="center">
   <img src="preview.jpg" alt="Wisdom Park Studio Workspace" width="100%"/>
