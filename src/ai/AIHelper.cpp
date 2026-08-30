@@ -31,7 +31,7 @@ bool AIHelper::isActive() const { return active; }
 void AIHelper::toggleTerrain() { terrainEnabled = !terrainEnabled; }
 bool AIHelper::isTerrainEnabled() const { return terrainEnabled; }
 sf::FloatRect AIHelper::getBounds() const { return mascot.getGlobalBounds(); }
-void AIHelper::draw(sf::RenderWindow& window) { window.draw(mascot); }
+void AIHelper::draw(sf::RenderWindow& window) {/* window.draw(mascot);*/ }
 void AIHelper::clearGrid() { std::fill(grid.begin(), grid.end(), 0); }
 
 void AIHelper::setTheme(const std::string& theme) { currentTheme = theme; }
