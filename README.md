@@ -22,11 +22,11 @@
 
 > [!WARNING]
 > ### ⚠️ Pre-Release & AI Work-in-Progress Notice (`v0.x.x`)
-> Wisdom Park Studio is currently in active **alpha development**. While core canvas rendering, timeline animation, and export tools are functional, **all AI-assisted subroutines, generative workflows, and experimental features are actively in progress and may not function predictably**. Expect frequent breaking changes and updates between builds.
+> Wisdom Park is currently in active **alpha development**. While core canvas rendering, timeline animation, and export tools are functional, **all AI-assisted subroutines, generative workflows, and experimental features are actively in progress and may not function predictably**. Expect frequent breaking changes and updates between builds.
 
 ---
 
-**Wisdom Park Studio** is a high-performance, custom-built 2D animation and pixel art studio written in C++17 and powered by SFML 2.6.x. Designed for creative and game asset workflows, it bridges the gap between traditional frame-by-frame animation, retro pixel-perfect art, procedural texture generation, and modern AI-assisted creation.
+**Wisdom Park** is a high-performance, custom-built 2D animation and pixel art studio written in C++17 and powered by SFML 2.6.x. Designed for creative and game asset workflows, it bridges the gap between traditional frame-by-frame animation, retro pixel-perfect art, procedural texture generation, and modern AI-assisted creation.
 
 ---
 
