@@ -34,7 +34,8 @@ namespace WisdomUI {
     void ToolOptionsBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
         m_sliderBounds = sf::FloatRect(bounds.left + 210.0f, bounds.top + 10.0f, 120.0f, 12.0f);
-        m_perfBtnBounds = sf::FloatRect(bounds.left + 420.0f, bounds.top + 5.0f, 104.0f, 22.0f);
+        m_perfBtnBounds = sf::FloatRect(bounds.left + 400.0f, bounds.top + 5.0f, 104.0f, 22.0f);
+        m_outlineBtnBounds = sf::FloatRect(bounds.left + 514.0f, bounds.top + 5.0f, 80.0f, 22.0f);
         updateSelectionButtonLayout();
     }
 
@@ -61,6 +62,9 @@ namespace WisdomUI {
             float targetToggle = m_pixelPerfect ? 1.0f : 0.0f;
             m_perfToggleProgress += (targetToggle - m_perfToggleProgress) * 16.0f * deltaTime;
 
+            bool outlineHover = m_outlineBtnBounds.contains(mousePos);
+            m_outlineHoverAlpha += ((outlineHover ? 1.0f : 0.0f) - m_outlineHoverAlpha) * 14.0f * deltaTime;
+
             bool sliderHover = m_sliderBounds.contains(mousePos) || m_isDraggingSlider;
             m_sliderThumbScale += ((sliderHover ? 1.25f : 1.0f) - m_sliderThumbScale) * 18.0f * deltaTime;
         }
@@ -69,7 +73,8 @@ namespace WisdomUI {
     bool ToolOptionsBar::HandleEvent(const sf::Event& event, const sf::RenderWindow& window,
         std::function<void(float)> onSizeChange,
         std::function<void()> onTogglePixelPerfect,
-        std::function<void(const std::string&)> onSelectAction) {
+        std::function<void(const std::string&)> onSelectAction,
+        std::function<void()> onMakeOutline) {
 
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
@@ -88,6 +93,10 @@ namespace WisdomUI {
                 }
                 else if (m_pixelMode && m_perfBtnBounds.contains(mousePos)) {
                     if (onTogglePixelPerfect) onTogglePixelPerfect();
+                    return true;
+                }
+                else if (m_outlineBtnBounds.contains(mousePos)) {
+                    if (onMakeOutline) onMakeOutline();
                     return true;
                 }
             }
@@ -156,6 +165,8 @@ namespace WisdomUI {
             if (m_pixelMode) {
                 Theme::DrawSunsetButton(window, m_perfBtnBounds, "Pixel Perfect", m_font, 11, m_pixelPerfect, m_perfHoverAlpha > 0.5f, true, 1.0f);
             }
+
+            Theme::DrawSunsetButton(window, m_outlineBtnBounds, "Outline", m_font, 11, false, m_outlineHoverAlpha > 0.5f, false, 1.0f);
         }
     }
 

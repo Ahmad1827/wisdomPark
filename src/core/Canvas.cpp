@@ -125,6 +125,7 @@ Frame::Frame(Frame&& other) noexcept = default;
 Frame& Frame::operator=(Frame&& other) noexcept = default;
 
 Canvas::Canvas() : isDrawing(false), startPos(0.f, 0.f), lastPos(0.f, 0.f), lastHoverLocalPos(0.f, 0.f), rawMousePos(0.f, 0.f), isHoveringCanvas(false),
+shiftAnchor(0.f, 0.f), hasShiftAnchor(false),
 activeTool(ToolType::Brush), primaryColor(sf::Color::Black), secondaryColor(sf::Color::White),
 fillTolerance(0.f), fillContiguous(true),
 activeLayer(1), onionSkinEnabled(true), onionSkinPrevOpacity(89.25f), onionSkinNextOpacity(89.25f), onionSkinPrevCount(1), onionSkinNextCount(1),
@@ -575,14 +576,14 @@ void Canvas::deleteSelection(int currentFrame) {
 }
 
 void Canvas::fillSelection(sf::Color color, int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && selection.isActive()) {
+    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         saveUndoState();
         sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
         unsigned int w = std::min(img.getSize().x, canvasLogicalSize.x);
         unsigned int h = std::min(img.getSize().y, canvasLogicalSize.y);
         for (unsigned int y = 0; y < h; ++y) {
             for (unsigned int x = 0; x < w; ++x) {
-                if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
+                if (!selection.isActive() || selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
                     img.setPixel(x, y, color);
                 }
             }
@@ -743,7 +744,6 @@ void Canvas::executeGlobalFill(sf::Color targetColor, sf::Color replacementColor
     for (unsigned int y = 0; y < h; ++y) {
         size_t rowStart = (static_cast<size_t>(y) * fullW) * 4;
         for (unsigned int x = 0; x < w; ++x) {
-            // Fill Selection Masking Integration
             if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) continue;
 
             size_t idx = rowStart + static_cast<size_t>(x) * 4;
@@ -761,7 +761,6 @@ void Canvas::executeGlobalFill(sf::Color targetColor, sf::Color replacementColor
 void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image) {
     if (colorMatches(targetColor, replacementColor)) return;
 
-    // Reject fill instantly if clicking completely outside active selection bounds
     if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(startPoint.x), static_cast<float>(startPoint.y)))) return;
 
     int w = static_cast<int>(std::min(image.getSize().x, canvasLogicalSize.x));
@@ -848,7 +847,6 @@ void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
     auto points = symmetryManager.getSymmetricPoints(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)));
 
     for (auto pt : points) {
-        // Brush & Eraser Selection Masking Integration
         if (selection.isActive() && !selection.isPointInsideSelection(pt)) continue;
 
         int ix = static_cast<int>(std::round(pt.x));
@@ -902,6 +900,59 @@ void Canvas::drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int 
     for (auto p : pts) {
         drawPixelExact(p.x, p.y, c, frameIdx);
     }
+}
+
+void Canvas::drawContinuousLine(sf::Vector2f from, sf::Vector2f to, sf::Color col, int currentFrame) {
+    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    if (frames[currentFrame].layers[activeLayer].locked || !frames[currentFrame].layers[activeLayer].visible) return;
+
+    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+    if (!targetTex) return;
+
+    if (isPixelMode) {
+        drawBresenhamLine(static_cast<int>(from.x), static_cast<int>(from.y),
+            static_cast<int>(to.x), static_cast<int>(to.y),
+            col, currentFrame);
+        targetTex->display();
+    }
+    else {
+        if (activeTool == ToolType::Eraser) {
+            sf::RenderStates rs(sf::BlendNone);
+            float currentEraserSize = brushEngine.getActivePreset().size;
+            float length = std::sqrt((to.x - from.x) * (to.x - from.x) + (to.y - from.y) * (to.y - from.y));
+            sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
+            line.setOrigin(0.0f, currentEraserSize / 2.f);
+            line.setPosition(from);
+            line.setRotation(std::atan2(to.y - from.y, to.x - from.x) * 180.f / 3.14159265f);
+            line.setFillColor(col);
+
+            sf::CircleShape circle(currentEraserSize / 2.f);
+            circle.setOrigin(currentEraserSize / 2.f, currentEraserSize / 2.f);
+            circle.setPosition(to);
+            circle.setFillColor(col);
+
+            sf::CircleShape startCircle(currentEraserSize / 2.f);
+            startCircle.setOrigin(currentEraserSize / 2.f, currentEraserSize / 2.f);
+            startCircle.setPosition(from);
+            startCircle.setFillColor(col);
+
+            targetTex->draw(startCircle, rs);
+            targetTex->draw(line, rs);
+            targetTex->draw(circle, rs);
+        }
+        else {
+            float dist = std::hypot(to.x - from.x, to.y - from.y);
+            float spacing = std::max(1.0f, brushEngine.getActivePreset().spacing);
+            int steps = std::max(1, static_cast<int>(dist / spacing));
+            for (int s = 0; s <= steps; ++s) {
+                float t = static_cast<float>(s) / static_cast<float>(steps);
+                sf::Vector2f interpPos = from + (to - from) * t;
+                brushEngine.paintStroke(targetTex, interpPos, col, 1.0f);
+            }
+        }
+        targetTex->display();
+    }
+    isDirty = true;
 }
 
 float Canvas::computeHandleHitRadius() const {
@@ -1006,10 +1057,26 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 return;
             }
 
+            bool isShift = sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift);
+            bool canDrawLine = (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser);
+
+            if (isShift && hasShiftAnchor && canDrawLine) {
+                saveUndoState();
+                sf::Color pC = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : drawCol;
+                drawContinuousLine(shiftAnchor, localPos, pC, currentFrame);
+                shiftAnchor = localPos;
+                lastPos = localPos;
+                startPos = localPos;
+                isDrawing = false;
+                return;
+            }
+
             saveUndoState();
             isDrawing = true;
             startPos = localPos;
             lastPos = localPos;
+            shiftAnchor = localPos;
+            hasShiftAnchor = true;
 
             if (isPixelMode) {
                 sf::Color pC = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : drawCol;
@@ -1038,6 +1105,15 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
         logicalPos = getInverseTransform().transformPoint(mappedPos);
     }
 
+    float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
+    float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
+    sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
+
+    if (isPixelMode && pixelSnapEnabled) {
+        localPos.x = std::floor(localPos.x);
+        localPos.y = std::floor(localPos.y);
+    }
+
     if (activeTool == ToolType::Symmetry) {
         isDrawing = false;
         return;
@@ -1048,14 +1124,6 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
             selection.endLasso();
 
             if (selection.getState() == SelectionState::Inactive) {
-                float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
-                float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
-                sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
-
-                if (isPixelMode && pixelSnapEnabled) {
-                    localPos.x = std::floor(localPos.x);
-                    localPos.y = std::floor(localPos.y);
-                }
                 autoSelectObject(localPos, currentFrame);
             }
         }
@@ -1063,6 +1131,11 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
             if (selection.isResizing()) selection.endResize();
             else selection.endDrag();
         }
+    }
+
+    if (isDrawing) {
+        shiftAnchor = localPos;
+        hasShiftAnchor = true;
     }
     isDrawing = false;
 }
@@ -1127,16 +1200,13 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
 
         sf::Color drawCol = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : primaryColor;
 
-        // --- PERSPECTIVE SNAP LOGIC ---
         sf::Vector2f targetPos = localPos;
         if (m_perspectiveManager && m_perspectiveManager->getActiveConfig() && m_perspectiveManager->getActiveConfig()->guideSettings.brushSnap) {
             if (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser) {
                 int activeVPIndex;
-                // Mathematically lock the target position to the nearest perspective ray
                 targetPos = PerspectiveSnapper::snapLine(startPos, localPos, *m_perspectiveManager->getActiveConfig(), activeVPIndex);
             }
         }
-        // ------------------------------
 
         if (isPixelMode) {
             sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
@@ -1203,12 +1273,71 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
             targetTex->display();
         }
 
-        lastPos = targetPos; // Update lastPos to the snapped position
+        lastPos = targetPos;
+        shiftAnchor = targetPos;
+        hasShiftAnchor = true;
 
         if (!isHoveringCanvas) {
             isDrawing = false;
         }
     }
+}
+
+void Canvas::makeOutline(int currentFrame, sf::Color outlineColor) {
+    if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    if (activeLayer < 0 || activeLayer >= static_cast<int>(frames[currentFrame].layers.size())) return;
+    if (frames[currentFrame].layers[activeLayer].locked || !frames[currentFrame].layers[activeLayer].visible) return;
+
+    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+    if (!targetTex) return;
+
+    saveUndoState();
+
+    sf::Image img = targetTex->getTexture().copyToImage();
+    int w = static_cast<int>(img.getSize().x);
+    int h = static_cast<int>(img.getSize().y);
+
+    std::vector<sf::Vector2i> outlinePts;
+
+    const int dx[8] = { -1, 0, 1, -1, 1, -1, 0, 1 };
+    const int dy[8] = { -1, -1, -1, 0, 0, 1, 1, 1 };
+
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            if (img.getPixel(x, y).a <= 30) {
+                if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
+                    continue;
+                }
+                bool neighborSolid = false;
+                for (int d = 0; d < 8; ++d) {
+                    int nx = x + dx[d];
+                    int ny = y + dy[d];
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                        if (img.getPixel(nx, ny).a > 30) {
+                            if (!selection.isActive() || selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(nx), static_cast<float>(ny)))) {
+                                neighborSolid = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (neighborSolid) {
+                    outlinePts.push_back(sf::Vector2i(x, y));
+                }
+            }
+        }
+    }
+
+    for (const auto& pt : outlinePts) {
+        img.setPixel(pt.x, pt.y, outlineColor);
+    }
+
+    sf::Texture newTex;
+    newTex.loadFromImage(img);
+    targetTex->clear(sf::Color::Transparent);
+    targetTex->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
+    targetTex->display();
+    isDirty = true;
 }
 
 void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states) {
@@ -1271,18 +1400,14 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         sRight.setTextureRect(sf::IntRect(0, 0, static_cast<int>(rW), static_cast<int>(ch)));
 
         sTopLeft.setPosition(cx - lW, cy - tH);
-
         sTopRight.setPosition(cx + cw - (trW - rW), cy - tH);
-
         sBotLeft.setPosition(cx - lW, cy + ch);
-
         sBotRight.setPosition(cx + cw - (brW - rW), cy + ch);
 
         window.draw(sTop, frameStates);
         window.draw(sBottom, frameStates);
         window.draw(sLeft, frameStates);
         window.draw(sRight, frameStates);
-
         window.draw(sTopLeft, frameStates);
         window.draw(sTopRight, frameStates);
         window.draw(sBotLeft, frameStates);
@@ -1422,20 +1547,6 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             }
         }
     }
-
-    /*
-    if (tileModeEnabled && isPixelMode) {
-        sf::Sprite baseSpr(frames[currentFrame].layers[activeLayer].texture->getTexture());
-        for (int x = -1; x <= 1; ++x) {
-            for (int y = -1; y <= 1; ++y) {
-                if (x == 0 && y == 0) continue;
-                sf::Sprite tileSpr = baseSpr;
-                tileSpr.setPosition(x * static_cast<float>(canvasLogicalSize.x), y * static_cast<float>(canvasLogicalSize.y));
-                window.draw(tileSpr, innerStates);
-            }
-        }
-    }
-    */
 
     float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
     float handleDenom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
@@ -1646,7 +1757,6 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     int targetLayerIndex = -1;
     sf::Image targetImg;
 
-    // Search from the top layer downwards to find the highest Z-coordinate object clicked
     for (int i = static_cast<int>(frames[currentFrame].layers.size()) - 1; i >= 0; --i) {
         if (!frames[currentFrame].layers[i].visible || frames[currentFrame].layers[i].locked) continue;
 
@@ -1660,13 +1770,11 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
         }
     }
 
-    // If clicking completely empty space on all layers, just clear the selection
     if (targetLayerIndex == -1) {
         selection.clearSelection();
         return;
     }
 
-    // Automatically switch to the layer containing the clicked object
     activeLayer = targetLayerIndex;
 
     int minX = sx, maxX = sx, minY = sy, maxY = sy;
@@ -1679,7 +1787,6 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     std::vector<bool> visited(w * h, false);
     visited[sy * w + sx] = true;
 
-    // Flood fill to find the boundaries of the non-transparent object on the newly swapped layer
     while (!stack.empty()) {
         sf::Vector2i p = stack.back();
         stack.pop_back();

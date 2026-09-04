@@ -24,7 +24,8 @@ namespace WisdomUI {
         bool HandleEvent(const sf::Event& event, const sf::RenderWindow& window,
             std::function<void(float)> onSizeChange,
             std::function<void()> onTogglePixelPerfect,
-            std::function<void(const std::string&)> onSelectAction = nullptr);
+            std::function<void(const std::string&)> onSelectAction = nullptr,
+            std::function<void()> onMakeOutline = nullptr);
 
         void Update(float deltaTime, const sf::Vector2f& mousePos);
         void Render(sf::RenderWindow& window);
@@ -40,11 +41,13 @@ namespace WisdomUI {
 
         sf::FloatRect m_sliderBounds;
         sf::FloatRect m_perfBtnBounds;
+        sf::FloatRect m_outlineBtnBounds;
 
         std::vector<SelectionToolButton> m_selectionButtons;
 
         float m_perfHoverAlpha{ 0.0f };
         float m_perfToggleProgress{ 0.0f };
+        float m_outlineHoverAlpha{ 0.0f };
         float m_sliderThumbScale{ 1.0f };
         float m_globalTime{ 0.0f };
 

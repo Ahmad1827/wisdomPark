@@ -1626,6 +1626,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 else if (action == "duplicate") canvas.duplicateSelection(curFrame);
                 else if (action == "crop") canvas.cropSelection(curFrame);
                 else if (action == "delete") canvas.deleteSelection(curFrame);
+            },
+            [&]() {
+                canvas.makeOutline(timeline.getCurrentFrame(), canvas.getPrimaryColor());
+                showMessage("Outline Created", sf::Color::Green);
             }
         )) return;
 

@@ -86,6 +86,9 @@ private:
     sf::Vector2f rawMousePos;
     bool isHoveringCanvas;
 
+    sf::Vector2f shiftAnchor;
+    bool hasShiftAnchor;
+
     std::vector<std::vector<Frame>> undoHistory;
     std::vector<std::vector<Frame>> redoHistory;
 
@@ -124,6 +127,7 @@ private:
     void drawPixelExact(int x, int y, sf::Color c, int frameIdx);
     std::vector<sf::Vector2i> getBresenhamPoints(int x0, int y0, int x1, int y1);
     void drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx);
+    void drawContinuousLine(sf::Vector2f from, sf::Vector2f to, sf::Color col, int currentFrame);
 
     float computeHandleHitRadius() const;
     bool isImageResourceActive(int currentFrame) const;
@@ -209,6 +213,8 @@ public:
     void handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame);
     void handleMouseReleased(sf::Vector2f logicalPos, int currentFrame);
     void handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int currentFrame);
+
+    void makeOutline(int currentFrame, sf::Color outlineColor);
 
     void draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states);
     void drawShadows(sf::RenderWindow& window, sf::Vector2f logicalSunPos, const std::vector<sf::FloatRect>& items, const std::vector<std::string>& categories, const sf::RenderStates& states);
