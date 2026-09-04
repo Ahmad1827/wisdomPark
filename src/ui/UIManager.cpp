@@ -122,6 +122,9 @@ static sf::CircleShape loadingSpinner;
 static sf::RectangleShape loadingCancelBtn;
 static sf::Text loadingCancelText;
 
+static bool g_selectingOutlineColor = false;
+static sf::Color g_outlineColor = sf::Color::Black;
+
 UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(true), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0), m_debugUseSpriteStudio(false) {}
 
 void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
@@ -145,6 +148,8 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     bottomTimeline.init();
     audioPanel.init();
     initMinigame();
+
+    m_toolOptionsBar.SetOutlineColor(g_outlineColor);
 
     AIManager::getInstance().init();
     g_aiPanel.init();
@@ -1628,8 +1633,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 else if (action == "delete") canvas.deleteSelection(curFrame);
             },
             [&]() {
-                canvas.makeOutline(timeline.getCurrentFrame(), canvas.getPrimaryColor());
+                canvas.makeOutline(timeline.getCurrentFrame(), g_outlineColor);
                 showMessage("Outline Created", sf::Color::Green);
+            },
+            [&]() {
+                g_selectingOutlineColor = true;
+                m_activeRightTab = RightTabMode::Palette;
+                showMessage("Pick Outline Color from Palette", sf::Color(255, 200, 100));
             }
         )) return;
 
@@ -1652,10 +1662,24 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
         else if (m_activeRightTab == RightTabMode::Palette) {
-            if (colorPalettePanel.handleEvent(event, mousePos, canvas)) return;
+            if (colorPalettePanel.handleEvent(event, mousePos, canvas)) {
+                if (g_selectingOutlineColor) {
+                    g_outlineColor = canvas.getPrimaryColor();
+                    m_toolOptionsBar.SetOutlineColor(g_outlineColor);
+                }
+                return;
+            }
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
                 std::string cpAction = colorPalettePanel.processClick(mousePos, canvas);
-                if (cpAction == "color_close") { m_activeRightTab = RightTabMode::None; return; }
+                if (g_selectingOutlineColor) {
+                    g_outlineColor = canvas.getPrimaryColor();
+                    m_toolOptionsBar.SetOutlineColor(g_outlineColor);
+                }
+                if (cpAction == "color_close") {
+                    m_activeRightTab = RightTabMode::None;
+                    g_selectingOutlineColor = false;
+                    return;
+                }
             }
         }
         else if (m_activeRightTab == RightTabMode::Properties) {

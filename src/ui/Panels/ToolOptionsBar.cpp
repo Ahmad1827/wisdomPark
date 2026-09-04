@@ -35,7 +35,8 @@ namespace WisdomUI {
         m_bounds = bounds;
         m_sliderBounds = sf::FloatRect(bounds.left + 210.0f, bounds.top + 10.0f, 120.0f, 12.0f);
         m_perfBtnBounds = sf::FloatRect(bounds.left + 400.0f, bounds.top + 5.0f, 104.0f, 22.0f);
-        m_outlineBtnBounds = sf::FloatRect(bounds.left + 514.0f, bounds.top + 5.0f, 80.0f, 22.0f);
+        m_outlineBtnBounds = sf::FloatRect(bounds.left + 514.0f, bounds.top + 5.0f, 72.0f, 22.0f);
+        m_outlineColorBoxBounds = sf::FloatRect(bounds.left + 592.0f, bounds.top + 5.0f, 22.0f, 22.0f);
         updateSelectionButtonLayout();
     }
 
@@ -65,6 +66,9 @@ namespace WisdomUI {
             bool outlineHover = m_outlineBtnBounds.contains(mousePos);
             m_outlineHoverAlpha += ((outlineHover ? 1.0f : 0.0f) - m_outlineHoverAlpha) * 14.0f * deltaTime;
 
+            bool colorBoxHover = m_outlineColorBoxBounds.contains(mousePos);
+            m_outlineColorBoxHoverAlpha += ((colorBoxHover ? 1.0f : 0.0f) - m_outlineColorBoxHoverAlpha) * 14.0f * deltaTime;
+
             bool sliderHover = m_sliderBounds.contains(mousePos) || m_isDraggingSlider;
             m_sliderThumbScale += ((sliderHover ? 1.25f : 1.0f) - m_sliderThumbScale) * 18.0f * deltaTime;
         }
@@ -74,7 +78,8 @@ namespace WisdomUI {
         std::function<void(float)> onSizeChange,
         std::function<void()> onTogglePixelPerfect,
         std::function<void(const std::string&)> onSelectAction,
-        std::function<void()> onMakeOutline) {
+        std::function<void()> onMakeOutline,
+        std::function<void()> onPickOutlineColor) {
 
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
@@ -97,6 +102,10 @@ namespace WisdomUI {
                 }
                 else if (m_outlineBtnBounds.contains(mousePos)) {
                     if (onMakeOutline) onMakeOutline();
+                    return true;
+                }
+                else if (m_outlineColorBoxBounds.contains(mousePos)) {
+                    if (onPickOutlineColor) onPickOutlineColor();
                     return true;
                 }
             }
@@ -167,6 +176,20 @@ namespace WisdomUI {
             }
 
             Theme::DrawSunsetButton(window, m_outlineBtnBounds, "Outline", m_font, 11, false, m_outlineHoverAlpha > 0.5f, false, 1.0f);
+
+            sf::RectangleShape colorBox(sf::Vector2f(m_outlineColorBoxBounds.width, m_outlineColorBoxBounds.height));
+            colorBox.setPosition(m_outlineColorBoxBounds.left, m_outlineColorBoxBounds.top);
+            colorBox.setFillColor(m_outlineColor);
+            colorBox.setOutlineThickness(m_outlineColorBoxHoverAlpha > 0.5f ? 2.0f : 1.2f);
+            colorBox.setOutlineColor(m_outlineColorBoxHoverAlpha > 0.5f ? Theme::SunsetGold : Theme::SunsetPlum);
+            window.draw(colorBox);
+
+            sf::RectangleShape innerEdge(sf::Vector2f(m_outlineColorBoxBounds.width - 4.0f, m_outlineColorBoxBounds.height - 4.0f));
+            innerEdge.setPosition(m_outlineColorBoxBounds.left + 2.0f, m_outlineColorBoxBounds.top + 2.0f);
+            innerEdge.setFillColor(sf::Color::Transparent);
+            innerEdge.setOutlineThickness(1.0f);
+            innerEdge.setOutlineColor(sf::Color(255, 255, 255, 50));
+            window.draw(innerEdge);
         }
     }
 
