@@ -400,26 +400,28 @@ void Canvas::setLayerProperties(int frameIndex, int layerIndex, const std::strin
 }
 
 void Canvas::toggleLayerPersistence(int frameIndex, int layerIndex) {
-    if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size()) && layerIndex >= 0 && layerIndex < static_cast<int>(frames[frameIndex].layers.size())) {
-        saveUndoState();
-        bool isPersist = !frames[frameIndex].layers[layerIndex].persistent;
-        auto targetTex = frames[frameIndex].layers[layerIndex].texture;
+    if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size())) {
+        if (layerIndex >= 0 && layerIndex < static_cast<int>(frames[frameIndex].layers.size())) {
+            saveUndoState();
+            bool isPersist = !frames[frameIndex].layers[layerIndex].persistent;
+            auto targetTex = frames[frameIndex].layers[layerIndex].texture;
 
-        for (size_t i = 0; i < frames.size(); ++i) {
-            frames[i].layers[layerIndex].persistent = isPersist;
-            if (isPersist && static_cast<int>(i) != frameIndex) {
-                frames[i].layers[layerIndex].texture = targetTex;
-            }
-            else if (!isPersist && static_cast<int>(i) != frameIndex) {
-                auto newTex = std::make_shared<sf::RenderTexture>();
-                newTex->create(canvasLogicalSize.x, canvasLogicalSize.y);
-                newTex->clear(sf::Color::Transparent);
-                if (isPixelMode) newTex->setSmooth(false);
-                else newTex->setSmooth(true);
-                sf::Sprite spr(targetTex->getTexture());
-                newTex->draw(spr, sf::RenderStates(sf::BlendNone));
-                newTex->display();
-                frames[i].layers[layerIndex].texture = newTex;
+            for (size_t i = 0; i < frames.size(); ++i) {
+                frames[i].layers[layerIndex].persistent = isPersist;
+                if (isPersist && static_cast<int>(i) != frameIndex) {
+                    frames[i].layers[layerIndex].texture = targetTex;
+                }
+                else if (!isPersist && static_cast<int>(i) != frameIndex) {
+                    auto newTex = std::make_shared<sf::RenderTexture>();
+                    newTex->create(canvasLogicalSize.x, canvasLogicalSize.y);
+                    newTex->clear(sf::Color::Transparent);
+                    if (isPixelMode) newTex->setSmooth(false);
+                    else newTex->setSmooth(true);
+                    sf::Sprite spr(targetTex->getTexture());
+                    newTex->draw(spr, sf::RenderStates(sf::BlendNone));
+                    newTex->display();
+                    frames[i].layers[layerIndex].texture = newTex;
+                }
             }
         }
     }
@@ -653,6 +655,9 @@ void Canvas::cropSelection(int currentFrame) {
 void Canvas::setActiveTool(ToolType tool) {
     activeTool = tool;
     isDrawing = false;
+    curveState = CurveState::None;
+    isCurveDragging = false;
+    m_contourPoints.clear();
     if (tool == ToolType::Pencil) {
         brushEngine.selectPreset("Pencil");
     }
@@ -691,6 +696,9 @@ void Canvas::undo() {
         selection.clearSelection();
         transformMode = TransformState::None;
         pendingTransform = false;
+        curveState = CurveState::None;
+        isCurveDragging = false;
+        m_contourPoints.clear();
     }
 }
 
@@ -702,6 +710,9 @@ void Canvas::redo() {
         selection.clearSelection();
         transformMode = TransformState::None;
         pendingTransform = false;
+        curveState = CurveState::None;
+        isCurveDragging = false;
+        m_contourPoints.clear();
     }
 }
 
@@ -955,6 +966,98 @@ void Canvas::drawContinuousLine(sf::Vector2f from, sf::Vector2f to, sf::Color co
     isDirty = true;
 }
 
+void Canvas::commitCurve(int currentFrame) {
+    if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    if (frames[currentFrame].layers[activeLayer].locked || !frames[currentFrame].layers[activeLayer].visible) return;
+
+    saveUndoState();
+
+    sf::Color drawCol = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : primaryColor;
+
+    float len = std::hypot(curveP1.x - curveP0.x, curveP1.y - curveP0.y) +
+        std::hypot(curveP2.x - curveP1.x, curveP2.y - curveP1.y) +
+        std::hypot(curveP3.x - curveP2.x, curveP3.y - curveP2.y);
+    int steps = std::max(16, static_cast<int>(len * 2.0f));
+
+    sf::Vector2f prevPt = curveP0;
+    for (int i = 1; i <= steps; ++i) {
+        float t = static_cast<float>(i) / static_cast<float>(steps);
+        float u = 1.0f - t;
+        sf::Vector2f pt = (u * u * u) * curveP0 +
+            (3.0f * u * u * t) * curveP1 +
+            (3.0f * u * t * t) * curveP2 +
+            (t * t * t) * curveP3;
+
+        drawContinuousLine(prevPt, pt, drawCol, currentFrame);
+        prevPt = pt;
+    }
+
+    shiftAnchor = curveP3;
+    hasShiftAnchor = true;
+    isDirty = true;
+}
+
+void Canvas::fillPolygonContour(const std::vector<sf::Vector2f>& points, sf::Color color, int currentFrame) {
+    if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    if (frames[currentFrame].layers[activeLayer].locked || !frames[currentFrame].layers[activeLayer].visible) return;
+    if (points.size() < 3) return;
+
+    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+    if (!targetTex) return;
+
+    saveUndoState();
+
+    int n = static_cast<int>(points.size());
+
+    float minY = points[0].y;
+    float maxY = points[0].y;
+    for (int i = 1; i < n; ++i) {
+        if (points[i].y < minY) minY = points[i].y;
+        if (points[i].y > maxY) maxY = points[i].y;
+    }
+
+    int startY = std::max(0, static_cast<int>(std::floor(minY)));
+    int endY = std::min(static_cast<int>(canvasLogicalSize.y) - 1, static_cast<int>(std::ceil(maxY)));
+
+    std::vector<float> nodeX;
+    for (int y = startY; y <= endY; ++y) {
+        nodeX.clear();
+        float curY = static_cast<float>(y) + 0.5f;
+
+        for (int i = 0; i < n; ++i) {
+            int next = (i + 1) % n;
+            float y1 = points[i].y;
+            float y2 = points[next].y;
+            float x1 = points[i].x;
+            float x2 = points[next].x;
+
+            if ((y1 < curY && y2 >= curY) || (y2 < curY && y1 >= curY)) {
+                float intersectX = x1 + (curY - y1) / (y2 - y1) * (x2 - x1);
+                nodeX.push_back(intersectX);
+            }
+        }
+
+        std::sort(nodeX.begin(), nodeX.end());
+
+        for (size_t i = 0; i + 1 < nodeX.size(); i += 2) {
+            int xStart = std::max(0, static_cast<int>(std::floor(nodeX[i])));
+            int xEnd = std::min(static_cast<int>(canvasLogicalSize.x) - 1, static_cast<int>(std::ceil(nodeX[i + 1])));
+
+            for (int x = xStart; x <= xEnd; ++x) {
+                drawPixelExact(x, y, color, currentFrame);
+            }
+        }
+    }
+
+    for (int i = 0; i < n; ++i) {
+        int next = (i + 1) % n;
+        drawContinuousLine(points[i], points[next], color, currentFrame);
+    }
+
+    targetTex->display();
+    isDirty = true;
+}
+
 float Canvas::computeHandleHitRadius() const {
     float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
     float denom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
@@ -977,6 +1080,10 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
     }
 
     if (rightClick) {
+        if (activeTool == ToolType::Curve && curveState != CurveState::None) {
+            curveState = CurveState::None;
+            isCurveDragging = false;
+        }
         return;
     }
 
@@ -993,6 +1100,34 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
         if (!frames[currentFrame].layers[activeLayer].locked && frames[currentFrame].layers[activeLayer].visible) {
 
             sf::Color drawCol = primaryColor;
+
+            if (activeTool == ToolType::Curve) {
+                if (curveState == CurveState::None) {
+                    curveP0 = localPos;
+                    curveP3 = localPos;
+                    curveP1 = localPos;
+                    curveP2 = localPos;
+                    curveState = CurveState::DrawingLine;
+                    isCurveDragging = true;
+                }
+                else if (curveState == CurveState::Bend1) {
+                    curveP1 = localPos;
+                    curveP2 = localPos;
+                    isCurveDragging = true;
+                }
+                else if (curveState == CurveState::Bend2) {
+                    curveP2 = localPos;
+                    isCurveDragging = true;
+                }
+                return;
+            }
+
+            if (activeTool == ToolType::FilledContour) {
+                m_contourPoints.clear();
+                m_contourPoints.push_back(localPos);
+                isDrawing = true;
+                return;
+            }
 
             if (activeTool == ToolType::Symmetry) {
                 isDrawing = true;
@@ -1114,6 +1249,40 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
         localPos.y = std::floor(localPos.y);
     }
 
+    if (activeTool == ToolType::Curve) {
+        if (isCurveDragging) {
+            isCurveDragging = false;
+            if (curveState == CurveState::DrawingLine) {
+                float d = std::hypot(curveP3.x - curveP0.x, curveP3.y - curveP0.y);
+                if (d < 1.0f) {
+                    curveState = CurveState::None;
+                }
+                else {
+                    curveState = CurveState::Bend1;
+                }
+            }
+            else if (curveState == CurveState::Bend1) {
+                curveState = CurveState::Bend2;
+            }
+            else if (curveState == CurveState::Bend2) {
+                commitCurve(currentFrame);
+                curveState = CurveState::None;
+            }
+        }
+        return;
+    }
+
+    if (activeTool == ToolType::FilledContour) {
+        if (isDrawing) {
+            isDrawing = false;
+            if (m_contourPoints.size() >= 3) {
+                fillPolygonContour(m_contourPoints, primaryColor, currentFrame);
+            }
+            m_contourPoints.clear();
+        }
+        return;
+    }
+
     if (activeTool == ToolType::Symmetry) {
         isDrawing = false;
         return;
@@ -1163,6 +1332,34 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     lastHoverLocalPos = localPos;
 
     if (activeTool == ToolType::Fill) return;
+
+    if (activeTool == ToolType::Curve) {
+        if (isCurveDragging) {
+            if (curveState == CurveState::DrawingLine) {
+                curveP3 = localPos;
+                curveP1 = curveP0 + (curveP3 - curveP0) * (1.0f / 3.0f);
+                curveP2 = curveP0 + (curveP3 - curveP0) * (2.0f / 3.0f);
+            }
+            else if (curveState == CurveState::Bend1) {
+                curveP1 = localPos;
+                curveP2 = localPos;
+            }
+            else if (curveState == CurveState::Bend2) {
+                curveP2 = localPos;
+            }
+        }
+        return;
+    }
+
+    if (activeTool == ToolType::FilledContour) {
+        if (isDrawing) {
+            if (m_contourPoints.empty() ||
+                std::hypot(localPos.x - m_contourPoints.back().x, localPos.y - m_contourPoints.back().y) >= 1.0f) {
+                m_contourPoints.push_back(localPos);
+            }
+        }
+        return;
+    }
 
     if (activeTool == ToolType::Symmetry) {
         if (isDrawing) {
@@ -1548,6 +1745,58 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         }
     }
 
+    if (activeTool == ToolType::Curve && curveState != CurveState::None) {
+        float len = std::hypot(curveP1.x - curveP0.x, curveP1.y - curveP0.y) +
+            std::hypot(curveP2.x - curveP1.x, curveP2.y - curveP1.y) +
+            std::hypot(curveP3.x - curveP2.x, curveP3.y - curveP2.y);
+        int steps = std::max(16, static_cast<int>(len * 2.0f));
+
+        sf::VertexArray curveVtx(sf::LineStrip);
+        sf::Color previewCol = primaryColor;
+        if (previewCol.a > 200) previewCol.a = 220;
+
+        for (int i = 0; i <= steps; ++i) {
+            float t = static_cast<float>(i) / static_cast<float>(steps);
+            float u = 1.0f - t;
+            sf::Vector2f pt = (u * u * u) * curveP0 +
+                (3.0f * u * u * t) * curveP1 +
+                (3.0f * u * t * t) * curveP2 +
+                (t * t * t) * curveP3;
+            curveVtx.append(sf::Vertex(pt, previewCol));
+        }
+        window.draw(curveVtx, innerStates);
+
+        if (curveState == CurveState::Bend1 || curveState == CurveState::Bend2) {
+            sf::CircleShape h1(2.5f);
+            h1.setOrigin(2.5f, 2.5f);
+            h1.setPosition(curveP1);
+            h1.setFillColor(sf::Color(255, 200, 50));
+            h1.setOutlineColor(sf::Color::Black);
+            h1.setOutlineThickness(1.0f);
+            window.draw(h1, innerStates);
+
+            if (curveState == CurveState::Bend2) {
+                sf::CircleShape h2(2.5f);
+                h2.setOrigin(2.5f, 2.5f);
+                h2.setPosition(curveP2);
+                h2.setFillColor(sf::Color(50, 200, 255));
+                h2.setOutlineColor(sf::Color::Black);
+                h2.setOutlineThickness(1.0f);
+                window.draw(h2, innerStates);
+            }
+        }
+    }
+
+    if (activeTool == ToolType::FilledContour && isDrawing && m_contourPoints.size() >= 2) {
+        sf::VertexArray contourVtx(sf::LineStrip);
+        sf::Color previewCol = primaryColor;
+        for (const auto& pt : m_contourPoints) {
+            contourVtx.append(sf::Vertex(pt, previewCol));
+        }
+        contourVtx.append(sf::Vertex(m_contourPoints.front(), sf::Color(previewCol.r, previewCol.g, previewCol.b, 140)));
+        window.draw(contourVtx, innerStates);
+    }
+
     float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
     float handleDenom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
     selection.setHandleVisualSize(10.0f / handleDenom);
@@ -1561,7 +1810,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     sf::Vector2f logicalPos = getInverseTransform().transformPoint(currentRawMousePos);
     bool currentlyHovering = drawArea.contains(logicalPos);
 
-    if (!isPlaying && currentlyHovering && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser)) {
+    if (!isPlaying && currentlyHovering && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser || activeTool == ToolType::Curve || activeTool == ToolType::FilledContour)) {
         if (isPixelMode) {
             float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
             float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;

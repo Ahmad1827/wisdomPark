@@ -10,9 +10,10 @@
 #include "DitherManager.h"
 #include "../core/PerspectiveSystem.h"
 
-enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text, Gradient };
+enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text, Gradient, Curve, FilledContour };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 enum class TransformState { None, Scaling };
+enum class CurveState { None, DrawingLine, Bend1, Bend2 };
 
 struct Layer {
     std::string name;
@@ -89,6 +90,15 @@ private:
     sf::Vector2f shiftAnchor;
     bool hasShiftAnchor;
 
+    CurveState curveState{ CurveState::None };
+    sf::Vector2f curveP0{ 0.f, 0.f };
+    sf::Vector2f curveP1{ 0.f, 0.f };
+    sf::Vector2f curveP2{ 0.f, 0.f };
+    sf::Vector2f curveP3{ 0.f, 0.f };
+    bool isCurveDragging{ false };
+
+    std::vector<sf::Vector2f> m_contourPoints;
+
     std::vector<std::vector<Frame>> undoHistory;
     std::vector<std::vector<Frame>> redoHistory;
 
@@ -128,6 +138,9 @@ private:
     std::vector<sf::Vector2i> getBresenhamPoints(int x0, int y0, int x1, int y1);
     void drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx);
     void drawContinuousLine(sf::Vector2f from, sf::Vector2f to, sf::Color col, int currentFrame);
+
+    void commitCurve(int currentFrame);
+    void fillPolygonContour(const std::vector<sf::Vector2f>& points, sf::Color color, int currentFrame);
 
     float computeHandleHitRadius() const;
     bool isImageResourceActive(int currentFrame) const;

@@ -346,6 +346,15 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     m_toolDock.AddTool("fill", "Fill Bucket (F)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Fill); m_toolDock.SetActiveTool("fill"); });
     m_toolDock.AddTool("select", "Selection Box (M)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Select); m_toolDock.SetActiveTool("select"); });
     m_toolDock.AddTool("magic_wand", "Magic Wand (W)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::MagicWand); m_toolDock.SetActiveTool("magic_wand"); });
+    m_toolDock.AddTool("curve", "Curve Tool", [this, baseCanvas]() {
+        baseCanvas->setActiveTool(ToolType::Curve);
+        m_toolDock.SetActiveTool("curve");
+        });
+
+    m_toolDock.AddTool("filled_contour", "Filled Contour", [this, baseCanvas]() {
+        baseCanvas->setActiveTool(ToolType::FilledContour);
+        m_toolDock.SetActiveTool("filled_contour");
+        });
     m_toolDock.AddTool("shapes", "Shapes Tool (U)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Shapes); m_toolDock.SetActiveTool("shapes"); });
     m_toolDock.AddTool("text", "Text Tool (T)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Text); m_toolDock.SetActiveTool("text"); });
     m_toolDock.AddTool("gradient", "Gradient Tool (G)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Gradient); m_toolDock.SetActiveTool("gradient"); });
