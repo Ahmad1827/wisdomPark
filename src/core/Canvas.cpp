@@ -505,15 +505,17 @@ void Canvas::mergeVisible(int frameIndex) {
 }
 
 void Canvas::moveLayer(int frameIndex, int fromIndex, int toIndex) {
-    if (frames.size() > 0 && fromIndex >= 0 && fromIndex < static_cast<int>(frames[0].layers.size()) && toIndex >= 0 && toIndex < static_cast<int>(frames[0].layers.size())) {
-        saveUndoState();
-        for (size_t i = 0; i < frames.size(); ++i) {
-            Layer temp = std::move(frames[i].layers[fromIndex]);
-            frames[i].layers.erase(frames[i].layers.begin() + fromIndex);
-            frames[i].layers.insert(frames[i].layers.begin() + toIndex, std::move(temp));
+    if (frames.size() > 0 && fromIndex >= 0 && fromIndex < static_cast<int>(frames[0].layers.size())) {
+        if (toIndex >= 0 && toIndex < static_cast<int>(frames[0].layers.size())) {
+            saveUndoState();
+            for (size_t i = 0; i < frames.size(); ++i) {
+                Layer temp = std::move(frames[i].layers[fromIndex]);
+                frames[i].layers.erase(frames[i].layers.begin() + fromIndex);
+                frames[i].layers.insert(frames[i].layers.begin() + toIndex, std::move(temp));
+            }
+            if (activeLayer == fromIndex) activeLayer = toIndex;
+            else if (activeLayer == toIndex) activeLayer = fromIndex;
         }
-        if (activeLayer == fromIndex) activeLayer = toIndex;
-        else if (activeLayer == toIndex) activeLayer = fromIndex;
     }
 }
 
@@ -569,7 +571,7 @@ void Canvas::pasteSelection(int currentFrame) {
 }
 
 void Canvas::deleteSelection(int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && selection.isActive()) {
+    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         saveUndoState();
         selection.deleteSelection(frames[currentFrame].layers[activeLayer].texture.get());
     }
@@ -598,7 +600,7 @@ void Canvas::fillSelection(sf::Color color, int currentFrame) {
 }
 
 void Canvas::flipSelectionHorizontal(int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && selection.isActive()) {
+    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         if (selection.getState() == SelectionState::Selected) {
             saveUndoState();
             selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
@@ -608,7 +610,7 @@ void Canvas::flipSelectionHorizontal(int currentFrame) {
 }
 
 void Canvas::flipSelectionVertical(int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && selection.isActive()) {
+    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         if (selection.getState() == SelectionState::Selected) {
             saveUndoState();
             selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
@@ -618,7 +620,7 @@ void Canvas::flipSelectionVertical(int currentFrame) {
 }
 
 void Canvas::duplicateSelection(int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && selection.isActive()) {
+    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         saveUndoState();
         selection.copy(frames[currentFrame].layers[activeLayer].texture.get());
         commitSelection(currentFrame);
@@ -631,7 +633,7 @@ void Canvas::duplicateSelection(int currentFrame) {
 }
 
 void Canvas::cropSelection(int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && selection.isActive()) {
+    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         saveUndoState();
         sf::Image layerImg = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
         sf::Image croppedImg;
@@ -655,8 +657,9 @@ void Canvas::cropSelection(int currentFrame) {
 void Canvas::setActiveTool(ToolType tool) {
     activeTool = tool;
     isDrawing = false;
-    curveState = CurveState::None;
-    isCurveDragging = false;
+    isDeforming = false;
+    deformPixels.clear();
+    currentDeformedPixels.clear();
     m_contourPoints.clear();
     if (tool == ToolType::Pencil) {
         brushEngine.selectPreset("Pencil");
@@ -696,8 +699,9 @@ void Canvas::undo() {
         selection.clearSelection();
         transformMode = TransformState::None;
         pendingTransform = false;
-        curveState = CurveState::None;
-        isCurveDragging = false;
+        isDeforming = false;
+        deformPixels.clear();
+        currentDeformedPixels.clear();
         m_contourPoints.clear();
     }
 }
@@ -710,8 +714,9 @@ void Canvas::redo() {
         selection.clearSelection();
         transformMode = TransformState::None;
         pendingTransform = false;
-        curveState = CurveState::None;
-        isCurveDragging = false;
+        isDeforming = false;
+        deformPixels.clear();
+        currentDeformedPixels.clear();
         m_contourPoints.clear();
     }
 }
@@ -966,35 +971,106 @@ void Canvas::drawContinuousLine(sf::Vector2f from, sf::Vector2f to, sf::Color co
     isDirty = true;
 }
 
-void Canvas::commitCurve(int currentFrame) {
-    if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
-    if (frames[currentFrame].layers[activeLayer].locked || !frames[currentFrame].layers[activeLayer].visible) return;
+float Canvas::computeDeformWeight(float t) const {
+    if (deformMode == 1) {
+        float u = std::clamp(t, 0.0f, 1.0f);
+        return u * u;
+    }
+    if (deformMode == 2) {
+        float u = std::clamp(1.0f - t, 0.0f, 1.0f);
+        return u * u;
+    }
+    if (t <= deformT0) {
+        if (deformT0 <= 0.0001f) return 1.0f;
+        float u = std::clamp(t / deformT0, 0.0f, 1.0f);
+        return u * u * (3.0f - 2.0f * u);
+    }
+    else {
+        if (deformT0 >= 0.9999f) return 1.0f;
+        float u = std::clamp((1.0f - t) / (1.0f - deformT0), 0.0f, 1.0f);
+        return u * u * (3.0f - 2.0f * u);
+    }
+}
 
-    saveUndoState();
+void Canvas::updateDeformPixels(sf::Vector2f delta) {
+    currentDeformedPixels.clear();
+    if (deformPixels.empty()) return;
 
-    sf::Color drawCol = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : primaryColor;
+    int boxW = deformMaxX - deformMinX + 1;
+    int boxH = deformMaxY - deformMinY + 1;
+    if (boxW <= 0 || boxH <= 0) return;
 
-    float len = std::hypot(curveP1.x - curveP0.x, curveP1.y - curveP0.y) +
-        std::hypot(curveP2.x - curveP1.x, curveP2.y - curveP1.y) +
-        std::hypot(curveP3.x - curveP2.x, curveP3.y - curveP2.y);
-    int steps = std::max(16, static_cast<int>(len * 2.0f));
+    float L = deformIsHorizontal ? static_cast<float>(std::max(1, boxW - 1)) : static_cast<float>(std::max(1, boxH - 1));
 
-    sf::Vector2f prevPt = curveP0;
-    for (int i = 1; i <= steps; ++i) {
-        float t = static_cast<float>(i) / static_cast<float>(steps);
-        float u = 1.0f - t;
-        sf::Vector2f pt = (u * u * u) * curveP0 +
-            (3.0f * u * u * t) * curveP1 +
-            (3.0f * u * t * t) * curveP2 +
-            (t * t * t) * curveP3;
+    std::vector<int> pixelGrid(boxW * boxH, -1);
+    std::vector<sf::Vector2i> mapped(deformPixels.size());
 
-        drawContinuousLine(prevPt, pt, drawCol, currentFrame);
-        prevPt = pt;
+    for (size_t i = 0; i < deformPixels.size(); ++i) {
+        int gx = deformPixels[i].x - deformMinX;
+        int gy = deformPixels[i].y - deformMinY;
+        if (gx >= 0 && gx < boxW && gy >= 0 && gy < boxH) {
+            pixelGrid[gy * boxW + gx] = static_cast<int>(i);
+        }
+
+        float coord = deformIsHorizontal ? static_cast<float>(deformPixels[i].x - deformMinX) : static_cast<float>(deformPixels[i].y - deformMinY);
+        float t = std::clamp(coord / L, 0.0f, 1.0f);
+        float w = computeDeformWeight(t);
+
+        int dx = static_cast<int>(std::round(delta.x * w));
+        int dy = static_cast<int>(std::round(delta.y * w));
+        mapped[i] = sf::Vector2i(deformPixels[i].x + dx, deformPixels[i].y + dy);
     }
 
-    shiftAnchor = curveP3;
-    hasShiftAnchor = true;
-    isDirty = true;
+    std::vector<bool> placedMask(canvasLogicalSize.x * canvasLogicalSize.y, false);
+
+    auto putPixel = [&](int px, int py, sf::Color col) {
+        if (px >= 0 && py >= 0 && px < static_cast<int>(canvasLogicalSize.x) && py < static_cast<int>(canvasLogicalSize.y)) {
+            size_t pidx = static_cast<size_t>(py) * canvasLogicalSize.x + px;
+            if (!placedMask[pidx]) {
+                placedMask[pidx] = true;
+                currentDeformedPixels.push_back({ px, py, col });
+            }
+        }
+        };
+
+    for (size_t i = 0; i < deformPixels.size(); ++i) {
+        putPixel(mapped[i].x, mapped[i].y, deformPixels[i].color);
+    }
+
+    for (int gy = 0; gy < boxH; ++gy) {
+        for (int gx = 0; gx < boxW; ++gx) {
+            int i = pixelGrid[gy * boxW + gx];
+            if (i == -1) continue;
+
+            if (gx + 1 < boxW) {
+                int j = pixelGrid[gy * boxW + (gx + 1)];
+                if (j != -1) {
+                    sf::Vector2i p1 = mapped[i];
+                    sf::Vector2i p2 = mapped[j];
+                    if (std::abs(p1.x - p2.x) > 1 || std::abs(p1.y - p2.y) > 1) {
+                        auto pts = getBresenhamPoints(p1.x, p1.y, p2.x, p2.y);
+                        for (const auto& pt : pts) {
+                            putPixel(pt.x, pt.y, deformPixels[i].color);
+                        }
+                    }
+                }
+            }
+
+            if (gy + 1 < boxH) {
+                int j = pixelGrid[(gy + 1) * boxW + gx];
+                if (j != -1) {
+                    sf::Vector2i p1 = mapped[i];
+                    sf::Vector2i p2 = mapped[j];
+                    if (std::abs(p1.x - p2.x) > 1 || std::abs(p1.y - p2.y) > 1) {
+                        auto pts = getBresenhamPoints(p1.x, p1.y, p2.x, p2.y);
+                        for (const auto& pt : pts) {
+                            putPixel(pt.x, pt.y, deformPixels[i].color);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 void Canvas::fillPolygonContour(const std::vector<sf::Vector2f>& points, sf::Color color, int currentFrame) {
@@ -1073,20 +1149,6 @@ bool Canvas::isImageResourceActive(int currentFrame) const {
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
-    if (g_activeWindow) {
-        sf::Vector2i pixelPos = sf::Mouse::getPosition(*g_activeWindow);
-        sf::Vector2f mappedPos = g_activeWindow->mapPixelToCoords(pixelPos);
-        logicalPos = getInverseTransform().transformPoint(mappedPos);
-    }
-
-    if (rightClick) {
-        if (activeTool == ToolType::Curve && curveState != CurveState::None) {
-            curveState = CurveState::None;
-            isCurveDragging = false;
-        }
-        return;
-    }
-
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
     float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
@@ -1096,29 +1158,172 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
         localPos.y = std::floor(localPos.y);
     }
 
+    if (rightClick) {
+        if (activeTool == ToolType::Curve && isDeforming) {
+            isDeforming = false;
+            deformPixels.clear();
+            currentDeformedPixels.clear();
+        }
+        return;
+    }
+
     if (drawArea.contains(logicalPos)) {
         if (!frames[currentFrame].layers[activeLayer].locked && frames[currentFrame].layers[activeLayer].visible) {
 
             sf::Color drawCol = primaryColor;
 
             if (activeTool == ToolType::Curve) {
-                if (curveState == CurveState::None) {
-                    curveP0 = localPos;
-                    curveP3 = localPos;
-                    curveP1 = localPos;
-                    curveP2 = localPos;
-                    curveState = CurveState::DrawingLine;
-                    isCurveDragging = true;
+                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                if (!targetTex) return;
+
+                int w = static_cast<int>(canvasLogicalSize.x);
+                int h = static_cast<int>(canvasLogicalSize.y);
+                int sx = static_cast<int>(localPos.x);
+                int sy = static_cast<int>(localPos.y);
+
+                deformPixels.clear();
+                currentDeformedPixels.clear();
+
+                int targetLayerIndex = -1;
+                sf::Image targetImg;
+
+                if (selection.isActive()) {
+                    targetLayerIndex = activeLayer;
+                    targetImg = targetTex->getTexture().copyToImage();
+                    deformMinX = w; deformMaxX = 0; deformMinY = h; deformMaxY = 0;
+                    for (int y = 0; y < h; ++y) {
+                        for (int x = 0; x < w; ++x) {
+                            if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
+                                sf::Color c = targetImg.getPixel(x, y);
+                                if (c.a > 0) {
+                                    deformPixels.push_back({ x, y, c });
+                                    deformMinX = std::min(deformMinX, x);
+                                    deformMaxX = std::max(deformMaxX, x);
+                                    deformMinY = std::min(deformMinY, y);
+                                    deformMaxY = std::max(deformMaxY, y);
+                                }
+                            }
+                        }
+                    }
                 }
-                else if (curveState == CurveState::Bend1) {
-                    curveP1 = localPos;
-                    curveP2 = localPos;
-                    isCurveDragging = true;
+                else {
+                    sf::Image activeImg = targetTex->getTexture().copyToImage();
+                    if (sx >= 0 && sy >= 0 && sx < w && sy < h && activeImg.getPixel(sx, sy).a > 0) {
+                        targetLayerIndex = activeLayer;
+                        targetImg = activeImg;
+                    }
+
+                    if (targetLayerIndex == -1) {
+                        for (int i = static_cast<int>(frames[currentFrame].layers.size()) - 1; i >= 0; --i) {
+                            if (!frames[currentFrame].layers[i].visible || frames[currentFrame].layers[i].locked) continue;
+                            sf::Image tempImg = frames[currentFrame].layers[i].texture->getTexture().copyToImage();
+                            if (sx >= 0 && sy >= 0 && sx < static_cast<int>(tempImg.getSize().x) && sy < static_cast<int>(tempImg.getSize().y)) {
+                                if (tempImg.getPixel(sx, sy).a > 0) {
+                                    targetLayerIndex = i;
+                                    targetImg = tempImg;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (targetLayerIndex == -1) {
+                        float bestDist = 9999.0f;
+                        int foundX = -1, foundY = -1;
+                        for (int i = static_cast<int>(frames[currentFrame].layers.size()) - 1; i >= 0; --i) {
+                            if (!frames[currentFrame].layers[i].visible || frames[currentFrame].layers[i].locked) continue;
+                            sf::Image tempImg = frames[currentFrame].layers[i].texture->getTexture().copyToImage();
+                            int imgW = static_cast<int>(tempImg.getSize().x);
+                            int imgH = static_cast<int>(tempImg.getSize().y);
+                            for (int r = 1; r <= 5; ++r) {
+                                for (int dy = -r; dy <= r; ++dy) {
+                                    for (int dx = -r; dx <= r; ++dx) {
+                                        int nx = sx + dx;
+                                        int ny = sy + dy;
+                                        if (nx >= 0 && ny >= 0 && nx < imgW && ny < imgH) {
+                                            if (tempImg.getPixel(nx, ny).a > 0) {
+                                                float d = static_cast<float>(dx * dx + dy * dy);
+                                                if (d < bestDist) {
+                                                    bestDist = d;
+                                                    foundX = nx;
+                                                    foundY = ny;
+                                                    targetLayerIndex = i;
+                                                    targetImg = tempImg;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if (targetLayerIndex != -1) break;
+                            }
+                            if (targetLayerIndex != -1) break;
+                        }
+                        if (targetLayerIndex != -1) {
+                            sx = foundX;
+                            sy = foundY;
+                        }
+                    }
+
+                    if (targetLayerIndex == -1) return;
+
+                    activeLayer = targetLayerIndex;
+                    targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+
+                    std::vector<bool> visited(w * h, false);
+                    std::vector<sf::Vector2i> stack;
+                    stack.push_back({ sx, sy });
+                    visited[sy * w + sx] = true;
+
+                    deformMinX = sx; deformMaxX = sx; deformMinY = sy; deformMaxY = sy;
+
+                    const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+                    const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+
+                    while (!stack.empty()) {
+                        sf::Vector2i p = stack.back();
+                        stack.pop_back();
+
+                        sf::Color c = targetImg.getPixel(p.x, p.y);
+                        deformPixels.push_back({ p.x, p.y, c });
+
+                        deformMinX = std::min(deformMinX, p.x);
+                        deformMaxX = std::max(deformMaxX, p.x);
+                        deformMinY = std::min(deformMinY, p.y);
+                        deformMaxY = std::max(deformMaxY, p.y);
+
+                        for (int d = 0; d < 8; ++d) {
+                            int nx = p.x + dx8[d];
+                            int ny = p.y + dy8[d];
+                            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                                int idx = ny * w + nx;
+                                if (!visited[idx] && targetImg.getPixel(nx, ny).a > 0) {
+                                    visited[idx] = true;
+                                    stack.push_back({ nx, ny });
+                                }
+                            }
+                        }
+                    }
                 }
-                else if (curveState == CurveState::Bend2) {
-                    curveP2 = localPos;
-                    isCurveDragging = true;
-                }
+
+                if (deformPixels.empty()) return;
+
+                int boxW = std::max(1, deformMaxX - deformMinX + 1);
+                int boxH = std::max(1, deformMaxY - deformMinY + 1);
+                deformIsHorizontal = (boxW >= boxH);
+
+                float L = deformIsHorizontal ? static_cast<float>(std::max(1, boxW - 1)) : static_cast<float>(std::max(1, boxH - 1));
+                float origin = deformIsHorizontal ? static_cast<float>(deformMinX) : static_cast<float>(deformMinY);
+                float curCoord = deformIsHorizontal ? static_cast<float>(sx) : static_cast<float>(sy);
+                deformT0 = (L > 0.f) ? std::clamp((curCoord - origin) / L, 0.0f, 1.0f) : 0.5f;
+
+                if (deformT0 < 0.15f) deformMode = 2;
+                else if (deformT0 > 0.85f) deformMode = 1;
+                else deformMode = 0;
+
+                deformClickPos = sf::Vector2f(static_cast<float>(sx), static_cast<float>(sy));
+                deformCurrentPos = deformClickPos;
+                isDeforming = true;
+                updateDeformPixels(sf::Vector2f(0.f, 0.f));
                 return;
             }
 
@@ -1234,12 +1439,6 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 }
 
 void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
-    if (g_activeWindow) {
-        sf::Vector2i pixelPos = sf::Mouse::getPosition(*g_activeWindow);
-        sf::Vector2f mappedPos = g_activeWindow->mapPixelToCoords(pixelPos);
-        logicalPos = getInverseTransform().transformPoint(mappedPos);
-    }
-
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
     float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
@@ -1250,24 +1449,40 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     }
 
     if (activeTool == ToolType::Curve) {
-        if (isCurveDragging) {
-            isCurveDragging = false;
-            if (curveState == CurveState::DrawingLine) {
-                float d = std::hypot(curveP3.x - curveP0.x, curveP3.y - curveP0.y);
-                if (d < 1.0f) {
-                    curveState = CurveState::None;
+        if (isDeforming) {
+            deformCurrentPos = localPos;
+            sf::Vector2f delta = deformCurrentPos - deformClickPos;
+
+            if (std::abs(delta.x) >= 1.0f || std::abs(delta.y) >= 1.0f) {
+                saveUndoState();
+                updateDeformPixels(delta);
+
+                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                if (targetTex) {
+                    sf::RenderStates rsNone;
+                    rsNone.blendMode = sf::BlendNone;
+                    sf::RectangleShape clearPx(sf::Vector2f(1.f, 1.f));
+                    clearPx.setFillColor(sf::Color::Transparent);
+
+                    for (const auto& dp : deformPixels) {
+                        clearPx.setPosition(static_cast<float>(dp.x), static_cast<float>(dp.y));
+                        targetTex->draw(clearPx, rsNone);
+                    }
+
+                    sf::RectangleShape drawPx(sf::Vector2f(1.f, 1.f));
+                    for (const auto& dp : currentDeformedPixels) {
+                        drawPx.setPosition(static_cast<float>(dp.x), static_cast<float>(dp.y));
+                        drawPx.setFillColor(dp.color);
+                        targetTex->draw(drawPx, rsNone);
+                    }
+                    targetTex->display();
                 }
-                else {
-                    curveState = CurveState::Bend1;
-                }
+                isDirty = true;
             }
-            else if (curveState == CurveState::Bend1) {
-                curveState = CurveState::Bend2;
-            }
-            else if (curveState == CurveState::Bend2) {
-                commitCurve(currentFrame);
-                curveState = CurveState::None;
-            }
+
+            isDeforming = false;
+            deformPixels.clear();
+            currentDeformedPixels.clear();
         }
         return;
     }
@@ -1310,13 +1525,6 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
 }
 
 void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int currentFrame) {
-    if (g_activeWindow) {
-        sf::Vector2i pixelPos = sf::Mouse::getPosition(*g_activeWindow);
-        sf::Vector2f mappedPos = g_activeWindow->mapPixelToCoords(pixelPos);
-        logicalPos = getInverseTransform().transformPoint(mappedPos);
-        rawPos = mappedPos;
-    }
-
     isHoveringCanvas = drawArea.contains(logicalPos);
     rawMousePos = rawPos;
 
@@ -1334,19 +1542,9 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     if (activeTool == ToolType::Fill) return;
 
     if (activeTool == ToolType::Curve) {
-        if (isCurveDragging) {
-            if (curveState == CurveState::DrawingLine) {
-                curveP3 = localPos;
-                curveP1 = curveP0 + (curveP3 - curveP0) * (1.0f / 3.0f);
-                curveP2 = curveP0 + (curveP3 - curveP0) * (2.0f / 3.0f);
-            }
-            else if (curveState == CurveState::Bend1) {
-                curveP1 = localPos;
-                curveP2 = localPos;
-            }
-            else if (curveState == CurveState::Bend2) {
-                curveP2 = localPos;
-            }
+        if (isDeforming) {
+            deformCurrentPos = localPos;
+            updateDeformPixels(deformCurrentPos - deformClickPos);
         }
         return;
     }
@@ -1597,14 +1795,18 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         sRight.setTextureRect(sf::IntRect(0, 0, static_cast<int>(rW), static_cast<int>(ch)));
 
         sTopLeft.setPosition(cx - lW, cy - tH);
+
         sTopRight.setPosition(cx + cw - (trW - rW), cy - tH);
+
         sBotLeft.setPosition(cx - lW, cy + ch);
+
         sBotRight.setPosition(cx + cw - (brW - rW), cy + ch);
 
         window.draw(sTop, frameStates);
         window.draw(sBottom, frameStates);
         window.draw(sLeft, frameStates);
         window.draw(sRight, frameStates);
+
         window.draw(sTopLeft, frameStates);
         window.draw(sTopRight, frameStates);
         window.draw(sBotLeft, frameStates);
@@ -1745,46 +1947,17 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         }
     }
 
-    if (activeTool == ToolType::Curve && curveState != CurveState::None) {
-        float len = std::hypot(curveP1.x - curveP0.x, curveP1.y - curveP0.y) +
-            std::hypot(curveP2.x - curveP1.x, curveP2.y - curveP1.y) +
-            std::hypot(curveP3.x - curveP2.x, curveP3.y - curveP2.y);
-        int steps = std::max(16, static_cast<int>(len * 2.0f));
-
-        sf::VertexArray curveVtx(sf::LineStrip);
-        sf::Color previewCol = primaryColor;
-        if (previewCol.a > 200) previewCol.a = 220;
-
-        for (int i = 0; i <= steps; ++i) {
-            float t = static_cast<float>(i) / static_cast<float>(steps);
-            float u = 1.0f - t;
-            sf::Vector2f pt = (u * u * u) * curveP0 +
-                (3.0f * u * u * t) * curveP1 +
-                (3.0f * u * t * t) * curveP2 +
-                (t * t * t) * curveP3;
-            curveVtx.append(sf::Vertex(pt, previewCol));
+    if (activeTool == ToolType::Curve && isDeforming) {
+        sf::VertexArray va(sf::Quads);
+        for (const auto& dp : currentDeformedPixels) {
+            float fx = static_cast<float>(dp.x);
+            float fy = static_cast<float>(dp.y);
+            va.append(sf::Vertex(sf::Vector2f(fx, fy), dp.color));
+            va.append(sf::Vertex(sf::Vector2f(fx + 1.0f, fy), dp.color));
+            va.append(sf::Vertex(sf::Vector2f(fx + 1.0f, fy + 1.0f), dp.color));
+            va.append(sf::Vertex(sf::Vector2f(fx, fy + 1.0f), dp.color));
         }
-        window.draw(curveVtx, innerStates);
-
-        if (curveState == CurveState::Bend1 || curveState == CurveState::Bend2) {
-            sf::CircleShape h1(2.5f);
-            h1.setOrigin(2.5f, 2.5f);
-            h1.setPosition(curveP1);
-            h1.setFillColor(sf::Color(255, 200, 50));
-            h1.setOutlineColor(sf::Color::Black);
-            h1.setOutlineThickness(1.0f);
-            window.draw(h1, innerStates);
-
-            if (curveState == CurveState::Bend2) {
-                sf::CircleShape h2(2.5f);
-                h2.setOrigin(2.5f, 2.5f);
-                h2.setPosition(curveP2);
-                h2.setFillColor(sf::Color(50, 200, 255));
-                h2.setOutlineColor(sf::Color::Black);
-                h2.setOutlineThickness(1.0f);
-                window.draw(h2, innerStates);
-            }
-        }
+        window.draw(va, innerStates);
     }
 
     if (activeTool == ToolType::FilledContour && isDrawing && m_contourPoints.size() >= 2) {
@@ -2040,19 +2213,17 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
         sf::Vector2i p = stack.back();
         stack.pop_back();
 
-        if (p.x < minX) minX = p.x;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.y > maxY) maxY = p.y;
+        minX = std::min(minX, p.x);
+        maxX = std::max(maxX, p.x);
+        minY = std::min(minY, p.y);
+        maxY = std::max(maxY, p.y);
 
-        sf::Vector2i neighbors[4] = {
-            {p.x - 1, p.y}, {p.x + 1, p.y},
-            {p.x, p.y - 1}, {p.x, p.y + 1}
-        };
+        const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+        const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
 
-        for (int i = 0; i < 4; ++i) {
-            int nx = neighbors[i].x;
-            int ny = neighbors[i].y;
+        for (int i = 0; i < 8; ++i) {
+            int nx = p.x + dx8[i];
+            int ny = p.y + dy8[i];
             if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
                 int idx = ny * w + nx;
                 if (!visited[idx]) {

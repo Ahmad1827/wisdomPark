@@ -13,7 +13,6 @@
 enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text, Gradient, Curve, FilledContour };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 enum class TransformState { None, Scaling };
-enum class CurveState { None, DrawingLine, Bend1, Bend2 };
 
 struct Layer {
     std::string name;
@@ -42,6 +41,12 @@ struct Frame {
     Frame& operator=(const Frame& other);
     Frame(Frame&& other) noexcept;
     Frame& operator=(Frame&& other) noexcept;
+};
+
+struct DeformPixel {
+    int x;
+    int y;
+    sf::Color color;
 };
 
 class Canvas {
@@ -90,12 +95,18 @@ private:
     sf::Vector2f shiftAnchor;
     bool hasShiftAnchor;
 
-    CurveState curveState{ CurveState::None };
-    sf::Vector2f curveP0{ 0.f, 0.f };
-    sf::Vector2f curveP1{ 0.f, 0.f };
-    sf::Vector2f curveP2{ 0.f, 0.f };
-    sf::Vector2f curveP3{ 0.f, 0.f };
-    bool isCurveDragging{ false };
+    bool isDeforming{ false };
+    sf::Vector2f deformClickPos{ 0.f, 0.f };
+    sf::Vector2f deformCurrentPos{ 0.f, 0.f };
+    int deformMinX{ 0 };
+    int deformMaxX{ 0 };
+    int deformMinY{ 0 };
+    int deformMaxY{ 0 };
+    float deformT0{ 0.5f };
+    bool deformIsHorizontal{ true };
+    int deformMode{ 0 };
+    std::vector<DeformPixel> deformPixels;
+    std::vector<DeformPixel> currentDeformedPixels;
 
     std::vector<sf::Vector2f> m_contourPoints;
 
@@ -139,7 +150,9 @@ private:
     void drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx);
     void drawContinuousLine(sf::Vector2f from, sf::Vector2f to, sf::Color col, int currentFrame);
 
-    void commitCurve(int currentFrame);
+    float computeDeformWeight(float t) const;
+    void updateDeformPixels(sf::Vector2f delta);
+
     void fillPolygonContour(const std::vector<sf::Vector2f>& points, sf::Color color, int currentFrame);
 
     float computeHandleHitRadius() const;
