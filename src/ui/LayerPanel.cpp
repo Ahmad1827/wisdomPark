@@ -5,7 +5,7 @@
 
 LayerPanel::LayerPanel()
     : scrollOffset(0.f), maxScroll(0.f), isDraggingScrollbar(false), scrollDragStartY(0.f), scrollDragStartOffset(0.f),
-    renamingLayerIndex(-1), draggedLayerIndex(-1), dropTargetIndex(-1), dropInsertAbove(false), isDragging(false),
+    renamingLayerIndex(-1), draggedLayerIndex(-1), dropVisualSlot(-1), isDragging(false),
     activeOpacityIndex(-1), isDraggingOpacity(false), lastClickedLayerIndex(-1),
     currentX(1920.f), targetX(1920.f), width(300.f), state(LayerPanelState::Hidden) {}
 
@@ -253,18 +253,10 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
     maxScroll = std::max(0.f, static_cast<float>(layerCount) * rowHeight - viewHeight);
     scrollOffset = std::clamp(scrollOffset, 0.f, maxScroll);
 
-    dropTargetIndex = -1;
-    dropInsertAbove = false;
-
+    dropVisualSlot = -1;
     if (isDragging && draggedLayerIndex != -1) {
-        for (int i = 0; i < static_cast<int>(layerCount); ++i) {
-            float rowTop = startY + (layerCount - 1 - i) * rowHeight - scrollOffset;
-            if (mousePos.y >= rowTop && mousePos.y <= rowTop + rowHeight) {
-                dropTargetIndex = i;
-                dropInsertAbove = (mousePos.y < rowTop + rowHeight * 0.5f);
-                break;
-            }
-        }
+        float relY = (mousePos.y + scrollOffset - startY) / rowHeight;
+        dropVisualSlot = std::clamp(static_cast<int>(std::round(relY)), 0, static_cast<int>(layerCount));
     }
 
     for (int i = static_cast<int>(layerCount) - 1; i >= 0; --i) {
@@ -396,11 +388,13 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         bText.setPosition(rowCache[i].blendBounds.left + 4.f, rowCache[i].blendBounds.top + 2.f);
         bText.setFillColor(WisdomUI::Theme::TextSecondary);
         window.draw(bText);
+    }
 
-        if (isDragging && dropTargetIndex == i && draggedLayerIndex != i) {
-            float lineY = dropInsertAbove ? rowCache[i].bounds.top : (rowCache[i].bounds.top + rowCache[i].bounds.height);
-            sf::RectangleShape indicator(sf::Vector2f(rowCache[i].bounds.width, 3.f));
-            indicator.setPosition(rowCache[i].bounds.left, lineY - 1.5f);
+    if (isDragging && dropVisualSlot != -1) {
+        float lineY = startY + dropVisualSlot * rowHeight - scrollOffset;
+        if (lineY >= startY - 2.f && lineY <= bottomLimit + 2.f) {
+            sf::RectangleShape indicator(sf::Vector2f(width - 20.f, 3.f));
+            indicator.setPosition(currentX + 6.f, lineY - 1.5f);
             indicator.setFillColor(WisdomUI::Theme::Gold);
             window.draw(indicator);
         }
@@ -573,23 +567,21 @@ bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canv
         }
         if (isDragging) {
             const Frame* f = canvas.getFrameReadOnly(currentFrame);
-            if (f && draggedLayerIndex != -1 && dropTargetIndex != -1 && draggedLayerIndex != dropTargetIndex) {
-                int toIndex = dropTargetIndex;
-                if (draggedLayerIndex < dropTargetIndex) {
-                    toIndex = dropInsertAbove ? dropTargetIndex : (dropTargetIndex - 1);
+            if (f && draggedLayerIndex != -1 && dropVisualSlot != -1) {
+                size_t layerCount = f->layers.size();
+                int targetDataIndex = static_cast<int>(layerCount) - dropVisualSlot;
+                if (draggedLayerIndex < targetDataIndex) {
+                    targetDataIndex--;
                 }
-                else if (draggedLayerIndex > dropTargetIndex) {
-                    toIndex = dropInsertAbove ? (dropTargetIndex + 1) : dropTargetIndex;
-                }
-                toIndex = std::clamp(toIndex, 0, static_cast<int>(f->layers.size()) - 1);
+                targetDataIndex = std::clamp(targetDataIndex, 0, static_cast<int>(layerCount) - 1);
 
-                if (toIndex != draggedLayerIndex) {
-                    canvas.moveLayer(currentFrame, draggedLayerIndex, toIndex);
+                if (targetDataIndex != draggedLayerIndex) {
+                    canvas.moveLayer(currentFrame, draggedLayerIndex, targetDataIndex);
                 }
             }
             isDragging = false;
             draggedLayerIndex = -1;
-            dropTargetIndex = -1;
+            dropVisualSlot = -1;
             return true;
         }
     }

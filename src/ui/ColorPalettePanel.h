@@ -67,6 +67,10 @@ private:
     sf::Vector2f resizeStartMouse;
     sf::FloatRect resizeStartBounds;
 
+    float pickerSize;
+    float pickerX;
+    float pickerY;
+
     ColorManager colorManager;
 
     float currentHue;

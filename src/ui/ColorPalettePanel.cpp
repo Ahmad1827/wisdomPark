@@ -9,8 +9,9 @@ ColorPalettePanel::ColorPalettePanel()
     : width(280.f), currentX(1920.f), targetX(1920.f), state(PalettePanelState::Hidden),
     hovered(false), isDetached(false), detachedPos(1500.f, 80.f), detachedSize(280.f, 620.f),
     isDraggingWindow(false), windowDragOffset(0.f, 0.f), isResizing(false),
-    activeResizeDir(PaletteResizeDir::None), currentHue(0.f), currentSat(1.f), currentVal(1.f),
-    currentAlpha(1.f), isDraggingSV(false), isDraggingHue(false), isDraggingAlpha(false),
+    activeResizeDir(PaletteResizeDir::None), pickerSize(200.f), pickerX(0.f), pickerY(0.f),
+    currentHue(0.f), currentSat(1.f), currentVal(1.f), currentAlpha(1.f),
+    isDraggingSV(false), isDraggingHue(false), isDraggingAlpha(false),
     activeInputIndex(-1), isEyedropperActive(false) {}
 
 void ColorPalettePanel::init() {
@@ -201,13 +202,13 @@ void ColorPalettePanel::update(float dt, bool focusMode, Canvas& canvas, bool is
     pinBtn.setPosition(panelX + panelW - 116.f, panelY + 4.f);
     pinLabel.setPosition(panelX + panelW - 108.f, panelY + 7.f);
 
-    primaryBox.setPosition(panelX + 16.f, panelY + 36.f);
-    secondaryBox.setPosition(panelX + 32.f, panelY + 52.f);
+    primaryBox.setPosition(panelX + 16.f, panelY + 34.f);
+    secondaryBox.setPosition(panelX + 32.f, panelY + 50.f);
 
     primaryBox.setFillColor(canvas.getPrimaryColor());
     secondaryBox.setFillColor(canvas.getSecondaryColor());
 
-    eyedropperBtn.setPosition(panelX + 80.f, panelY + 42.f);
+    eyedropperBtn.setPosition(panelX + 80.f, panelY + 40.f);
     if (isEyedropperActive) {
         eyedropperBtn.setFillColor(WisdomUI::Theme::Accent);
         eyedropperBtn.setOutlineColor(WisdomUI::Theme::BorderHighlight);
@@ -218,25 +219,30 @@ void ColorPalettePanel::update(float dt, bool focusMode, Canvas& canvas, bool is
         eyedropperBtn.setOutlineColor(WisdomUI::Theme::Border);
         eyedropperLabel.setFillColor(WisdomUI::Theme::TextSecondary);
     }
-    eyedropperLabel.setPosition(panelX + 92.f, panelY + 46.f);
+    eyedropperLabel.setPosition(panelX + 92.f, panelY + 44.f);
 
-    float pickerW = std::clamp(panelW - 32.f, 160.f, 400.f);
-    float pickerY = panelY + 86.f;
-    float pickerX = panelX + 16.f;
+    float maxSVFromHeight = panelH - 246.f;
+    float maxSVFromWidth = panelW - 32.f;
+    pickerSize = std::clamp(std::min(maxSVFromWidth, maxSVFromHeight), 100.f, 320.f);
+
+    pickerX = panelX + (panelW - pickerSize) * 0.5f;
+    pickerY = panelY + 80.f;
 
     svSprite.setPosition(pickerX, pickerY);
-    svSprite.setScale(pickerW / 200.f, pickerW / 200.f);
-    svSelector.setPosition(pickerX + currentSat * pickerW, pickerY + (1.0f - currentVal) * pickerW);
+    svSprite.setScale(pickerSize / 200.f, pickerSize / 200.f);
+    svSelector.setPosition(pickerX + currentSat * pickerSize, pickerY + (1.0f - currentVal) * pickerSize);
 
-    float hueY = pickerY + pickerW + 8.f;
+    float hueY = pickerY + pickerSize + 8.f;
     hueSprite.setPosition(pickerX, hueY);
-    hueSprite.setScale(pickerW / 200.f, 1.f);
-    hueSelector.setPosition(pickerX + (currentHue / 360.f) * pickerW, hueY);
+    hueSprite.setScale(pickerSize / 200.f, 14.f / 15.f);
+    hueSelector.setSize(sf::Vector2f(4.f, 14.f));
+    hueSelector.setPosition(pickerX + (currentHue / 360.f) * pickerSize, hueY);
 
-    float alphaY = hueY + 22.f;
+    float alphaY = hueY + 20.f;
     alphaSprite.setPosition(pickerX, alphaY);
-    alphaSprite.setScale(pickerW / 200.f, 1.f);
-    alphaSelector.setPosition(pickerX + currentAlpha * pickerW, alphaY);
+    alphaSprite.setScale(pickerSize / 200.f, 14.f / 15.f);
+    alphaSelector.setSize(sf::Vector2f(4.f, 14.f));
+    alphaSelector.setPosition(pickerX + currentAlpha * pickerSize, alphaY);
 }
 
 void ColorPalettePanel::updateHover(sf::Vector2f mousePos, bool canOpen) {
@@ -279,10 +285,8 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
     window.draw(eyedropperBtn);
     window.draw(eyedropperLabel);
 
-    float pickerW = std::clamp(background.getSize().x - 32.f, 160.f, 400.f);
-
-    sf::RectangleShape svOutline(sf::Vector2f(pickerW + 2.f, pickerW + 2.f));
-    svOutline.setPosition(svSprite.getPosition().x - 1.f, svSprite.getPosition().y - 1.f);
+    sf::RectangleShape svOutline(sf::Vector2f(pickerSize + 2.f, pickerSize + 2.f));
+    svOutline.setPosition(pickerX - 1.f, pickerY - 1.f);
     svOutline.setFillColor(sf::Color::Transparent);
     svOutline.setOutlineThickness(1.f);
     svOutline.setOutlineColor(WisdomUI::Theme::Border);
@@ -298,10 +302,13 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
     window.draw(alphaSelector);
 
     float panelX = background.getPosition().x;
-    float inputY = alphaSprite.getPosition().y + 22.f;
+    float panelY = background.getPosition().y;
+    float panelH = background.getSize().y;
+
+    float inputY = alphaSprite.getPosition().y + 20.f;
 
     auto drawInput = [&](int index, const std::string& label, const std::string& val, float x, float w) {
-        sf::Text t(label, font, 10);
+        sf::Text t(label, font, 9);
         t.setPosition(x, inputY);
         t.setFillColor(WisdomUI::Theme::TextSecondary);
         window.draw(t);
@@ -313,8 +320,8 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
         box.setOutlineColor(activeInputIndex == index ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
         window.draw(box);
 
-        sf::Text v(activeInputIndex == index ? inputBuffer + "_" : val, font, 10);
-        v.setPosition(x + 4.f, inputY + 14.f);
+        sf::Text v(activeInputIndex == index ? inputBuffer + "_" : val, font, 9);
+        v.setPosition(x + 3.f, inputY + 14.f);
         v.setFillColor(WisdomUI::Theme::Gold);
         window.draw(v);
         };
@@ -322,59 +329,69 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
     sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
     curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
 
-    drawInput(0, "R", std::to_string(curC.r), panelX + 16.f, 32.f);
-    drawInput(1, "G", std::to_string(curC.g), panelX + 52.f, 32.f);
-    drawInput(2, "B", std::to_string(curC.b), panelX + 88.f, 32.f);
-    drawInput(3, "A", std::to_string(curC.a), panelX + 124.f, 32.f);
-    drawInput(4, "Hex", colorToHex(curC), panelX + 162.f, 54.f);
+    float boxSpacing = (pickerSize - 4.f * 28.f - 52.f) / 4.f;
+    boxSpacing = std::max(2.f, boxSpacing);
 
-    float sx = panelX + 16.f;
-    float sy = inputY + 36.f;
-    sf::Text rt("Recent", font, 10);
-    rt.setPosition(sx, sy);
-    rt.setFillColor(WisdomUI::Theme::Gold);
-    window.draw(rt);
-    sy += 16.f;
+    float curInputX = pickerX;
+    drawInput(0, "R", std::to_string(curC.r), curInputX, 28.f); curInputX += 28.f + boxSpacing;
+    drawInput(1, "G", std::to_string(curC.g), curInputX, 28.f); curInputX += 28.f + boxSpacing;
+    drawInput(2, "B", std::to_string(curC.b), curInputX, 28.f); curInputX += 28.f + boxSpacing;
+    drawInput(3, "A", std::to_string(curC.a), curInputX, 28.f); curInputX += 28.f + boxSpacing;
+    drawInput(4, "Hex", colorToHex(curC), curInputX, 52.f);
 
-    for (const auto& c : colorManager.getRecentColors()) {
-        sf::RectangleShape s(sf::Vector2f(14.f, 14.f));
-        s.setPosition(sx, sy);
-        s.setFillColor(c);
-        s.setOutlineThickness(1.f);
-        s.setOutlineColor(WisdomUI::Theme::Border);
-        window.draw(s);
-        sx += 18.f;
-        if (sx > panelX + background.getSize().x - 24.f) { sx = panelX + 16.f; sy += 18.f; }
-    }
+    float sx = pickerX;
+    float sy = inputY + 34.f;
+    if (sy + 16.f < panelY + panelH) {
+        sf::Text rt("Recent", font, 9);
+        rt.setPosition(sx, sy);
+        rt.setFillColor(WisdomUI::Theme::Gold);
+        window.draw(rt);
+        sy += 14.f;
 
-    sx = panelX + 16.f;
-    sy += 20.f;
-    sf::Text ct("Swatches", font, 10);
-    ct.setPosition(sx, sy);
-    ct.setFillColor(WisdomUI::Theme::Gold);
-    window.draw(ct);
+        for (const auto& c : colorManager.getRecentColors()) {
+            if (sy + 14.f >= panelY + panelH - 4.f) break;
+            sf::RectangleShape s(sf::Vector2f(14.f, 14.f));
+            s.setPosition(sx, sy);
+            s.setFillColor(c);
+            s.setOutlineThickness(1.f);
+            s.setOutlineColor(WisdomUI::Theme::Border);
+            window.draw(s);
+            sx += 18.f;
+            if (sx > pickerX + pickerSize - 14.f) { sx = pickerX; sy += 18.f; }
+        }
 
-    sf::RectangleShape addSwatchBtn(sf::Vector2f(16.f, 16.f));
-    addSwatchBtn.setPosition(panelX + background.getSize().x - 26.f, sy - 1.f);
-    addSwatchBtn.setFillColor(WisdomUI::Theme::PanelInset);
-    addSwatchBtn.setOutlineThickness(1.f);
-    addSwatchBtn.setOutlineColor(WisdomUI::Theme::Border);
-    window.draw(addSwatchBtn);
-    sf::Text plus("+", font, 12);
-    plus.setPosition(addSwatchBtn.getPosition().x + 4.f, addSwatchBtn.getPosition().y - 2.f);
-    plus.setFillColor(WisdomUI::Theme::Gold);
-    window.draw(plus);
+        sx = pickerX;
+        sy += 20.f;
+        if (sy + 14.f < panelY + panelH) {
+            sf::Text ct("Swatches", font, 9);
+            ct.setPosition(sx, sy);
+            ct.setFillColor(WisdomUI::Theme::Gold);
+            window.draw(ct);
 
-    sy += 16.f;
-    for (const auto& c : colorManager.getCustomSwatches()) {
-        sf::RectangleShape s(sf::Vector2f(16.f, 16.f));
-        s.setPosition(sx, sy);
-        s.setFillColor(c);
-        s.setOutlineThickness(1.f);
-        s.setOutlineColor(WisdomUI::Theme::Border);
-        window.draw(s);
-        sx += 20.f;
-        if (sx > panelX + background.getSize().x - 24.f) { sx = panelX + 16.f; sy += 20.f; }
+            sf::RectangleShape addSwatchBtn(sf::Vector2f(14.f, 14.f));
+            addSwatchBtn.setPosition(pickerX + pickerSize - 16.f, sy);
+            addSwatchBtn.setFillColor(WisdomUI::Theme::PanelInset);
+            addSwatchBtn.setOutlineThickness(1.f);
+            addSwatchBtn.setOutlineColor(WisdomUI::Theme::Border);
+            window.draw(addSwatchBtn);
+            sf::Text plus("+", font, 11);
+            plus.setPosition(addSwatchBtn.getPosition().x + 3.f, addSwatchBtn.getPosition().y - 2.f);
+            plus.setFillColor(WisdomUI::Theme::Gold);
+            window.draw(plus);
+
+            sy += 16.f;
+            for (const auto& c : colorManager.getCustomSwatches()) {
+                if (sy + 16.f >= panelY + panelH - 4.f) break;
+                sf::RectangleShape s(sf::Vector2f(16.f, 16.f));
+                s.setPosition(sx, sy);
+                s.setFillColor(c);
+                s.setOutlineThickness(1.f);
+                s.setOutlineColor(WisdomUI::Theme::Border);
+                window.draw(s);
+                sx += 20.f;
+                if (sx > pickerX + pickerSize - 16.f) { sx = pickerX; sy += 20.f; }
+            }
+        }
     }
 
     if (isDetached) {
@@ -505,22 +522,24 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
         else if (hueSprite.getGlobalBounds().contains(mousePos)) isDraggingHue = true;
         else if (alphaSprite.getGlobalBounds().contains(mousePos)) isDraggingAlpha = true;
 
-        float panelX = background.getPosition().x;
-        float inputY = alphaSprite.getPosition().y + 22.f + 12.f;
+        float inputY = alphaSprite.getPosition().y + 20.f + 12.f;
+        float boxSpacing = (pickerSize - 4.f * 28.f - 52.f) / 4.f;
+        boxSpacing = std::max(2.f, boxSpacing);
 
-        if (sf::FloatRect(panelX + 16.f, inputY, 32.f, 18.f).contains(mousePos)) { activeInputIndex = 0; inputBuffer = ""; return true; }
-        if (sf::FloatRect(panelX + 52.f, inputY, 32.f, 18.f).contains(mousePos)) { activeInputIndex = 1; inputBuffer = ""; return true; }
-        if (sf::FloatRect(panelX + 88.f, inputY, 32.f, 18.f).contains(mousePos)) { activeInputIndex = 2; inputBuffer = ""; return true; }
-        if (sf::FloatRect(panelX + 124.f, inputY, 32.f, 18.f).contains(mousePos)) { activeInputIndex = 3; inputBuffer = ""; return true; }
-        if (sf::FloatRect(panelX + 162.f, inputY, 54.f, 18.f).contains(mousePos)) { activeInputIndex = 4; inputBuffer = ""; return true; }
+        float curInputX = pickerX;
+        if (sf::FloatRect(curInputX, inputY, 28.f, 18.f).contains(mousePos)) { activeInputIndex = 0; inputBuffer = ""; return true; } curInputX += 28.f + boxSpacing;
+        if (sf::FloatRect(curInputX, inputY, 28.f, 18.f).contains(mousePos)) { activeInputIndex = 1; inputBuffer = ""; return true; } curInputX += 28.f + boxSpacing;
+        if (sf::FloatRect(curInputX, inputY, 28.f, 18.f).contains(mousePos)) { activeInputIndex = 2; inputBuffer = ""; return true; } curInputX += 28.f + boxSpacing;
+        if (sf::FloatRect(curInputX, inputY, 28.f, 18.f).contains(mousePos)) { activeInputIndex = 3; inputBuffer = ""; return true; } curInputX += 28.f + boxSpacing;
+        if (sf::FloatRect(curInputX, inputY, 52.f, 18.f).contains(mousePos)) { activeInputIndex = 4; inputBuffer = ""; return true; }
 
         activeInputIndex = -1;
 
         sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
         curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
 
-        float sy = inputY + 36.f + 16.f;
-        float sx = panelX + 16.f;
+        float sy = inputY + 34.f + 14.f;
+        float sx = pickerX;
         for (const auto& c : colorManager.getRecentColors()) {
             if (sf::FloatRect(sx, sy, 14.f, 14.f).contains(mousePos)) {
                 updateFromRGB(c);
@@ -528,12 +547,12 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
                 return true;
             }
             sx += 18.f;
-            if (sx > panelX + background.getSize().x - 24.f) { sx = panelX + 16.f; sy += 18.f; }
+            if (sx > pickerX + pickerSize - 14.f) { sx = pickerX; sy += 18.f; }
         }
 
-        sx = panelX + 16.f;
+        sx = pickerX;
         sy += 20.f;
-        if (sf::FloatRect(panelX + background.getSize().x - 26.f, sy - 1.f, 16.f, 16.f).contains(mousePos)) {
+        if (sf::FloatRect(pickerX + pickerSize - 16.f, sy, 14.f, 14.f).contains(mousePos)) {
             colorManager.addCustomSwatch(curC);
             return true;
         }
@@ -550,7 +569,7 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
                 return true;
             }
             sx += 20.f;
-            if (sx > panelX + background.getSize().x - 24.f) { sx = panelX + 16.f; sy += 20.f; }
+            if (sx > pickerX + pickerSize - 16.f) { sx = pickerX; sy += 20.f; }
         }
         if (removeIdx != -1) colorManager.removeCustomSwatch(removeIdx);
     }
@@ -575,8 +594,8 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
             float dx = mousePos.x - resizeStartMouse.x;
             float dy = mousePos.y - resizeStartMouse.y;
 
-            float minW = 240.f;
-            float minH = 420.f;
+            const float minW = 260.f;
+            const float minH = 440.f;
 
             float newX = resizeStartBounds.left;
             float newY = resizeStartBounds.top;
@@ -616,11 +635,9 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
             return true;
         }
 
-        float pickerW = std::clamp(background.getSize().x - 32.f, 160.f, 400.f);
-
         if (isDraggingSV) {
-            currentSat = std::clamp((mousePos.x - svSprite.getPosition().x) / pickerW, 0.f, 1.f);
-            currentVal = 1.0f - std::clamp((mousePos.y - svSprite.getPosition().y) / pickerW, 0.f, 1.f);
+            currentSat = std::clamp((mousePos.x - pickerX) / pickerSize, 0.f, 1.f);
+            currentVal = 1.0f - std::clamp((mousePos.y - pickerY) / pickerSize, 0.f, 1.f);
             updatePickerImages();
             sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
             curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
@@ -628,7 +645,7 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
             return true;
         }
         else if (isDraggingHue) {
-            currentHue = std::clamp((mousePos.x - hueSprite.getPosition().x) / pickerW, 0.f, 1.f) * 360.f;
+            currentHue = std::clamp((mousePos.x - pickerX) / pickerSize, 0.f, 1.f) * 360.f;
             updatePickerImages();
             sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
             curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
@@ -636,7 +653,7 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
             return true;
         }
         else if (isDraggingAlpha) {
-            currentAlpha = std::clamp((mousePos.x - alphaSprite.getPosition().x) / pickerW, 0.f, 1.f);
+            currentAlpha = std::clamp((mousePos.x - pickerX) / pickerSize, 0.f, 1.f);
             sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
             curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
             canvas.setPrimaryColor(curC);

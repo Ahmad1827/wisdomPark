@@ -43,8 +43,7 @@ private:
     sf::Text renameText;
 
     int draggedLayerIndex;
-    int dropTargetIndex;
-    bool dropInsertAbove;
+    int dropVisualSlot;
     sf::Vector2f dragCurrentPos;
     bool isDragging;
 
