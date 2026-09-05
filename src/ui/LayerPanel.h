@@ -33,6 +33,9 @@ private:
 
     float scrollOffset;
     float maxScroll;
+    bool isDraggingScrollbar;
+    float scrollDragStartY;
+    float scrollDragStartOffset;
 
     int renamingLayerIndex;
     std::string renameBuffer;
@@ -40,8 +43,15 @@ private:
     sf::Text renameText;
 
     int draggedLayerIndex;
-    sf::Vector2f dragStartPos;
+    int dropTargetIndex;
+    sf::Vector2f dragCurrentPos;
     bool isDragging;
+
+    int activeOpacityIndex;
+    bool isDraggingOpacity;
+
+    sf::Clock clickTimer;
+    int lastClickedLayerIndex;
 
     float currentX;
     float targetX;
@@ -50,10 +60,11 @@ private:
 
     struct LayerRow {
         sf::FloatRect bounds;
+        sf::FloatRect colorTagBounds;
         sf::FloatRect eyeBounds;
         sf::FloatRect lockBounds;
         sf::FloatRect persistBounds;
-        sf::FloatRect colorTagBounds;
+        sf::FloatRect thumbBounds;
         sf::FloatRect nameBounds;
         sf::FloatRect opacityBounds;
         sf::FloatRect blendBounds;
@@ -61,6 +72,9 @@ private:
     std::vector<LayerRow> rowCache;
 
     sf::Color getTagColor(int tagId) const;
+    void renderEyeIcon(sf::RenderWindow& window, sf::FloatRect bounds, bool visible);
+    void renderLockIcon(sf::RenderWindow& window, sf::FloatRect bounds, bool locked);
+    void renderPersistIcon(sf::RenderWindow& window, sf::FloatRect bounds, bool persistent);
 
 public:
     LayerPanel();
