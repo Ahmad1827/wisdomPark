@@ -7,6 +7,10 @@
 
 enum class PalettePanelState { Hidden, Visible, Pinned };
 
+enum class PaletteResizeDir {
+    None, Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight
+};
+
 class ColorPalettePanel {
 private:
     sf::RectangleShape background;
@@ -17,6 +21,9 @@ private:
 
     sf::RectangleShape pinBtn;
     sf::Text pinLabel;
+
+    sf::RectangleShape detachBtn;
+    sf::Text detachLabel;
 
     sf::RectangleShape primaryBox;
     sf::RectangleShape secondaryBox;
@@ -48,6 +55,18 @@ private:
     PalettePanelState state;
     bool hovered;
 
+    bool isDetached;
+    sf::Vector2f detachedPos;
+    sf::Vector2f detachedSize;
+
+    bool isDraggingWindow;
+    sf::Vector2f windowDragOffset;
+
+    bool isResizing;
+    PaletteResizeDir activeResizeDir;
+    sf::Vector2f resizeStartMouse;
+    sf::FloatRect resizeStartBounds;
+
     ColorManager colorManager;
 
     float currentHue;
@@ -65,6 +84,7 @@ private:
     void updatePickerImages();
     void updateFromRGB(sf::Color c);
     std::string colorToHex(sf::Color c) const;
+    PaletteResizeDir getResizeDirection(sf::Vector2f mousePos) const;
 
 public:
     ColorPalettePanel();
@@ -89,4 +109,7 @@ public:
 
     bool getIsEyedropperActive() const;
     void setEyedropperActive(bool active);
+
+    bool getIsDetached() const;
+    void setIsDetached(bool detached);
 };
