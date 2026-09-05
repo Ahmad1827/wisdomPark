@@ -44,6 +44,7 @@ private:
 
     int draggedLayerIndex;
     int dropTargetIndex;
+    bool dropInsertAbove;
     sf::Vector2f dragCurrentPos;
     bool isDragging;
 

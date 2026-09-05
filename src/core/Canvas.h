@@ -190,15 +190,16 @@ public:
     void addLayer(int frameIndex, const std::string& name = "Layer");
     void deleteLayer(int frameIndex, int layerIndex);
     void duplicateLayer(int frameIndex, int layerIndex);
-    void setLayerProperties(int frameIndex, int layerIndex, const std::string& name, bool visible, bool locked, float opacity, BlendMode mode);
+    void setLayerProperties(int frameIndex, int layerIndex, const std::string& name, bool visible, bool locked, float opacity, BlendMode mode, bool recordUndo = true);
     void toggleLayerPersistence(int frameIndex, int layerIndex);
     void cycleLayerColorTag(int frameIndex, int layerIndex);
     void pushLayerToNextFrame(int currentFrame, int layerIndex);
+    void extendLayerToNextFrame(int currentFrame, int layerIndex);
     void mergeDown(int frameIndex);
     void mergeVisible(int frameIndex);
     void moveLayer(int frameIndex, int fromIndex, int toIndex);
 
-    void setActiveLayer(int index);
+    void setActiveLayer(int index, int currentFrame = -1);
     int getActiveLayer() const;
 
     void setOnionSkin(bool enabled, float prevOpac, float nextOpac);

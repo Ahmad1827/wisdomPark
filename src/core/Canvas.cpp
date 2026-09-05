@@ -386,17 +386,20 @@ void Canvas::duplicateLayer(int frameIndex, int layerIndex) {
     }
 }
 
-void Canvas::setLayerProperties(int frameIndex, int layerIndex, const std::string& name, bool visible, bool locked, float opacity, BlendMode mode) {
-    if (frames.size() > 0 && layerIndex >= 0 && layerIndex < static_cast<int>(frames[0].layers.size())) {
-        for (size_t i = 0; i < frames.size(); ++i) {
-            auto& l = frames[i].layers[layerIndex];
-            l.name = name;
-            l.visible = visible;
-            l.locked = locked;
-            l.opacity = std::max(0.0f, std::min(static_cast<float>(opacity), 1.0f));
-            l.blendMode = mode;
-        }
+void Canvas::setLayerProperties(int frameIndex, int layerIndex, const std::string& name, bool visible, bool locked, float opacity, BlendMode mode, bool recordUndo) {
+    if (frames.empty() || layerIndex < 0 || layerIndex >= static_cast<int>(frames[0].layers.size())) return;
+    if (recordUndo) {
+        saveUndoState();
     }
+    for (size_t i = 0; i < frames.size(); ++i) {
+        auto& l = frames[i].layers[layerIndex];
+        l.name = name;
+        l.visible = visible;
+        l.locked = locked;
+        l.opacity = std::clamp(opacity, 0.0f, 1.0f);
+        l.blendMode = mode;
+    }
+    isDirty = true;
 }
 
 void Canvas::toggleLayerPersistence(int frameIndex, int layerIndex) {
@@ -449,6 +452,27 @@ void Canvas::pushLayerToNextFrame(int currentFrame, int layerIndex) {
             dstTex->display();
         }
     }
+}
+
+void Canvas::extendLayerToNextFrame(int currentFrame, int layerIndex) {
+    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size()) ||
+        layerIndex < 0 || layerIndex >= static_cast<int>(frames[currentFrame].layers.size())) return;
+
+    saveUndoState();
+    if (currentFrame == static_cast<int>(frames.size()) - 1) {
+        addFrame(currentFrame);
+    }
+
+    auto srcTex = frames[currentFrame].layers[layerIndex].texture;
+    auto dstTex = frames[currentFrame + 1].layers[layerIndex].texture;
+
+    if (!frames[currentFrame].layers[layerIndex].persistent && srcTex && dstTex) {
+        dstTex->clear(sf::Color::Transparent);
+        sf::Sprite spr(srcTex->getTexture());
+        dstTex->draw(spr, sf::RenderStates(sf::BlendNone));
+        dstTex->display();
+    }
+    isDirty = true;
 }
 
 void Canvas::mergeDown(int frameIndex) {
@@ -505,22 +529,40 @@ void Canvas::mergeVisible(int frameIndex) {
 }
 
 void Canvas::moveLayer(int frameIndex, int fromIndex, int toIndex) {
-    if (frames.size() > 0 && fromIndex >= 0 && fromIndex < static_cast<int>(frames[0].layers.size())) {
-        if (toIndex >= 0 && toIndex < static_cast<int>(frames[0].layers.size())) {
-            saveUndoState();
-            for (size_t i = 0; i < frames.size(); ++i) {
-                Layer temp = std::move(frames[i].layers[fromIndex]);
-                frames[i].layers.erase(frames[i].layers.begin() + fromIndex);
-                frames[i].layers.insert(frames[i].layers.begin() + toIndex, std::move(temp));
-            }
-            if (activeLayer == fromIndex) activeLayer = toIndex;
-            else if (activeLayer == toIndex) activeLayer = fromIndex;
-        }
+    if (frames.empty() || fromIndex < 0 || fromIndex >= static_cast<int>(frames[0].layers.size()) ||
+        toIndex < 0 || toIndex >= static_cast<int>(frames[0].layers.size()) || fromIndex == toIndex) return;
+
+    saveUndoState();
+    for (size_t i = 0; i < frames.size(); ++i) {
+        Layer temp = std::move(frames[i].layers[fromIndex]);
+        frames[i].layers.erase(frames[i].layers.begin() + fromIndex);
+        frames[i].layers.insert(frames[i].layers.begin() + toIndex, std::move(temp));
     }
+
+    if (activeLayer == fromIndex) {
+        activeLayer = toIndex;
+    }
+    else if (fromIndex < toIndex && activeLayer > fromIndex && activeLayer <= toIndex) {
+        activeLayer--;
+    }
+    else if (fromIndex > toIndex && activeLayer >= toIndex && activeLayer < fromIndex) {
+        activeLayer++;
+    }
+    isDirty = true;
 }
 
-void Canvas::setActiveLayer(int index) {
-    activeLayer = std::max(0, static_cast<int>(index));
+void Canvas::setActiveLayer(int index, int currentFrame) {
+    int target = std::max(0, index);
+    if (target == activeLayer) return;
+
+    if (currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
+        if (selection.isActive() && selection.getState() == SelectionState::Floating) {
+            selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
+            transformMode = TransformState::None;
+            pendingTransform = false;
+        }
+    }
+    activeLayer = target;
 }
 
 int Canvas::getActiveLayer() const {
@@ -1795,18 +1837,14 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         sRight.setTextureRect(sf::IntRect(0, 0, static_cast<int>(rW), static_cast<int>(ch)));
 
         sTopLeft.setPosition(cx - lW, cy - tH);
-
         sTopRight.setPosition(cx + cw - (trW - rW), cy - tH);
-
         sBotLeft.setPosition(cx - lW, cy + ch);
-
         sBotRight.setPosition(cx + cw - (brW - rW), cy + ch);
 
         window.draw(sTop, frameStates);
         window.draw(sBottom, frameStates);
         window.draw(sLeft, frameStates);
         window.draw(sRight, frameStates);
-
         window.draw(sTopLeft, frameStates);
         window.draw(sTopRight, frameStates);
         window.draw(sBotLeft, frameStates);

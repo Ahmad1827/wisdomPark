@@ -5,7 +5,7 @@
 
 LayerPanel::LayerPanel()
     : scrollOffset(0.f), maxScroll(0.f), isDraggingScrollbar(false), scrollDragStartY(0.f), scrollDragStartOffset(0.f),
-    renamingLayerIndex(-1), draggedLayerIndex(-1), dropTargetIndex(-1), isDragging(false),
+    renamingLayerIndex(-1), draggedLayerIndex(-1), dropTargetIndex(-1), dropInsertAbove(false), isDragging(false),
     activeOpacityIndex(-1), isDraggingOpacity(false), lastClickedLayerIndex(-1),
     currentX(1920.f), targetX(1920.f), width(300.f), state(LayerPanelState::Hidden) {}
 
@@ -56,7 +56,7 @@ void LayerPanel::init() {
     setupBtn(delBtn, delText, "Del", 32.f);
     setupBtn(mergeDownBtn, mergeDownText, "Merge", 42.f);
     setupBtn(mergeVisBtn, mergeVisText, "Flat", 34.f);
-    setupBtn(pushBtn, pushText, "Push", 36.f);
+    setupBtn(pushBtn, pushText, "Ext", 36.f);
 
     renameBox.setFillColor(WisdomUI::Theme::Background);
     renameBox.setOutlineThickness(1.f);
@@ -254,11 +254,14 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
     scrollOffset = std::clamp(scrollOffset, 0.f, maxScroll);
 
     dropTargetIndex = -1;
+    dropInsertAbove = false;
+
     if (isDragging && draggedLayerIndex != -1) {
         for (int i = 0; i < static_cast<int>(layerCount); ++i) {
             float rowTop = startY + (layerCount - 1 - i) * rowHeight - scrollOffset;
             if (mousePos.y >= rowTop && mousePos.y <= rowTop + rowHeight) {
                 dropTargetIndex = i;
+                dropInsertAbove = (mousePos.y < rowTop + rowHeight * 0.5f);
                 break;
             }
         }
@@ -395,8 +398,9 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         window.draw(bText);
 
         if (isDragging && dropTargetIndex == i && draggedLayerIndex != i) {
-            sf::RectangleShape indicator(sf::Vector2f(rowCache[i].bounds.width, 2.f));
-            indicator.setPosition(rowCache[i].bounds.left, rowCache[i].bounds.top);
+            float lineY = dropInsertAbove ? rowCache[i].bounds.top : (rowCache[i].bounds.top + rowCache[i].bounds.height);
+            sf::RectangleShape indicator(sf::Vector2f(rowCache[i].bounds.width, 3.f));
+            indicator.setPosition(rowCache[i].bounds.left, lineY - 1.5f);
             indicator.setFillColor(WisdomUI::Theme::Gold);
             window.draw(indicator);
         }
@@ -434,7 +438,7 @@ std::string LayerPanel::processClick(sf::Vector2f mousePos, Canvas& canvas, int 
     if (delBtn.getGlobalBounds().contains(mousePos)) { canvas.deleteLayer(currentFrame, canvas.getActiveLayer()); return "layer_del"; }
     if (mergeDownBtn.getGlobalBounds().contains(mousePos)) { canvas.mergeDown(currentFrame); return "layer_merge_d"; }
     if (mergeVisBtn.getGlobalBounds().contains(mousePos)) { canvas.mergeVisible(currentFrame); return "layer_merge_v"; }
-    if (pushBtn.getGlobalBounds().contains(mousePos)) { canvas.pushLayerToNextFrame(currentFrame, canvas.getActiveLayer()); return "layer_push"; }
+    if (pushBtn.getGlobalBounds().contains(mousePos)) { canvas.extendLayerToNextFrame(currentFrame, canvas.getActiveLayer()); return "layer_push"; }
 
     float startY = 134.f;
     float bottomLimit = 1080.f - 24.f;
@@ -460,11 +464,11 @@ std::string LayerPanel::processClick(sf::Vector2f mousePos, Canvas& canvas, int 
                 return "layer_tag";
             }
             if (rowCache[i].eyeBounds.contains(mousePos)) {
-                canvas.setLayerProperties(currentFrame, i, f->layers[i].name, !f->layers[i].visible, f->layers[i].locked, f->layers[i].opacity, f->layers[i].blendMode);
+                canvas.setLayerProperties(currentFrame, i, f->layers[i].name, !f->layers[i].visible, f->layers[i].locked, f->layers[i].opacity, f->layers[i].blendMode, true);
                 return "layer_vis";
             }
             if (rowCache[i].lockBounds.contains(mousePos)) {
-                canvas.setLayerProperties(currentFrame, i, f->layers[i].name, f->layers[i].visible, !f->layers[i].locked, f->layers[i].opacity, f->layers[i].blendMode);
+                canvas.setLayerProperties(currentFrame, i, f->layers[i].name, f->layers[i].visible, !f->layers[i].locked, f->layers[i].opacity, f->layers[i].blendMode, true);
                 return "layer_lock";
             }
             if (rowCache[i].persistBounds.contains(mousePos)) {
@@ -472,16 +476,17 @@ std::string LayerPanel::processClick(sf::Vector2f mousePos, Canvas& canvas, int 
                 return "layer_persist";
             }
             if (rowCache[i].opacityBounds.contains(mousePos)) {
+                canvas.saveUndoState();
                 isDraggingOpacity = true;
                 activeOpacityIndex = i;
                 float newOp = std::clamp((mousePos.x - rowCache[i].opacityBounds.left) / rowCache[i].opacityBounds.width, 0.f, 1.f);
-                canvas.setLayerProperties(currentFrame, i, f->layers[i].name, f->layers[i].visible, f->layers[i].locked, newOp, f->layers[i].blendMode);
+                canvas.setLayerProperties(currentFrame, i, f->layers[i].name, f->layers[i].visible, f->layers[i].locked, newOp, f->layers[i].blendMode, false);
                 return "layer_op";
             }
             if (rowCache[i].blendBounds.contains(mousePos)) {
                 int b = static_cast<int>(f->layers[i].blendMode) + 1;
                 if (b > 4) b = 0;
-                canvas.setLayerProperties(currentFrame, i, f->layers[i].name, f->layers[i].visible, f->layers[i].locked, f->layers[i].opacity, static_cast<BlendMode>(b));
+                canvas.setLayerProperties(currentFrame, i, f->layers[i].name, f->layers[i].visible, f->layers[i].locked, f->layers[i].opacity, static_cast<BlendMode>(b), true);
                 return "layer_blend";
             }
 
@@ -495,7 +500,7 @@ std::string LayerPanel::processClick(sf::Vector2f mousePos, Canvas& canvas, int 
                 lastClickedLayerIndex = i;
             }
 
-            canvas.setActiveLayer(i);
+            canvas.setActiveLayer(i, currentFrame);
             draggedLayerIndex = i;
             dragCurrentPos = mousePos;
             isDragging = true;
@@ -524,7 +529,7 @@ bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canv
             if (event.key.code == sf::Keyboard::Enter) {
                 const Frame* f = canvas.getFrameReadOnly(currentFrame);
                 if (f && renamingLayerIndex < static_cast<int>(f->layers.size())) {
-                    canvas.setLayerProperties(currentFrame, renamingLayerIndex, renameBuffer, f->layers[renamingLayerIndex].visible, f->layers[renamingLayerIndex].locked, f->layers[renamingLayerIndex].opacity, f->layers[renamingLayerIndex].blendMode);
+                    canvas.setLayerProperties(currentFrame, renamingLayerIndex, renameBuffer, f->layers[renamingLayerIndex].visible, f->layers[renamingLayerIndex].locked, f->layers[renamingLayerIndex].opacity, f->layers[renamingLayerIndex].blendMode, true);
                 }
                 renamingLayerIndex = -1;
                 return true;
@@ -541,7 +546,7 @@ bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canv
             const Frame* f = canvas.getFrameReadOnly(currentFrame);
             if (f && activeOpacityIndex < static_cast<int>(f->layers.size()) && activeOpacityIndex < static_cast<int>(rowCache.size())) {
                 float newOp = std::clamp((mousePos.x - rowCache[activeOpacityIndex].opacityBounds.left) / rowCache[activeOpacityIndex].opacityBounds.width, 0.f, 1.f);
-                canvas.setLayerProperties(currentFrame, activeOpacityIndex, f->layers[activeOpacityIndex].name, f->layers[activeOpacityIndex].visible, f->layers[activeOpacityIndex].locked, newOp, f->layers[activeOpacityIndex].blendMode);
+                canvas.setLayerProperties(currentFrame, activeOpacityIndex, f->layers[activeOpacityIndex].name, f->layers[activeOpacityIndex].visible, f->layers[activeOpacityIndex].locked, newOp, f->layers[activeOpacityIndex].blendMode, false);
             }
             return true;
         }
@@ -567,8 +572,20 @@ bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canv
             return true;
         }
         if (isDragging) {
-            if (draggedLayerIndex != -1 && dropTargetIndex != -1 && draggedLayerIndex != dropTargetIndex) {
-                canvas.moveLayer(currentFrame, draggedLayerIndex, dropTargetIndex);
+            const Frame* f = canvas.getFrameReadOnly(currentFrame);
+            if (f && draggedLayerIndex != -1 && dropTargetIndex != -1 && draggedLayerIndex != dropTargetIndex) {
+                int toIndex = dropTargetIndex;
+                if (draggedLayerIndex < dropTargetIndex) {
+                    toIndex = dropInsertAbove ? dropTargetIndex : (dropTargetIndex - 1);
+                }
+                else if (draggedLayerIndex > dropTargetIndex) {
+                    toIndex = dropInsertAbove ? (dropTargetIndex + 1) : dropTargetIndex;
+                }
+                toIndex = std::clamp(toIndex, 0, static_cast<int>(f->layers.size()) - 1);
+
+                if (toIndex != draggedLayerIndex) {
+                    canvas.moveLayer(currentFrame, draggedLayerIndex, toIndex);
+                }
             }
             isDragging = false;
             draggedLayerIndex = -1;
