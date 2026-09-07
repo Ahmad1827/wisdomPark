@@ -224,12 +224,9 @@ void Canvas::zoom(float delta) {
     float ratio = zoomMultiplier / oldZoom;
 
     sf::Vector2i mousePosI = sf::Mouse::getPosition(*g_activeWindow);
-    sf::Vector2f mousePos(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
+    sf::Vector2f mousePos = g_activeWindow->mapPixelToCoords(mousePosI);
 
-    sf::Vector2f screenCenter(
-        static_cast<float>(g_activeWindow->getSize().x) / 2.0f,
-        static_cast<float>(g_activeWindow->getSize().y) / 2.0f
-    );
+    sf::Vector2f screenCenter(1920.0f / 2.0f, 1080.0f / 2.0f);
 
     panOffset.x = (mousePos.x - screenCenter.x) - ratio * (mousePos.x - screenCenter.x - panOffset.x);
     panOffset.y = (mousePos.y - screenCenter.y) - ratio * (mousePos.y - screenCenter.y - panOffset.y);

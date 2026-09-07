@@ -26,7 +26,8 @@ void CanvasTool::RenderShadows(sf::RenderWindow& window, AIHelper& aiHelper) {
     sf::RenderStates canvasStates;
     canvasStates.transform = m_canvas.getTransform();
 
-    sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
+    sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
     sf::Vector2f logicalSunPos = m_canvas.getInverseTransform().transformPoint(mousePos);
 
     std::vector<sf::FloatRect> boundsList;
@@ -39,15 +40,21 @@ void CanvasTool::RenderShadows(sf::RenderWindow& window, AIHelper& aiHelper) {
 }
 
 void CanvasTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
-    sf::Vector2f mousePos(static_cast<float>(sf::Mouse::getPosition(window).x), static_cast<float>(sf::Mouse::getPosition(window).y));
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
+    if (event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::MouseButtonReleased) {
+        pixelPos = sf::Vector2i(event.mouseButton.x, event.mouseButton.y);
+    }
+    sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
     sf::Vector2f logicalPos = m_canvas.getInverseTransform().transformPoint(mousePos);
 
-    if (event.type == sf::Event::MouseWheelScrolled && event.mouseWheelScroll.wheel == sf::Mouse::VerticalWheel) {
-        m_canvas.zoom(event.mouseWheelScroll.delta);
-    }
-
     if (event.type == sf::Event::MouseButtonPressed) {
-        if (event.mouseButton.button == sf::Mouse::Middle || event.mouseButton.button == sf::Mouse::Right) {
+        if (event.mouseButton.button == sf::Mouse::Middle) {
+            m_isPanning = true;
+            m_lastPanMousePos = mousePos;
+            return;
+        }
+        if (event.mouseButton.button == sf::Mouse::Right) {
+            m_canvas.handleMousePressed(logicalPos, true, m_timeline.getCurrentFrame());
             m_isPanning = true;
             m_lastPanMousePos = mousePos;
             return;
