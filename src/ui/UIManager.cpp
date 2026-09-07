@@ -362,6 +362,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     m_toolDock.AddTool("perspective", "Perspective Grid", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Perspective); m_toolDock.SetActiveTool("perspective"); });
     m_toolDock.AddTool("ai_gen", "AI Generator", [this]() { g_aiPanel.toggle(); m_toolDock.SetActiveTool("ai_gen"); });
 
+    baseCanvas->setMaxUndoHistory(uiHistorySize);
     initStartMenu();
 }
 
@@ -1447,8 +1448,16 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     if (checkStepperL(c1X + 16.f, r2Y + 120.f)) { uiAnimFps = (uiAnimFps == 12) ? 60 : ((uiAnimFps == 24) ? 12 : 24); settings.animFps = uiAnimFps; }
                     if (checkStepperR(c1X + 16.f, r2Y + 120.f)) { uiAnimFps = (uiAnimFps == 12) ? 24 : ((uiAnimFps == 24) ? 60 : 12); settings.animFps = uiAnimFps; }
 
-                    if (checkStepperL(c1X + 16.f, r2Y + 180.f)) { uiHistorySize = (uiHistorySize == 15) ? 50 : ((uiHistorySize == 30) ? 15 : 30); settings.historySize = uiHistorySize; }
-                    if (checkStepperR(c1X + 16.f, r2Y + 180.f)) { uiHistorySize = (uiHistorySize == 15) ? 30 : ((uiHistorySize == 30) ? 50 : 15); settings.historySize = uiHistorySize; }
+                    if (checkStepperL(c1X + 16.f, r2Y + 180.f)) {
+                        uiHistorySize = (uiHistorySize == 15) ? 50 : ((uiHistorySize == 30) ? 15 : 30);
+                        settings.historySize = uiHistorySize;
+                        canvas.setMaxUndoHistory(uiHistorySize);
+                    }
+                    if (checkStepperR(c1X + 16.f, r2Y + 180.f)) {
+                        uiHistorySize = (uiHistorySize == 15) ? 30 : ((uiHistorySize == 30) ? 50 : 15);
+                        settings.historySize = uiHistorySize;
+                        canvas.setMaxUndoHistory(uiHistorySize);
+                    }
 
                     if (checkStepperL(c2X + 16.f, r2Y + 60.f)) AIManager::getInstance().cycleProvider(-1);
                     if (checkStepperR(c2X + 16.f, r2Y + 60.f)) AIManager::getInstance().cycleProvider(1);

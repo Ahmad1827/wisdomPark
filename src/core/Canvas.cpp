@@ -726,7 +726,9 @@ void Canvas::setFillSettings(float tolerance, bool contiguous) { fillTolerance =
 void Canvas::saveUndoState() {
     isDirty = true;
     undoHistory.push_back(frames);
-    if (undoHistory.size() > 15) undoHistory.erase(undoHistory.begin());
+    if (undoHistory.size() > maxUndoHistory) {
+        undoHistory.erase(undoHistory.begin());
+    }
     redoHistory.clear();
 }
 

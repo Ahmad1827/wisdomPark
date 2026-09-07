@@ -158,6 +158,8 @@ private:
     float computeHandleHitRadius() const;
     bool isImageResourceActive(int currentFrame) const;
 
+    size_t maxUndoHistory{ 50 };
+
 public:
     Canvas();
     void init();
@@ -276,4 +278,7 @@ public:
 
     SelectionManager& getSelection() { return selection; }
     const SelectionManager& getSelection() const { return selection; }
+
+    void setMaxUndoHistory(size_t limit) { maxUndoHistory = limit; }
+    size_t getMaxUndoHistory() const { return maxUndoHistory; }
 };
