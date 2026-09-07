@@ -8,6 +8,51 @@
 
 static const sf::RenderWindow* g_activeWindow = nullptr;
 
+static void appendVectorSegment(sf::VertexArray& va, sf::Vector2f p1, sf::Vector2f p2, float radius, sf::Color color) {
+    sf::Vector2f dir = p2 - p1;
+    float len = std::hypot(dir.x, dir.y);
+    if (len < 0.001f) return;
+
+    sf::Vector2f normal(-dir.y / len * radius, dir.x / len * radius);
+
+    sf::Vector2f a = p1 + normal;
+    sf::Vector2f b = p1 - normal;
+    sf::Vector2f c = p2 + normal;
+    sf::Vector2f d = p2 - normal;
+
+    va.append(sf::Vertex(a, color));
+    va.append(sf::Vertex(b, color));
+    va.append(sf::Vertex(c, color));
+
+    va.append(sf::Vertex(b, color));
+    va.append(sf::Vertex(d, color));
+    va.append(sf::Vertex(c, color));
+
+    const int steps = 12;
+    for (int i = 0; i < steps; ++i) {
+        float a1 = static_cast<float>(i) / static_cast<float>(steps) * 6.2831853f;
+        float a2 = static_cast<float>(i + 1) / static_cast<float>(steps) * 6.2831853f;
+        sf::Vector2f j1 = p2 + sf::Vector2f(std::cos(a1) * radius, std::sin(a1) * radius);
+        sf::Vector2f j2 = p2 + sf::Vector2f(std::cos(a2) * radius, std::sin(a2) * radius);
+        va.append(sf::Vertex(p2, color));
+        va.append(sf::Vertex(j1, color));
+        va.append(sf::Vertex(j2, color));
+    }
+}
+
+static void appendVectorCap(sf::VertexArray& va, sf::Vector2f center, float radius, sf::Color color) {
+    const int steps = 16;
+    for (int i = 0; i < steps; ++i) {
+        float a1 = static_cast<float>(i) / static_cast<float>(steps) * 6.2831853f;
+        float a2 = static_cast<float>(i + 1) / static_cast<float>(steps) * 6.2831853f;
+        sf::Vector2f p1 = center + sf::Vector2f(std::cos(a1) * radius, std::sin(a1) * radius);
+        sf::Vector2f p2 = center + sf::Vector2f(std::cos(a2) * radius, std::sin(a2) * radius);
+        va.append(sf::Vertex(center, color));
+        va.append(sf::Vertex(p1, color));
+        va.append(sf::Vertex(p2, color));
+    }
+}
+
 const int DEFAULT_NORMAL_W = 1280;
 const int DEFAULT_NORMAL_H = 720;
 const int DEFAULT_PIXEL_W = 64;
@@ -178,7 +223,7 @@ void Canvas::initCustom(int width, int height) {
     for (auto& l : frames[0].layers) {
         l.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
         l.texture->clear(sf::Color::Transparent);
-        l.texture->setSmooth(false);
+        l.texture->setSmooth(!isPixelMode);
     }
 
     undoHistory.clear();
@@ -332,8 +377,7 @@ void Canvas::addLayer(int frameIndex, const std::string& name) {
             Layer newL(name);
             newL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
             newL.texture->clear(sf::Color::Transparent);
-            if (isPixelMode) newL.texture->setSmooth(false);
-            else newL.texture->setSmooth(true);
+            newL.texture->setSmooth(!isPixelMode);
             frames[i].layers.push_back(newL);
         }
         activeLayer = static_cast<int>(frames[0].layers.size()) - 1;
@@ -976,36 +1020,34 @@ void Canvas::drawContinuousLine(sf::Vector2f from, sf::Vector2f to, sf::Color co
         if (activeTool == ToolType::Eraser) {
             sf::RenderStates rs(sf::BlendNone);
             float currentEraserSize = brushEngine.getActivePreset().size;
-            float length = std::sqrt((to.x - from.x) * (to.x - from.x) + (to.y - from.y) * (to.y - from.y));
-            sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
-            line.setOrigin(0.0f, currentEraserSize / 2.f);
-            line.setPosition(from);
-            line.setRotation(std::atan2(to.y - from.y, to.x - from.x) * 180.f / 3.14159265f);
-            line.setFillColor(col);
+            float radius = currentEraserSize * 0.5f;
 
-            sf::CircleShape circle(currentEraserSize / 2.f);
-            circle.setOrigin(currentEraserSize / 2.f, currentEraserSize / 2.f);
-            circle.setPosition(to);
-            circle.setFillColor(col);
-
-            sf::CircleShape startCircle(currentEraserSize / 2.f);
-            startCircle.setOrigin(currentEraserSize / 2.f, currentEraserSize / 2.f);
+            sf::CircleShape startCircle(radius);
+            startCircle.setOrigin(radius, radius);
             startCircle.setPosition(from);
             startCircle.setFillColor(col);
-
             targetTex->draw(startCircle, rs);
-            targetTex->draw(line, rs);
-            targetTex->draw(circle, rs);
+
+            sf::Vector2f dir = to - from;
+            float len = std::hypot(dir.x, dir.y);
+            if (len > 0.001f) {
+                sf::Vector2f normal(-dir.y / len * radius, dir.x / len * radius);
+                sf::VertexArray body(sf::TriangleStrip, 4);
+                body[0] = sf::Vertex(from + normal, col);
+                body[1] = sf::Vertex(from - normal, col);
+                body[2] = sf::Vertex(to + normal, col);
+                body[3] = sf::Vertex(to - normal, col);
+                targetTex->draw(body, rs);
+
+                sf::CircleShape endCircle(radius);
+                endCircle.setOrigin(radius, radius);
+                endCircle.setPosition(to);
+                endCircle.setFillColor(col);
+                targetTex->draw(endCircle, rs);
+            }
         }
         else {
-            float dist = std::hypot(to.x - from.x, to.y - from.y);
-            float spacing = std::max(1.0f, brushEngine.getActivePreset().spacing);
-            int steps = std::max(1, static_cast<int>(dist / spacing));
-            for (int s = 0; s <= steps; ++s) {
-                float t = static_cast<float>(s) / static_cast<float>(steps);
-                sf::Vector2f interpPos = from + (to - from) * t;
-                brushEngine.paintStroke(targetTex, interpPos, col, 1.0f);
-            }
+            brushEngine.paintStroke(targetTex, to, col, 1.0f);
         }
         targetTex->display();
     }
@@ -1473,7 +1515,19 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 frames[currentFrame].layers[activeLayer].texture->display();
             }
             else {
-                brushEngine.resetStroke(localPos);
+                if (activeTool == ToolType::Brush || activeTool == ToolType::Pencil) {
+                    m_isVectorStrokeActive = true;
+                    m_vPrevPoint = localPos;
+                    m_vPrevMidPoint = localPos;
+                    m_activeVectorMesh.clear();
+                    m_activeVectorMesh.setPrimitiveType(sf::Triangles);
+
+                    float radius = brushEngine.getActivePreset().size * 0.5f;
+                    appendVectorCap(m_activeVectorMesh, localPos, radius, drawCol);
+                }
+                else {
+                    brushEngine.resetStroke(localPos);
+                }
             }
         }
     }
@@ -1559,6 +1613,18 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     }
 
     if (isDrawing) {
+        if (!isPixelMode && m_isVectorStrokeActive) {
+            float radius = brushEngine.getActivePreset().size * 0.5f;
+            appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
+            appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, primaryColor);
+
+            if (m_activeVectorMesh.getVertexCount() > 0) {
+                m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
+            }
+            m_isVectorStrokeActive = false;
+            m_activeVectorMesh.clear();
+        }
+
         shiftAnchor = localPos;
         hasShiftAnchor = true;
     }
@@ -1704,7 +1770,47 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                 targetTex->draw(circle, rs);
             }
             else {
-                brushEngine.paintStroke(targetTex, targetPos, drawCol, 1.0f);
+                if ((activeTool == ToolType::Brush || activeTool == ToolType::Pencil) && m_isVectorStrokeActive) {
+                    float dx = targetPos.x - m_vPrevPoint.x;
+                    float dy = targetPos.y - m_vPrevPoint.y;
+                    if (dx * dx + dy * dy >= 1.0f) {
+                        sf::Vector2f midPoint = (m_vPrevPoint + targetPos) * 0.5f;
+                        float radius = brushEngine.getActivePreset().size * 0.5f;
+                        const int segments = 6;
+                        sf::Vector2f lastP = m_vPrevMidPoint;
+
+                        for (int i = 1; i <= segments; ++i) {
+                            float t = static_cast<float>(i) / static_cast<float>(segments);
+                            float invT = 1.0f - t;
+                            sf::Vector2f curveP = (invT * invT * m_vPrevMidPoint) + (2.0f * invT * t * m_vPrevPoint) + (t * t * midPoint);
+                            appendVectorSegment(m_activeVectorMesh, lastP, curveP, radius, drawCol);
+                            lastP = curveP;
+                        }
+
+                        m_vPrevPoint = targetPos;
+                        m_vPrevMidPoint = midPoint;
+                    }
+                }
+                else if (activeTool == ToolType::Eraser) {
+                    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                    sf::RenderStates rs(sf::BlendNone);
+                    float currentEraserSize = brushEngine.getActivePreset().size;
+                    float length = std::sqrt((targetPos.x - lastPos.x) * (targetPos.x - lastPos.x) + (targetPos.y - lastPos.y) * (targetPos.y - lastPos.y));
+                    sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
+                    line.setOrigin(0.0f, currentEraserSize / 2.f);
+                    line.setPosition(lastPos);
+                    line.setRotation(std::atan2(targetPos.y - lastPos.y, targetPos.x - lastPos.x) * 180.f / 3.14159265f);
+                    line.setFillColor(drawCol);
+
+                    sf::CircleShape circle(currentEraserSize / 2.f);
+                    circle.setOrigin(currentEraserSize / 2.f, currentEraserSize / 2.f);
+                    circle.setPosition(targetPos);
+                    circle.setFillColor(drawCol);
+
+                    targetTex->draw(line, rs);
+                    targetTex->draw(circle, rs);
+                    targetTex->display();
+                }
             }
             targetTex->display();
         }
@@ -1972,6 +2078,16 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                 sf::RenderStates layerStates = innerStates;
                 layerStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
                 window.draw(spr, layerStates);
+                if (!isPixelMode) {
+                    for (const auto& vs : m_vectorStrokes) {
+                        if (vs.frame == currentFrame && vs.layer == static_cast<int>(i)) {
+                            window.draw(vs.mesh, innerStates);
+                        }
+                    }
+                    if (m_isVectorStrokeActive && static_cast<int>(i) == activeLayer) {
+                        window.draw(m_activeVectorMesh, innerStates);
+                    }
+                }
 
                 if (static_cast<int>(i) == activeLayer) {
                     selection.drawPixels(window, layerStates);
@@ -2100,7 +2216,16 @@ const Frame* Canvas::getFrameReadOnly(int index) const {
 
 size_t Canvas::getFrameCount() const { return frames.size(); }
 
-void Canvas::setPixelMode(bool enabled) { isPixelMode = enabled; }
+void Canvas::setPixelMode(bool enabled) {
+    isPixelMode = enabled;
+    for (auto& frame : frames) {
+        for (auto& layer : frame.layers) {
+            if (layer.texture) {
+                layer.texture->setSmooth(!isPixelMode);
+            }
+        }
+    }
+}
 bool Canvas::getPixelMode() const { return isPixelMode; }
 void Canvas::setPixelBrushSize(int size) { pixelBrushSize = size; }
 int Canvas::getPixelBrushSize() const { return pixelBrushSize; }
@@ -2279,3 +2404,4 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     selection.addLassoPoint(sf::Vector2f(static_cast<float>(minX), static_cast<float>(maxY + 1)), canvasLogicalSize);
     selection.endLasso();
 }
+

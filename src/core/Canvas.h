@@ -138,6 +138,16 @@ private:
 
     sf::Image layerSnapshot;
     std::vector<sf::Vector2i> activeStroke;
+    struct VectorStroke {
+        sf::VertexArray mesh;
+        int layer;
+        int frame;
+    };
+    std::vector<VectorStroke> m_vectorStrokes;
+    sf::VertexArray m_activeVectorMesh;
+    sf::Vector2f m_vPrevPoint;
+    sf::Vector2f m_vPrevMidPoint;
+    bool m_isVectorStrokeActive{ false };
     sf::Texture frameTex[8];
     bool hasFrameAssets;
 

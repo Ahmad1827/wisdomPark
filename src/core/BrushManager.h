@@ -25,19 +25,19 @@ struct BrushPreset {
     float scatter;
     float rotation;
     bool pressureSensitivity;
-    sf::Texture brushTexture;
 };
 
 class BrushManager {
 private:
     std::map<std::string, BrushPreset> presets;
     std::string activePresetName;
-    sf::Vector2f lastStabilizedPos;
-    sf::Vector2f lastDrawnPos;
-    float distanceAccumulator;
 
-    sf::Texture generateBrushTexture(float hardness, int size);
-    void applyStamp(sf::RenderTexture* targetTex, sf::Vector2f pos, float currentSize, float currentOpacity, sf::Color color);
+    sf::Vector2f m_prevPoint;
+    sf::Vector2f m_prevMidPoint;
+    bool m_hasStartedStroke;
+
+    void appendRibbonSegment(sf::RenderTexture* targetTex, sf::Vector2f p1, sf::Vector2f p2, float radius, sf::Color color, float opacity);
+    void appendCap(sf::RenderTexture* targetTex, sf::Vector2f center, float radius, sf::Color color, float opacity);
 
 public:
     BrushManager();
@@ -60,5 +60,6 @@ public:
 
     void resetStroke(sf::Vector2f startPos);
     void paintStroke(sf::RenderTexture* targetTex, sf::Vector2f targetPos, sf::Color color, float pressure = 1.0f);
+    void endStroke(sf::RenderTexture* targetTex, sf::Color color);
     void drawPreviewCursor(sf::RenderWindow& window, sf::Vector2f mousePos, sf::Color color, float scale);
 };
