@@ -110,8 +110,25 @@ private:
 
     std::vector<sf::Vector2f> m_contourPoints;
 
-    std::vector<std::vector<Frame>> undoHistory;
-    std::vector<std::vector<Frame>> redoHistory;
+    struct VectorStroke {
+        sf::VertexArray mesh;
+        int layer;
+        int frame;
+    };
+
+    struct UndoState {
+        std::vector<Frame> frames;
+        std::vector<VectorStroke> vectorStrokes;
+    };
+
+    std::vector<UndoState> undoHistory;
+    std::vector<UndoState> redoHistory;
+
+    std::vector<VectorStroke> m_vectorStrokes;
+    sf::VertexArray m_activeVectorMesh;
+    sf::Vector2f m_vPrevPoint;
+    sf::Vector2f m_vPrevMidPoint;
+    bool m_isVectorStrokeActive{ false };
 
     sf::Texture deskTexture;
     sf::Sprite deskSprite;
@@ -138,16 +155,6 @@ private:
 
     sf::Image layerSnapshot;
     std::vector<sf::Vector2i> activeStroke;
-    struct VectorStroke {
-        sf::VertexArray mesh;
-        int layer;
-        int frame;
-    };
-    std::vector<VectorStroke> m_vectorStrokes;
-    sf::VertexArray m_activeVectorMesh;
-    sf::Vector2f m_vPrevPoint;
-    sf::Vector2f m_vPrevMidPoint;
-    bool m_isVectorStrokeActive{ false };
     sf::Texture frameTex[8];
     bool hasFrameAssets;
 

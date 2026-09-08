@@ -366,8 +366,16 @@ void Canvas::duplicateFrame(int index) {
 
 void Canvas::deleteFrame(int index) { if (frames.size() > 1 && index >= 0 && index < static_cast<int>(frames.size())) { saveUndoState(); frames.erase(frames.begin() + index); } }
 void Canvas::clearAllFrames() {
-    saveUndoState(); frames.clear(); frames.emplace_back();
-    for (auto& l : frames[0].layers) { l.texture->create(canvasLogicalSize.x, canvasLogicalSize.y); l.texture->clear(sf::Color::Transparent); }
+    saveUndoState();
+    frames.clear();
+    frames.emplace_back();
+    for (auto& l : frames[0].layers) {
+        l.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+        l.texture->clear(sf::Color::Transparent);
+    }
+    m_vectorStrokes.clear();
+    m_activeVectorMesh.clear();
+    m_isVectorStrokeActive = false;
 }
 
 void Canvas::addLayer(int frameIndex, const std::string& name) {
@@ -769,7 +777,10 @@ void Canvas::setFillSettings(float tolerance, bool contiguous) { fillTolerance =
 
 void Canvas::saveUndoState() {
     isDirty = true;
-    undoHistory.push_back(frames);
+    UndoState state;
+    state.frames = frames;
+    state.vectorStrokes = m_vectorStrokes;
+    undoHistory.push_back(state);
     if (undoHistory.size() > maxUndoHistory) {
         undoHistory.erase(undoHistory.begin());
     }
@@ -778,9 +789,17 @@ void Canvas::saveUndoState() {
 
 void Canvas::undo() {
     if (!undoHistory.empty()) {
-        redoHistory.push_back(frames);
-        frames = undoHistory.back();
+        UndoState currentState;
+        currentState.frames = frames;
+        currentState.vectorStrokes = m_vectorStrokes;
+        redoHistory.push_back(currentState);
+
+        UndoState prevState = undoHistory.back();
         undoHistory.pop_back();
+
+        frames = prevState.frames;
+        m_vectorStrokes = prevState.vectorStrokes;
+
         selection.clearSelection();
         transformMode = TransformState::None;
         pendingTransform = false;
@@ -788,14 +807,25 @@ void Canvas::undo() {
         deformPixels.clear();
         currentDeformedPixels.clear();
         m_contourPoints.clear();
+        m_isVectorStrokeActive = false;
+        m_activeVectorMesh.clear();
+        isDrawing = false;
     }
 }
 
 void Canvas::redo() {
     if (!redoHistory.empty()) {
-        undoHistory.push_back(frames);
-        frames = redoHistory.back();
+        UndoState currentState;
+        currentState.frames = frames;
+        currentState.vectorStrokes = m_vectorStrokes;
+        undoHistory.push_back(currentState);
+
+        UndoState nextState = redoHistory.back();
         redoHistory.pop_back();
+
+        frames = nextState.frames;
+        m_vectorStrokes = nextState.vectorStrokes;
+
         selection.clearSelection();
         transformMode = TransformState::None;
         pendingTransform = false;
@@ -803,6 +833,9 @@ void Canvas::redo() {
         deformPixels.clear();
         currentDeformedPixels.clear();
         m_contourPoints.clear();
+        m_isVectorStrokeActive = false;
+        m_activeVectorMesh.clear();
+        isDrawing = false;
     }
 }
 
