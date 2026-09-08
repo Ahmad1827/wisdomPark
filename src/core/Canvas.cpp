@@ -55,8 +55,19 @@ static void appendVectorCap(sf::VertexArray& va, sf::Vector2f center, float radi
 
 void Canvas::eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius, int currentFrame) {
     float rSq = radius * radius;
-    float dist = std::hypot(p2.x - p1.x, p2.y - p1.y);
-    int steps = std::max(1, static_cast<int>(std::ceil(dist / std::max(1.0f, radius * 0.5f))));
+
+    auto distSqToSegment = [](sf::Vector2f p, sf::Vector2f a, sf::Vector2f b) -> float {
+        sf::Vector2f ab = b - a;
+        float lenSq = ab.x * ab.x + ab.y * ab.y;
+        if (lenSq < 0.0001f) {
+            float dx = p.x - a.x, dy = p.y - a.y;
+            return dx * dx + dy * dy;
+        }
+        float t = std::clamp(((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / lenSq, 0.0f, 1.0f);
+        sf::Vector2f proj = a + t * ab;
+        float dx = p.x - proj.x, dy = p.y - proj.y;
+        return dx * dx + dy * dy;
+        };
 
     bool anyModified = false;
 
@@ -83,27 +94,16 @@ void Canvas::eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius
             const sf::Vector2f& c = va[i + 2].position;
             sf::Vector2f center = (a + b + c) / 3.0f;
 
-            bool hit = false;
-            for (int s = 0; s <= steps; ++s) {
-                float t = static_cast<float>(s) / static_cast<float>(steps);
-                sf::Vector2f cur = p1 + (p2 - p1) * t;
-
-                if ((center.x - cur.x) * (center.x - cur.x) + (center.y - cur.y) * (center.y - cur.y) <= rSq ||
-                    (a.x - cur.x) * (a.x - cur.x) + (a.y - cur.y) * (a.y - cur.y) <= rSq ||
-                    (b.x - cur.x) * (b.x - cur.x) + (b.y - cur.y) * (b.y - cur.y) <= rSq ||
-                    (c.x - cur.x) * (c.x - cur.x) + (c.y - cur.y) * (c.y - cur.y) <= rSq) {
-                    hit = true;
-                    break;
-                }
+            if (distSqToSegment(center, p1, p2) <= rSq ||
+                distSqToSegment(a, p1, p2) <= rSq ||
+                distSqToSegment(b, p1, p2) <= rSq ||
+                distSqToSegment(c, p1, p2) <= rSq) {
+                strokeChanged = true;
             }
-
-            if (!hit) {
+            else {
                 newVa.append(va[i]);
                 newVa.append(va[i + 1]);
                 newVa.append(va[i + 2]);
-            }
-            else {
-                strokeChanged = true;
             }
         }
 
@@ -1868,77 +1868,54 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
             }
         }
         else {
-            sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
-            if (activeTool == ToolType::Eraser) {
-                sf::RenderStates rs(sf::BlendNone);
+            if ((activeTool == ToolType::Brush || activeTool == ToolType::Pencil) && m_isVectorStrokeActive) {
+                float dx = targetPos.x - m_vPrevPoint.x;
+                float dy = targetPos.y - m_vPrevPoint.y;
+                if (dx * dx + dy * dy >= 1.0f) {
+                    sf::Vector2f midPoint = (m_vPrevPoint + targetPos) * 0.5f;
+                    float radius = brushEngine.getActivePreset().size * 0.5f;
+                    const int segments = 6;
+                    sf::Vector2f lastP = m_vPrevMidPoint;
+
+                    for (int i = 1; i <= segments; ++i) {
+                        float t = static_cast<float>(i) / static_cast<float>(segments);
+                        float invT = 1.0f - t;
+                        sf::Vector2f curveP = (invT * invT * m_vPrevMidPoint) + (2.0f * invT * t * m_vPrevPoint) + (t * t * midPoint);
+                        appendVectorSegment(m_activeVectorMesh, lastP, curveP, radius, drawCol);
+                        lastP = curveP;
+                    }
+
+                    m_vPrevPoint = targetPos;
+                    m_vPrevMidPoint = midPoint;
+                }
+            }
+            else if (activeTool == ToolType::Eraser) {
                 float currentEraserSize = brushEngine.getActivePreset().size;
+                float radius = currentEraserSize * 0.5f;
+                eraseVectorStrokesAt(lastPos, targetPos, radius, currentFrame);
 
-                float length = std::sqrt((targetPos.x - lastPos.x) * (targetPos.x - lastPos.x) + (targetPos.y - lastPos.y) * (targetPos.y - lastPos.y));
-                sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
-                line.setOrigin(0.0f, currentEraserSize / 2.f);
-                line.setPosition(lastPos);
-                line.setRotation(std::atan2(targetPos.y - lastPos.y, targetPos.x - lastPos.x) * 180.f / 3.14159265f);
-                line.setFillColor(drawCol);
+                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                if (targetTex) {
+                    sf::RenderStates rs(sf::BlendNone);
+                    float length = std::hypot(targetPos.x - lastPos.x, targetPos.y - lastPos.y);
+                    if (length > 0.001f) {
+                        sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
+                        line.setOrigin(0.0f, currentEraserSize / 2.f);
+                        line.setPosition(lastPos);
+                        line.setRotation(std::atan2(targetPos.y - lastPos.y, targetPos.x - lastPos.x) * 180.f / 3.14159265f);
+                        line.setFillColor(sf::Color::Transparent);
 
-                sf::CircleShape circle(currentEraserSize / 2.f);
-                circle.setOrigin(currentEraserSize / 2.f, currentEraserSize / 2.f);
-                circle.setPosition(targetPos);
-                circle.setFillColor(drawCol);
+                        sf::CircleShape circle(radius);
+                        circle.setOrigin(radius, radius);
+                        circle.setPosition(targetPos);
+                        circle.setFillColor(sf::Color::Transparent);
 
-                targetTex->draw(line, rs);
-                targetTex->draw(circle, rs);
-            }
-            else {
-                if ((activeTool == ToolType::Brush || activeTool == ToolType::Pencil) && m_isVectorStrokeActive) {
-                    float dx = targetPos.x - m_vPrevPoint.x;
-                    float dy = targetPos.y - m_vPrevPoint.y;
-                    if (dx * dx + dy * dy >= 1.0f) {
-                        sf::Vector2f midPoint = (m_vPrevPoint + targetPos) * 0.5f;
-                        float radius = brushEngine.getActivePreset().size * 0.5f;
-                        const int segments = 6;
-                        sf::Vector2f lastP = m_vPrevMidPoint;
-
-                        for (int i = 1; i <= segments; ++i) {
-                            float t = static_cast<float>(i) / static_cast<float>(segments);
-                            float invT = 1.0f - t;
-                            sf::Vector2f curveP = (invT * invT * m_vPrevMidPoint) + (2.0f * invT * t * m_vPrevPoint) + (t * t * midPoint);
-                            appendVectorSegment(m_activeVectorMesh, lastP, curveP, radius, drawCol);
-                            lastP = curveP;
-                        }
-
-                        m_vPrevPoint = targetPos;
-                        m_vPrevMidPoint = midPoint;
-                    }
-                }
-                else if (activeTool == ToolType::Eraser) {
-                    float currentEraserSize = brushEngine.getActivePreset().size;
-                    float radius = currentEraserSize * 0.5f;
-                    eraseVectorStrokesAt(lastPos, targetPos, radius, currentFrame);
-
-                    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
-                    if (targetTex) {
-                        sf::RenderStates rs(sf::BlendNone);
-                        float length = std::hypot(targetPos.x - lastPos.x, targetPos.y - lastPos.y);
-                        if (length > 0.001f) {
-                            sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
-                            line.setOrigin(0.0f, currentEraserSize / 2.f);
-                            line.setPosition(lastPos);
-                            line.setRotation(std::atan2(targetPos.y - lastPos.y, targetPos.x - lastPos.x) * 180.f / 3.14159265f);
-                            line.setFillColor(sf::Color::Transparent);
-
-                            sf::CircleShape circle(radius);
-                            circle.setOrigin(radius, radius);
-                            circle.setPosition(targetPos);
-                            circle.setFillColor(sf::Color::Transparent);
-
-                            targetTex->draw(line, rs);
-                            targetTex->draw(circle, rs);
-                            targetTex->display();
-                        }
+                        targetTex->draw(line, rs);
+                        targetTex->draw(circle, rs);
+                        targetTex->display();
                     }
                 }
             }
-            targetTex->display();
         }
 
         lastPos = targetPos;
