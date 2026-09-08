@@ -53,6 +53,78 @@ static void appendVectorCap(sf::VertexArray& va, sf::Vector2f center, float radi
     }
 }
 
+void Canvas::eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius, int currentFrame) {
+    float rSq = radius * radius;
+    float dist = std::hypot(p2.x - p1.x, p2.y - p1.y);
+    int steps = std::max(1, static_cast<int>(std::ceil(dist / std::max(1.0f, radius * 0.5f))));
+
+    bool anyModified = false;
+
+    for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
+        if (it->frame != currentFrame || it->layer != activeLayer) {
+            ++it;
+            continue;
+        }
+
+        sf::VertexArray& va = it->mesh;
+        size_t vCount = va.getVertexCount();
+        if (vCount < 3) {
+            it = m_vectorStrokes.erase(it);
+            anyModified = true;
+            continue;
+        }
+
+        sf::VertexArray newVa(sf::Triangles);
+        bool strokeChanged = false;
+
+        for (size_t i = 0; i + 2 < vCount; i += 3) {
+            const sf::Vector2f& a = va[i].position;
+            const sf::Vector2f& b = va[i + 1].position;
+            const sf::Vector2f& c = va[i + 2].position;
+            sf::Vector2f center = (a + b + c) / 3.0f;
+
+            bool hit = false;
+            for (int s = 0; s <= steps; ++s) {
+                float t = static_cast<float>(s) / static_cast<float>(steps);
+                sf::Vector2f cur = p1 + (p2 - p1) * t;
+
+                if ((center.x - cur.x) * (center.x - cur.x) + (center.y - cur.y) * (center.y - cur.y) <= rSq ||
+                    (a.x - cur.x) * (a.x - cur.x) + (a.y - cur.y) * (a.y - cur.y) <= rSq ||
+                    (b.x - cur.x) * (b.x - cur.x) + (b.y - cur.y) * (b.y - cur.y) <= rSq ||
+                    (c.x - cur.x) * (c.x - cur.x) + (c.y - cur.y) * (c.y - cur.y) <= rSq) {
+                    hit = true;
+                    break;
+                }
+            }
+
+            if (!hit) {
+                newVa.append(va[i]);
+                newVa.append(va[i + 1]);
+                newVa.append(va[i + 2]);
+            }
+            else {
+                strokeChanged = true;
+            }
+        }
+
+        if (strokeChanged) {
+            anyModified = true;
+            if (newVa.getVertexCount() == 0) {
+                it = m_vectorStrokes.erase(it);
+                continue;
+            }
+            else {
+                it->mesh = newVa;
+            }
+        }
+        ++it;
+    }
+
+    if (anyModified) {
+        isDirty = true;
+    }
+}
+
 const int DEFAULT_NORMAL_W = 1280;
 const int DEFAULT_NORMAL_H = 720;
 const int DEFAULT_PIXEL_W = 64;
@@ -1268,6 +1340,8 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
     float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
+    localPos.x = std::clamp(localPos.x, 0.0f, static_cast<float>(canvasLogicalSize.x));
+    localPos.y = std::clamp(localPos.y, 0.0f, static_cast<float>(canvasLogicalSize.y));
 
     if (isPixelMode && pixelSnapEnabled) {
         localPos.x = std::floor(localPos.x);
@@ -1527,6 +1601,12 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 return;
             }
 
+            if (!isPixelMode && m_isVectorStrokeActive && m_activeVectorMesh.getVertexCount() > 0) {
+                m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
+                m_isVectorStrokeActive = false;
+                m_activeVectorMesh.clear();
+            }
+
             saveUndoState();
             isDrawing = true;
             startPos = localPos;
@@ -1557,6 +1637,10 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
                     float radius = brushEngine.getActivePreset().size * 0.5f;
                     appendVectorCap(m_activeVectorMesh, localPos, radius, drawCol);
+                }
+                else if (activeTool == ToolType::Eraser) {
+                    float radius = brushEngine.getActivePreset().size * 0.5f;
+                    eraseVectorStrokesAt(localPos, localPos, radius, currentFrame);
                 }
                 else {
                     brushEngine.resetStroke(localPos);
@@ -1645,19 +1729,19 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
         }
     }
 
-    if (isDrawing) {
-        if (!isPixelMode && m_isVectorStrokeActive) {
-            float radius = brushEngine.getActivePreset().size * 0.5f;
-            appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
-            appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, primaryColor);
+    if (!isPixelMode && m_isVectorStrokeActive) {
+        float radius = brushEngine.getActivePreset().size * 0.5f;
+        appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
+        appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, primaryColor);
 
-            if (m_activeVectorMesh.getVertexCount() > 0) {
-                m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
-            }
-            m_isVectorStrokeActive = false;
-            m_activeVectorMesh.clear();
+        if (m_activeVectorMesh.getVertexCount() > 0) {
+            m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
         }
+        m_isVectorStrokeActive = false;
+        m_activeVectorMesh.clear();
+    }
 
+    if (isDrawing) {
         shiftAnchor = localPos;
         hasShiftAnchor = true;
     }
@@ -1671,6 +1755,8 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
     float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
+    localPos.x = std::clamp(localPos.x, 0.0f, static_cast<float>(canvasLogicalSize.x));
+    localPos.y = std::clamp(localPos.y, 0.0f, static_cast<float>(canvasLogicalSize.y));
 
     if (isPixelMode && pixelSnapEnabled) {
         localPos.x = std::floor(localPos.x);
@@ -1825,24 +1911,31 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                     }
                 }
                 else if (activeTool == ToolType::Eraser) {
-                    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
-                    sf::RenderStates rs(sf::BlendNone);
                     float currentEraserSize = brushEngine.getActivePreset().size;
-                    float length = std::sqrt((targetPos.x - lastPos.x) * (targetPos.x - lastPos.x) + (targetPos.y - lastPos.y) * (targetPos.y - lastPos.y));
-                    sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
-                    line.setOrigin(0.0f, currentEraserSize / 2.f);
-                    line.setPosition(lastPos);
-                    line.setRotation(std::atan2(targetPos.y - lastPos.y, targetPos.x - lastPos.x) * 180.f / 3.14159265f);
-                    line.setFillColor(drawCol);
+                    float radius = currentEraserSize * 0.5f;
+                    eraseVectorStrokesAt(lastPos, targetPos, radius, currentFrame);
 
-                    sf::CircleShape circle(currentEraserSize / 2.f);
-                    circle.setOrigin(currentEraserSize / 2.f, currentEraserSize / 2.f);
-                    circle.setPosition(targetPos);
-                    circle.setFillColor(drawCol);
+                    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                    if (targetTex) {
+                        sf::RenderStates rs(sf::BlendNone);
+                        float length = std::hypot(targetPos.x - lastPos.x, targetPos.y - lastPos.y);
+                        if (length > 0.001f) {
+                            sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
+                            line.setOrigin(0.0f, currentEraserSize / 2.f);
+                            line.setPosition(lastPos);
+                            line.setRotation(std::atan2(targetPos.y - lastPos.y, targetPos.x - lastPos.x) * 180.f / 3.14159265f);
+                            line.setFillColor(sf::Color::Transparent);
 
-                    targetTex->draw(line, rs);
-                    targetTex->draw(circle, rs);
-                    targetTex->display();
+                            sf::CircleShape circle(radius);
+                            circle.setOrigin(radius, radius);
+                            circle.setPosition(targetPos);
+                            circle.setFillColor(sf::Color::Transparent);
+
+                            targetTex->draw(line, rs);
+                            targetTex->draw(circle, rs);
+                            targetTex->display();
+                        }
+                    }
                 }
             }
             targetTex->display();
@@ -1852,7 +1945,18 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
         shiftAnchor = targetPos;
         hasShiftAnchor = true;
 
-        if (!isHoveringCanvas) {
+        if (!isHoveringCanvas && isDrawing) {
+            if (!isPixelMode && m_isVectorStrokeActive) {
+                float radius = brushEngine.getActivePreset().size * 0.5f;
+                appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
+                appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, primaryColor);
+
+                if (m_activeVectorMesh.getVertexCount() > 0) {
+                    m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
+                }
+                m_isVectorStrokeActive = false;
+                m_activeVectorMesh.clear();
+            }
             isDrawing = false;
         }
     }
@@ -1932,96 +2036,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     sf::RenderStates frameStates = states;
     frameStates.transform = frameTransform;
 
-    const float frameThickness = 16.f;
-    sf::Color frameColor(45, 35, 25);
-    sf::Color shadowColor(20, 15, 10);
-
-    if (hasFrameAssets) {
-        float cx = 0.f;
-        float cy = 0.f;
-        float cw = std::round(drawArea.width);
-        float ch = std::round(drawArea.height);
-
-        float tlW = static_cast<float>(frameTex[0].getSize().x);
-        float tlH = static_cast<float>(frameTex[0].getSize().y);
-        float tH = static_cast<float>(frameTex[1].getSize().y);
-        float trW = static_cast<float>(frameTex[2].getSize().x);
-        float trH = static_cast<float>(frameTex[2].getSize().y);
-        float lW = static_cast<float>(frameTex[3].getSize().x);
-        float rW = static_cast<float>(frameTex[4].getSize().x);
-        float blW = static_cast<float>(frameTex[5].getSize().x);
-        float bH = static_cast<float>(frameTex[6].getSize().y);
-        float brW = static_cast<float>(frameTex[7].getSize().x);
-
-        sf::Sprite sTopLeft(frameTex[0]);
-        sf::Sprite sTop(frameTex[1]);
-        sf::Sprite sTopRight(frameTex[2]);
-        sf::Sprite sLeft(frameTex[3]);
-        sf::Sprite sRight(frameTex[4]);
-        sf::Sprite sBotLeft(frameTex[5]);
-        sf::Sprite sBottom(frameTex[6]);
-        sf::Sprite sBotRight(frameTex[7]);
-
-        sTop.setPosition(cx, cy - tH);
-        sTop.setTextureRect(sf::IntRect(0, 0, static_cast<int>(cw), static_cast<int>(tH)));
-
-        sBottom.setPosition(cx, cy + ch);
-        sBottom.setTextureRect(sf::IntRect(0, 0, static_cast<int>(cw), static_cast<int>(bH)));
-
-        sLeft.setPosition(cx - lW, cy);
-        sLeft.setTextureRect(sf::IntRect(0, 0, static_cast<int>(lW), static_cast<int>(ch)));
-
-        sRight.setPosition(cx + cw, cy);
-        sRight.setTextureRect(sf::IntRect(0, 0, static_cast<int>(rW), static_cast<int>(ch)));
-
-        sTopLeft.setPosition(cx - lW, cy - tH);
-        sTopRight.setPosition(cx + cw - (trW - rW), cy - tH);
-        sBotLeft.setPosition(cx - lW, cy + ch);
-        sBotRight.setPosition(cx + cw - (brW - rW), cy + ch);
-
-        window.draw(sTop, frameStates);
-        window.draw(sBottom, frameStates);
-        window.draw(sLeft, frameStates);
-        window.draw(sRight, frameStates);
-        window.draw(sTopLeft, frameStates);
-        window.draw(sTopRight, frameStates);
-        window.draw(sBotLeft, frameStates);
-        window.draw(sBotRight, frameStates);
-    }
-    else {
-        float dw = std::round(drawArea.width);
-        float dh = std::round(drawArea.height);
-        float cx = 0.f;
-        float cy = 0.f;
-
-        sf::RectangleShape topEdge({ dw + 2 * frameThickness, frameThickness });
-        topEdge.setPosition(cx - frameThickness, cy - frameThickness);
-        topEdge.setFillColor(frameColor);
-
-        sf::RectangleShape bottomEdge({ dw + 2 * frameThickness, frameThickness });
-        bottomEdge.setPosition(cx - frameThickness, cy + dh);
-        bottomEdge.setFillColor(frameColor);
-
-        sf::RectangleShape leftEdge({ frameThickness, dh });
-        leftEdge.setPosition(cx - frameThickness, cy);
-        leftEdge.setFillColor(frameColor);
-
-        sf::RectangleShape rightEdge({ frameThickness, dh });
-        rightEdge.setPosition(cx + dw, cy);
-        rightEdge.setFillColor(frameColor);
-
-        sf::RectangleShape innerShadow({ dw, dh });
-        innerShadow.setPosition(cx, cy);
-        innerShadow.setFillColor(sf::Color::Transparent);
-        innerShadow.setOutlineThickness(1.5f);
-        innerShadow.setOutlineColor(shadowColor);
-
-        window.draw(topEdge, frameStates);
-        window.draw(bottomEdge, frameStates);
-        window.draw(leftEdge, frameStates);
-        window.draw(rightEdge, frameStates);
-        window.draw(innerShadow, frameStates);
-    }
+    
 
     sf::RectangleShape bg(sf::Vector2f(canvasLogicalSize.x, canvasLogicalSize.y));
     bg.setFillColor(sf::Color::White);
@@ -2161,6 +2176,96 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     selection.setHandleVisualSize(10.0f / handleDenom);
     selection.setShowHandles(pendingTransform);
 
+    const float frameThickness = 16.f;
+    sf::Color frameColor(45, 35, 25);
+    sf::Color shadowColor(20, 15, 10);
+
+    if (hasFrameAssets) {
+        float cx = 0.f;
+        float cy = 0.f;
+        float cw = std::round(drawArea.width);
+        float ch = std::round(drawArea.height);
+
+        float tlW = static_cast<float>(frameTex[0].getSize().x);
+        float tlH = static_cast<float>(frameTex[0].getSize().y);
+        float tH = static_cast<float>(frameTex[1].getSize().y);
+        float trW = static_cast<float>(frameTex[2].getSize().x);
+        float trH = static_cast<float>(frameTex[2].getSize().y);
+        float lW = static_cast<float>(frameTex[3].getSize().x);
+        float rW = static_cast<float>(frameTex[4].getSize().x);
+        float blW = static_cast<float>(frameTex[5].getSize().x);
+        float bH = static_cast<float>(frameTex[6].getSize().y);
+        float brW = static_cast<float>(frameTex[7].getSize().x);
+
+        sf::Sprite sTopLeft(frameTex[0]);
+        sf::Sprite sTop(frameTex[1]);
+        sf::Sprite sTopRight(frameTex[2]);
+        sf::Sprite sLeft(frameTex[3]);
+        sf::Sprite sRight(frameTex[4]);
+        sf::Sprite sBotLeft(frameTex[5]);
+        sf::Sprite sBottom(frameTex[6]);
+        sf::Sprite sBotRight(frameTex[7]);
+
+        sTop.setPosition(cx, cy - tH);
+        sTop.setTextureRect(sf::IntRect(0, 0, static_cast<int>(cw), static_cast<int>(tH)));
+
+        sBottom.setPosition(cx, cy + ch);
+        sBottom.setTextureRect(sf::IntRect(0, 0, static_cast<int>(cw), static_cast<int>(bH)));
+
+        sLeft.setPosition(cx - lW, cy);
+        sLeft.setTextureRect(sf::IntRect(0, 0, static_cast<int>(lW), static_cast<int>(ch)));
+
+        sRight.setPosition(cx + cw, cy);
+        sRight.setTextureRect(sf::IntRect(0, 0, static_cast<int>(rW), static_cast<int>(ch)));
+
+        sTopLeft.setPosition(cx - lW, cy - tH);
+        sTopRight.setPosition(cx + cw - (trW - rW), cy - tH);
+        sBotLeft.setPosition(cx - lW, cy + ch);
+        sBotRight.setPosition(cx + cw - (brW - rW), cy + ch);
+
+        window.draw(sTop, frameStates);
+        window.draw(sBottom, frameStates);
+        window.draw(sLeft, frameStates);
+        window.draw(sRight, frameStates);
+        window.draw(sTopLeft, frameStates);
+        window.draw(sTopRight, frameStates);
+        window.draw(sBotLeft, frameStates);
+        window.draw(sBotRight, frameStates);
+    }
+    else {
+        float dw = std::round(drawArea.width);
+        float dh = std::round(drawArea.height);
+        float cx = 0.f;
+        float cy = 0.f;
+
+        sf::RectangleShape topEdge({ dw + 2 * frameThickness, frameThickness });
+        topEdge.setPosition(cx - frameThickness, cy - frameThickness);
+        topEdge.setFillColor(frameColor);
+
+        sf::RectangleShape bottomEdge({ dw + 2 * frameThickness, frameThickness });
+        bottomEdge.setPosition(cx - frameThickness, cy + dh);
+        bottomEdge.setFillColor(frameColor);
+
+        sf::RectangleShape leftEdge({ frameThickness, dh });
+        leftEdge.setPosition(cx - frameThickness, cy);
+        leftEdge.setFillColor(frameColor);
+
+        sf::RectangleShape rightEdge({ frameThickness, dh });
+        rightEdge.setPosition(cx + dw, cy);
+        rightEdge.setFillColor(frameColor);
+
+        sf::RectangleShape innerShadow({ dw, dh });
+        innerShadow.setPosition(cx, cy);
+        innerShadow.setFillColor(sf::Color::Transparent);
+        innerShadow.setOutlineThickness(1.5f);
+        innerShadow.setOutlineColor(shadowColor);
+
+        window.draw(topEdge, frameStates);
+        window.draw(bottomEdge, frameStates);
+        window.draw(leftEdge, frameStates);
+        window.draw(rightEdge, frameStates);
+        window.draw(innerShadow, frameStates);
+    }
     selection.draw(window, innerStates);
 
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);

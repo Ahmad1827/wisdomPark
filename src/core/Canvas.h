@@ -177,6 +177,8 @@ private:
 
     size_t maxUndoHistory{ 50 };
 
+    void eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius, int currentFrame);
+
 public:
     Canvas();
     void init();
