@@ -723,6 +723,51 @@ void Canvas::copySelection(int currentFrame) {
     }
 }
 
+void Canvas::pasteImage(const sf::Image& img, int currentFrame) {
+    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+
+    saveUndoState();
+
+    addLayer(currentFrame, "Pasted Clipboard");
+
+    auto& targetLayer = frames[currentFrame].layers[activeLayer];
+    targetLayer.isImageResource = true;
+    auto tex = std::make_shared<sf::Texture>();
+    tex->loadFromImage(img);
+    targetLayer.staticTexture = tex;
+
+    sf::Vector2u texSize = img.getSize();
+
+    float maxW = static_cast<float>(canvasLogicalSize.x) * 0.9f;
+    float maxH = static_cast<float>(canvasLogicalSize.y) * 0.9f;
+    float scale = std::min(maxW / static_cast<float>(texSize.x), maxH / static_cast<float>(texSize.y));
+    scale = std::min(scale, 1.0f);
+
+    sf::Sprite importSprite(*tex);
+    importSprite.setScale(scale, scale);
+
+    float scaledW = static_cast<float>(texSize.x) * scale;
+    float scaledH = static_cast<float>(texSize.y) * scale;
+    float centerX = (canvasLogicalSize.x / 2.0f) - (scaledW / 2.0f);
+    float centerY = (canvasLogicalSize.y / 2.0f) - (scaledH / 2.0f);
+    importSprite.setPosition(centerX, centerY);
+
+    targetLayer.texture->clear(sf::Color::Transparent);
+    targetLayer.texture->draw(importSprite, sf::RenderStates(sf::BlendAlpha));
+    targetLayer.texture->display();
+
+    isDirty = true;
+
+    commitSelection(currentFrame);
+    selection.startLasso(sf::Vector2f(centerX, centerY), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY + scaledH), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(centerX, centerY + scaledH), canvasLogicalSize);
+    selection.endLasso();
+    selection.extractFromLayer(targetLayer.texture.get(), true);
+    setActiveTool(ToolType::Select);
+}
+
 void Canvas::pasteSelection(int currentFrame) {
     commitSelection(currentFrame);
     saveUndoState();

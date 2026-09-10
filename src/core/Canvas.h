@@ -300,4 +300,6 @@ public:
 
     void setMaxUndoHistory(size_t limit) { maxUndoHistory = limit; }
     size_t getMaxUndoHistory() const { return maxUndoHistory; }
+
+    void pasteImage(const sf::Image& img, int currentFrame);
 };

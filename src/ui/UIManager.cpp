@@ -81,6 +81,86 @@ static void SetupDragDrop(HWND hwnd) {
 }
 #endif
 
+#if defined(_WIN32)
+static bool GetClipboardImage(sf::Image& outImage) {
+    if (!OpenClipboard(nullptr)) return false;
+
+    HANDLE hData = GetClipboardData(CF_DIB);
+    if (!hData) {
+        CloseClipboard();
+        return false;
+    }
+
+    BITMAPINFOHEADER* bmi = static_cast<BITMAPINFOHEADER*>(GlobalLock(hData));
+    if (!bmi) {
+        CloseClipboard();
+        return false;
+    }
+
+    int width = bmi->biWidth;
+    int height = bmi->biHeight;
+    bool topDown = (height < 0);
+    height = std::abs(height);
+    WORD bpp = bmi->biBitCount;
+
+    if (width <= 0 || height <= 0 || (bpp != 24 && bpp != 32)) {
+        GlobalUnlock(hData);
+        CloseClipboard();
+        return false;
+    }
+
+    DWORD colorTableSize = 0;
+    if (bmi->biCompression == BI_BITFIELDS) {
+        colorTableSize = 3 * sizeof(DWORD);
+    }
+    else if (bmi->biClrUsed > 0) {
+        colorTableSize = bmi->biClrUsed * sizeof(RGBQUAD);
+    }
+
+    const unsigned char* srcBits = reinterpret_cast<const unsigned char*>(bmi) + bmi->biSize + colorTableSize;
+    outImage.create(width, height);
+
+    int rowStride = ((width * bpp + 31) / 32) * 4;
+
+    bool hasNonZeroAlpha = false;
+
+    for (int y = 0; y < height; ++y) {
+        int srcY = topDown ? y : (height - 1 - y);
+        const unsigned char* row = srcBits + srcY * rowStride;
+        for (int x = 0; x < width; ++x) {
+            if (bpp == 32) {
+                unsigned char b = row[x * 4 + 0];
+                unsigned char g = row[x * 4 + 1];
+                unsigned char r = row[x * 4 + 2];
+                unsigned char a = row[x * 4 + 3];
+                if (a != 0) hasNonZeroAlpha = true;
+                outImage.setPixel(x, y, sf::Color(r, g, b, a));
+            }
+            else if (bpp == 24) {
+                unsigned char b = row[x * 3 + 0];
+                unsigned char g = row[x * 3 + 1];
+                unsigned char r = row[x * 3 + 2];
+                outImage.setPixel(x, y, sf::Color(r, g, b, 255));
+            }
+        }
+    }
+
+    if (bpp == 32 && !hasNonZeroAlpha) {
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                sf::Color c = outImage.getPixel(x, y);
+                c.a = 255;
+                outImage.setPixel(x, y, c);
+            }
+        }
+    }
+
+    GlobalUnlock(hData);
+    CloseClipboard();
+    return true;
+}
+#endif
+
 static sf::Image DownscaleIcon(const sf::Image& src, unsigned int targetSize = 32) {
     sf::Image dest;
     dest.create(targetSize, targetSize);
@@ -1998,7 +2078,20 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 if (keybindManager.isActionTriggered("edit_copy", event)) canvas.copySelection(timeline.getCurrentFrame());
-                if (keybindManager.isActionTriggered("edit_paste", event)) canvas.pasteSelection(timeline.getCurrentFrame());
+                if (keybindManager.isActionTriggered("edit_paste", event)) {
+#if defined(_WIN32)
+                    sf::Image clipImg;
+                    if (GetClipboardImage(clipImg)) {
+                        canvas.pasteImage(clipImg, timeline.getCurrentFrame());
+                        showMessage("Pasted from Clipboard", sf::Color::Green);
+                    }
+                    else {
+                        canvas.pasteSelection(timeline.getCurrentFrame());
+                    }
+#else
+                    canvas.pasteSelection(timeline.getCurrentFrame());
+#endif
+                }
                 if (keybindManager.isActionTriggered("edit_dup_sel", event)) canvas.duplicateSelection(timeline.getCurrentFrame());
 
                 if (canvas.getActiveTool() == ToolType::Select) {
