@@ -32,7 +32,6 @@ private:
     sf::Vector2f resizeAnchorWorld;
     sf::Vector2f resizeAnchorLocal;
     sf::Vector2f resizeDraggedLocal;
-    sf::Vector2f resizeInitialScale;
 
     bool isInsidePolygon(sf::Vector2f point, const std::vector<sf::Vector2f>& polygon) const;
     void calculateBoundingBox();
@@ -66,11 +65,10 @@ public:
     SelectionState getState() const;
     bool isActive() const;
 
-    void setSmooth(bool smooth);
     void setShowHandles(bool show);
     bool isShowingHandles() const;
     void setHandleVisualSize(float localSize);
-    std::array<sf::Vector2f, 8> getHandlePositions() const;
+    std::array<sf::Vector2f, 4> getHandlePositions() const;
     int hitTestHandle(sf::Vector2f pos, float handleRadius) const;
     bool startResize(sf::Vector2f pos, float handleRadius);
     void resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas);

@@ -64,7 +64,7 @@ Layer::Layer(std::string n) : name(n), visible(true), locked(false), opacity(1.0
     texture = std::make_shared<sf::RenderTexture>();
     texture->create(1, 1);
     texture->clear(sf::Color::Transparent);
-    texture->setSmooth(false);
+    texture->setSmooth(true);
 }
 
 Layer::Layer(const Layer& other) : name(other.name), visible(other.visible), locked(other.locked), opacity(other.opacity), blendMode(other.blendMode), persistent(other.persistent), colorTag(other.colorTag), isImageResource(other.isImageResource) {
@@ -178,7 +178,7 @@ fillTolerance(0.f), fillContiguous(true),
 activeLayer(1), onionSkinEnabled(true), onionSkinPrevOpacity(89.25f), onionSkinNextOpacity(89.25f), onionSkinPrevCount(1), onionSkinNextCount(1),
 viewScale(1.0f), targetScale(1.0f), canvasLogicalSize(DEFAULT_NORMAL_W, DEFAULT_NORMAL_H), zoomMultiplier(1.0f), panOffset(0.f, 0.f),
 isPixelMode(false), pixelBrushSize(1), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false), pixelPerfectEnabled(false), isDirty(false),
-transformMode(TransformState::None), pendingTransform(false), currentRotation(0.0f), currentScale(1.0f, 1.0f) {
+transformMode(TransformState::None), pendingTransform(false), currentRotation(0.0f), currentScale(1.0f, 1.0f), hasFrameAssets(false) {
     brushEngine.initDefaultPresets();
 }
 
@@ -349,8 +349,7 @@ void Canvas::addFrame(int index) {
         else {
             newL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
             newL.texture->clear(sf::Color::Transparent);
-            if (isPixelMode) newL.texture->setSmooth(false);
-            else newL.texture->setSmooth(true);
+            newL.texture->setSmooth(!isPixelMode);
         }
         newFrame.layers.push_back(newL);
     }
@@ -372,6 +371,7 @@ void Canvas::clearAllFrames() {
     for (auto& l : frames[0].layers) {
         l.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
         l.texture->clear(sf::Color::Transparent);
+        l.texture->setSmooth(!isPixelMode);
     }
     m_vectorStrokes.clear();
     m_activeVectorMesh.clear();
@@ -426,8 +426,7 @@ void Canvas::duplicateLayer(int frameIndex, int layerIndex) {
 
             copyL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
             copyL.texture->clear(sf::Color::Transparent);
-            if (isPixelMode) copyL.texture->setSmooth(false);
-            else copyL.texture->setSmooth(true);
+            copyL.texture->setSmooth(!isPixelMode);
             sf::Sprite spr(frames[i].layers[layerIndex].texture->getTexture());
             copyL.texture->draw(spr, sf::RenderStates(sf::BlendNone));
             copyL.texture->display();
@@ -470,8 +469,7 @@ void Canvas::toggleLayerPersistence(int frameIndex, int layerIndex) {
                     auto newTex = std::make_shared<sf::RenderTexture>();
                     newTex->create(canvasLogicalSize.x, canvasLogicalSize.y);
                     newTex->clear(sf::Color::Transparent);
-                    if (isPixelMode) newTex->setSmooth(false);
-                    else newTex->setSmooth(true);
+                    newTex->setSmooth(!isPixelMode);
                     sf::Sprite spr(targetTex->getTexture());
                     newTex->draw(spr, sf::RenderStates(sf::BlendNone));
                     newTex->display();
@@ -493,22 +491,24 @@ void Canvas::cycleLayerColorTag(int frameIndex, int layerIndex) {
 }
 
 void Canvas::pushLayerToNextFrame(int currentFrame, int layerIndex) {
-    if (currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) - 1 && layerIndex >= 0 && layerIndex < static_cast<int>(frames[0].layers.size())) {
-        saveUndoState();
-        auto srcTex = frames[currentFrame].layers[layerIndex].texture;
-        auto dstTex = frames[currentFrame + 1].layers[layerIndex].texture;
-        if (!frames[currentFrame].layers[layerIndex].persistent) {
-            dstTex->clear(sf::Color::Transparent);
-            sf::Sprite spr(srcTex->getTexture());
-            dstTex->draw(spr, sf::RenderStates(sf::BlendNone));
-            dstTex->display();
+    if (currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
+        if (currentFrame < static_cast<int>(frames.size()) - 1 && layerIndex >= 0 && layerIndex < static_cast<int>(frames[0].layers.size())) {
+            saveUndoState();
+            auto srcTex = frames[currentFrame].layers[layerIndex].texture;
+            auto dstTex = frames[currentFrame + 1].layers[layerIndex].texture;
+            if (!frames[currentFrame].layers[layerIndex].persistent) {
+                dstTex->clear(sf::Color::Transparent);
+                sf::Sprite spr(srcTex->getTexture());
+                dstTex->draw(spr, sf::RenderStates(sf::BlendNone));
+                dstTex->display();
+            }
         }
     }
 }
 
 void Canvas::extendLayerToNextFrame(int currentFrame, int layerIndex) {
-    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size()) ||
-        layerIndex < 0 || layerIndex >= static_cast<int>(frames[currentFrame].layers.size())) return;
+    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[currentFrame].layers.size())) return;
 
     saveUndoState();
     if (currentFrame == static_cast<int>(frames.size()) - 1) {
@@ -556,8 +556,7 @@ void Canvas::mergeVisible(int frameIndex) {
             Layer mergedLayer("Merged Visible");
             mergedLayer.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
             mergedLayer.texture->clear(sf::Color::Transparent);
-            if (isPixelMode) mergedLayer.texture->setSmooth(false);
-            else mergedLayer.texture->setSmooth(true);
+            mergedLayer.texture->setSmooth(!isPixelMode);
 
             for (const auto& layer : frames[i].layers) {
                 if (layer.visible) {
@@ -779,7 +778,7 @@ void Canvas::cropSelection(int currentFrame) {
         croppedImg.create(layerImg.getSize().x, layerImg.getSize().y, sf::Color::Transparent);
         for (unsigned int x = 0; x < layerImg.getSize().x; ++x) {
             for (unsigned int y = 0; y < layerImg.getSize().y; ++y) {
-                if (selection.isPointInsideSelection(sf::Vector2f(x, y))) {
+                if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
                     croppedImg.setPixel(x, y, layerImg.getPixel(x, y));
                 }
             }
@@ -1319,7 +1318,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
     localPos.x = std::clamp(localPos.x, 0.0f, static_cast<float>(canvasLogicalSize.x));
     localPos.y = std::clamp(localPos.y, 0.0f, static_cast<float>(canvasLogicalSize.y));
 
-    if (isPixelMode && pixelSnapEnabled) {
+    if (isPixelMode && pixelSnapEnabled && activeTool != ToolType::Select) {
         localPos.x = std::floor(localPos.x);
         localPos.y = std::floor(localPos.y);
     }
@@ -1647,7 +1646,7 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
 
-    if (isPixelMode && pixelSnapEnabled) {
+    if (isPixelMode && pixelSnapEnabled && activeTool != ToolType::Select) {
         localPos.x = std::floor(localPos.x);
         localPos.y = std::floor(localPos.y);
     }
@@ -1761,7 +1760,7 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     localPos.x = std::clamp(localPos.x, 0.0f, static_cast<float>(canvasLogicalSize.x));
     localPos.y = std::clamp(localPos.y, 0.0f, static_cast<float>(canvasLogicalSize.y));
 
-    if (isPixelMode && pixelSnapEnabled) {
+    if (isPixelMode && pixelSnapEnabled && activeTool != ToolType::Select) {
         localPos.x = std::floor(localPos.x);
         localPos.y = std::floor(localPos.y);
     }
@@ -2116,10 +2115,8 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                 layerStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
                 window.draw(spr, layerStates);
 
-                if (!isPixelMode) {
-                    if (m_isVectorStrokeActive && static_cast<int>(i) == activeLayer) {
-                        window.draw(m_activeVectorMesh, innerStates);
-                    }
+                if (!isPixelMode && m_isVectorStrokeActive && static_cast<int>(i) == activeLayer) {
+                    window.draw(m_activeVectorMesh, innerStates);
                 }
 
                 if (static_cast<int>(i) == activeLayer) {
@@ -2158,7 +2155,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
     float handleDenom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
-    selection.setHandleVisualSize(10.0f / handleDenom);
+    selection.setHandleVisualSize(8.0f / handleDenom);
     selection.setShowHandles(pendingTransform);
 
     const float frameThickness = 16.f;
