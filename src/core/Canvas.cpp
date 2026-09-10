@@ -1675,6 +1675,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             else {
                 if (activeTool == ToolType::Brush || activeTool == ToolType::Pencil) {
                     m_isVectorStrokeActive = true;
+                    m_stabilizedPos = localPos;
                     m_vPrevPoint = localPos;
                     m_vPrevMidPoint = localPos;
                     m_activeVectorMesh.clear();
@@ -1776,8 +1777,17 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
 
     if (!isPixelMode && m_isVectorStrokeActive) {
         float radius = brushEngine.getActivePreset().size * 0.5f;
-        appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
-        appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, primaryColor);
+
+        float dEnd = std::hypot(localPos.x - m_vPrevPoint.x, localPos.y - m_vPrevPoint.y);
+        if (dEnd > 1.0f) {
+            appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
+            appendVectorSegment(m_activeVectorMesh, m_vPrevPoint, localPos, radius, primaryColor);
+            appendVectorCap(m_activeVectorMesh, localPos, radius, primaryColor);
+        }
+        else {
+            appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
+            appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, primaryColor);
+        }
 
         if (m_activeVectorMesh.getVertexCount() > 0) {
             m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
@@ -1914,9 +1924,19 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
         }
         else {
             if ((activeTool == ToolType::Brush || activeTool == ToolType::Pencil) && m_isVectorStrokeActive) {
+                float stab = brushEngine.getActivePreset().stabilization;
+                if (stab > 0.0f) {
+                    float weight = std::clamp(1.0f - stab, 0.05f, 1.0f);
+                    m_stabilizedPos += (targetPos - m_stabilizedPos) * weight;
+                    targetPos = m_stabilizedPos;
+                }
+                else {
+                    m_stabilizedPos = targetPos;
+                }
+
                 float dx = targetPos.x - m_vPrevPoint.x;
                 float dy = targetPos.y - m_vPrevPoint.y;
-                if (dx * dx + dy * dy >= 1.0f) {
+                if (dx * dx + dy * dy >= 0.8f) {
                     sf::Vector2f midPoint = (m_vPrevPoint + targetPos) * 0.5f;
                     float radius = brushEngine.getActivePreset().size * 0.5f;
                     const int segments = 6;

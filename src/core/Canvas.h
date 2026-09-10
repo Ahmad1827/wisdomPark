@@ -128,6 +128,7 @@ private:
     sf::VertexArray m_activeVectorMesh;
     sf::Vector2f m_vPrevPoint;
     sf::Vector2f m_vPrevMidPoint;
+    sf::Vector2f m_stabilizedPos;
     bool m_isVectorStrokeActive{ false };
 
     sf::Texture deskTexture;
@@ -302,4 +303,7 @@ public:
     size_t getMaxUndoHistory() const { return maxUndoHistory; }
 
     void pasteImage(const sf::Image& img, int currentFrame);
+
+    void setStabilizer(float val) { brushEngine.setStabilization(val); }
+    float getStabilizer() const { return brushEngine.getActivePreset().stabilization; }
 };

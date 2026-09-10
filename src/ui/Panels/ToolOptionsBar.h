@@ -19,7 +19,7 @@ namespace WisdomUI {
         ToolOptionsBar();
         void Initialize(const sf::Font& font);
         void SetBounds(const sf::FloatRect& bounds);
-        void SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect);
+        void SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization = 0.0f);
 
         void SetOutlineColor(sf::Color color) { m_outlineColor = color; }
         sf::Color GetOutlineColor() const { return m_outlineColor; }
@@ -29,7 +29,8 @@ namespace WisdomUI {
             std::function<void()> onTogglePixelPerfect,
             std::function<void(const std::string&)> onSelectAction = nullptr,
             std::function<void()> onMakeOutline = nullptr,
-            std::function<void()> onPickOutlineColor = nullptr);
+            std::function<void()> onPickOutlineColor = nullptr,
+            std::function<void(float)> onStabilizationChange = nullptr);
 
         void Update(float deltaTime, const sf::Vector2f& mousePos);
         void Render(sf::RenderWindow& window);
@@ -39,11 +40,14 @@ namespace WisdomUI {
         sf::Font m_font;
         std::string m_activeToolName{ "Brush" };
         float m_size{ 4.0f };
+        float m_stabilization{ 0.0f };
         bool m_pixelMode{ false };
         bool m_pixelPerfect{ false };
         bool m_isDraggingSlider{ false };
+        bool m_isDraggingStabSlider{ false };
 
         sf::FloatRect m_sliderBounds;
+        sf::FloatRect m_stabSliderBounds;
         sf::FloatRect m_perfBtnBounds;
         sf::FloatRect m_outlineBtnBounds;
         sf::FloatRect m_outlineColorBoxBounds;
@@ -57,6 +61,7 @@ namespace WisdomUI {
         float m_outlineHoverAlpha{ 0.0f };
         float m_outlineColorBoxHoverAlpha{ 0.0f };
         float m_sliderThumbScale{ 1.0f };
+        float m_stabSliderThumbScale{ 1.0f };
         float m_globalTime{ 0.0f };
 
         void updateSelectionButtonLayout();

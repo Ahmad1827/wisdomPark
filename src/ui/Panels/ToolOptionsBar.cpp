@@ -1,6 +1,7 @@
 #include "ToolOptionsBar.h"
 #include "../UITheme.h"
 #include <algorithm>
+#include <cmath>
 
 namespace WisdomUI {
 
@@ -33,18 +34,20 @@ namespace WisdomUI {
 
     void ToolOptionsBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        m_sliderBounds = sf::FloatRect(bounds.left + 210.0f, bounds.top + 10.0f, 120.0f, 12.0f);
-        m_perfBtnBounds = sf::FloatRect(bounds.left + 400.0f, bounds.top + 5.0f, 104.0f, 22.0f);
-        m_outlineBtnBounds = sf::FloatRect(bounds.left + 514.0f, bounds.top + 5.0f, 72.0f, 22.0f);
-        m_outlineColorBoxBounds = sf::FloatRect(bounds.left + 592.0f, bounds.top + 5.0f, 22.0f, 22.0f);
+        m_sliderBounds = sf::FloatRect(bounds.left + 205.0f, bounds.top + 10.0f, 100.0f, 12.0f);
+        m_stabSliderBounds = sf::FloatRect(bounds.left + 405.0f, bounds.top + 10.0f, 100.0f, 12.0f);
+        m_perfBtnBounds = sf::FloatRect(bounds.left + 370.0f, bounds.top + 5.0f, 104.0f, 22.0f);
+        m_outlineBtnBounds = sf::FloatRect(bounds.left + 570.0f, bounds.top + 5.0f, 72.0f, 22.0f);
+        m_outlineColorBoxBounds = sf::FloatRect(bounds.left + 648.0f, bounds.top + 5.0f, 22.0f, 22.0f);
         updateSelectionButtonLayout();
     }
 
-    void ToolOptionsBar::SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect) {
+    void ToolOptionsBar::SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization) {
         m_activeToolName = toolName;
         m_size = size;
         m_pixelMode = pixelMode;
         m_pixelPerfect = pixelPerfect;
+        m_stabilization = stabilization;
     }
 
     void ToolOptionsBar::Update(float deltaTime, const sf::Vector2f& mousePos) {
@@ -71,6 +74,9 @@ namespace WisdomUI {
 
             bool sliderHover = m_sliderBounds.contains(mousePos) || m_isDraggingSlider;
             m_sliderThumbScale += ((sliderHover ? 1.25f : 1.0f) - m_sliderThumbScale) * 18.0f * deltaTime;
+
+            bool stabSliderHover = m_stabSliderBounds.contains(mousePos) || m_isDraggingStabSlider;
+            m_stabSliderThumbScale += ((stabSliderHover ? 1.25f : 1.0f) - m_stabSliderThumbScale) * 18.0f * deltaTime;
         }
     }
 
@@ -79,9 +85,11 @@ namespace WisdomUI {
         std::function<void()> onTogglePixelPerfect,
         std::function<void(const std::string&)> onSelectAction,
         std::function<void()> onMakeOutline,
-        std::function<void()> onPickOutlineColor) {
+        std::function<void()> onPickOutlineColor,
+        std::function<void(float)> onStabilizationChange) {
 
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+        bool showStab = !m_pixelMode && (m_activeToolName == "Brush" || m_activeToolName == "Pencil");
 
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
             if (m_activeToolName == "Select" || m_activeToolName == "Magic Wand") {
@@ -95,6 +103,11 @@ namespace WisdomUI {
             else {
                 if (m_sliderBounds.contains(mousePos)) {
                     m_isDraggingSlider = true;
+                    return true;
+                }
+                else if (showStab && m_stabSliderBounds.contains(mousePos)) {
+                    m_isDraggingStabSlider = true;
+                    return true;
                 }
                 else if (m_pixelMode && m_perfBtnBounds.contains(mousePos)) {
                     if (onTogglePixelPerfect) onTogglePixelPerfect();
@@ -113,12 +126,19 @@ namespace WisdomUI {
 
         if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
             m_isDraggingSlider = false;
+            m_isDraggingStabSlider = false;
         }
 
         if (m_isDraggingSlider && (event.type == sf::Event::MouseMoved || sf::Mouse::isButtonPressed(sf::Mouse::Left))) {
             float ratio = std::clamp((mousePos.x - m_sliderBounds.left) / m_sliderBounds.width, 0.0f, 1.0f);
             float newSize = m_pixelMode ? (1.0f + ratio * 31.0f) : (1.0f + ratio * 99.0f);
             if (onSizeChange) onSizeChange(newSize);
+            return true;
+        }
+
+        if (m_isDraggingStabSlider && (event.type == sf::Event::MouseMoved || sf::Mouse::isButtonPressed(sf::Mouse::Left))) {
+            float ratio = std::clamp((mousePos.x - m_stabSliderBounds.left) / m_stabSliderBounds.width, 0.0f, 1.0f);
+            if (onStabilizationChange) onStabilizationChange(ratio);
             return true;
         }
 
@@ -169,7 +189,42 @@ namespace WisdomUI {
             thumb.setOutlineColor(Theme::SunsetGold);
             window.draw(thumb);
 
-            Theme::DrawCrispText(window, m_font, std::to_string(static_cast<int>(m_size)) + "px", 12, m_sliderBounds.left + m_sliderBounds.width + 12.0f, m_bounds.top + 8.0f, Theme::TextPrimary);
+            Theme::DrawCrispText(window, m_font, std::to_string(static_cast<int>(m_size)) + "px", 12, m_sliderBounds.left + m_sliderBounds.width + 10.0f, m_bounds.top + 8.0f, Theme::TextPrimary);
+
+            bool showStab = !m_pixelMode && (m_activeToolName == "Brush" || m_activeToolName == "Pencil");
+
+            if (showStab) {
+                Theme::DrawCrispText(window, m_font, "STAB:", 12, m_stabSliderBounds.left - 42.0f, m_bounds.top + 8.0f, Theme::TextSecondary);
+
+                sf::RectangleShape stabTrack(sf::Vector2f(m_stabSliderBounds.width, m_stabSliderBounds.height));
+                stabTrack.setPosition(m_stabSliderBounds.left, m_stabSliderBounds.top);
+                stabTrack.setFillColor(Theme::SunsetDeepDark);
+                stabTrack.setOutlineThickness(1.0f);
+                stabTrack.setOutlineColor(Theme::SunsetPlum);
+                window.draw(stabTrack);
+
+                float stabRatio = std::clamp(m_stabilization, 0.0f, 1.0f);
+                float stabFillW = stabRatio * m_stabSliderBounds.width;
+
+                sf::RectangleShape stabFill(sf::Vector2f(stabFillW, m_stabSliderBounds.height));
+                stabFill.setPosition(m_stabSliderBounds.left, m_stabSliderBounds.top);
+                stabFill.setFillColor(Theme::SunsetGold);
+                window.draw(stabFill);
+
+                float stabThumbX = m_stabSliderBounds.left + stabFillW;
+                float stabThumbY = m_stabSliderBounds.top + m_stabSliderBounds.height / 2.0f;
+                sf::RectangleShape stabThumb(sf::Vector2f(8.0f, 16.0f));
+                stabThumb.setOrigin(4.0f, 8.0f);
+                stabThumb.setPosition(std::floor(stabThumbX), std::floor(stabThumbY));
+                stabThumb.setScale(m_stabSliderThumbScale, m_stabSliderThumbScale);
+                stabThumb.setFillColor(Theme::SunsetAmber);
+                stabThumb.setOutlineThickness(1.0f);
+                stabThumb.setOutlineColor(Theme::SunsetGold);
+                window.draw(stabThumb);
+
+                int stabPercent = static_cast<int>(std::round(m_stabilization * 100.0f));
+                Theme::DrawCrispText(window, m_font, std::to_string(stabPercent) + "%", 12, m_stabSliderBounds.left + m_stabSliderBounds.width + 10.0f, m_bounds.top + 8.0f, Theme::TextPrimary);
+            }
 
             if (m_pixelMode) {
                 Theme::DrawSunsetButton(window, m_perfBtnBounds, "Pixel Perfect", m_font, 11, m_pixelPerfect, m_perfHoverAlpha > 0.5f, true, 1.0f);

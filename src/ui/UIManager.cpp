@@ -1738,6 +1738,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 g_selectingOutlineColor = true;
                 m_activeRightTab = RightTabMode::Palette;
                 showMessage("Pick Outline Color from Palette", sf::Color(255, 200, 100));
+            },
+            [&](float stab) {
+                canvas.setStabilizer(stab);
             }
         )) return;
 
@@ -2453,7 +2456,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         else if (canvas.getActiveTool() == ToolType::Symmetry) toolName = "Symmetry";
 
         float curSize = canvas.getPixelMode() ? static_cast<float>(canvas.getPixelBrushSize()) : canvas.getBrushSize();
-        m_toolOptionsBar.SyncState(toolName, curSize, canvas.getPixelMode(), canvas.isPixelPerfectEnabled());
+        m_toolOptionsBar.SyncState(toolName, curSize, canvas.getPixelMode(), canvas.isPixelPerfectEnabled(), canvas.getStabilizer());
         m_toolOptionsBar.Update(dt, mousePos);
 
         m_toolDock.SetBounds(regions.toolDock);
