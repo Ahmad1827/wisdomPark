@@ -862,7 +862,12 @@ void Canvas::cropSelection(int currentFrame) {
     }
 }
 
-void Canvas::setActiveTool(ToolType tool) {
+void Canvas::setActiveTool(ToolType tool, int currentFrame) {
+    if (selection.isActive() && tool != ToolType::Select) {
+        commitSelection(currentFrame);
+        selection.clearSelection();
+    }
+
     activeTool = tool;
     isDrawing = false;
     isDeforming = false;
@@ -1631,9 +1636,13 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 }
                 return;
             }
-
-            bool isShift = sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift);
             bool canDrawLine = (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser);
+            bool isShift = sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift);
+
+            if (selection.isActive() && canDrawLine) {
+                commitSelection(currentFrame);
+                selection.clearSelection();
+            }
 
             if (isShift && hasShiftAnchor && canDrawLine) {
                 saveUndoState();

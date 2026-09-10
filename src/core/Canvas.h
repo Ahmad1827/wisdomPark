@@ -240,7 +240,7 @@ public:
     void duplicateSelection(int currentFrame);
     void cropSelection(int currentFrame);
 
-    void setActiveTool(ToolType tool);
+    void setActiveTool(ToolType tool, int currentFrame = 0);
     ToolType getActiveTool() const;
     BrushManager& getBrushEngine();
     void setBrushSize(float size);
