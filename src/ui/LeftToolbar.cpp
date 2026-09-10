@@ -1,7 +1,7 @@
 #include "LeftToolbar.h"
 #include <algorithm>
 
-LeftToolbar::LeftToolbar() : activeToolId("brush"), width(90.f), currentX(-90.f), targetX(-90.f), state(PanelState::Hidden), scrollY(0.f), maxScrollY(0.f) {}
+LeftToolbar::LeftToolbar() : activeToolId("brush"), width(96.f), currentX(-96.f), targetX(-96.f), state(PanelState::Hidden), scrollY(0.f), maxScrollY(0.f) {}
 
 void LeftToolbar::init() {
     font.loadFromFile("assets/font.otf");
@@ -11,7 +11,7 @@ void LeftToolbar::init() {
     background.setOutlineThickness(1.f);
     background.setOutlineColor(sf::Color(255, 255, 255, 15));
 
-    handleBg.setSize(sf::Vector2f(24.f, 80.f));
+    handleBg.setSize(sf::Vector2f(26.f, 84.f));
     handleBg.setFillColor(sf::Color(30, 30, 35, 200));
     handleBg.setOutlineThickness(1.f);
     handleBg.setOutlineColor(sf::Color(255, 255, 255, 30));
@@ -21,7 +21,7 @@ void LeftToolbar::init() {
     handleLabel.setCharacterSize(16);
     handleLabel.setFillColor(sf::Color(200, 200, 200));
 
-    pinBtn.setSize(sf::Vector2f(width - 20.f, 24.f));
+    pinBtn.setSize(sf::Vector2f(width - 20.f, 26.f));
     pinBtn.setFillColor(sf::Color(255, 255, 255, 10));
 
     pinLabel.setFont(font);
@@ -33,10 +33,10 @@ void LeftToolbar::init() {
         ToolItem btn;
         btn.id = id;
         btn.isAiTool = aiTool;
-        btn.rect.setSize(sf::Vector2f(width - 20.f, 40.f));
+        btn.rect.setSize(sf::Vector2f(width - 20.f, 42.f));
         btn.label.setFont(font);
         btn.label.setString(text);
-        btn.label.setCharacterSize(11);
+        btn.label.setCharacterSize(12);
         sf::FloatRect tRect = btn.label.getLocalBounds();
         btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
         tools.push_back(btn);
@@ -62,10 +62,10 @@ void LeftToolbar::init() {
     auto makeActionBtn = [&](std::string id, std::string text) {
         ToolItem btn;
         btn.id = id;
-        btn.rect.setSize(sf::Vector2f(width - 20.f, 30.f));
+        btn.rect.setSize(sf::Vector2f(width - 20.f, 32.f));
         btn.label.setFont(font);
         btn.label.setString(text);
-        btn.label.setCharacterSize(10);
+        btn.label.setCharacterSize(11);
         sf::FloatRect tRect = btn.label.getLocalBounds();
         btn.label.setOrigin(tRect.left + tRect.width / 2.0f, tRect.top + tRect.height / 2.0f);
         selectionActions.push_back(btn);
@@ -93,7 +93,7 @@ void LeftToolbar::update(float dt, bool focusMode) {
     currentX += (targetX - currentX) * 15.0f * dt;
     background.setPosition(currentX, 0.f);
     handleBg.setPosition(currentX + width, 500.f);
-    handleLabel.setPosition(currentX + width + 6.f, 530.f);
+    handleLabel.setPosition(currentX + width + 8.f, 532.f);
 
     if (state == PanelState::Pinned) {
         handleLabel.setString("x");
@@ -107,20 +107,20 @@ void LeftToolbar::update(float dt, bool focusMode) {
     }
 
     pinBtn.setPosition(currentX + 10.f, 20.f);
-    pinLabel.setPosition(currentX + 25.f, 24.f);
+    pinLabel.setPosition(currentX + 28.f, 24.f);
 
     float startY = 60.f + scrollY;
     for (auto& tool : tools) {
         tool.rect.setPosition(currentX + 10.f, startY);
-        tool.label.setPosition(currentX + (width / 2.f), startY + 20.f);
-        startY += 45.f;
+        tool.label.setPosition(currentX + (width / 2.f), startY + 21.f);
+        startY += 48.f;
     }
 
     startY += 10.f;
     for (auto& act : selectionActions) {
         act.rect.setPosition(currentX + 10.f, startY);
-        act.label.setPosition(currentX + (width / 2.f), startY + 15.f);
-        startY += 35.f;
+        act.label.setPosition(currentX + (width / 2.f), startY + 16.f);
+        startY += 38.f;
     }
 
     float totalHeight = (startY - scrollY) + 20.f;

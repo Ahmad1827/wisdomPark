@@ -36,11 +36,11 @@ void TopMenuBar::init() {
 }
 
 void TopMenuBar::updatePositions(float windowWidth) {
-    float barHeight = 32.f;
-    float btnWidth = 90.f;
+    float barHeight = 34.f;
+    float btnWidth = 96.f;
     float barWidth = m_buttons.size() * btnWidth + 30.f;
     float startX = (windowWidth - barWidth) / 2.f;
-    float startY = 8.f;
+    float startY = 6.f;
 
     m_background.setSize(sf::Vector2f(barWidth, barHeight));
     m_background.setPosition(startX, startY);
@@ -105,8 +105,8 @@ void TopMenuBar::draw(sf::RenderWindow& window) {
         sf::Text text(btn.label, m_font, 14);
         sf::FloatRect tBounds = text.getLocalBounds();
         text.setPosition(
-            btn.bounds.left + (btn.bounds.width - tBounds.width) / 2.f,
-            btn.bounds.top + (btn.bounds.height - text.getCharacterSize()) / 2.f - 2.f
+            std::floor(btn.bounds.left + (btn.bounds.width - tBounds.width) / 2.f),
+            std::floor(btn.bounds.top + (btn.bounds.height - text.getCharacterSize()) / 2.f - 1.f)
         );
         text.setFillColor(sf::Color(240, 220, 180));
         window.draw(text);

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-GradientPanel::GradientPanel() : m_config(nullptr), m_position(64.f, 78.f), m_size(280.f, 490.f), m_draggedStopIndex(-1), m_selectedStopIndex(-1) {}
+GradientPanel::GradientPanel() : m_config(nullptr), m_position(64.f, 78.f), m_size(280.f, 520.f), m_draggedStopIndex(-1), m_selectedStopIndex(-1) {}
 
 void GradientPanel::init(GradientConfig* config) {
     m_config = config;
@@ -15,12 +15,12 @@ void GradientPanel::update(float dt) {}
 
 void GradientPanel::drawButton(sf::RenderWindow& window, sf::FloatRect bounds, const std::string& text, sf::Color bgColor) {
     bool hovered = bounds.contains(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
-    WisdomUI::Theme::DrawSunsetButton(window, bounds, text, m_font, 11, false, hovered, false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, bounds, text, m_font, 12, false, hovered, false, 1.0f);
 }
 
 void GradientPanel::drawToggle(sf::RenderWindow& window, sf::FloatRect bounds, const std::string& text, bool state) {
     bool hovered = bounds.contains(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
-    WisdomUI::Theme::DrawSunsetButton(window, bounds, text, m_font, 11, state, hovered, state, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, bounds, text, m_font, 12, state, hovered, state, 1.0f);
 }
 
 void GradientPanel::sortStops() {
@@ -50,7 +50,7 @@ void GradientPanel::draw(sf::RenderWindow& window) {
     sf::FloatRect panelBounds(m_position.x, m_position.y, m_size.x, m_size.y);
     WisdomUI::Theme::DrawSunsetPanel(window, panelBounds, 1.0f);
 
-    sf::FloatRect headerGrip(m_position.x + 8.f, m_position.y + 6.f, m_size.x - 16.f, 26.f);
+    sf::FloatRect headerGrip(m_position.x + 8.f, m_position.y + 6.f, m_size.x - 16.f, 28.f);
     sf::RectangleShape gripBg(sf::Vector2f(headerGrip.width, headerGrip.height));
     gripBg.setPosition(headerGrip.left, headerGrip.top);
     gripBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
@@ -58,33 +58,33 @@ void GradientPanel::draw(sf::RenderWindow& window) {
     gripBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(gripBg);
 
-    WisdomUI::Theme::DrawCrispText(window, m_font, ":: GRADIENT TOOL ::", 12, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, m_font, ":: GRADIENT TOOL ::", 13, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
     if (!m_config) return;
 
     float bx = m_position.x;
-    float y = m_position.y + 40.f;
+    float y = m_position.y + 42.f;
 
-    drawButton(window, sf::FloatRect(bx + 12.f, y, 256.f, 24.f),
+    drawButton(window, sf::FloatRect(bx + 12.f, y, 256.f, 28.f),
         m_config->type == GradientType::Linear ? "Type: Linear" :
         m_config->type == GradientType::Radial ? "Type: Radial" :
         m_config->type == GradientType::Diamond ? "Type: Diamond" :
         m_config->type == GradientType::Angle ? "Type: Angle" : "Type: Reflected",
         WisdomUI::Theme::SunsetSkyMid);
-    y += 28.f;
+    y += 32.f;
 
-    drawButton(window, sf::FloatRect(bx + 12.f, y, 256.f, 24.f),
+    drawButton(window, sf::FloatRect(bx + 12.f, y, 256.f, 28.f),
         m_config->interpolation == GradientInterpolation::RGB ? "Interpolation: RGB" :
         m_config->interpolation == GradientInterpolation::HSV ? "Interpolation: HSV" : "Interpolation: Constant",
         WisdomUI::Theme::SunsetSkyMid);
-    y += 28.f;
+    y += 32.f;
 
-    drawButton(window, sf::FloatRect(bx + 12.f, y, 256.f, 24.f),
+    drawButton(window, sf::FloatRect(bx + 12.f, y, 256.f, 28.f),
         m_config->dither == GradientDither::None ? "Dither: None" :
         m_config->dither == GradientDither::Bayer2x2 ? "Dither: Bayer 2x2" :
         m_config->dither == GradientDither::Bayer4x4 ? "Dither: Bayer 4x4" : "Dither: Bayer 8x8",
         WisdomUI::Theme::SunsetSkyMid);
-    y += 28.f;
+    y += 32.f;
 
     std::string bmStr = "Blend: ";
     if (m_config->blendModeIndex == 0) bmStr += "Replace";
@@ -92,23 +92,23 @@ void GradientPanel::draw(sf::RenderWindow& window) {
     else if (m_config->blendModeIndex == 2) bmStr += "Multiply";
     else if (m_config->blendModeIndex == 3) bmStr += "Add";
     else bmStr += "Screen";
-    drawButton(window, sf::FloatRect(bx + 12.f, y, 256.f, 24.f), bmStr, WisdomUI::Theme::SunsetSkyMid);
-    y += 28.f;
+    drawButton(window, sf::FloatRect(bx + 12.f, y, 256.f, 28.f), bmStr, WisdomUI::Theme::SunsetSkyMid);
+    y += 32.f;
 
-    drawButton(window, sf::FloatRect(bx + 12.f, y, 60.f, 24.f), "Opac-", WisdomUI::Theme::SunsetCoralDark);
-    drawButton(window, sf::FloatRect(bx + 76.f, y, 128.f, 24.f), "Opacity: " + std::to_string(static_cast<int>(m_config->opacity)) + "%", WisdomUI::Theme::SunsetSkyTop);
-    drawButton(window, sf::FloatRect(bx + 208.f, y, 60.f, 24.f), "Opac+", WisdomUI::Theme::SunsetCoralDark);
-    y += 28.f;
+    drawButton(window, sf::FloatRect(bx + 12.f, y, 62.f, 28.f), "Opac-", WisdomUI::Theme::SunsetCoralDark);
+    drawButton(window, sf::FloatRect(bx + 78.f, y, 124.f, 28.f), "Opacity: " + std::to_string(static_cast<int>(m_config->opacity)) + "%", WisdomUI::Theme::SunsetSkyTop);
+    drawButton(window, sf::FloatRect(bx + 206.f, y, 62.f, 28.f), "Opac+", WisdomUI::Theme::SunsetCoralDark);
+    y += 32.f;
 
-    drawToggle(window, sf::FloatRect(bx + 12.f, y, 78.f, 24.f), "Reverse", m_config->reverse);
-    drawToggle(window, sf::FloatRect(bx + 94.f, y, 78.f, 24.f), "Repeat", m_config->repeat);
-    drawToggle(window, sf::FloatRect(bx + 176.f, y, 92.f, 24.f), "Preview", m_config->livePreview);
-    y += 28.f;
+    drawToggle(window, sf::FloatRect(bx + 12.f, y, 78.f, 28.f), "Reverse", m_config->reverse);
+    drawToggle(window, sf::FloatRect(bx + 94.f, y, 78.f, 28.f), "Repeat", m_config->repeat);
+    drawToggle(window, sf::FloatRect(bx + 176.f, y, 92.f, 28.f), "Preview", m_config->livePreview);
+    y += 32.f;
 
-    drawToggle(window, sf::FloatRect(bx + 12.f, y, 256.f, 24.f), "Snap to Grid", m_config->snapToGrid);
-    y += 36.f;
+    drawToggle(window, sf::FloatRect(bx + 12.f, y, 256.f, 28.f), "Snap to Grid", m_config->snapToGrid);
+    y += 40.f;
 
-    m_gradientBar = sf::FloatRect(bx + 16.f, y, 248.f, 28.f);
+    m_gradientBar = sf::FloatRect(bx + 16.f, y, 248.f, 30.f);
     sf::RectangleShape barBg(sf::Vector2f(m_gradientBar.width, m_gradientBar.height));
     barBg.setPosition(m_gradientBar.left, m_gradientBar.top);
     barBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
@@ -131,9 +131,9 @@ void GradientPanel::draw(sf::RenderWindow& window) {
 
     for (size_t i = 0; i < m_config->stops.size(); ++i) {
         float sx = m_gradientBar.left + m_config->stops[i].position * m_gradientBar.width;
-        sf::CircleShape stop(7.f);
-        stop.setOrigin(7.f, 7.f);
-        stop.setPosition(sx, m_gradientBar.top + m_gradientBar.height + 7.f);
+        sf::CircleShape stop(8.f);
+        stop.setOrigin(8.f, 8.f);
+        stop.setPosition(sx, m_gradientBar.top + m_gradientBar.height + 8.f);
         stop.setFillColor(m_config->stops[i].color);
         stop.setOutlineThickness(2.f);
         stop.setOutlineColor(static_cast<int>(i) == m_selectedStopIndex ? WisdomUI::Theme::SunsetAmber : sf::Color::White);
@@ -172,35 +172,35 @@ bool GradientPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
         if (!sf::FloatRect(m_position.x, m_position.y, m_size.x, m_size.y).contains(mousePos)) return false;
 
         float bx = m_position.x;
-        float y = m_position.y + 40.f;
+        float y = m_position.y + 42.f;
 
-        if (sf::FloatRect(bx + 12.f, y, 256.f, 24.f).contains(mousePos)) {
+        if (sf::FloatRect(bx + 12.f, y, 256.f, 28.f).contains(mousePos)) {
             m_config->type = static_cast<GradientType>((static_cast<int>(m_config->type) + 1) % 5); return true;
-        } y += 28.f;
-        if (sf::FloatRect(bx + 12.f, y, 256.f, 24.f).contains(mousePos)) {
+        } y += 32.f;
+        if (sf::FloatRect(bx + 12.f, y, 256.f, 28.f).contains(mousePos)) {
             m_config->interpolation = static_cast<GradientInterpolation>((static_cast<int>(m_config->interpolation) + 1) % 3); return true;
-        } y += 28.f;
-        if (sf::FloatRect(bx + 12.f, y, 256.f, 24.f).contains(mousePos)) {
+        } y += 32.f;
+        if (sf::FloatRect(bx + 12.f, y, 256.f, 28.f).contains(mousePos)) {
             m_config->dither = static_cast<GradientDither>((static_cast<int>(m_config->dither) + 1) % 4); return true;
-        } y += 28.f;
-        if (sf::FloatRect(bx + 12.f, y, 256.f, 24.f).contains(mousePos)) {
+        } y += 32.f;
+        if (sf::FloatRect(bx + 12.f, y, 256.f, 28.f).contains(mousePos)) {
             m_config->blendModeIndex = (m_config->blendModeIndex + 1) % 5;
             updateBlendMode();
             return true;
-        } y += 28.f;
-        if (sf::FloatRect(bx + 12.f, y, 60.f, 24.f).contains(mousePos)) {
+        } y += 32.f;
+        if (sf::FloatRect(bx + 12.f, y, 62.f, 28.f).contains(mousePos)) {
             m_config->opacity = std::max(0.0f, m_config->opacity - 10.0f); return true;
         }
-        if (sf::FloatRect(bx + 208.f, y, 60.f, 24.f).contains(mousePos)) {
+        if (sf::FloatRect(bx + 206.f, y, 62.f, 28.f).contains(mousePos)) {
             m_config->opacity = std::min(100.0f, m_config->opacity + 10.0f); return true;
-        } y += 28.f;
+        } y += 32.f;
 
-        if (sf::FloatRect(bx + 12.f, y, 78.f, 24.f).contains(mousePos)) { m_config->reverse = !m_config->reverse; return true; }
-        if (sf::FloatRect(bx + 94.f, y, 78.f, 24.f).contains(mousePos)) { m_config->repeat = !m_config->repeat; return true; }
-        if (sf::FloatRect(bx + 176.f, y, 92.f, 24.f).contains(mousePos)) { m_config->livePreview = !m_config->livePreview; return true; }
-        y += 28.f;
+        if (sf::FloatRect(bx + 12.f, y, 78.f, 28.f).contains(mousePos)) { m_config->reverse = !m_config->reverse; return true; }
+        if (sf::FloatRect(bx + 94.f, y, 78.f, 28.f).contains(mousePos)) { m_config->repeat = !m_config->repeat; return true; }
+        if (sf::FloatRect(bx + 176.f, y, 92.f, 28.f).contains(mousePos)) { m_config->livePreview = !m_config->livePreview; return true; }
+        y += 32.f;
 
-        if (sf::FloatRect(bx + 12.f, y, 256.f, 24.f).contains(mousePos)) { m_config->snapToGrid = !m_config->snapToGrid; return true; }
+        if (sf::FloatRect(bx + 12.f, y, 256.f, 28.f).contains(mousePos)) { m_config->snapToGrid = !m_config->snapToGrid; return true; }
 
         for (size_t i = 0; i < m_config->stops.size(); ++i) {
             float sx = m_gradientBar.left + m_config->stops[i].position * m_gradientBar.width;

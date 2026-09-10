@@ -1724,7 +1724,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             },
             [&](const std::string& action) {
                 int curFrame = static_cast<int>(timeline.getCurrentFrame());
-                if (action == "flip_h") canvas.flipSelectionHorizontal(curFrame);
+                if (action == "resize") canvas.enterTransformMode(curFrame);
+                else if (action == "flip_h") canvas.flipSelectionHorizontal(curFrame);
                 else if (action == "flip_v") canvas.flipSelectionVertical(curFrame);
                 else if (action == "duplicate") canvas.duplicateSelection(curFrame);
                 else if (action == "crop") canvas.cropSelection(curFrame);

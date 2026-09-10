@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <iostream>
 
-RightPanelManager::RightPanelManager() : currentX(1920.f), targetX(1920.f), width(300.f), pinned(false), hovered(false), primaryColor(sf::Color::Black), secondaryColor(sf::Color::White), activeTheme("all"), isLightingMode(false), isTerrainEnabled(false), isOnionSkinEnabled(false), onionOpacity(89.25f), timelineFps(12.f) {}
+RightPanelManager::RightPanelManager() : currentX(1920.f), targetX(1920.f), width(310.f), pinned(false), hovered(false), primaryColor(sf::Color::Black), secondaryColor(sf::Color::White), activeTheme("all"), isLightingMode(false), isTerrainEnabled(false), isOnionSkinEnabled(false), onionOpacity(89.25f), timelineFps(12.f) {}
 
 void RightPanelManager::init() {
     font.loadFromFile("assets/font.otf");
@@ -17,7 +17,7 @@ void RightPanelManager::init() {
 
     handleText.setFont(font);
     handleText.setString("< P");
-    handleText.setCharacterSize(14);
+    handleText.setCharacterSize(15);
     handleText.setFillColor(sf::Color(200, 200, 200));
 }
 
@@ -44,9 +44,9 @@ void RightPanelManager::update(float dt, bool focusMode) {
     background.setPosition(currentX, 0.f);
     background.setSize(sf::Vector2f(width, 1080.f));
 
-    handleBg.setPosition(currentX - 30.f, 200.f);
-    handleBg.setSize(sf::Vector2f(30.f, 80.f));
-    handleText.setPosition(currentX - 25.f, 230.f);
+    handleBg.setPosition(currentX - 32.f, 200.f);
+    handleBg.setSize(sf::Vector2f(32.f, 84.f));
+    handleText.setPosition(currentX - 26.f, 232.f);
 }
 
 void RightPanelManager::updateHover(sf::Vector2f mousePos) {
@@ -88,86 +88,86 @@ void RightPanelManager::draw(sf::RenderWindow& window, Canvas& canvas, int curre
         window.draw(handleText);
     }
 
-    sf::RectangleShape headerBg(sf::Vector2f(width, 30.f));
+    sf::RectangleShape headerBg(sf::Vector2f(width, 34.f));
     headerBg.setPosition(currentX, 0.f);
     headerBg.setFillColor(sf::Color(40, 40, 45, 255));
     window.draw(headerBg);
-    drawText(window, "PROPERTIES", sf::Vector2f(currentX + 10.f, 5.f), 14, sf::Color(200, 200, 200));
+    drawText(window, "PROPERTIES", sf::Vector2f(currentX + 12.f, 8.f), 14, sf::Color(200, 200, 200));
 
-    sf::RectangleShape pinBtn = createBtn(sf::FloatRect(currentX + 10.f, 40.f, 60.f, 24.f), sf::Color(50, 50, 60));
+    sf::RectangleShape pinBtn = createBtn(sf::FloatRect(currentX + 10.f, 44.f, 66.f, 26.f), sf::Color(50, 50, 60));
     if (pinned) {
         pinBtn.setOutlineThickness(1.f);
         pinBtn.setOutlineColor(sf::Color(0, 191, 255));
     }
     window.draw(pinBtn);
-    drawText(window, pinned ? "Unpin" : "Pin", sf::Vector2f(currentX + 25.f, 43.f), 12, pinned ? sf::Color(0, 191, 255) : sf::Color::White);
+    drawText(window, pinned ? "Unpin" : "Pin", sf::Vector2f(currentX + 26.f, 48.f), 12, pinned ? sf::Color(0, 191, 255) : sf::Color::White);
 
-    float y = 90.f;
-    drawText(window, "AI Theme Settings", sf::Vector2f(currentX + 10.f, y), 12, sf::Color(150, 150, 150));
-    y += 20.f;
+    float y = 96.f;
+    drawText(window, "AI Theme Settings", sf::Vector2f(currentX + 10.f, y), 13, sf::Color(150, 150, 150));
+    y += 24.f;
 
     auto drawThemeBtn = [&](std::string id, std::string label, float bx, float by, float bw) {
-        sf::RectangleShape btn = createBtn(sf::FloatRect(bx, by, bw, 24.f), activeTheme == id ? sf::Color(0, 122, 204, 180) : sf::Color(50, 50, 60));
+        sf::RectangleShape btn = createBtn(sf::FloatRect(bx, by, bw, 26.f), activeTheme == id ? sf::Color(0, 122, 204, 180) : sf::Color(50, 50, 60));
         window.draw(btn);
-        drawText(window, label, sf::Vector2f(bx + 10.f, by + 3.f), 12);
+        drawText(window, label, sf::Vector2f(bx + 10.f, by + 5.f), 12);
         };
-    drawThemeBtn("all", "All", currentX + 10.f, y, 60.f);
-    drawThemeBtn("structure", "Struct", currentX + 80.f, y, 60.f);
-    drawThemeBtn("clutter", "Clutter", currentX + 150.f, y, 60.f);
-    drawThemeBtn("wfc", "WFC", currentX + 220.f, y, 50.f);
+    drawThemeBtn("all", "All", currentX + 10.f, y, 62.f);
+    drawThemeBtn("structure", "Struct", currentX + 78.f, y, 66.f);
+    drawThemeBtn("clutter", "Clutter", currentX + 150.f, y, 66.f);
+    drawThemeBtn("wfc", "WFC", currentX + 222.f, y, 56.f);
 
-    y += 40.f;
-    sf::RectangleShape lightBtn = createBtn(sf::FloatRect(currentX + 10.f, y, 130.f, 24.f), isLightingMode ? sf::Color(255, 200, 0, 100) : sf::Color(50, 50, 60));
+    y += 44.f;
+    sf::RectangleShape lightBtn = createBtn(sf::FloatRect(currentX + 10.f, y, 134.f, 26.f), isLightingMode ? sf::Color(255, 200, 0, 100) : sf::Color(50, 50, 60));
     window.draw(lightBtn);
-    drawText(window, "Lighting Mode", sf::Vector2f(currentX + 30.f, y + 3.f), 12);
+    drawText(window, "Lighting Mode", sf::Vector2f(currentX + 26.f, y + 5.f), 12);
 
-    sf::RectangleShape terrBtn = createBtn(sf::FloatRect(currentX + 150.f, y, 130.f, 24.f), isTerrainEnabled ? sf::Color(50, 200, 50, 100) : sf::Color(50, 50, 60));
+    sf::RectangleShape terrBtn = createBtn(sf::FloatRect(currentX + 152.f, y, 134.f, 26.f), isTerrainEnabled ? sf::Color(50, 200, 50, 100) : sf::Color(50, 50, 60));
     window.draw(terrBtn);
-    drawText(window, "Terrain Rules", sf::Vector2f(currentX + 175.f, y + 3.f), 12);
+    drawText(window, "Terrain Rules", sf::Vector2f(currentX + 172.f, y + 5.f), 12);
 
-    y += 40.f;
+    y += 44.f;
     sf::RectangleShape div1(sf::Vector2f(width - 20.f, 1.f)); div1.setPosition(currentX + 10.f, y); div1.setFillColor(sf::Color(255, 255, 255, 20)); window.draw(div1);
-    y += 15.f;
+    y += 18.f;
 
-    drawText(window, "Colors", sf::Vector2f(currentX + 10.f, y), 12, sf::Color(150, 150, 150));
-    y += 20.f;
+    drawText(window, "Colors", sf::Vector2f(currentX + 10.f, y), 13, sf::Color(150, 150, 150));
+    y += 24.f;
 
-    sf::RectangleShape pBox(sf::Vector2f(40.f, 40.f)); pBox.setPosition(currentX + 10.f, y); pBox.setFillColor(canvas.getPrimaryColor()); pBox.setOutlineThickness(1.f); pBox.setOutlineColor(sf::Color::White); window.draw(pBox);
-    sf::RectangleShape sBox(sf::Vector2f(40.f, 40.f)); sBox.setPosition(currentX + 30.f, y + 20.f); sBox.setFillColor(canvas.getSecondaryColor()); sBox.setOutlineThickness(1.f); sBox.setOutlineColor(sf::Color::White); window.draw(sBox);
+    sf::RectangleShape pBox(sf::Vector2f(44.f, 44.f)); pBox.setPosition(currentX + 10.f, y); pBox.setFillColor(canvas.getPrimaryColor()); pBox.setOutlineThickness(1.f); pBox.setOutlineColor(sf::Color::White); window.draw(pBox);
+    sf::RectangleShape sBox(sf::Vector2f(44.f, 44.f)); sBox.setPosition(currentX + 32.f, y + 22.f); sBox.setFillColor(canvas.getSecondaryColor()); sBox.setOutlineThickness(1.f); sBox.setOutlineColor(sf::Color::White); window.draw(sBox);
 
-    float px = currentX + 80.f;
+    float px = currentX + 88.f;
     std::vector<sf::Color> pal = { sf::Color::Black, sf::Color::White, sf::Color::Red, sf::Color::Green, sf::Color::Blue, sf::Color::Yellow, sf::Color(255, 128, 0), sf::Color(128, 0, 255), sf::Color(0, 255, 255), sf::Color(255, 0, 255), sf::Color(128, 128, 128), sf::Color(139, 69, 19) };
     for (int i = 0; i < 12; ++i) {
-        sf::RectangleShape cBox(sf::Vector2f(20.f, 20.f));
-        cBox.setPosition(px + (i % 6) * 25.f, y + (i / 6) * 25.f);
+        sf::RectangleShape cBox(sf::Vector2f(24.f, 24.f));
+        cBox.setPosition(px + (i % 6) * 30.f, y + (i / 6) * 30.f);
         cBox.setFillColor(pal[i]);
         window.draw(cBox);
     }
 }
 
 std::string RightPanelManager::handleClick(sf::Vector2f mousePos, Canvas& canvas, int currentFrame) {
-    if (sf::FloatRect(currentX + 10.f, 40.f, 60.f, 24.f).contains(mousePos)) { pinned = !pinned; return "pin_toggle"; }
+    if (sf::FloatRect(currentX + 10.f, 44.f, 66.f, 26.f).contains(mousePos)) { pinned = !pinned; return "pin_toggle"; }
 
-    float y = 110.f;
-    if (sf::FloatRect(currentX + 10.f, y, 60.f, 24.f).contains(mousePos)) return "theme_all";
-    if (sf::FloatRect(currentX + 80.f, y, 60.f, 24.f).contains(mousePos)) return "theme_struct";
-    if (sf::FloatRect(currentX + 150.f, y, 60.f, 24.f).contains(mousePos)) return "theme_clutter";
-    if (sf::FloatRect(currentX + 220.f, y, 50.f, 24.f).contains(mousePos)) return "theme_wfc";
+    float y = 120.f;
+    if (sf::FloatRect(currentX + 10.f, y, 62.f, 26.f).contains(mousePos)) return "theme_all";
+    if (sf::FloatRect(currentX + 78.f, y, 66.f, 26.f).contains(mousePos)) return "theme_struct";
+    if (sf::FloatRect(currentX + 150.f, y, 66.f, 26.f).contains(mousePos)) return "theme_clutter";
+    if (sf::FloatRect(currentX + 222.f, y, 56.f, 26.f).contains(mousePos)) return "theme_wfc";
 
-    y += 40.f;
-    if (sf::FloatRect(currentX + 10.f, y, 130.f, 24.f).contains(mousePos)) return "toggle_light";
-    if (sf::FloatRect(currentX + 150.f, y, 130.f, 24.f).contains(mousePos)) return "toggle_terrain";
+    y += 44.f;
+    if (sf::FloatRect(currentX + 10.f, y, 134.f, 26.f).contains(mousePos)) return "toggle_light";
+    if (sf::FloatRect(currentX + 152.f, y, 134.f, 26.f).contains(mousePos)) return "toggle_terrain";
 
     return "";
 }
 
 bool RightPanelManager::handlePaletteClick(sf::Vector2f mousePos, sf::Color& outPrimary, sf::Color& outSecondary) {
     if (currentX > 1919.f) return false;
-    float px = currentX + 80.f;
-    float y = 185.f;
+    float px = currentX + 88.f;
+    float y = 196.f;
     std::vector<sf::Color> pal = { sf::Color::Black, sf::Color::White, sf::Color::Red, sf::Color::Green, sf::Color::Blue, sf::Color::Yellow, sf::Color(255, 128, 0), sf::Color(128, 0, 255), sf::Color(0, 255, 255), sf::Color(255, 0, 255), sf::Color(128, 128, 128), sf::Color(139, 69, 19) };
     for (int i = 0; i < 12; ++i) {
-        if (sf::FloatRect(px + (i % 6) * 25.f, y + (i / 6) * 25.f, 20.f, 20.f).contains(mousePos)) {
+        if (sf::FloatRect(px + (i % 6) * 30.f, y + (i / 6) * 30.f, 24.f, 24.f).contains(mousePos)) {
             outPrimary = pal[i];
             outSecondary = pal[i];
             return true;

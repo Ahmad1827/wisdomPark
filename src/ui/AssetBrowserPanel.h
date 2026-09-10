@@ -45,5 +45,5 @@ public:
     void setBounds(const sf::FloatRect& bounds);
     void update(float dt);
     void draw(sf::RenderWindow& window);
-    void handleEvent(const sf::Event& event, const sf::RenderWindow& window, Canvas& canvas, int currentFrame);
+    bool handleEvent(const sf::Event& event, const sf::RenderWindow& window, Canvas& canvas, int currentFrame);
 };

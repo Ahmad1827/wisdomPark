@@ -66,6 +66,8 @@ namespace WisdomUI {
         static inline const float BorderThickness = 1.0f;
 
         static void DrawCrispText(sf::RenderWindow& window, const sf::Font& font, const std::string& str, unsigned int size, float x, float y, sf::Color color, sf::Color shadowColor = sf::Color::Transparent, bool centerH = false, bool centerV = false) {
+            const_cast<sf::Texture&>(font.getTexture(size)).setSmooth(false);
+
             sf::Text txt(str, font, size);
             sf::FloatRect tb = txt.getLocalBounds();
 

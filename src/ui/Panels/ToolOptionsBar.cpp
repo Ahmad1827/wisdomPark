@@ -7,6 +7,7 @@ namespace WisdomUI {
 
     ToolOptionsBar::ToolOptionsBar() {
         m_selectionButtons = {
+            { "resize", "Resize", sf::FloatRect(), 0.0f },
             { "flip_h", "Flip H", sf::FloatRect(), 0.0f },
             { "flip_v", "Flip V", sf::FloatRect(), 0.0f },
             { "duplicate", "Duplicate", sf::FloatRect(), 0.0f },
@@ -20,13 +21,17 @@ namespace WisdomUI {
     }
 
     void ToolOptionsBar::updateSelectionButtonLayout() {
-        float btnX = m_bounds.left + 160.0f;
-        float btnY = m_bounds.top + 5.0f;
-        float btnH = 22.0f;
+        float btnX = std::floor(m_bounds.left + 150.0f);
+        float btnY = std::floor(m_bounds.top + 5.0f);
+        float btnH = 26.0f;
         float spacing = 6.0f;
 
         for (auto& btn : m_selectionButtons) {
-            float btnW = (btn.id == "crop" || btn.id == "delete") ? 92.0f : ((btn.id == "duplicate") ? 82.0f : 64.0f);
+            float btnW = 64.0f;
+            if (btn.id == "resize") btnW = 66.0f;
+            else if (btn.id == "duplicate") btnW = 86.0f;
+            else if (btn.id == "crop" || btn.id == "delete") btnW = 96.0f;
+
             btn.bounds = sf::FloatRect(btnX, btnY, btnW, btnH);
             btnX += btnW + spacing;
         }
@@ -34,11 +39,11 @@ namespace WisdomUI {
 
     void ToolOptionsBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        m_sliderBounds = sf::FloatRect(bounds.left + 205.0f, bounds.top + 10.0f, 100.0f, 12.0f);
-        m_stabSliderBounds = sf::FloatRect(bounds.left + 405.0f, bounds.top + 10.0f, 100.0f, 12.0f);
-        m_perfBtnBounds = sf::FloatRect(bounds.left + 370.0f, bounds.top + 5.0f, 104.0f, 22.0f);
-        m_outlineBtnBounds = sf::FloatRect(bounds.left + 570.0f, bounds.top + 5.0f, 72.0f, 22.0f);
-        m_outlineColorBoxBounds = sf::FloatRect(bounds.left + 648.0f, bounds.top + 5.0f, 22.0f, 22.0f);
+        m_sliderBounds = sf::FloatRect(std::floor(bounds.left + 215.0f), std::floor(bounds.top + 8.0f), 110.0f, 16.0f);
+        m_stabSliderBounds = sf::FloatRect(std::floor(bounds.left + 445.0f), std::floor(bounds.top + 8.0f), 110.0f, 16.0f);
+        m_perfBtnBounds = sf::FloatRect(std::floor(bounds.left + 395.0f), std::floor(bounds.top + 4.0f), 114.0f, 24.0f);
+        m_outlineBtnBounds = sf::FloatRect(std::floor(bounds.left + 630.0f), std::floor(bounds.top + 4.0f), 80.0f, 24.0f);
+        m_outlineColorBoxBounds = sf::FloatRect(std::floor(bounds.left + 716.0f), std::floor(bounds.top + 4.0f), 24.0f, 24.0f);
         updateSelectionButtonLayout();
     }
 
@@ -150,17 +155,17 @@ namespace WisdomUI {
 
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
-        Theme::DrawCrispText(window, m_font, "TOOL: " + m_activeToolName, 12, m_bounds.left + 24.0f, m_bounds.top + 8.0f, Theme::SunsetAmber);
+        Theme::DrawCrispText(window, m_font, "TOOL: " + m_activeToolName, 14, std::floor(m_bounds.left + 24.0f), std::floor(m_bounds.top + 7.0f), Theme::SunsetAmber);
 
         if (m_activeToolName == "Select" || m_activeToolName == "Magic Wand") {
             for (const auto& btn : m_selectionButtons) {
                 bool isHov = btn.bounds.contains(mousePos);
                 bool isDel = (btn.id == "delete");
-                Theme::DrawSunsetButton(window, btn.bounds, btn.label, m_font, 10, false, isHov, isDel, 1.0f);
+                Theme::DrawSunsetButton(window, btn.bounds, btn.label, m_font, 11, false, isHov, isDel, 1.0f);
             }
         }
         else {
-            Theme::DrawCrispText(window, m_font, "SIZE:", 12, m_bounds.left + 165.0f, m_bounds.top + 8.0f, Theme::TextSecondary);
+            Theme::DrawCrispText(window, m_font, "SIZE:", 13, std::floor(m_bounds.left + 165.0f), std::floor(m_bounds.top + 8.0f), Theme::TextSecondary);
 
             sf::RectangleShape sliderTrack(sf::Vector2f(m_sliderBounds.width, m_sliderBounds.height));
             sliderTrack.setPosition(m_sliderBounds.left, m_sliderBounds.top);
@@ -180,8 +185,8 @@ namespace WisdomUI {
 
             float thumbX = m_sliderBounds.left + fillW;
             float thumbY = m_sliderBounds.top + m_sliderBounds.height / 2.0f;
-            sf::RectangleShape thumb(sf::Vector2f(8.0f, 16.0f));
-            thumb.setOrigin(4.0f, 8.0f);
+            sf::RectangleShape thumb(sf::Vector2f(10.0f, 20.0f));
+            thumb.setOrigin(5.0f, 10.0f);
             thumb.setPosition(std::floor(thumbX), std::floor(thumbY));
             thumb.setScale(m_sliderThumbScale, m_sliderThumbScale);
             thumb.setFillColor(Theme::SunsetPeach);
@@ -189,12 +194,12 @@ namespace WisdomUI {
             thumb.setOutlineColor(Theme::SunsetGold);
             window.draw(thumb);
 
-            Theme::DrawCrispText(window, m_font, std::to_string(static_cast<int>(m_size)) + "px", 12, m_sliderBounds.left + m_sliderBounds.width + 10.0f, m_bounds.top + 8.0f, Theme::TextPrimary);
+            Theme::DrawCrispText(window, m_font, std::to_string(static_cast<int>(m_size)) + "px", 13, std::floor(m_sliderBounds.left + m_sliderBounds.width + 10.0f), std::floor(m_bounds.top + 8.0f), Theme::TextPrimary);
 
             bool showStab = !m_pixelMode && (m_activeToolName == "Brush" || m_activeToolName == "Pencil");
 
             if (showStab) {
-                Theme::DrawCrispText(window, m_font, "STAB:", 12, m_stabSliderBounds.left - 42.0f, m_bounds.top + 8.0f, Theme::TextSecondary);
+                Theme::DrawCrispText(window, m_font, "STAB:", 13, std::floor(m_stabSliderBounds.left - 48.0f), std::floor(m_bounds.top + 8.0f), Theme::TextSecondary);
 
                 sf::RectangleShape stabTrack(sf::Vector2f(m_stabSliderBounds.width, m_stabSliderBounds.height));
                 stabTrack.setPosition(m_stabSliderBounds.left, m_stabSliderBounds.top);
@@ -213,8 +218,8 @@ namespace WisdomUI {
 
                 float stabThumbX = m_stabSliderBounds.left + stabFillW;
                 float stabThumbY = m_stabSliderBounds.top + m_stabSliderBounds.height / 2.0f;
-                sf::RectangleShape stabThumb(sf::Vector2f(8.0f, 16.0f));
-                stabThumb.setOrigin(4.0f, 8.0f);
+                sf::RectangleShape stabThumb(sf::Vector2f(10.0f, 20.0f));
+                stabThumb.setOrigin(5.0f, 10.0f);
                 stabThumb.setPosition(std::floor(stabThumbX), std::floor(stabThumbY));
                 stabThumb.setScale(m_stabSliderThumbScale, m_stabSliderThumbScale);
                 stabThumb.setFillColor(Theme::SunsetAmber);
@@ -223,14 +228,14 @@ namespace WisdomUI {
                 window.draw(stabThumb);
 
                 int stabPercent = static_cast<int>(std::round(m_stabilization * 100.0f));
-                Theme::DrawCrispText(window, m_font, std::to_string(stabPercent) + "%", 12, m_stabSliderBounds.left + m_stabSliderBounds.width + 10.0f, m_bounds.top + 8.0f, Theme::TextPrimary);
+                Theme::DrawCrispText(window, m_font, std::to_string(stabPercent) + "%", 13, std::floor(m_stabSliderBounds.left + m_stabSliderBounds.width + 10.0f), std::floor(m_bounds.top + 8.0f), Theme::TextPrimary);
             }
 
             if (m_pixelMode) {
-                Theme::DrawSunsetButton(window, m_perfBtnBounds, "Pixel Perfect", m_font, 11, m_pixelPerfect, m_perfHoverAlpha > 0.5f, true, 1.0f);
+                Theme::DrawSunsetButton(window, m_perfBtnBounds, "Pixel Perfect", m_font, 12, m_pixelPerfect, m_perfHoverAlpha > 0.5f, true, 1.0f);
             }
 
-            Theme::DrawSunsetButton(window, m_outlineBtnBounds, "Outline", m_font, 11, false, m_outlineHoverAlpha > 0.5f, false, 1.0f);
+            Theme::DrawSunsetButton(window, m_outlineBtnBounds, "Outline", m_font, 12, false, m_outlineHoverAlpha > 0.5f, false, 1.0f);
 
             sf::RectangleShape colorBox(sf::Vector2f(m_outlineColorBoxBounds.width, m_outlineColorBoxBounds.height));
             colorBox.setPosition(m_outlineColorBoxBounds.left, m_outlineColorBoxBounds.top);
