@@ -53,7 +53,7 @@ void LayerPanel::init() {
 
     setupBtn(addBtn, addText, "+ New", 44.f);
     setupBtn(dupBtn, dupText, "Dup", 34.f);
-    setupBtn(delBtn, delText, "Del", 32.f);
+    setupBtn(delBtn, delText, "Del", 40.f);
     setupBtn(mergeDownBtn, mergeDownText, "Merge", 42.f);
     setupBtn(mergeVisBtn, mergeVisText, "Flat", 34.f);
     setupBtn(pushBtn, pushText, "Ext", 36.f);
@@ -222,21 +222,29 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
     drawHeaderBtn(closeBtn, closeText, false);
     drawHeaderBtn(pinBtn, pinText, state == LayerPanelState::Pinned);
 
-    auto drawActionBtn = [&](sf::RectangleShape& r, sf::Text& t) {
+    auto drawActionBtn = [&](sf::RectangleShape& r, sf::Text& t, bool isDelete = false) {
         bool hov = r.getGlobalBounds().contains(mousePos);
-        r.setFillColor(hov ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
-        r.setOutlineColor(hov ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
-        t.setFillColor(hov ? sf::Color::White : WisdomUI::Theme::Gold);
+        if (isDelete && hov) {
+            r.setFillColor(sf::Color(180, 45, 45));
+            r.setOutlineColor(sf::Color(240, 90, 90));
+            t.setFillColor(sf::Color::White);
+        }
+        else {
+            r.setFillColor(hov ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
+            r.setOutlineColor(hov ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
+            t.setFillColor(hov ? sf::Color::White : WisdomUI::Theme::Gold);
+        }
         window.draw(r);
         window.draw(t);
         };
 
     drawActionBtn(addBtn, addText);
     drawActionBtn(dupBtn, dupText);
-    drawActionBtn(delBtn, delText);
+    drawActionBtn(delBtn, delText, true);
     drawActionBtn(mergeDownBtn, mergeDownText);
     drawActionBtn(mergeVisBtn, mergeVisText);
     drawActionBtn(pushBtn, pushText);
+
 
     const Frame* frame = canvas.getFrameReadOnly(currentFrame);
     if (!frame) return;
@@ -530,6 +538,14 @@ bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canv
             }
             if (event.key.code == sf::Keyboard::Escape) {
                 renamingLayerIndex = -1;
+                return true;
+            }
+        }
+    }
+    if (event.type == sf::Event::KeyPressed && renamingLayerIndex == -1) {
+        if (event.key.code == sf::Keyboard::Delete || event.key.code == sf::Keyboard::BackSpace) {
+            if (background.getGlobalBounds().contains(mousePos)) {
+                canvas.deleteLayer(currentFrame, canvas.getActiveLayer());
                 return true;
             }
         }

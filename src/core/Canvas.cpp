@@ -465,17 +465,32 @@ void Canvas::addLayer(int frameIndex, const std::string& name) {
 }
 
 void Canvas::deleteLayer(int frameIndex, int layerIndex) {
-    if (frames.size() > 0 && frames[0].layers.size() > 1) {
-        if (layerIndex >= 0 && layerIndex < static_cast<int>(frames[0].layers.size())) {
-            saveUndoState();
-            for (size_t i = 0; i < frames.size(); ++i) {
-                frames[i].layers.erase(frames[i].layers.begin() + layerIndex);
+    if (frames.empty() || frames[0].layers.size() <= 1) return;
+    if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[0].layers.size())) return;
+
+    saveUndoState();
+
+    for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
+        if (it->layer == layerIndex) {
+            it = m_vectorStrokes.erase(it);
+        }
+        else {
+            if (it->layer > layerIndex) {
+                it->layer--;
             }
-            if (activeLayer >= static_cast<int>(frames[0].layers.size())) {
-                activeLayer = static_cast<int>(frames[0].layers.size()) - 1;
-            }
+            ++it;
         }
     }
+
+    for (size_t i = 0; i < frames.size(); ++i) {
+        frames[i].layers.erase(frames[i].layers.begin() + layerIndex);
+    }
+
+    if (activeLayer >= static_cast<int>(frames[0].layers.size())) {
+        activeLayer = static_cast<int>(frames[0].layers.size()) - 1;
+    }
+
+    isDirty = true;
 }
 
 void Canvas::duplicateLayer(int frameIndex, int layerIndex) {
