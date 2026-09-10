@@ -1229,6 +1229,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(sf::Vector2u(event.size.width, event.size.height)));
     }
 
+
+
     if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F11) {
         toggleFullscreen(window, settings);
         return;
@@ -1807,7 +1809,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (assetBrowser && assetBrowser->getIsVisible()) {
-            assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame());
+            if (assetBrowser->handleEvent(event, window, canvas, timeline.getCurrentFrame())) return;
         }
 
         if (audioPanel.getIsVisible()) {
