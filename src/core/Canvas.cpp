@@ -53,77 +53,7 @@ static void appendVectorCap(sf::VertexArray& va, sf::Vector2f center, float radi
     }
 }
 
-void Canvas::eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius, int currentFrame) {
-    float rSq = radius * radius;
-
-    auto distSqToSegment = [](sf::Vector2f p, sf::Vector2f a, sf::Vector2f b) -> float {
-        sf::Vector2f ab = b - a;
-        float lenSq = ab.x * ab.x + ab.y * ab.y;
-        if (lenSq < 0.0001f) {
-            float dx = p.x - a.x, dy = p.y - a.y;
-            return dx * dx + dy * dy;
-        }
-        float t = std::clamp(((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / lenSq, 0.0f, 1.0f);
-        sf::Vector2f proj = a + t * ab;
-        float dx = p.x - proj.x, dy = p.y - proj.y;
-        return dx * dx + dy * dy;
-        };
-
-    bool anyModified = false;
-
-    for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
-        if (it->frame != currentFrame || it->layer != activeLayer) {
-            ++it;
-            continue;
-        }
-
-        sf::VertexArray& va = it->mesh;
-        size_t vCount = va.getVertexCount();
-        if (vCount < 3) {
-            it = m_vectorStrokes.erase(it);
-            anyModified = true;
-            continue;
-        }
-
-        sf::VertexArray newVa(sf::Triangles);
-        bool strokeChanged = false;
-
-        for (size_t i = 0; i + 2 < vCount; i += 3) {
-            const sf::Vector2f& a = va[i].position;
-            const sf::Vector2f& b = va[i + 1].position;
-            const sf::Vector2f& c = va[i + 2].position;
-            sf::Vector2f center = (a + b + c) / 3.0f;
-
-            if (distSqToSegment(center, p1, p2) <= rSq ||
-                distSqToSegment(a, p1, p2) <= rSq ||
-                distSqToSegment(b, p1, p2) <= rSq ||
-                distSqToSegment(c, p1, p2) <= rSq) {
-                strokeChanged = true;
-            }
-            else {
-                newVa.append(va[i]);
-                newVa.append(va[i + 1]);
-                newVa.append(va[i + 2]);
-            }
-        }
-
-        if (strokeChanged) {
-            anyModified = true;
-            if (newVa.getVertexCount() == 0) {
-                it = m_vectorStrokes.erase(it);
-                continue;
-            }
-            else {
-                it->mesh = newVa;
-            }
-        }
-        ++it;
-    }
-
-    if (anyModified) {
-        isDirty = true;
-    }
-}
+void Canvas::eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius, int currentFrame) {}
 
 const int DEFAULT_NORMAL_W = 1280;
 const int DEFAULT_NORMAL_H = 720;
@@ -260,14 +190,12 @@ void Canvas::init() {
 void Canvas::initCustom(int width, int height) {
     canvasLogicalSize = sf::Vector2u(static_cast<unsigned int>(width), static_cast<unsigned int>(height));
 
-    if (!deskTexture.loadFromFile("assets/workbench.png", sf::IntRect(114, 702, 1669, 379))) {
-    }
+    if (!deskTexture.loadFromFile("assets/workbench.png", sf::IntRect(114, 702, 1669, 379))) {}
     deskSprite.setTexture(deskTexture);
     deskSprite.setOrigin(1669.f / 2.f, 379.f / 2.f);
     deskSprite.setPosition(1920.f / 2.f, 850.f);
 
-    if (!canvasTexture.loadFromFile("assets/canvas.png")) {
-    }
+    if (!canvasTexture.loadFromFile("assets/canvas.png")) {}
     canvasSprite.setTexture(canvasTexture);
 
     float maxViewportHeight = 700.f;
@@ -469,18 +397,6 @@ void Canvas::deleteLayer(int frameIndex, int layerIndex) {
     if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[0].layers.size())) return;
 
     saveUndoState();
-
-    for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
-        if (it->layer == layerIndex) {
-            it = m_vectorStrokes.erase(it);
-        }
-        else {
-            if (it->layer > layerIndex) {
-                it->layer--;
-            }
-            ++it;
-        }
-    }
 
     for (size_t i = 0; i < frames.size(); ++i) {
         frames[i].layers.erase(frames[i].layers.begin() + layerIndex);
@@ -916,7 +832,6 @@ void Canvas::saveUndoState() {
     isDirty = true;
     UndoState state;
     state.frames = frames;
-    state.vectorStrokes = m_vectorStrokes;
     undoHistory.push_back(state);
     if (undoHistory.size() > maxUndoHistory) {
         undoHistory.erase(undoHistory.begin());
@@ -928,14 +843,12 @@ void Canvas::undo() {
     if (!undoHistory.empty()) {
         UndoState currentState;
         currentState.frames = frames;
-        currentState.vectorStrokes = m_vectorStrokes;
         redoHistory.push_back(currentState);
 
         UndoState prevState = undoHistory.back();
         undoHistory.pop_back();
 
         frames = prevState.frames;
-        m_vectorStrokes = prevState.vectorStrokes;
 
         selection.clearSelection();
         transformMode = TransformState::None;
@@ -954,14 +867,12 @@ void Canvas::redo() {
     if (!redoHistory.empty()) {
         UndoState currentState;
         currentState.frames = frames;
-        currentState.vectorStrokes = m_vectorStrokes;
         undoHistory.push_back(currentState);
 
         UndoState nextState = redoHistory.back();
         redoHistory.pop_back();
 
         frames = nextState.frames;
-        m_vectorStrokes = nextState.vectorStrokes;
 
         selection.clearSelection();
         transformMode = TransformState::None;
@@ -1625,9 +1536,6 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 return;
             }
 
-            if (selection.isActive() && activeTool != ToolType::Fill && activeTool != ToolType::Shapes) {
-            }
-
             if (activeTool == ToolType::Fill) {
                 if (isPixelMode) fillTolerance = 0.0f;
                 else fillTolerance = 0.08f;
@@ -1651,6 +1559,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 }
                 return;
             }
+
             bool canDrawLine = (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser);
             bool isShift = sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift);
 
@@ -1671,7 +1580,11 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             }
 
             if (!isPixelMode && m_isVectorStrokeActive && m_activeVectorMesh.getVertexCount() > 0) {
-                m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
+                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                if (targetTex) {
+                    targetTex->draw(m_activeVectorMesh);
+                    targetTex->display();
+                }
                 m_isVectorStrokeActive = false;
                 m_activeVectorMesh.clear();
             }
@@ -1710,7 +1623,16 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 }
                 else if (activeTool == ToolType::Eraser) {
                     float radius = brushEngine.getActivePreset().size * 0.5f;
-                    eraseVectorStrokesAt(localPos, localPos, radius, currentFrame);
+                    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                    if (targetTex) {
+                        sf::RenderStates rs(sf::BlendNone);
+                        sf::CircleShape circle(radius);
+                        circle.setOrigin(radius, radius);
+                        circle.setPosition(localPos);
+                        circle.setFillColor(sf::Color::Transparent);
+                        targetTex->draw(circle, rs);
+                        targetTex->display();
+                    }
                 }
                 else {
                     brushEngine.resetStroke(localPos);
@@ -1813,8 +1735,10 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
             appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, primaryColor);
         }
 
-        if (m_activeVectorMesh.getVertexCount() > 0) {
-            m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
+        sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+        if (targetTex && m_activeVectorMesh.getVertexCount() > 0) {
+            targetTex->draw(m_activeVectorMesh);
+            targetTex->display();
         }
         m_isVectorStrokeActive = false;
         m_activeVectorMesh.clear();
@@ -1981,7 +1905,6 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
             else if (activeTool == ToolType::Eraser) {
                 float currentEraserSize = brushEngine.getActivePreset().size;
                 float radius = currentEraserSize * 0.5f;
-                eraseVectorStrokesAt(lastPos, targetPos, radius, currentFrame);
 
                 sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
                 if (targetTex) {
@@ -2017,8 +1940,10 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                 appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
                 appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, primaryColor);
 
-                if (m_activeVectorMesh.getVertexCount() > 0) {
-                    m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
+                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                if (targetTex && m_activeVectorMesh.getVertexCount() > 0) {
+                    targetTex->draw(m_activeVectorMesh);
+                    targetTex->display();
                 }
                 m_isVectorStrokeActive = false;
                 m_activeVectorMesh.clear();
@@ -2101,8 +2026,6 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     frameTransform.translate(std::round(drawArea.left), std::round(drawArea.top));
     sf::RenderStates frameStates = states;
     frameStates.transform = frameTransform;
-
-    
 
     sf::RectangleShape bg(sf::Vector2f(canvasLogicalSize.x, canvasLogicalSize.y));
     bg.setFillColor(sf::Color::White);
@@ -2192,12 +2115,8 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                 sf::RenderStates layerStates = innerStates;
                 layerStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
                 window.draw(spr, layerStates);
+
                 if (!isPixelMode) {
-                    for (const auto& vs : m_vectorStrokes) {
-                        if (vs.frame == currentFrame && vs.layer == static_cast<int>(i)) {
-                            window.draw(vs.mesh, innerStates);
-                        }
-                    }
                     if (m_isVectorStrokeActive && static_cast<int>(i) == activeLayer) {
                         window.draw(m_activeVectorMesh, innerStates);
                     }
@@ -2332,6 +2251,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         window.draw(rightEdge, frameStates);
         window.draw(innerShadow, frameStates);
     }
+
     selection.draw(window, innerStates);
 
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
@@ -2353,17 +2273,44 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             float ty = std::floor(localPos.y) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
 
             sf::RectangleShape pxHover(sf::Vector2f(static_cast<float>(pixelBrushSize), static_cast<float>(pixelBrushSize)));
-            pxHover.setFillColor(sf::Color(255, 255, 255, 90));
-            pxHover.setOutlineThickness(0.f);
+            pxHover.setFillColor(sf::Color(20, 10, 30, 40));
+            pxHover.setOutlineThickness(0.2f);
+            pxHover.setOutlineColor(sf::Color(20, 10, 30, 220));
             pxHover.setPosition(tx, ty);
 
-            sf::RenderStates hoverStates = innerStates;
-            hoverStates.blendMode = sf::BlendAdd;
-
-            window.draw(pxHover, hoverStates);
+            window.draw(pxHover, innerStates);
         }
         else {
-            brushEngine.drawPreviewCursor(window, currentRawMousePos, sf::Color::White, viewScale);
+            float brushDiameter = brushEngine.getActivePreset().size;
+            float worldPerLogical = drawArea.width / static_cast<float>(canvasLogicalSize.x);
+            float screenRadius = (brushDiameter * 0.5f) * worldPerLogical * viewScale;
+            screenRadius = std::max(2.0f, screenRadius);
+
+            sf::CircleShape outerRing(screenRadius);
+            outerRing.setOrigin(screenRadius, screenRadius);
+            outerRing.setPosition(currentRawMousePos);
+            outerRing.setFillColor(sf::Color::Transparent);
+            outerRing.setOutlineThickness(1.5f);
+            outerRing.setOutlineColor(sf::Color(15, 10, 25, 230));
+            window.draw(outerRing);
+
+            if (screenRadius > 2.5f) {
+                sf::CircleShape innerRing(screenRadius - 1.0f);
+                innerRing.setOrigin(screenRadius - 1.0f, screenRadius - 1.0f);
+                innerRing.setPosition(currentRawMousePos);
+                innerRing.setFillColor(sf::Color::Transparent);
+                innerRing.setOutlineThickness(1.0f);
+                innerRing.setOutlineColor(sf::Color(255, 255, 255, 230));
+                window.draw(innerRing);
+            }
+
+            sf::CircleShape dot(1.5f);
+            dot.setOrigin(1.5f, 1.5f);
+            dot.setPosition(currentRawMousePos);
+            dot.setFillColor(sf::Color(255, 215, 60));
+            dot.setOutlineThickness(1.0f);
+            dot.setOutlineColor(sf::Color(15, 10, 25));
+            window.draw(dot);
         }
     }
 }
@@ -2608,4 +2555,3 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     selection.addLassoPoint(sf::Vector2f(static_cast<float>(minX), static_cast<float>(maxY + 1)), canvasLogicalSize);
     selection.endLasso();
 }
-

@@ -3,13 +3,17 @@
 #include <algorithm>
 
 SelectionManager::SelectionManager() : state(SelectionState::Inactive), dashOffset(0.f), hasClipboard(false), isDragging(false),
-showHandles(false), handleVisualSize(6.f), isResizingFlag(false), activeHandle(-1),
-resizeAnchorWorld(0.f, 0.f), resizeAnchorLocal(0.f, 0.f), resizeDraggedLocal(0.f, 0.f) {
+showHandles(false), handleVisualSize(8.f), isResizingFlag(false), activeHandle(-1),
+resizeAnchorWorld(0.f, 0.f), resizeAnchorLocal(0.f, 0.f), resizeDraggedLocal(0.f, 0.f), resizeInitialScale(1.f, 1.f) {
     sf::Image dashImg;
-    dashImg.create(8, 2, sf::Color::Transparent);
-    for (int i = 0; i < 4; i++) {
-        dashImg.setPixel(i, 0, sf::Color::White);
-        dashImg.setPixel(i, 1, sf::Color::Black);
+    dashImg.create(12, 2, sf::Color::Transparent);
+    for (int i = 0; i < 6; i++) {
+        dashImg.setPixel(i, 0, sf::Color(15, 10, 25));
+        dashImg.setPixel(i, 1, sf::Color(15, 10, 25));
+    }
+    for (int i = 6; i < 12; i++) {
+        dashImg.setPixel(i, 0, sf::Color(255, 215, 60));
+        dashImg.setPixel(i, 1, sf::Color(255, 215, 60));
     }
     dashTexture.loadFromImage(dashImg);
     dashTexture.setRepeated(true);
@@ -32,7 +36,27 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
 
     const std::vector<sf::Vector2f>& pts = (state == SelectionState::Floating) ? localPoints : pathPoints;
 
+    sf::RenderStates states = baseStates;
+    if (state == SelectionState::Floating) {
+        states.transform *= floatingSprite.getTransform();
+    }
+
+    if (pts.size() > 2 && (state == SelectionState::Selected || state == SelectionState::Floating)) {
+        sf::VertexArray fillPoly(sf::TriangleFan);
+        for (const auto& p : pts) {
+            fillPoly.append(sf::Vertex(p, sf::Color(0, 160, 255, 40)));
+        }
+        window.draw(fillPoly, states);
+    }
+
     if (pts.size() > 1) {
+        sf::VertexArray darkUnder(sf::LineStrip, pts.size());
+        for (size_t i = 0; i < pts.size(); ++i) {
+            darkUnder[i].position = pts[i];
+            darkUnder[i].color = sf::Color(15, 10, 25, 220);
+        }
+        window.draw(darkUnder, states);
+
         sf::VertexArray ants(sf::LineStrip, pts.size());
         float dist = 0.f;
         for (size_t i = 0; i < pts.size(); ++i) {
@@ -41,28 +65,32 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
                 dist += std::sqrt(diff.x * diff.x + diff.y * diff.y);
             }
             ants[i].position = pts[i];
-            ants[i].texCoords = sf::Vector2f(dist + dashOffset, 0.f);
-            ants[i].color = sf::Color(255, 255, 255, 200);
+            ants[i].texCoords = sf::Vector2f(dist + dashOffset, 0.5f);
+            ants[i].color = sf::Color::White;
         }
 
-        sf::RenderStates states = baseStates;
-        states.texture = &dashTexture;
-        if (state == SelectionState::Floating) {
-            states.transform *= floatingSprite.getTransform();
-        }
-
-        window.draw(ants, states);
+        sf::RenderStates dashStates = states;
+        dashStates.texture = &dashTexture;
+        window.draw(ants, dashStates);
     }
 
     if (state == SelectionState::Floating && showHandles) {
-        auto corners = getHandlePositions();
-        for (const auto& c : corners) {
-            sf::RectangleShape h(sf::Vector2f(handleVisualSize, handleVisualSize));
-            h.setOrigin(handleVisualSize / 2.f, handleVisualSize / 2.f);
-            h.setPosition(c);
-            h.setFillColor(sf::Color(0, 191, 255));
-            h.setOutlineThickness(std::max(0.5f, handleVisualSize * 0.15f));
-            h.setOutlineColor(sf::Color::White);
+        auto handles = getHandlePositions();
+        float hSize = std::max(8.0f, handleVisualSize);
+        for (size_t i = 0; i < handles.size(); ++i) {
+            sf::RectangleShape h(sf::Vector2f(hSize, hSize));
+            h.setOrigin(hSize / 2.f, hSize / 2.f);
+            h.setPosition(handles[i]);
+
+            if (i % 2 == 0) {
+                h.setFillColor(sf::Color(255, 210, 90));
+            }
+            else {
+                h.setFillColor(sf::Color(240, 90, 80));
+            }
+
+            h.setOutlineThickness(1.5f);
+            h.setOutlineColor(sf::Color(15, 10, 25));
             window.draw(h, baseStates);
         }
     }
@@ -163,8 +191,12 @@ bool SelectionManager::isPointInsideSelection(sf::Vector2f pos) const {
     return false;
 }
 
+void SelectionManager::setSmooth(bool smooth) {
+    floatingTexture.setSmooth(smooth);
+}
+
 void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool removeOriginal) {
-    if (state != SelectionState::Selected) return;
+    if (state != SelectionState::Selected || !layerTexture) return;
 
     int w = static_cast<int>(boundingBox.width);
     int h = static_cast<int>(boundingBox.height);
@@ -198,7 +230,6 @@ void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool re
     floatingTexture.loadFromImage(extractImg);
     floatingSprite.setTexture(floatingTexture, true);
 
-    // Lock origin to 0,0 to fix the move/jump bug when detaching from layer
     floatingSprite.setOrigin(0.f, 0.f);
     floatingSprite.setPosition(boundingBox.left, boundingBox.top);
     floatingSprite.setScale(1.f, 1.f);
@@ -212,7 +243,7 @@ void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool re
 }
 
 void SelectionManager::commitToLayer(sf::RenderTexture* layerTexture) {
-    if (state == SelectionState::Floating) {
+    if (state == SelectionState::Floating && layerTexture) {
         layerTexture->draw(floatingSprite);
         layerTexture->display();
     }
@@ -264,7 +295,7 @@ void SelectionManager::copy(sf::RenderTexture* layerTexture) {
         clipboardTexture = floatingTexture;
         clipboardPos = floatingSprite.getPosition() - floatingSprite.getOrigin();
         hasClipboard = true;
-        pasteCount = 0; // Reset offset on fresh copy
+        pasteCount = 0;
     }
     else if (state == SelectionState::Selected && layerTexture) {
         int w = static_cast<int>(boundingBox.width);
@@ -289,7 +320,7 @@ void SelectionManager::copy(sf::RenderTexture* layerTexture) {
         clipboardTexture.loadFromImage(tempImg);
         clipboardPos = sf::Vector2f(boundingBox.left, boundingBox.top);
         hasClipboard = true;
-        pasteCount = 0; // Reset offset on fresh copy
+        pasteCount = 0;
     }
 }
 
@@ -301,7 +332,6 @@ void SelectionManager::paste(sf::Vector2u canvasSize) {
     int w = static_cast<int>(floatingTexture.getSize().x);
     int h = static_cast<int>(floatingTexture.getSize().y);
 
-    // Increment paste count to cascade offsets diagonally
     pasteCount++;
     sf::Vector2f offset(pasteCount * 20.f, pasteCount * 20.f);
 
@@ -309,7 +339,6 @@ void SelectionManager::paste(sf::Vector2u canvasSize) {
     floatingSprite.setPosition(clipboardPos + offset);
     floatingSprite.setScale(1.f, 1.f);
 
-    // Prevent the offset from eventually pushing the object entirely off-canvas
     clampToCanvas(canvasSize, false);
 
     localPoints.clear();
@@ -371,7 +400,7 @@ void SelectionManager::duplicate(sf::RenderTexture* layerTexture, sf::Vector2u c
         floatingSprite.move(20.f, 20.f);
         clampToCanvas(canvasSize);
     }
-    else if (state == SelectionState::Floating) {
+    else if (state == SelectionState::Floating && layerTexture) {
         layerTexture->draw(floatingSprite);
         layerTexture->display();
         floatingSprite.move(20.f, 20.f);
@@ -381,10 +410,6 @@ void SelectionManager::duplicate(sf::RenderTexture* layerTexture, sf::Vector2u c
 
 SelectionState SelectionManager::getState() const { return state; }
 bool SelectionManager::isActive() const { return state != SelectionState::Inactive; }
-
-// ---------------------------------------------------------------------------
-// Resize / free-transform via corner handles
-// ---------------------------------------------------------------------------
 
 void SelectionManager::setShowHandles(bool show) {
     showHandles = show;
@@ -400,23 +425,27 @@ void SelectionManager::setHandleVisualSize(float localSize) {
     handleVisualSize = std::max(1.0f, localSize);
 }
 
-std::array<sf::Vector2f, 4> SelectionManager::getHandlePositions() const {
+std::array<sf::Vector2f, 8> SelectionManager::getHandlePositions() const {
     float w = static_cast<float>(floatingTexture.getSize().x);
     float h = static_cast<float>(floatingTexture.getSize().y);
     sf::Transform t = floatingSprite.getTransform();
     return {
-        t.transformPoint(0.f, 0.f), // TL
-        t.transformPoint(w, 0.f),   // TR
-        t.transformPoint(w, h),     // BR
-        t.transformPoint(0.f, h)    // BL
+        t.transformPoint(0.f, 0.f),
+        t.transformPoint(w * 0.5f, 0.f),
+        t.transformPoint(w, 0.f),
+        t.transformPoint(w, h * 0.5f),
+        t.transformPoint(w, h),
+        t.transformPoint(w * 0.5f, h),
+        t.transformPoint(0.f, h),
+        t.transformPoint(0.f, h * 0.5f)
     };
 }
 
 int SelectionManager::hitTestHandle(sf::Vector2f pos, float handleRadius) const {
     if (state != SelectionState::Floating) return -1;
-    auto corners = getHandlePositions();
-    for (size_t i = 0; i < corners.size(); ++i) {
-        sf::Vector2f d = pos - corners[i];
+    auto handles = getHandlePositions();
+    for (size_t i = 0; i < handles.size(); ++i) {
+        sf::Vector2f d = pos - handles[i];
         if (std::sqrt(d.x * d.x + d.y * d.y) <= handleRadius) return static_cast<int>(i);
     }
     return -1;
@@ -428,7 +457,7 @@ bool SelectionManager::startResize(sf::Vector2f pos, float handleRadius) {
     if (idx == -1) return false;
 
     activeHandle = idx;
-    int anchorIdx = (idx + 2) % 4; // opposite corner stays fixed
+    int anchorIdx = (idx + 4) % 8;
 
     auto worldCorners = getHandlePositions();
     resizeAnchorWorld = worldCorners[anchorIdx];
@@ -437,11 +466,20 @@ bool SelectionManager::startResize(sf::Vector2f pos, float handleRadius) {
     float h = static_cast<float>(floatingTexture.getSize().y);
     sf::Vector2f origin = floatingSprite.getOrigin();
 
-    std::array<sf::Vector2f, 4> localFull = {
-        sf::Vector2f(0.f, 0.f), sf::Vector2f(w, 0.f), sf::Vector2f(w, h), sf::Vector2f(0.f, h)
+    std::array<sf::Vector2f, 8> localFull = {
+        sf::Vector2f(0.f, 0.f),
+        sf::Vector2f(w * 0.5f, 0.f),
+        sf::Vector2f(w, 0.f),
+        sf::Vector2f(w, h * 0.5f),
+        sf::Vector2f(w, h),
+        sf::Vector2f(w * 0.5f, h),
+        sf::Vector2f(0.f, h),
+        sf::Vector2f(0.f, h * 0.5f)
     };
+
     resizeAnchorLocal = localFull[anchorIdx] - origin;
     resizeDraggedLocal = localFull[idx] - origin;
+    resizeInitialScale = floatingSprite.getScale();
 
     isResizingFlag = true;
     return true;
@@ -452,18 +490,37 @@ void SelectionManager::resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool al
 
     sf::Vector2f diffLocal = resizeDraggedLocal - resizeAnchorLocal;
 
-    float newScaleX = floatingSprite.getScale().x;
-    float newScaleY = floatingSprite.getScale().y;
-    if (std::abs(diffLocal.x) > 0.0001f) newScaleX = (pos.x - resizeAnchorWorld.x) / diffLocal.x;
-    if (std::abs(diffLocal.y) > 0.0001f) newScaleY = (pos.y - resizeAnchorWorld.y) / diffLocal.y;
+    float newScaleX = resizeInitialScale.x;
+    float newScaleY = resizeInitialScale.y;
 
-    // Prevent inverting/vanishing the selection - clamp to a sane minimum
-    // size in canvas-logical pixels regardless of the source texture size.
+    if (activeHandle == 1 || activeHandle == 5) {
+        if (std::abs(diffLocal.y) > 0.0001f) {
+            newScaleY = (pos.y - resizeAnchorWorld.y) / diffLocal.y;
+        }
+    }
+    else if (activeHandle == 3 || activeHandle == 7) {
+        if (std::abs(diffLocal.x) > 0.0001f) {
+            newScaleX = (pos.x - resizeAnchorWorld.x) / diffLocal.x;
+        }
+    }
+    else {
+        if (std::abs(diffLocal.x) > 0.0001f) newScaleX = (pos.x - resizeAnchorWorld.x) / diffLocal.x;
+        if (std::abs(diffLocal.y) > 0.0001f) newScaleY = (pos.y - resizeAnchorWorld.y) / diffLocal.y;
+
+        bool isShift = sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift);
+        if (isShift) {
+            float scaleVal = std::max(std::abs(newScaleX), std::abs(newScaleY));
+            newScaleX = (newScaleX < 0.f ? -scaleVal : scaleVal);
+            newScaleY = (newScaleY < 0.f ? -scaleVal : scaleVal);
+        }
+    }
+
     float w = static_cast<float>(floatingTexture.getSize().x);
     float h = static_cast<float>(floatingTexture.getSize().y);
     const float minDim = 4.0f;
     float minScaleX = minDim / std::max(1.f, w);
     float minScaleY = minDim / std::max(1.f, h);
+
     if (newScaleX < minScaleX) newScaleX = minScaleX;
     if (newScaleY < minScaleY) newScaleY = minScaleY;
 
