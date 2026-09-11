@@ -219,6 +219,9 @@ void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool re
     }
 
     floatingTexture.loadFromImage(extractImg);
+    if (layerTexture) {
+        floatingTexture.setSmooth(layerTexture->isSmooth());
+    }
     floatingSprite.setTexture(floatingTexture, true);
     floatingSprite.setOrigin(0.f, 0.f);
     floatingSprite.setPosition(boundingBox.left, boundingBox.top);

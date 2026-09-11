@@ -74,7 +74,11 @@ Layer::Layer(const Layer& other) : name(other.name), visible(other.visible), loc
     else {
         texture = std::make_shared<sf::RenderTexture>();
         if (other.texture) {
-            texture->create(other.texture->getSize().x, other.texture->getSize().y);
+            sf::ContextSettings ctx;
+            ctx.antialiasingLevel = other.texture->isSmooth() ? 8 : 0;
+            if (!texture->create(other.texture->getSize().x, other.texture->getSize().y, ctx)) {
+                texture->create(other.texture->getSize().x, other.texture->getSize().y);
+            }
             texture->clear(sf::Color::Transparent);
             texture->setSmooth(other.texture->isSmooth());
             sf::Sprite spr(other.texture->getTexture());
@@ -108,7 +112,11 @@ Layer& Layer::operator=(const Layer& other) {
                 texture = std::make_shared<sf::RenderTexture>();
             }
             if (other.texture) {
-                texture->create(other.texture->getSize().x, other.texture->getSize().y);
+                sf::ContextSettings ctx;
+                ctx.antialiasingLevel = other.texture->isSmooth() ? 8 : 0;
+                if (!texture->create(other.texture->getSize().x, other.texture->getSize().y, ctx)) {
+                    texture->create(other.texture->getSize().x, other.texture->getSize().y);
+                }
                 texture->setSmooth(other.texture->isSmooth());
                 texture->clear(sf::Color::Transparent);
                 sf::Sprite spr(other.texture->getTexture());
@@ -220,8 +228,12 @@ void Canvas::initCustom(int width, int height) {
 
     frames.clear();
     frames.emplace_back();
+    sf::ContextSettings ctx;
+    ctx.antialiasingLevel = isPixelMode ? 0 : 8;
     for (auto& l : frames[0].layers) {
-        l.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+        if (!l.texture->create(canvasLogicalSize.x, canvasLogicalSize.y, ctx)) {
+            l.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+        }
         l.texture->clear(sf::Color::Transparent);
         l.texture->setSmooth(!isPixelMode);
     }
@@ -347,7 +359,11 @@ void Canvas::addFrame(int index) {
             newL.texture = l.texture;
         }
         else {
-            newL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+            sf::ContextSettings ctx;
+            ctx.antialiasingLevel = isPixelMode ? 0 : 8;
+            if (!newL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y, ctx)) {
+                newL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+            }
             newL.texture->clear(sf::Color::Transparent);
             newL.texture->setSmooth(!isPixelMode);
         }
@@ -381,9 +397,13 @@ void Canvas::clearAllFrames() {
 void Canvas::addLayer(int frameIndex, const std::string& name) {
     if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size())) {
         saveUndoState();
+        sf::ContextSettings ctx;
+        ctx.antialiasingLevel = isPixelMode ? 0 : 8;
         for (size_t i = 0; i < frames.size(); ++i) {
             Layer newL(name);
-            newL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+            if (!newL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y, ctx)) {
+                newL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+            }
             newL.texture->clear(sf::Color::Transparent);
             newL.texture->setSmooth(!isPixelMode);
             frames[i].layers.push_back(newL);
@@ -424,7 +444,11 @@ void Canvas::duplicateLayer(int frameIndex, int layerIndex) {
             copyL.visible = vis; copyL.locked = lck; copyL.opacity = op; copyL.blendMode = bm; copyL.colorTag = ct;
             copyL.persistent = false;
 
-            copyL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+            sf::ContextSettings ctx;
+            ctx.antialiasingLevel = isPixelMode ? 0 : 8;
+            if (!copyL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y, ctx)) {
+                copyL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+            }
             copyL.texture->clear(sf::Color::Transparent);
             copyL.texture->setSmooth(!isPixelMode);
             sf::Sprite spr(frames[i].layers[layerIndex].texture->getTexture());
