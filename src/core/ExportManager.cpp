@@ -3,32 +3,16 @@
 #include <cmath>
 #include <algorithm>
 
+// Export resolution multiplier. Strokes are retained geometry, so raising this
+// re-rasterizes them larger instead of upscaling a bitmap — 2 or 4 costs almost
+// nothing in quality. Set to 1 for exact canvas-size output.
+static const unsigned int EXPORT_SCALE = 1;
+
 sf::Image ExportManager::flattenFrame(Canvas& canvas, int frameIndex) {
-    sf::Vector2u size = canvas.getCanvasSize();
-    sf::RenderTexture renderTex;
-    renderTex.create(size.x, size.y);
-    renderTex.clear(sf::Color::Transparent);
-
-    const Frame* frame = canvas.getFrameReadOnly(frameIndex);
-    if (frame) {
-        for (const auto& layer : frame->layers) {
-            if (layer.visible) {
-                sf::Sprite spr(layer.texture->getTexture());
-                spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * layer.opacity)));
-
-                sf::RenderStates states;
-                if (layer.blendMode == BlendMode::Multiply) states.blendMode = sf::BlendMultiply;
-                else if (layer.blendMode == BlendMode::Additive) states.blendMode = sf::BlendAdd;
-                else if (layer.blendMode == BlendMode::Screen) states.blendMode = sf::BlendMode(sf::BlendMode::One, sf::BlendMode::OneMinusSrcColor, sf::BlendMode::Add);
-                else states.blendMode = sf::BlendAlpha;
-
-                renderTex.draw(spr, states);
-            }
-        }
-    }
-
-    renderTex.display();
-    return renderTex.getTexture().copyToImage();
+    // CHANGED: was compositing only layer.texture, which meant every vector
+    // stroke was missing from exported images. Canvas::flattenFrameToImage
+    // draws the raster and the strokes together, with blend modes and opacity.
+    return canvas.flattenFrameToImage(frameIndex, EXPORT_SCALE);
 }
 
 sf::IntRect ExportManager::calculateAutoCrop(const sf::Image& img) {

@@ -64,6 +64,8 @@ public:
     void duplicate(sf::RenderTexture* layerTexture, sf::Vector2u canvasSize);
     SelectionState getState() const;
     bool isActive() const;
+    sf::FloatRect getBoundingBox() const { return boundingBox; }
+    sf::Transform getFloatingTransform() const { return floatingSprite.getTransform(); }
 
     void setShowHandles(bool show);
     bool isShowingHandles() const;

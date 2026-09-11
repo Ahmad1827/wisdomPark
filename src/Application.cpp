@@ -1,7 +1,14 @@
 #include "Application.h"
 
+// Shared AA settings so every window we create gets multisampling.
+static sf::ContextSettings makeContextSettings() {
+    sf::ContextSettings s;
+    s.antialiasingLevel = 8;
+    return s;
+}
+
 Application::Application()
-    : window(sf::VideoMode(1600, 900), "Wisdom Park Studio", sf::Style::Default),
+    : window(sf::VideoMode(1600, 900), "Wisdom Park Studio", sf::Style::Default, makeContextSettings()),
     currentState(AppState::Welcome),
     currentFullscreenState(false) {
     window.setFramerateLimit(60);
@@ -26,11 +33,13 @@ void Application::applyVideoMode(bool fullscreen) {
 
     currentFullscreenState = fullscreen;
 
+    // CHANGED: window.create() discards the original ContextSettings, so the
+    // AA level has to be passed again here or fullscreen toggling loses it.
     if (fullscreen) {
-        window.create(sf::VideoMode::getFullscreenModes()[0], "Wisdom Park Studio", sf::Style::Fullscreen);
+        window.create(sf::VideoMode::getFullscreenModes()[0], "Wisdom Park Studio", sf::Style::Fullscreen, makeContextSettings());
     }
     else {
-        window.create(sf::VideoMode(1600, 900), "Wisdom Park Studio", sf::Style::Default);
+        window.create(sf::VideoMode(1600, 900), "Wisdom Park Studio", sf::Style::Default, makeContextSettings());
     }
 
     sf::View view(sf::FloatRect(0.f, 0.f, 1920.f, 1080.f));

@@ -125,6 +125,9 @@ private:
     std::vector<UndoState> redoHistory;
 
     std::vector<VectorStroke> m_vectorStrokes;
+    // Currently unused: selections now bake the layer instead of splitting
+    // meshes. Kept so the member layout doesn't shift under you.
+    std::vector<VectorStroke> m_floatingVectorStrokes;
     sf::VertexArray m_activeVectorMesh;
     sf::Vector2f m_vPrevPoint;
     sf::Vector2f m_vPrevMidPoint;
@@ -180,6 +183,11 @@ private:
 
     void eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius, int currentFrame);
 
+    // NEW: rasterize this layer's retained strokes into its raster texture and
+    // drop them from the stroke list. Every pixel-reading tool calls this first
+    // so it can see vector content. Costs that layer its resolution-independence.
+    void bakeLayerStrokes(int frameIndex, int layerIndex);
+
 public:
     Canvas();
     void init();
@@ -206,6 +214,11 @@ public:
     Frame* getFrame(int index);
     const Frame* getFrameReadOnly(int index) const;
     sf::RenderTexture* getActiveRenderTexture(int currentFrame);
+
+    // NEW: composite a whole frame (raster + strokes, blend modes, opacity)
+    // into an image, optionally at a multiple of canvas resolution. Does not
+    // mutate the document — strokes stay vector, so scaleFactor > 1 is crisp.
+    sf::Image flattenFrameToImage(int frameIndex, unsigned int scaleFactor = 1);
 
     void setPerspectiveManager(PerspectiveManager* pm) { m_perspectiveManager = pm; }
 
@@ -283,6 +296,8 @@ public:
     void fillSelection(sf::Color color, int currentFrame);
     bool getIsDirty() const;
     void clearIsDirty();
+
+    void drawLayerThumbnail(sf::RenderTarget& target, int frameIndex, int layerIndex, sf::FloatRect bounds);
 
     void importImageToActiveLayer(const std::string& filepath, int currentFrame);
 

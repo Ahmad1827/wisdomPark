@@ -339,17 +339,7 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         thumbBase.setOutlineColor(WisdomUI::Theme::Border);
         window.draw(thumbBase);
 
-        if (frame->layers[i].texture) {
-            sf::Sprite thumb(frame->layers[i].texture->getTexture());
-            float cw = static_cast<float>(canvas.getCanvasSize().x);
-            float ch = static_cast<float>(canvas.getCanvasSize().y);
-            if (cw > 0.f && ch > 0.f) {
-                float s = std::min(rowCache[i].thumbBounds.width / cw, rowCache[i].thumbBounds.height / ch);
-                thumb.setScale(s, s);
-                thumb.setPosition(rowCache[i].thumbBounds.left, rowCache[i].thumbBounds.top);
-                window.draw(thumb);
-            }
-        }
+        canvas.drawLayerThumbnail(window, currentFrame, i, rowCache[i].thumbBounds);
 
         if (renamingLayerIndex == i) {
             renameBox.setPosition(rowCache[i].nameBounds.left, rowCache[i].nameBounds.top);

@@ -53,7 +53,14 @@ int main() {
 #endif
 
     sf::VideoMode desktopMode = sf::VideoMode::getDesktopMode();
-    sf::RenderWindow window(desktopMode, "Wisdom Park", sf::Style::Fullscreen);
+
+    // CHANGED: request multisampling. Vector strokes are drawn as geometry
+    // straight to this window, so the window's AA level is what smooths them.
+    // With the default (0) every stroke edge is hard binary coverage.
+    sf::ContextSettings ctxSettings;
+    ctxSettings.antialiasingLevel = 8;
+
+    sf::RenderWindow window(desktopMode, "Wisdom Park", sf::Style::Fullscreen, ctxSettings);
 
     ApplyWindowIcon(window);
 
