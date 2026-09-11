@@ -8,6 +8,12 @@
 
 static const sf::RenderWindow* g_activeWindow = nullptr;
 
+static sf::BlendMode eraseBlendMode() {
+    return sf::BlendMode(
+        sf::BlendMode::Zero, sf::BlendMode::OneMinusSrcAlpha, sf::BlendMode::Add,
+        sf::BlendMode::Zero, sf::BlendMode::OneMinusSrcAlpha, sf::BlendMode::Add);
+}
+
 static void appendVectorSegment(sf::VertexArray& va, sf::Vector2f p1, sf::Vector2f p2, float radius, sf::Color color) {
     sf::Vector2f dir = p2 - p1;
     float len = std::hypot(dir.x, dir.y);
@@ -53,9 +59,6 @@ static void appendVectorCap(sf::VertexArray& va, sf::Vector2f center, float radi
     }
 }
 
-// Returns a copy of the mesh with every vertex alpha scaled by `opacity`.
-// Used so retained strokes honour their layer's opacity slider like the
-// raster content does.
 static sf::VertexArray meshWithOpacity(const sf::VertexArray& src, float opacity) {
     sf::VertexArray out(src.getPrimitiveType(), src.getVertexCount());
     for (std::size_t i = 0; i < src.getVertexCount(); ++i) {
@@ -203,34 +206,209 @@ transformMode(TransformState::None), pendingTransform(false), currentRotation(0.
     brushEngine.initDefaultPresets();
 }
 
-// NEW. Rasterizes every retained stroke belonging to (frameIndex, layerIndex)
-// into that layer's texture, then removes them from the list. After this the
-// layer is plain raster again, so copyToImage()/getPixel() see the strokes.
+bool Canvas::layerHasErase(int frameIndex, int layerIndex) const {
+    for (const auto& vs : m_vectorStrokes) {
+        if (vs.frame == frameIndex && vs.layer == layerIndex && vs.isErase) return true;
+    }
+    return false;
+}
+
+void Canvas::drawLayerContent(sf::RenderTarget& target, int frameIndex, int layerIndex,
+    const sf::RenderStates& layerStates, bool isActiveLayerForPreview) {
+    if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return;
+    if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[frameIndex].layers.size())) return;
+
+    const Layer& layer = frames[frameIndex].layers[layerIndex];
+    float op = layer.opacity;
+
+    bool activeErase = isActiveLayerForPreview && m_isVectorStrokeActive &&
+        m_activeStrokeIsErase && m_activeVectorMesh.getVertexCount() > 0;
+    bool floatingHasErase = false;
+    if (isActiveLayerForPreview && selection.getState() == SelectionState::Floating) {
+        for (const auto& fvs : m_floatingVectorStrokes) {
+            if (fvs.isErase) { floatingHasErase = true; break; }
+        }
+    }
+
+    bool needsComposite = !isPixelMode && (layerHasErase(frameIndex, layerIndex) || activeErase || floatingHasErase);
+
+    if (!needsComposite) {
+        if (layer.texture) {
+            sf::Sprite spr(layer.texture->getTexture());
+            spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * op)));
+            target.draw(spr, layerStates);
+        }
+
+        if (!isPixelMode) {
+            for (const auto& vs : m_vectorStrokes) {
+                if (vs.frame != frameIndex || vs.layer != layerIndex) continue;
+                if (op < 0.999f) target.draw(meshWithOpacity(vs.mesh, op), layerStates);
+                else target.draw(vs.mesh, layerStates);
+            }
+            if (isActiveLayerForPreview && m_isVectorStrokeActive && m_activeVectorMesh.getVertexCount() > 0) {
+                target.draw(m_activeVectorMesh, layerStates);
+            }
+        }
+        return;
+    }
+
+    sf::Vector2u targetSize = target.getSize();
+    if (m_layerCache.getSize() != targetSize) {
+        sf::ContextSettings ctx;
+        ctx.antialiasingLevel = 8;
+        if (!m_layerCache.create(targetSize.x, targetSize.y, ctx)) {
+            m_layerCache.create(targetSize.x, targetSize.y);
+        }
+        m_layerCache.setSmooth(false);
+    }
+
+    m_layerCache.setView(target.getView());
+    m_layerCache.clear(sf::Color::Transparent);
+
+    if (layer.texture) {
+        sf::Sprite base(layer.texture->getTexture());
+        m_layerCache.draw(base, layerStates);
+    }
+
+    for (const auto& vs : m_vectorStrokes) {
+        if (vs.frame != frameIndex || vs.layer != layerIndex) continue;
+        sf::RenderStates st = layerStates;
+        st.blendMode = vs.isErase ? eraseBlendMode() : sf::BlendAlpha;
+        m_layerCache.draw(vs.mesh, st);
+    }
+
+    if (isActiveLayerForPreview && !m_floatingVectorStrokes.empty() && selection.getState() == SelectionState::Floating) {
+        sf::RenderStates st = layerStates;
+        st.transform *= selection.getFloatingTransform();
+        for (const auto& vs : m_floatingVectorStrokes) {
+            st.blendMode = vs.isErase ? eraseBlendMode() : sf::BlendAlpha;
+            m_layerCache.draw(vs.mesh, st);
+        }
+    }
+
+    if (isActiveLayerForPreview && m_isVectorStrokeActive && m_activeVectorMesh.getVertexCount() > 0) {
+        sf::RenderStates st = layerStates;
+        st.blendMode = m_activeStrokeIsErase ? eraseBlendMode() : sf::BlendAlpha;
+        m_layerCache.draw(m_activeVectorMesh, st);
+    }
+
+    m_layerCache.display();
+
+    sf::Sprite out(m_layerCache.getTexture());
+    out.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * op)));
+
+    sf::View savedView = target.getView();
+    target.setView(target.getDefaultView());
+    sf::RenderStates finalStates;
+    finalStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
+    target.draw(out, finalStates);
+    target.setView(savedView);
+}
+
+bool Canvas::renderLayerToTexture(int frameIndex, int layerIndex, sf::RenderTexture& out) {
+    if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return false;
+    if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[frameIndex].layers.size())) return false;
+
+    if (out.getSize() != canvasLogicalSize) {
+        sf::ContextSettings ctx;
+        ctx.antialiasingLevel = isPixelMode ? 0 : 8;
+        if (!out.create(canvasLogicalSize.x, canvasLogicalSize.y, ctx)) {
+            if (!out.create(canvasLogicalSize.x, canvasLogicalSize.y)) return false;
+        }
+        out.setSmooth(!isPixelMode);
+    }
+
+    out.clear(sf::Color::Transparent);
+    drawLayerContent(out, frameIndex, layerIndex, sf::RenderStates::Default, false);
+    out.display();
+    return true;
+}
+
 void Canvas::bakeLayerStrokes(int frameIndex, int layerIndex) {
     if (isPixelMode) return;
     if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return;
     if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[frameIndex].layers.size())) return;
 
+    bool any = false;
+    for (const auto& vs : m_vectorStrokes) {
+        if (vs.frame == frameIndex && vs.layer == layerIndex) { any = true; break; }
+    }
+    if (!any) return;
+
     sf::RenderTexture* targetTex = frames[frameIndex].layers[layerIndex].texture.get();
     if (!targetTex) return;
 
-    bool baked = false;
+    renderLayerToTexture(frameIndex, layerIndex, *targetTex);
+
     for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
-        if (it->frame == frameIndex && it->layer == layerIndex) {
-            if (it->mesh.getVertexCount() > 0) {
-                targetTex->draw(it->mesh);
-                baked = true;
+        if (it->frame == frameIndex && it->layer == layerIndex) it = m_vectorStrokes.erase(it);
+        else ++it;
+    }
+
+    isDirty = true;
+}
+
+void Canvas::extractFloatingStrokes(int currentFrame) {
+    m_floatingVectorStrokes.clear();
+    if (isPixelMode) return;
+    if (selection.getState() != SelectionState::Selected) return;
+
+    sf::FloatRect bb = selection.getBoundingBox();
+    m_floatingLocalSize = sf::Vector2f(bb.width, bb.height);
+    sf::Vector2f origin(bb.left, bb.top);
+
+    for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
+        if (it->frame != currentFrame || it->layer != activeLayer) {
+            ++it;
+            continue;
+        }
+
+        sf::VertexArray kept(sf::Triangles);
+        sf::VertexArray moved(sf::Triangles);
+
+        for (size_t v = 0; v + 2 < it->mesh.getVertexCount(); v += 3) {
+            sf::Vector2f centroid =
+                (it->mesh[v].position + it->mesh[v + 1].position + it->mesh[v + 2].position) / 3.0f;
+
+            if (selection.isPointInsideSelection(centroid)) {
+                for (int k = 0; k < 3; ++k) {
+                    sf::Vertex vert = it->mesh[v + k];
+                    vert.position -= origin;
+                    moved.append(vert);
+                }
             }
+            else {
+                kept.append(it->mesh[v]);
+                kept.append(it->mesh[v + 1]);
+                kept.append(it->mesh[v + 2]);
+            }
+        }
+
+        if (moved.getVertexCount() > 0) {
+            VectorStroke fs;
+            fs.mesh = moved;
+            fs.layer = activeLayer;
+            fs.frame = currentFrame;
+            fs.isErase = it->isErase;
+            m_floatingVectorStrokes.push_back(std::move(fs));
+        }
+
+        if (kept.getVertexCount() == 0) {
             it = m_vectorStrokes.erase(it);
         }
         else {
+            it->mesh = kept;
             ++it;
         }
     }
+}
 
-    if (baked) {
-        targetTex->display();
-        isDirty = true;
+void Canvas::flipFloatingStrokes(bool horizontal) {
+    for (auto& vs : m_floatingVectorStrokes) {
+        for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+            if (horizontal) vs.mesh[v].position.x = m_floatingLocalSize.x - vs.mesh[v].position.x;
+            else vs.mesh[v].position.y = m_floatingLocalSize.y - vs.mesh[v].position.y;
+        }
     }
 }
 
@@ -282,11 +460,11 @@ void Canvas::initCustom(int width, int height) {
         l.texture->setSmooth(!isPixelMode);
     }
 
-    // FIXED: a new document used to inherit the previous document's strokes.
     m_vectorStrokes.clear();
     m_floatingVectorStrokes.clear();
     m_activeVectorMesh.clear();
     m_isVectorStrokeActive = false;
+    m_activeStrokeIsErase = false;
 
     undoHistory.clear();
     redoHistory.clear();
@@ -420,8 +598,6 @@ void Canvas::addFrame(int index) {
         newFrame.layers.push_back(newL);
     }
 
-    // FIXED: inserting a frame shifted the raster frames but left vs.frame
-    // alone, so every later frame's strokes attached to the wrong frame.
     if (!isPixelMode) {
         for (auto& vs : m_vectorStrokes) {
             if (vs.frame > index) vs.frame++;
@@ -434,20 +610,19 @@ void Canvas::addFrame(int index) {
 void Canvas::duplicateFrame(int index) {
     saveUndoState();
     if (index >= 0 && index < static_cast<int>(frames.size())) {
-        // FIXED: remap, then copy this frame's strokes onto the new frame.
         if (!isPixelMode) {
             std::vector<VectorStroke> copies;
             for (auto& vs : m_vectorStrokes) {
                 if (vs.frame == index) {
-                    copies.push_back({ vs.mesh, vs.layer, index + 1 });
+                    VectorStroke c;
+                    c.mesh = vs.mesh; c.layer = vs.layer; c.frame = index + 1; c.isErase = vs.isErase;
+                    copies.push_back(std::move(c));
                 }
             }
             for (auto& vs : m_vectorStrokes) {
                 if (vs.frame > index) vs.frame++;
             }
-            for (auto& c : copies) {
-                m_vectorStrokes.push_back(std::move(c));
-            }
+            for (auto& c : copies) m_vectorStrokes.push_back(std::move(c));
         }
         frames.insert(frames.begin() + (index + 1), Frame(frames[index]));
     }
@@ -457,7 +632,6 @@ void Canvas::deleteFrame(int index) {
     if (frames.size() > 1 && index >= 0 && index < static_cast<int>(frames.size())) {
         saveUndoState();
 
-        // FIXED: drop this frame's strokes and shift the ones after it down.
         if (!isPixelMode) {
             for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
                 if (it->frame == index) {
@@ -487,6 +661,7 @@ void Canvas::clearAllFrames() {
     m_floatingVectorStrokes.clear();
     m_activeVectorMesh.clear();
     m_isVectorStrokeActive = false;
+    m_activeStrokeIsErase = false;
 }
 
 void Canvas::addLayer(int frameIndex, const std::string& name) {
@@ -523,9 +698,7 @@ void Canvas::deleteLayer(int frameIndex, int layerIndex) {
                 it = m_vectorStrokes.erase(it);
             }
             else {
-                if (it->layer > layerIndex) {
-                    it->layer--;
-                }
+                if (it->layer > layerIndex) it->layer--;
                 ++it;
             }
         }
@@ -573,12 +746,12 @@ void Canvas::duplicateLayer(int frameIndex, int layerIndex) {
                     vs.layer++;
                 }
                 else if (vs.layer == layerIndex) {
-                    duplicates.push_back({ vs.mesh, layerIndex + 1, vs.frame });
+                    VectorStroke d;
+                    d.mesh = vs.mesh; d.layer = layerIndex + 1; d.frame = vs.frame; d.isErase = vs.isErase;
+                    duplicates.push_back(std::move(d));
                 }
             }
-            for (auto& d : duplicates) {
-                m_vectorStrokes.push_back(std::move(d));
-            }
+            for (auto& d : duplicates) m_vectorStrokes.push_back(std::move(d));
         }
         activeLayer = layerIndex + 1;
     }
@@ -604,12 +777,6 @@ void Canvas::toggleLayerPersistence(int frameIndex, int layerIndex) {
     if (frameIndex >= 0 && frameIndex < static_cast<int>(frames.size())) {
         if (layerIndex >= 0 && layerIndex < static_cast<int>(frames[frameIndex].layers.size())) {
             saveUndoState();
-
-            // Persistent layers share one texture across frames, which retained
-            // strokes can't express — bake them first.
-            for (size_t i = 0; i < frames.size(); ++i) {
-                bakeLayerStrokes(static_cast<int>(i), layerIndex);
-            }
 
             bool isPersist = !frames[frameIndex].layers[layerIndex].persistent;
             auto targetTex = frames[frameIndex].layers[layerIndex].texture;
@@ -649,10 +816,6 @@ void Canvas::pushLayerToNextFrame(int currentFrame, int layerIndex) {
         if (currentFrame < static_cast<int>(frames.size()) - 1 && layerIndex >= 0 && layerIndex < static_cast<int>(frames[0].layers.size())) {
             saveUndoState();
 
-            // Copies pixels between frames, so both sides must be raster.
-            bakeLayerStrokes(currentFrame, layerIndex);
-            bakeLayerStrokes(currentFrame + 1, layerIndex);
-
             auto srcTex = frames[currentFrame].layers[layerIndex].texture;
             auto dstTex = frames[currentFrame + 1].layers[layerIndex].texture;
             if (!frames[currentFrame].layers[layerIndex].persistent) {
@@ -660,6 +823,25 @@ void Canvas::pushLayerToNextFrame(int currentFrame, int layerIndex) {
                 sf::Sprite spr(srcTex->getTexture());
                 dstTex->draw(spr, sf::RenderStates(sf::BlendNone));
                 dstTex->display();
+            }
+
+            if (!isPixelMode) {
+                std::vector<VectorStroke> copies;
+                for (const auto& vs : m_vectorStrokes) {
+                    if (vs.frame == currentFrame && vs.layer == layerIndex) {
+                        VectorStroke c;
+                        c.mesh = vs.mesh;
+                        c.layer = layerIndex;
+                        c.frame = currentFrame + 1;
+                        c.isErase = vs.isErase;
+                        copies.push_back(std::move(c));
+                    }
+                }
+                for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
+                    if (it->frame == currentFrame + 1 && it->layer == layerIndex) it = m_vectorStrokes.erase(it);
+                    else ++it;
+                }
+                for (auto& c : copies) m_vectorStrokes.push_back(std::move(c));
             }
         }
     }
@@ -674,9 +856,6 @@ void Canvas::extendLayerToNextFrame(int currentFrame, int layerIndex) {
         addFrame(currentFrame);
     }
 
-    bakeLayerStrokes(currentFrame, layerIndex);
-    bakeLayerStrokes(currentFrame + 1, layerIndex);
-
     auto srcTex = frames[currentFrame].layers[layerIndex].texture;
     auto dstTex = frames[currentFrame + 1].layers[layerIndex].texture;
 
@@ -686,6 +865,25 @@ void Canvas::extendLayerToNextFrame(int currentFrame, int layerIndex) {
         dstTex->draw(spr, sf::RenderStates(sf::BlendNone));
         dstTex->display();
     }
+
+    if (!isPixelMode) {
+        std::vector<VectorStroke> copies;
+        for (const auto& vs : m_vectorStrokes) {
+            if (vs.frame == currentFrame && vs.layer == layerIndex) {
+                VectorStroke c;
+                c.mesh = vs.mesh;
+                c.layer = layerIndex;
+                c.frame = currentFrame + 1;
+                c.isErase = vs.isErase;
+                copies.push_back(std::move(c));
+            }
+        }
+        for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
+            if (it->frame == currentFrame + 1 && it->layer == layerIndex) it = m_vectorStrokes.erase(it);
+            else ++it;
+        }
+        for (auto& c : copies) m_vectorStrokes.push_back(std::move(c));
+    }
     isDirty = true;
 }
 
@@ -693,11 +891,6 @@ void Canvas::mergeDown(int frameIndex) {
     if (frames.size() > 0 && activeLayer > 0 && activeLayer < static_cast<int>(frames[0].layers.size())) {
         saveUndoState();
         for (size_t i = 0; i < frames.size(); ++i) {
-            // Merging composites textures, so strokes on both layers must land
-            // in those textures first or they'd be lost.
-            bakeLayerStrokes(static_cast<int>(i), activeLayer);
-            bakeLayerStrokes(static_cast<int>(i), activeLayer - 1);
-
             auto& topLayer = frames[i].layers[activeLayer];
             auto& bottomLayer = frames[i].layers[activeLayer - 1];
 
@@ -714,13 +907,12 @@ void Canvas::mergeDown(int frameIndex) {
         }
 
         if (!isPixelMode) {
-            for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
-                if (it->layer == activeLayer) {
-                    it = m_vectorStrokes.erase(it);
+            for (auto& vs : m_vectorStrokes) {
+                if (vs.layer == activeLayer) {
+                    vs.layer = activeLayer - 1;
                 }
-                else {
-                    if (it->layer > activeLayer) it->layer--;
-                    ++it;
+                else if (vs.layer > activeLayer) {
+                    vs.layer--;
                 }
             }
         }
@@ -762,10 +954,7 @@ void Canvas::mergeVisible(int frameIndex) {
             frames[i].layers.push_back(mergedLayer);
         }
 
-        // Layer indices were rewritten wholesale; any surviving stroke
-        // references are meaningless now.
         m_vectorStrokes.clear();
-
         activeLayer = static_cast<int>(frames[0].layers.size()) - 1;
     }
 }
@@ -813,9 +1002,7 @@ void Canvas::setActiveLayer(int index, int currentFrame) {
 
     if (currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         if (selection.isActive() && selection.getState() == SelectionState::Floating) {
-            selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
-            transformMode = TransformState::None;
-            pendingTransform = false;
+            commitSelection(currentFrame);
         }
     }
     activeLayer = target;
@@ -846,7 +1033,31 @@ void Canvas::commitSelection(int currentFrame) {
     if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
     if (selection.isActive()) {
         saveUndoState();
-        selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
+
+        if (!isPixelMode) {
+            if (!m_floatingVectorStrokes.empty()) {
+                sf::Transform t = selection.getFloatingTransform();
+                for (auto& vs : m_floatingVectorStrokes) {
+                    for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+                        vs.mesh[v].position = t.transformPoint(vs.mesh[v].position);
+                    }
+                    vs.layer = activeLayer;
+                    vs.frame = currentFrame;
+                    m_vectorStrokes.push_back(std::move(vs));
+                }
+                m_floatingVectorStrokes.clear();
+            }
+
+            if (isImageResourceActive(currentFrame)) {
+                selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
+            }
+            else {
+                selection.discardFloating();
+            }
+        }
+        else {
+            selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
+        }
     }
     transformMode = TransformState::None;
     pendingTransform = false;
@@ -854,7 +1065,13 @@ void Canvas::commitSelection(int currentFrame) {
 
 void Canvas::copySelection(int currentFrame) {
     if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
-        bakeLayerStrokes(currentFrame, activeLayer);
+        if (!isPixelMode) {
+            sf::RenderTexture tmp;
+            if (renderLayerToTexture(currentFrame, activeLayer, tmp)) {
+                selection.copy(&tmp);
+                return;
+            }
+        }
         selection.copy(frames[currentFrame].layers[activeLayer].texture.get());
     }
 }
@@ -917,7 +1134,7 @@ void Canvas::pasteSelection(int currentFrame) {
 void Canvas::deleteSelection(int currentFrame) {
     if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         saveUndoState();
-        bakeLayerStrokes(currentFrame, activeLayer);
+        m_floatingVectorStrokes.clear();
         selection.deleteSelection(frames[currentFrame].layers[activeLayer].texture.get());
     }
     transformMode = TransformState::None;
@@ -950,10 +1167,11 @@ void Canvas::flipSelectionHorizontal(int currentFrame) {
     if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         if (selection.getState() == SelectionState::Selected) {
             saveUndoState();
-            bakeLayerStrokes(currentFrame, activeLayer);
-            selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
+            extractFloatingStrokes(currentFrame);
+            selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), isImageResourceActive(currentFrame));
         }
         selection.flipHorizontal();
+        flipFloatingStrokes(true);
     }
 }
 
@@ -961,18 +1179,18 @@ void Canvas::flipSelectionVertical(int currentFrame) {
     if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         if (selection.getState() == SelectionState::Selected) {
             saveUndoState();
-            bakeLayerStrokes(currentFrame, activeLayer);
-            selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
+            extractFloatingStrokes(currentFrame);
+            selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), isImageResourceActive(currentFrame));
         }
         selection.flipVertical();
+        flipFloatingStrokes(false);
     }
 }
 
 void Canvas::duplicateSelection(int currentFrame) {
     if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         saveUndoState();
-        bakeLayerStrokes(currentFrame, activeLayer);
-        selection.copy(frames[currentFrame].layers[activeLayer].texture.get());
+        copySelection(currentFrame);
         commitSelection(currentFrame);
 
         addLayer(currentFrame, frames[currentFrame].layers[activeLayer].name + " Duplicate");
@@ -1057,8 +1275,8 @@ void Canvas::undo() {
     if (!undoHistory.empty()) {
         UndoState currentState;
         currentState.frames = frames;
-        currentState.vectorStrokes = m_vectorStrokes;   // FIXED: was never set,
-        redoHistory.push_back(currentState);            // so redo lost all strokes.
+        currentState.vectorStrokes = m_vectorStrokes;
+        redoHistory.push_back(currentState);
 
         UndoState prevState = undoHistory.back();
         undoHistory.pop_back();
@@ -1075,6 +1293,7 @@ void Canvas::undo() {
         currentDeformedPixels.clear();
         m_contourPoints.clear();
         m_isVectorStrokeActive = false;
+        m_activeStrokeIsErase = false;
         m_activeVectorMesh.clear();
         isDrawing = false;
     }
@@ -1084,7 +1303,7 @@ void Canvas::redo() {
     if (!redoHistory.empty()) {
         UndoState currentState;
         currentState.frames = frames;
-        currentState.vectorStrokes = m_vectorStrokes;   // FIXED: same bug here.
+        currentState.vectorStrokes = m_vectorStrokes;
         undoHistory.push_back(currentState);
 
         UndoState nextState = redoHistory.back();
@@ -1102,6 +1321,7 @@ void Canvas::redo() {
         currentDeformedPixels.clear();
         m_contourPoints.clear();
         m_isVectorStrokeActive = false;
+        m_activeStrokeIsErase = false;
         m_activeVectorMesh.clear();
         isDrawing = false;
     }
@@ -1124,9 +1344,6 @@ sf::RenderStates Canvas::getSFMLBlendMode(BlendMode mode) const {
     }
 }
 
-// NEW. Renders a frame's layers and their retained strokes into one image.
-// scaleFactor > 1 re-rasterizes the geometry larger rather than upscaling a
-// bitmap, so exports come out crisp.
 sf::Image Canvas::flattenFrameToImage(int frameIndex, unsigned int scaleFactor) {
     if (scaleFactor < 1) scaleFactor = 1;
 
@@ -1137,9 +1354,7 @@ sf::Image Canvas::flattenFrameToImage(int frameIndex, unsigned int scaleFactor) 
     sf::ContextSettings ctx;
     ctx.antialiasingLevel = isPixelMode ? 0 : 8;
     if (!out.create(w, h, ctx)) {
-        if (!out.create(w, h)) {
-            return sf::Image();
-        }
+        if (!out.create(w, h)) return sf::Image();
     }
     out.setSmooth(!isPixelMode);
     out.clear(sf::Color::Transparent);
@@ -1159,24 +1374,7 @@ sf::Image Canvas::flattenFrameToImage(int frameIndex, unsigned int scaleFactor) 
         states.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
         states.transform.scale(s, s);
 
-        if (layer.texture) {
-            sf::Sprite spr(layer.texture->getTexture());
-            spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * layer.opacity)));
-            out.draw(spr, states);
-        }
-
-        if (!isPixelMode) {
-            for (const auto& vs : m_vectorStrokes) {
-                if (vs.frame == frameIndex && vs.layer == static_cast<int>(i)) {
-                    if (layer.opacity < 0.999f) {
-                        out.draw(meshWithOpacity(vs.mesh, layer.opacity), states);
-                    }
-                    else {
-                        out.draw(vs.mesh, states);
-                    }
-                }
-            }
-        }
+        drawLayerContent(out, frameIndex, static_cast<int>(i), states, false);
     }
 
     out.display();
@@ -1367,50 +1565,32 @@ void Canvas::drawContinuousLine(sf::Vector2f from, sf::Vector2f to, sf::Color co
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
     if (frames[currentFrame].layers[activeLayer].locked || !frames[currentFrame].layers[activeLayer].visible) return;
 
-    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
-    if (!targetTex) return;
-
     if (isPixelMode) {
+        sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+        if (!targetTex) return;
         drawBresenhamLine(static_cast<int>(from.x), static_cast<int>(from.y),
             static_cast<int>(to.x), static_cast<int>(to.y),
             col, currentFrame);
         targetTex->display();
+        isDirty = true;
+        return;
     }
-    else {
-        if (activeTool == ToolType::Eraser) {
-            sf::RenderStates rs(sf::BlendNone);
-            float currentEraserSize = brushEngine.getActivePreset().size;
-            float radius = currentEraserSize * 0.5f;
 
-            sf::CircleShape startCircle(radius);
-            startCircle.setOrigin(radius, radius);
-            startCircle.setPosition(from);
-            startCircle.setFillColor(col);
-            targetTex->draw(startCircle, rs);
+    bool erasing = (activeTool == ToolType::Eraser);
+    float radius = brushEngine.getActivePreset().size * 0.5f;
+    sf::Color meshCol = erasing ? sf::Color::White : col;
 
-            sf::Vector2f dir = to - from;
-            float len = std::hypot(dir.x, dir.y);
-            if (len > 0.001f) {
-                sf::Vector2f normal(-dir.y / len * radius, dir.x / len * radius);
-                sf::VertexArray body(sf::TriangleStrip, 4);
-                body[0] = sf::Vertex(from + normal, col);
-                body[1] = sf::Vertex(from - normal, col);
-                body[2] = sf::Vertex(to + normal, col);
-                body[3] = sf::Vertex(to - normal, col);
-                targetTex->draw(body, rs);
+    VectorStroke vs;
+    vs.mesh.setPrimitiveType(sf::Triangles);
+    vs.layer = activeLayer;
+    vs.frame = currentFrame;
+    vs.isErase = erasing;
 
-                sf::CircleShape endCircle(radius);
-                endCircle.setOrigin(radius, radius);
-                endCircle.setPosition(to);
-                endCircle.setFillColor(col);
-                targetTex->draw(endCircle, rs);
-            }
-        }
-        else {
-            brushEngine.paintStroke(targetTex, to, col, 1.0f);
-        }
-        targetTex->display();
-    }
+    appendVectorCap(vs.mesh, from, radius, meshCol);
+    appendVectorSegment(vs.mesh, from, to, radius, meshCol);
+    appendVectorCap(vs.mesh, to, radius, meshCol);
+
+    m_vectorStrokes.push_back(std::move(vs));
     isDirty = true;
 }
 
@@ -1521,10 +1701,34 @@ void Canvas::fillPolygonContour(const std::vector<sf::Vector2f>& points, sf::Col
     if (frames[currentFrame].layers[activeLayer].locked || !frames[currentFrame].layers[activeLayer].visible) return;
     if (points.size() < 3) return;
 
+    saveUndoState();
+
+    if (!isPixelMode) {
+        VectorStroke vs;
+        vs.mesh.setPrimitiveType(sf::Triangles);
+        vs.layer = activeLayer;
+        vs.frame = currentFrame;
+        vs.isErase = false;
+
+        sf::Vector2f c(0.f, 0.f);
+        for (const auto& p : points) c += p;
+        c /= static_cast<float>(points.size());
+
+        for (size_t i = 0; i < points.size(); ++i) {
+            const sf::Vector2f& a = points[i];
+            const sf::Vector2f& b = points[(i + 1) % points.size()];
+            vs.mesh.append(sf::Vertex(c, color));
+            vs.mesh.append(sf::Vertex(a, color));
+            vs.mesh.append(sf::Vertex(b, color));
+        }
+
+        m_vectorStrokes.push_back(std::move(vs));
+        isDirty = true;
+        return;
+    }
+
     sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
     if (!targetTex) return;
-
-    saveUndoState();
 
     int n = static_cast<int>(points.size());
 
@@ -1566,11 +1770,6 @@ void Canvas::fillPolygonContour(const std::vector<sf::Vector2f>& points, sf::Col
                 drawPixelExact(x, y, color, currentFrame);
             }
         }
-    }
-
-    for (int i = 0; i < n; ++i) {
-        int next = (i + 1) % n;
-        drawContinuousLine(points[i], points[next], color, currentFrame);
     }
 
     targetTex->display();
@@ -1618,11 +1817,6 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             sf::Color drawCol = primaryColor;
 
             if (activeTool == ToolType::Curve) {
-                // Deform reads pixels off every candidate layer, so bake them all.
-                for (size_t l = 0; l < frames[currentFrame].layers.size(); ++l) {
-                    bakeLayerStrokes(currentFrame, static_cast<int>(l));
-                }
-
                 sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
                 if (!targetTex) return;
 
@@ -1803,11 +1997,8 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 if (selection.isPointInsideSelection(localPos)) {
                     if (selection.getState() == SelectionState::Selected) {
                         saveUndoState();
-                        // Bake so the extracted pixels include the strokes.
-                        // (Replaces the old mesh-splitting path, which left the
-                        // raster and vector halves out of sync.)
-                        bakeLayerStrokes(currentFrame, activeLayer);
-                        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
+                        extractFloatingStrokes(currentFrame);
+                        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), isImageResourceActive(currentFrame));
                     }
                     selection.startDrag(localPos);
                     return;
@@ -1860,8 +2051,6 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
             if (isShift && hasShiftAnchor && canDrawLine) {
                 saveUndoState();
-                // Shift-line goes through the raster brush engine / eraser.
-                bakeLayerStrokes(currentFrame, activeLayer);
                 sf::Color pC = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : drawCol;
                 drawContinuousLine(shiftAnchor, localPos, pC, currentFrame);
                 shiftAnchor = localPos;
@@ -1872,7 +2061,12 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             }
 
             if (!isPixelMode && m_isVectorStrokeActive && m_activeVectorMesh.getVertexCount() > 0) {
-                m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
+                VectorStroke vs;
+                vs.mesh = m_activeVectorMesh;
+                vs.layer = activeLayer;
+                vs.frame = currentFrame;
+                vs.isErase = m_activeStrokeIsErase;
+                m_vectorStrokes.push_back(std::move(vs));
                 m_isVectorStrokeActive = false;
                 m_activeVectorMesh.clear();
             }
@@ -1898,8 +2092,9 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 frames[currentFrame].layers[activeLayer].texture->display();
             }
             else {
-                if (activeTool == ToolType::Brush || activeTool == ToolType::Pencil) {
+                if (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser) {
                     m_isVectorStrokeActive = true;
+                    m_activeStrokeIsErase = (activeTool == ToolType::Eraser);
                     m_stabilizedPos = localPos;
                     m_vPrevPoint = localPos;
                     m_vPrevMidPoint = localPos;
@@ -1907,27 +2102,8 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     m_activeVectorMesh.setPrimitiveType(sf::Triangles);
 
                     float radius = brushEngine.getActivePreset().size * 0.5f;
-                    appendVectorCap(m_activeVectorMesh, localPos, radius, drawCol);
-                }
-                else if (activeTool == ToolType::Eraser) {
-                    // FIXED: the eraser punches holes in the layer texture, but
-                    // strokes draw on top of it — so erasing did nothing in
-                    // normal mode. Baking first puts the strokes *into* the
-                    // texture where the hole-punch can reach them. Costs this
-                    // layer its vector crispness; that's the trade for now.
-                    bakeLayerStrokes(currentFrame, activeLayer);
-
-                    float radius = brushEngine.getActivePreset().size * 0.5f;
-                    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
-                    if (targetTex) {
-                        sf::RenderStates rs(sf::BlendNone);
-                        sf::CircleShape circle(radius);
-                        circle.setOrigin(radius, radius);
-                        circle.setPosition(localPos);
-                        circle.setFillColor(sf::Color::Transparent);
-                        targetTex->draw(circle, rs);
-                        targetTex->display();
-                    }
+                    sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : drawCol;
+                    appendVectorCap(m_activeVectorMesh, localPos, radius, meshCol);
                 }
                 else {
                     brushEngine.resetStroke(localPos);
@@ -1990,7 +2166,6 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
         if (isDrawing) {
             isDrawing = false;
             if (m_contourPoints.size() >= 3) {
-                bakeLayerStrokes(currentFrame, activeLayer);
                 fillPolygonContour(m_contourPoints, primaryColor, currentFrame);
             }
             m_contourPoints.clear();
@@ -2019,20 +2194,26 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
 
     if (!isPixelMode && m_isVectorStrokeActive) {
         float radius = brushEngine.getActivePreset().size * 0.5f;
+        sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : primaryColor;
 
         float dEnd = std::hypot(localPos.x - m_vPrevPoint.x, localPos.y - m_vPrevPoint.y);
         if (dEnd > 1.0f) {
-            appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
-            appendVectorSegment(m_activeVectorMesh, m_vPrevPoint, localPos, radius, primaryColor);
-            appendVectorCap(m_activeVectorMesh, localPos, radius, primaryColor);
+            appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, meshCol);
+            appendVectorSegment(m_activeVectorMesh, m_vPrevPoint, localPos, radius, meshCol);
+            appendVectorCap(m_activeVectorMesh, localPos, radius, meshCol);
         }
         else {
-            appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
-            appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, primaryColor);
+            appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, meshCol);
+            appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, meshCol);
         }
 
         if (m_activeVectorMesh.getVertexCount() > 0) {
-            m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
+            VectorStroke vs;
+            vs.mesh = m_activeVectorMesh;
+            vs.layer = activeLayer;
+            vs.frame = currentFrame;
+            vs.isErase = m_activeStrokeIsErase;
+            m_vectorStrokes.push_back(std::move(vs));
         }
         m_isVectorStrokeActive = false;
         m_activeVectorMesh.clear();
@@ -2060,10 +2241,6 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
         localPos.y = std::floor(localPos.y);
     }
 
-    // FIXED: lastHoverLocalPos used to be overwritten here, before the Select
-    // branch below computed its drag delta from it — so the delta was always
-    // zero. Keep the previous value around until we're done with it.
-    sf::Vector2f prevHoverLocalPos = lastHoverLocalPos;
     lastHoverLocalPos = localPos;
 
     if (activeTool == ToolType::Fill) return;
@@ -2113,16 +2290,7 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
             selection.addLassoPoint(localPos, canvasLogicalSize);
         }
         else if (selection.getState() == SelectionState::Floating) {
-            sf::Vector2f dragDelta = localPos - prevHoverLocalPos;
             selection.drag(localPos, canvasLogicalSize, allowOutside);
-
-            if (!isPixelMode) {
-                for (auto& vs : m_floatingVectorStrokes) {
-                    for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
-                        vs.mesh[v].position += dragDelta;
-                    }
-                }
-            }
         }
         return;
     }
@@ -2182,7 +2350,8 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
             }
         }
         else {
-            if ((activeTool == ToolType::Brush || activeTool == ToolType::Pencil) && m_isVectorStrokeActive) {
+            if ((activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser)
+                && m_isVectorStrokeActive) {
                 float stab = brushEngine.getActivePreset().stabilization;
                 if (stab > 0.0f) {
                     float weight = std::clamp(1.0f - stab, 0.05f, 1.0f);
@@ -2198,6 +2367,7 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                 if (dx * dx + dy * dy >= 0.8f) {
                     sf::Vector2f midPoint = (m_vPrevPoint + targetPos) * 0.5f;
                     float radius = brushEngine.getActivePreset().size * 0.5f;
+                    sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : primaryColor;
                     const int segments = 6;
                     sf::Vector2f lastP = m_vPrevMidPoint;
 
@@ -2205,38 +2375,12 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                         float t = static_cast<float>(i) / static_cast<float>(segments);
                         float invT = 1.0f - t;
                         sf::Vector2f curveP = (invT * invT * m_vPrevMidPoint) + (2.0f * invT * t * m_vPrevPoint) + (t * t * midPoint);
-                        appendVectorSegment(m_activeVectorMesh, lastP, curveP, radius, drawCol);
+                        appendVectorSegment(m_activeVectorMesh, lastP, curveP, radius, meshCol);
                         lastP = curveP;
                     }
 
                     m_vPrevPoint = targetPos;
                     m_vPrevMidPoint = midPoint;
-                }
-            }
-            else if (activeTool == ToolType::Eraser) {
-                float currentEraserSize = brushEngine.getActivePreset().size;
-                float radius = currentEraserSize * 0.5f;
-
-                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
-                if (targetTex) {
-                    sf::RenderStates rs(sf::BlendNone);
-                    float length = std::hypot(targetPos.x - lastPos.x, targetPos.y - lastPos.y);
-                    if (length > 0.001f) {
-                        sf::RectangleShape line(sf::Vector2f(length, currentEraserSize));
-                        line.setOrigin(0.0f, currentEraserSize / 2.f);
-                        line.setPosition(lastPos);
-                        line.setRotation(std::atan2(targetPos.y - lastPos.y, targetPos.x - lastPos.x) * 180.f / 3.14159265f);
-                        line.setFillColor(sf::Color::Transparent);
-
-                        sf::CircleShape circle(radius);
-                        circle.setOrigin(radius, radius);
-                        circle.setPosition(targetPos);
-                        circle.setFillColor(sf::Color::Transparent);
-
-                        targetTex->draw(line, rs);
-                        targetTex->draw(circle, rs);
-                        targetTex->display();
-                    }
                 }
             }
         }
@@ -2248,11 +2392,17 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
         if (!isHoveringCanvas && isDrawing) {
             if (!isPixelMode && m_isVectorStrokeActive) {
                 float radius = brushEngine.getActivePreset().size * 0.5f;
-                appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, primaryColor);
-                appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, primaryColor);
+                sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : primaryColor;
+                appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, meshCol);
+                appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, meshCol);
 
                 if (m_activeVectorMesh.getVertexCount() > 0) {
-                    m_vectorStrokes.push_back({ m_activeVectorMesh, activeLayer, currentFrame });
+                    VectorStroke vs;
+                    vs.mesh = m_activeVectorMesh;
+                    vs.layer = activeLayer;
+                    vs.frame = currentFrame;
+                    vs.isErase = m_activeStrokeIsErase;
+                    m_vectorStrokes.push_back(std::move(vs));
                 }
                 m_isVectorStrokeActive = false;
                 m_activeVectorMesh.clear();
@@ -2324,7 +2474,6 @@ void Canvas::drawLayerThumbnail(sf::RenderTarget& target, int frameIndex, int la
     if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return;
     if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[frameIndex].layers.size())) return;
 
-    const auto& layer = frames[frameIndex].layers[layerIndex];
     float cw = static_cast<float>(canvasLogicalSize.x);
     float ch = static_cast<float>(canvasLogicalSize.y);
     if (cw <= 0.f || ch <= 0.f) return;
@@ -2335,18 +2484,7 @@ void Canvas::drawLayerThumbnail(sf::RenderTarget& target, int frameIndex, int la
     states.transform.translate(bounds.left, bounds.top);
     states.transform.scale(s, s);
 
-    if (layer.texture) {
-        sf::Sprite spr(layer.texture->getTexture());
-        target.draw(spr, states);
-    }
-
-    if (!isPixelMode) {
-        for (const auto& vs : m_vectorStrokes) {
-            if (vs.frame == frameIndex && vs.layer == layerIndex) {
-                target.draw(vs.mesh, states);
-            }
-        }
-    }
+    drawLayerContent(target, frameIndex, layerIndex, states, false);
 }
 
 void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states) {
@@ -2417,27 +2555,25 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             int prevIdx = currentFrame - i;
             if (prevIdx >= 0 && prevIdx < static_cast<int>(frames.size())) {
                 float fadeOpac = onionSkinPrevOpacity * (1.0f - (static_cast<float>(i) - 1.0f) / static_cast<float>(onionSkinPrevCount));
+                float tint = std::clamp(fadeOpac / 255.0f, 0.f, 1.f);
                 for (size_t li = 0; li < frames[prevIdx].layers.size(); ++li) {
                     const auto& layer = frames[prevIdx].layers[li];
-                    if (layer.visible) {
-                        sf::Sprite onionSpr(layer.texture->getTexture());
-                        onionSpr.setColor(sf::Color(255, 100, 100, static_cast<sf::Uint8>(fadeOpac)));
-                        sf::RenderStates oStates = innerStates;
-                        oStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
-                        window.draw(onionSpr, oStates);
+                    if (!layer.visible) continue;
 
-                        // Onion skin used to show only raster content.
-                        if (!isPixelMode) {
-                            float tint = std::clamp(fadeOpac / 255.0f, 0.f, 1.f);
-                            for (const auto& vs : m_vectorStrokes) {
-                                if (vs.frame == prevIdx && vs.layer == static_cast<int>(li)) {
-                                    sf::VertexArray ghost = meshWithOpacity(vs.mesh, tint);
-                                    for (std::size_t v = 0; v < ghost.getVertexCount(); ++v) {
-                                        ghost[v].color.r = 255; ghost[v].color.g = 100; ghost[v].color.b = 100;
-                                    }
-                                    window.draw(ghost, oStates);
-                                }
+                    sf::Sprite onionSpr(layer.texture->getTexture());
+                    onionSpr.setColor(sf::Color(255, 100, 100, static_cast<sf::Uint8>(fadeOpac)));
+                    sf::RenderStates oStates = innerStates;
+                    oStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
+                    window.draw(onionSpr, oStates);
+
+                    if (!isPixelMode) {
+                        for (const auto& vs : m_vectorStrokes) {
+                            if (vs.frame != prevIdx || vs.layer != static_cast<int>(li) || vs.isErase) continue;
+                            sf::VertexArray ghost = meshWithOpacity(vs.mesh, tint);
+                            for (std::size_t v = 0; v < ghost.getVertexCount(); ++v) {
+                                ghost[v].color.r = 255; ghost[v].color.g = 100; ghost[v].color.b = 100;
                             }
+                            window.draw(ghost, oStates);
                         }
                     }
                 }
@@ -2447,26 +2583,25 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             int nextIdx = currentFrame + i;
             if (nextIdx >= 0 && nextIdx < static_cast<int>(frames.size())) {
                 float fadeOpac = onionSkinNextOpacity * (1.0f - (static_cast<float>(i) - 1.0f) / static_cast<float>(onionSkinNextCount));
+                float tint = std::clamp(fadeOpac / 255.0f, 0.f, 1.f);
                 for (size_t li = 0; li < frames[nextIdx].layers.size(); ++li) {
                     const auto& layer = frames[nextIdx].layers[li];
-                    if (layer.visible) {
-                        sf::Sprite onionSpr(layer.texture->getTexture());
-                        onionSpr.setColor(sf::Color(100, 255, 100, static_cast<sf::Uint8>(fadeOpac)));
-                        sf::RenderStates oStates = innerStates;
-                        oStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
-                        window.draw(onionSpr, oStates);
+                    if (!layer.visible) continue;
 
-                        if (!isPixelMode) {
-                            float tint = std::clamp(fadeOpac / 255.0f, 0.f, 1.f);
-                            for (const auto& vs : m_vectorStrokes) {
-                                if (vs.frame == nextIdx && vs.layer == static_cast<int>(li)) {
-                                    sf::VertexArray ghost = meshWithOpacity(vs.mesh, tint);
-                                    for (std::size_t v = 0; v < ghost.getVertexCount(); ++v) {
-                                        ghost[v].color.r = 100; ghost[v].color.g = 255; ghost[v].color.b = 100;
-                                    }
-                                    window.draw(ghost, oStates);
-                                }
+                    sf::Sprite onionSpr(layer.texture->getTexture());
+                    onionSpr.setColor(sf::Color(100, 255, 100, static_cast<sf::Uint8>(fadeOpac)));
+                    sf::RenderStates oStates = innerStates;
+                    oStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
+                    window.draw(onionSpr, oStates);
+
+                    if (!isPixelMode) {
+                        for (const auto& vs : m_vectorStrokes) {
+                            if (vs.frame != nextIdx || vs.layer != static_cast<int>(li) || vs.isErase) continue;
+                            sf::VertexArray ghost = meshWithOpacity(vs.mesh, tint);
+                            for (std::size_t v = 0; v < ghost.getVertexCount(); ++v) {
+                                ghost[v].color.r = 100; ghost[v].color.g = 255; ghost[v].color.b = 100;
                             }
+                            window.draw(ghost, oStates);
                         }
                     }
                 }
@@ -2477,44 +2612,34 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     if (currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         for (size_t i = 0; i < frames[currentFrame].layers.size(); ++i) {
             const auto& layer = frames[currentFrame].layers[i];
-            if (layer.visible) {
-                sf::Sprite spr(layer.texture->getTexture());
-                spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * layer.opacity)));
-                sf::RenderStates layerStates = innerStates;
-                layerStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
-                window.draw(spr, layerStates);
+            if (!layer.visible) continue;
 
-                if (!isPixelMode) {
-                    // CHANGED: strokes now use layerStates (so the layer's blend
-                    // mode applies) and honour layer opacity. They used to be
-                    // drawn with plain innerStates, ignoring both.
-                    for (const auto& vs : m_vectorStrokes) {
-                        if (vs.frame == currentFrame && vs.layer == static_cast<int>(i)) {
-                            if (layer.opacity < 0.999f) {
-                                window.draw(meshWithOpacity(vs.mesh, layer.opacity), layerStates);
-                            }
-                            else {
-                                window.draw(vs.mesh, layerStates);
-                            }
-                        }
-                    }
-                    if (static_cast<int>(i) == activeLayer) {
-                        for (const auto& vs : m_floatingVectorStrokes) {
-                            window.draw(vs.mesh, layerStates);
-                        }
-                    }
-                    if (m_isVectorStrokeActive && static_cast<int>(i) == activeLayer) {
-                        window.draw(m_activeVectorMesh, layerStates);
+            sf::RenderStates layerStates = innerStates;
+            layerStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
+
+            bool isActive = (static_cast<int>(i) == activeLayer);
+            drawLayerContent(window, currentFrame, static_cast<int>(i), layerStates, isActive);
+
+            if (isActive) {
+                bool needsComposite = !isPixelMode && (layerHasErase(currentFrame, static_cast<int>(i)) ||
+                    (m_isVectorStrokeActive && m_activeStrokeIsErase));
+
+                if (!isPixelMode && !m_floatingVectorStrokes.empty() &&
+                    selection.getState() == SelectionState::Floating && !needsComposite) {
+                    sf::RenderStates fs = layerStates;
+                    fs.transform *= selection.getFloatingTransform();
+                    for (const auto& vs : m_floatingVectorStrokes) {
+                        window.draw(vs.mesh, fs);
                     }
                 }
 
-                if (static_cast<int>(i) == activeLayer) {
+                if (isPixelMode || isImageResourceActive(currentFrame)) {
                     selection.drawPixels(window, layerStates);
                 }
+            }
 
-                if (m_textManager) {
-                    m_textManager->render(window, currentFrame, static_cast<int>(i), isPixelMode, layerStates, canvasLogicalSize);
-                }
+            if (m_textManager) {
+                m_textManager->render(window, currentFrame, static_cast<int>(i), isPixelMode, layerStates, canvasLogicalSize);
             }
         }
     }
@@ -2557,14 +2682,10 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         float cw = std::round(drawArea.width);
         float ch = std::round(drawArea.height);
 
-        float tlW = static_cast<float>(frameTex[0].getSize().x);
-        float tlH = static_cast<float>(frameTex[0].getSize().y);
         float tH = static_cast<float>(frameTex[1].getSize().y);
         float trW = static_cast<float>(frameTex[2].getSize().x);
-        float trH = static_cast<float>(frameTex[2].getSize().y);
         float lW = static_cast<float>(frameTex[3].getSize().x);
         float rW = static_cast<float>(frameTex[4].getSize().x);
-        float blW = static_cast<float>(frameTex[5].getSize().x);
         float bH = static_cast<float>(frameTex[6].getSize().y);
         float brW = static_cast<float>(frameTex[7].getSize().x);
 
@@ -2648,15 +2769,15 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     if (!isPlaying && currentlyHovering && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser || activeTool == ToolType::Curve || activeTool == ToolType::FilledContour)) {
         if (isPixelMode) {
-            float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
-            float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
+            float sX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
+            float sY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
 
-            sf::Vector2f localPos = getInverseTransform().transformPoint(currentRawMousePos);
-            localPos.x = (localPos.x - drawArea.left) * scaleX;
-            localPos.y = (localPos.y - drawArea.top) * scaleY;
+            sf::Vector2f lp = getInverseTransform().transformPoint(currentRawMousePos);
+            lp.x = (lp.x - drawArea.left) * sX;
+            lp.y = (lp.y - drawArea.top) * sY;
 
-            float tx = std::floor(localPos.x) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
-            float ty = std::floor(localPos.y) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
+            float tx = std::floor(lp.x) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
+            float ty = std::floor(lp.y) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
 
             sf::RectangleShape pxHover(sf::Vector2f(static_cast<float>(pixelBrushSize), static_cast<float>(pixelBrushSize)));
             pxHover.setFillColor(sf::Color(20, 10, 30, 40));
@@ -2754,24 +2875,20 @@ const Frame* Canvas::getFrameReadOnly(int index) const {
 size_t Canvas::getFrameCount() const { return frames.size(); }
 
 void Canvas::setPixelMode(bool enabled) {
-    isPixelMode = enabled;
-
-    // Switching to pixel mode means no more retained geometry — flush whatever
-    // is outstanding into the textures so nothing silently disappears.
-    if (enabled && !m_vectorStrokes.empty()) {
-        bool wasPixel = isPixelMode;
-        isPixelMode = false;
+    if (enabled && !isPixelMode && !m_vectorStrokes.empty()) {
         for (size_t f = 0; f < frames.size(); ++f) {
             for (size_t l = 0; l < frames[f].layers.size(); ++l) {
                 bakeLayerStrokes(static_cast<int>(f), static_cast<int>(l));
             }
         }
-        isPixelMode = wasPixel;
         m_vectorStrokes.clear();
         m_floatingVectorStrokes.clear();
         m_activeVectorMesh.clear();
         m_isVectorStrokeActive = false;
+        m_activeStrokeIsErase = false;
     }
+
+    isPixelMode = enabled;
 
     for (auto& frame : frames) {
         for (auto& layer : frame.layers) {
@@ -2781,6 +2898,7 @@ void Canvas::setPixelMode(bool enabled) {
         }
     }
 }
+
 bool Canvas::getPixelMode() const { return isPixelMode; }
 void Canvas::setPixelBrushSize(int size) { pixelBrushSize = size; }
 int Canvas::getPixelBrushSize() const { return pixelBrushSize; }
@@ -2794,16 +2912,19 @@ void Canvas::cyclePixelBrushSize() {
     else if (pixelBrushSize == 8) pixelBrushSize = 16;
     else pixelBrushSize = 1;
 }
+
 void Canvas::togglePixelGrid() { pixelGridEnabled = !pixelGridEnabled; }
 bool Canvas::isPixelGridEnabled() const { return pixelGridEnabled; }
 void Canvas::togglePixelSnap() { pixelSnapEnabled = !pixelSnapEnabled; }
 bool Canvas::isPixelSnapEnabled() const { return pixelSnapEnabled; }
+
 void Canvas::toggleTileMode() {
     if (!tileModeX && !tileModeY) { tileModeX = true; tileModeY = false; }
     else if (tileModeX && !tileModeY) { tileModeX = false; tileModeY = true; }
     else if (!tileModeX && tileModeY) { tileModeX = true; tileModeY = true; }
     else { tileModeX = false; tileModeY = false; }
 }
+
 void Canvas::togglePixelPerfect() { pixelPerfectEnabled = !pixelPerfectEnabled; }
 bool Canvas::isPixelPerfectEnabled() const { return pixelPerfectEnabled; }
 
@@ -2858,8 +2979,8 @@ void Canvas::enterTransformMode(int currentFrame) {
 
     if (selection.getState() == SelectionState::Selected) {
         saveUndoState();
-        bakeLayerStrokes(currentFrame, activeLayer);
-        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
+        extractFloatingStrokes(currentFrame);
+        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), isImageResourceActive(currentFrame));
     }
 
     if (selection.getState() == SelectionState::Floating) {
@@ -2891,8 +3012,6 @@ bool Canvas::isTransforming() const {
 void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
-    // Fast path: hit-test retained stroke geometry directly. No baking needed,
-    // and it gives a tight bbox around the stroke you actually clicked.
     if (!isPixelMode) {
         int foundStrokeIdx = -1;
         int foundLayerIdx = -1;
@@ -2903,7 +3022,7 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
 
             for (int s = static_cast<int>(m_vectorStrokes.size()) - 1; s >= 0; --s) {
                 const auto& vs = m_vectorStrokes[s];
-                if (vs.frame == currentFrame && vs.layer == l) {
+                if (vs.frame == currentFrame && vs.layer == l && !vs.isErase) {
                     for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
                         float dx = vs.mesh[v].position.x - pos.x;
                         float dy = vs.mesh[v].position.y - pos.y;

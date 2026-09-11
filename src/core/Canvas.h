@@ -114,6 +114,7 @@ private:
         sf::VertexArray mesh;
         int layer;
         int frame;
+        bool isErase = false;
     };
 
     struct UndoState {
@@ -125,14 +126,17 @@ private:
     std::vector<UndoState> redoHistory;
 
     std::vector<VectorStroke> m_vectorStrokes;
-    // Currently unused: selections now bake the layer instead of splitting
-    // meshes. Kept so the member layout doesn't shift under you.
     std::vector<VectorStroke> m_floatingVectorStrokes;
+    sf::Vector2f m_floatingLocalSize{ 0.f, 0.f };
+
     sf::VertexArray m_activeVectorMesh;
     sf::Vector2f m_vPrevPoint;
     sf::Vector2f m_vPrevMidPoint;
     sf::Vector2f m_stabilizedPos;
     bool m_isVectorStrokeActive{ false };
+    bool m_activeStrokeIsErase{ false };
+
+    sf::RenderTexture m_layerCache;
 
     sf::Texture deskTexture;
     sf::Sprite deskSprite;
@@ -183,10 +187,14 @@ private:
 
     void eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius, int currentFrame);
 
-    // NEW: rasterize this layer's retained strokes into its raster texture and
-    // drop them from the stroke list. Every pixel-reading tool calls this first
-    // so it can see vector content. Costs that layer its resolution-independence.
+    bool layerHasErase(int frameIndex, int layerIndex) const;
+    void drawLayerContent(sf::RenderTarget& target, int frameIndex, int layerIndex,
+        const sf::RenderStates& layerStates, bool isActiveLayerForPreview);
     void bakeLayerStrokes(int frameIndex, int layerIndex);
+    bool renderLayerToTexture(int frameIndex, int layerIndex, sf::RenderTexture& out);
+
+    void extractFloatingStrokes(int currentFrame);
+    void flipFloatingStrokes(bool horizontal);
 
 public:
     Canvas();
@@ -215,9 +223,6 @@ public:
     const Frame* getFrameReadOnly(int index) const;
     sf::RenderTexture* getActiveRenderTexture(int currentFrame);
 
-    // NEW: composite a whole frame (raster + strokes, blend modes, opacity)
-    // into an image, optionally at a multiple of canvas resolution. Does not
-    // mutate the document — strokes stay vector, so scaleFactor > 1 is crisp.
     sf::Image flattenFrameToImage(int frameIndex, unsigned int scaleFactor = 1);
 
     void setPerspectiveManager(PerspectiveManager* pm) { m_perspectiveManager = pm; }
