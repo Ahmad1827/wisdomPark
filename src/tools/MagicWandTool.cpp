@@ -44,9 +44,18 @@ std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
         img = ExportManager::flattenFrame(m_canvas, m_timeline.getCurrentFrame());
     }
     else {
-        auto* tex = m_canvas.getActiveRenderTexture(m_timeline.getCurrentFrame());
-        if (!tex) return mask;
-        img = tex->getTexture().copyToImage();
+        if (m_canvas.getPixelMode()) {
+            auto* tex = m_canvas.getActiveRenderTexture(m_timeline.getCurrentFrame());
+            if (!tex) return mask;
+            img = tex->getTexture().copyToImage();
+        }
+        else {
+            sf::RenderTexture scratch;
+           // if (!m_canvas.renderLayerToTexture(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), scratch)) {
+            //    return mask;
+           // }
+            img = scratch.getTexture().copyToImage();
+        }
     }
 
     sf::Color targetCol = img.getPixel(startPos.x, startPos.y);

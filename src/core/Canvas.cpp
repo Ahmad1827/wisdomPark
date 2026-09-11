@@ -1142,25 +1142,57 @@ void Canvas::deleteSelection(int currentFrame) {
 }
 
 void Canvas::fillSelection(sf::Color color, int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
-        saveUndoState();
-        bakeLayerStrokes(currentFrame, activeLayer);
+    if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    saveUndoState();
 
-        sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
-        unsigned int w = std::min(img.getSize().x, canvasLogicalSize.x);
-        unsigned int h = std::min(img.getSize().y, canvasLogicalSize.y);
-        for (unsigned int y = 0; y < h; ++y) {
-            for (unsigned int x = 0; x < w; ++x) {
-                if (!selection.isActive() || selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
-                    img.setPixel(x, y, color);
-                }
+    if (!isPixelMode) {
+        if (selection.isActive() && selection.getBoundingBox().width > 0) {
+            sf::FloatRect bb = selection.getBoundingBox();
+            std::vector<sf::Vector2f> poly = {
+                { bb.left, bb.top },
+                { bb.left + bb.width, bb.top },
+                { bb.left + bb.width, bb.top + bb.height },
+                { bb.left, bb.top + bb.height }
+            };
+
+            VectorStroke vs;
+            vs.mesh.setPrimitiveType(sf::Triangles);
+            vs.layer = activeLayer;
+            vs.frame = currentFrame;
+            vs.isErase = (color == sf::Color::Transparent || color.a == 0);
+
+            sf::Color fillCol = vs.isErase ? sf::Color::White : color;
+
+            vs.mesh.append(sf::Vertex(poly[0], fillCol));
+            vs.mesh.append(sf::Vertex(poly[1], fillCol));
+            vs.mesh.append(sf::Vertex(poly[2], fillCol));
+
+            vs.mesh.append(sf::Vertex(poly[0], fillCol));
+            vs.mesh.append(sf::Vertex(poly[2], fillCol));
+            vs.mesh.append(sf::Vertex(poly[3], fillCol));
+
+            m_vectorStrokes.push_back(std::move(vs));
+            isDirty = true;
+        }
+        return;
+    }
+
+    sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
+    unsigned int w = std::min(img.getSize().x, canvasLogicalSize.x);
+    unsigned int h = std::min(img.getSize().y, canvasLogicalSize.y);
+    for (unsigned int y = 0; y < h; ++y) {
+        for (unsigned int x = 0; x < w; ++x) {
+            if (!selection.isActive() || selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
+                img.setPixel(x, y, color);
             }
         }
-        sf::Texture newTex; newTex.loadFromImage(img);
-        frames[currentFrame].layers[activeLayer].texture->clear(sf::Color::Transparent);
-        frames[currentFrame].layers[activeLayer].texture->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
-        frames[currentFrame].layers[activeLayer].texture->display();
     }
+    sf::Texture newTex;
+    newTex.loadFromImage(img);
+    frames[currentFrame].layers[activeLayer].texture->clear(sf::Color::Transparent);
+    frames[currentFrame].layers[activeLayer].texture->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
+    frames[currentFrame].layers[activeLayer].texture->display();
+    isDirty = true;
 }
 
 void Canvas::flipSelectionHorizontal(int currentFrame) {
@@ -2016,29 +2048,88 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             }
 
             if (activeTool == ToolType::Fill) {
-                if (isPixelMode) fillTolerance = 0.0f;
-                else fillTolerance = 0.08f;
+                if (isPixelMode) {
+                    fillTolerance = 0.0f;
+                    saveUndoState();
+                    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                    if (!targetTex) return;
 
-                saveUndoState();
-                bakeLayerStrokes(currentFrame, activeLayer);
+                    sf::Image img = targetTex->getTexture().copyToImage();
+                    sf::Vector2i pixelPos(static_cast<int>(localPos.x), static_cast<int>(localPos.y));
 
-                sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
-                sf::Vector2i pixelPos(static_cast<int>(localPos.x), static_cast<int>(localPos.y));
+                    if (pixelPos.x >= 0 && pixelPos.y >= 0 && pixelPos.x < static_cast<int>(img.getSize().x) && pixelPos.y < static_cast<int>(img.getSize().y)) {
+                        sf::Color targetCol = img.getPixel(pixelPos.x, pixelPos.y);
 
-                if (pixelPos.x >= 0 && pixelPos.y >= 0 && pixelPos.x < static_cast<int>(img.getSize().x) && pixelPos.y < static_cast<int>(img.getSize().y)) {
-                    sf::Color targetCol = img.getPixel(pixelPos.x, pixelPos.y);
+                        if (fillContiguous) executeQueueFill(pixelPos, targetCol, drawCol, img);
+                        else executeGlobalFill(targetCol, drawCol, img);
 
-                    if (fillContiguous) executeQueueFill(pixelPos, targetCol, drawCol, img);
-                    else executeGlobalFill(targetCol, drawCol, img);
-
-                    sf::Texture tex;
-                    tex.loadFromImage(img);
-                    sf::Sprite spr(tex);
-                    frames[currentFrame].layers[activeLayer].texture->clear(sf::Color::Transparent);
-                    frames[currentFrame].layers[activeLayer].texture->draw(spr, sf::RenderStates(sf::BlendNone));
-                    frames[currentFrame].layers[activeLayer].texture->display();
+                        sf::Texture tex;
+                        tex.loadFromImage(img);
+                        sf::Sprite spr(tex);
+                        targetTex->clear(sf::Color::Transparent);
+                        targetTex->draw(spr, sf::RenderStates(sf::BlendNone));
+                        targetTex->display();
+                        isDirty = true;
+                    }
+                    return;
                 }
-                return;
+                else {
+                    sf::RenderTexture scratch;
+                    if (!renderLayerToTexture(currentFrame, activeLayer, scratch)) return;
+
+                    sf::Image img = scratch.getTexture().copyToImage();
+                    sf::Vector2i pixelPos(static_cast<int>(localPos.x), static_cast<int>(localPos.y));
+
+                    int w = static_cast<int>(img.getSize().x);
+                    int h = static_cast<int>(img.getSize().y);
+                    if (pixelPos.x < 0 || pixelPos.x >= w || pixelPos.y < 0 || pixelPos.y >= h) return;
+
+                    sf::Color targetCol = img.getPixel(pixelPos.x, pixelPos.y);
+                    if (colorMatches(targetCol, drawCol)) return;
+
+                    std::vector<bool> fillMask(w * h, false);
+                    std::queue<sf::Vector2i> q;
+                    q.push(pixelPos);
+                    fillMask[pixelPos.y * w + pixelPos.x] = true;
+
+                    while (!q.empty()) {
+                        sf::Vector2i p = q.front();
+                        q.pop();
+
+                        const int dx[4] = { 1, -1, 0, 0 };
+                        const int dy[4] = { 0, 0, 1, -1 };
+                        for (int d = 0; d < 4; ++d) {
+                            int nx = p.x + dx[d];
+                            int ny = p.y + dy[d];
+                            if (nx >= 0 && nx < w && ny >= 0 && ny < h && !fillMask[ny * w + nx]) {
+                                if (colorMatches(img.getPixel(nx, ny), targetCol)) {
+                                    fillMask[ny * w + nx] = true;
+                                    q.push({ nx, ny });
+                                }
+                            }
+                        }
+                    }
+
+                    std::vector<sf::Vector2f> contour;
+                    for (int y = 0; y < h; ++y) {
+                        for (int x = 0; x < w; ++x) {
+                            if (fillMask[y * w + x]) {
+                                bool edge = (x == 0 || !fillMask[y * w + (x - 1)] ||
+                                    x == w - 1 || !fillMask[y * w + (x + 1)] ||
+                                    y == 0 || !fillMask[(y - 1) * w + x] ||
+                                    y == h - 1 || !fillMask[(y + 1) * w + x]);
+                                if (edge) {
+                                    contour.push_back(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)));
+                                }
+                            }
+                        }
+                    }
+
+                    if (contour.size() >= 3) {
+                        fillPolygonContour(contour, drawCol, currentFrame);
+                    }
+                    return;
+                }
             }
 
             bool canDrawLine = (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser);
