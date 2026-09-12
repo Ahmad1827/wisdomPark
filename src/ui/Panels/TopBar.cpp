@@ -135,6 +135,37 @@ namespace WisdomUI {
                 if (m_onDisableSymmetry) m_onDisableSymmetry();
                 return true;
             }
+            if (m_gridControlsVisible) {
+                if (m_gridToggleBtnBounds.contains(mousePos)) {
+                    if (m_onToggleGrid) m_onToggleGrid(!m_gridActive);
+                    return true;
+                }
+                if (m_gridMinusBtnBounds.contains(mousePos)) {
+                    int nextSize = std::max(1, m_gridSize - 1);
+                    if (m_onChangeGridSize) m_onChangeGridSize(nextSize);
+                    return true;
+                }
+                if (m_gridPlusBtnBounds.contains(mousePos)) {
+                    int nextSize = std::min(1000, m_gridSize + 1);
+                    if (m_onChangeGridSize) m_onChangeGridSize(nextSize);
+                    return true;
+                }
+                if (m_gridSizeBox.contains(mousePos)) {
+                    m_isEditingGridSize = true;
+                    m_gridSizeInput = std::to_string(m_gridSize);
+                    return true;
+                }
+                else if (m_isEditingGridSize) {
+                    if (!m_gridSizeInput.empty()) {
+                        try {
+                            int val = std::clamp(std::stoi(m_gridSizeInput), 1, 1000);
+                            if (m_onChangeGridSize) m_onChangeGridSize(val);
+                        }
+                        catch (...) {}
+                    }
+                    m_isEditingGridSize = false;
+                }
+            }
 
             if (m_openMenuIndex != -1) {
                 auto& openMenu = m_menus[m_openMenuIndex];
@@ -171,6 +202,48 @@ namespace WisdomUI {
             }
 
             m_openMenuIndex = -1;
+        }
+        if (m_gridControlsVisible && m_isEditingGridSize) {
+            if (event.type == sf::Event::TextEntered) {
+                if (event.text.unicode == '\b') {
+                    if (!m_gridSizeInput.empty()) m_gridSizeInput.pop_back();
+                    return true;
+                }
+                else if (event.text.unicode == '\r' || event.text.unicode == '\n') {
+                    if (!m_gridSizeInput.empty()) {
+                        try {
+                            int val = std::clamp(std::stoi(m_gridSizeInput), 1, 1000);
+                            if (m_onChangeGridSize) m_onChangeGridSize(val);
+                        }
+                        catch (...) {}
+                    }
+                    m_isEditingGridSize = false;
+                    return true;
+                }
+                else if (event.text.unicode >= '0' && event.text.unicode <= '9') {
+                    if (m_gridSizeInput.length() < 4) {
+                        m_gridSizeInput += static_cast<char>(event.text.unicode);
+                    }
+                    return true;
+                }
+            }
+            if (event.type == sf::Event::KeyPressed) {
+                if (event.key.code == sf::Keyboard::Escape) {
+                    m_isEditingGridSize = false;
+                    return true;
+                }
+                if (event.key.code == sf::Keyboard::Enter) {
+                    if (!m_gridSizeInput.empty()) {
+                        try {
+                            int val = std::clamp(std::stoi(m_gridSizeInput), 1, 1000);
+                            if (m_onChangeGridSize) m_onChangeGridSize(val);
+                        }
+                        catch (...) {}
+                    }
+                    m_isEditingGridSize = false;
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -218,6 +291,50 @@ namespace WisdomUI {
 
             sf::Vector2f iconPos(qb.bounds.left + 4.0f, qb.bounds.top + 4.0f);
             Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
+        }
+        if (m_gridControlsVisible) {
+            float rightAnchor = m_quickBtns.empty() ? (m_bounds.left + m_bounds.width - 14.f) : (m_quickBtns.front().bounds.left - 14.f);
+            if (m_symmetryActive) {
+                rightAnchor = m_symmetryBtnBounds.left - 14.f;
+            }
+
+            float totalW = 86.f + 6.f + 26.f + 4.f + 56.f + 4.f + 26.f;
+            float startX = rightAnchor - totalW;
+            float topY = m_bounds.top + 5.0f;
+
+            m_gridToggleBtnBounds = sf::FloatRect(startX, topY, 86.0f, 26.0f);
+            m_gridMinusBtnBounds = sf::FloatRect(startX + 92.0f, topY, 26.0f, 26.0f);
+            m_gridSizeBox = sf::FloatRect(startX + 122.0f, topY, 56.0f, 26.0f);
+            m_gridPlusBtnBounds = sf::FloatRect(startX + 182.0f, topY, 26.0f, 26.0f);
+
+            bool hovToggle = m_gridToggleBtnBounds.contains(mPos);
+            bool hovMinus = m_gridMinusBtnBounds.contains(mPos);
+            bool hovBox = m_gridSizeBox.contains(mPos);
+            bool hovPlus = m_gridPlusBtnBounds.contains(mPos);
+
+            Theme::DrawSunsetButton(window, m_gridToggleBtnBounds, m_gridActive ? "Grid: ON" : "Grid: OFF", m_font, 11, m_gridActive, hovToggle, m_gridActive, 1.0f);
+            Theme::DrawSunsetButton(window, m_gridMinusBtnBounds, "-", m_font, 13, false, hovMinus, false, 1.0f);
+
+            sf::RectangleShape valBg(sf::Vector2f(m_gridSizeBox.width, m_gridSizeBox.height));
+            valBg.setPosition(m_gridSizeBox.left, m_gridSizeBox.top);
+            valBg.setFillColor(sf::Color(14, 6, 20));
+            valBg.setOutlineThickness(m_isEditingGridSize ? 2.0f : 1.0f);
+            valBg.setOutlineColor(m_isEditingGridSize ? Theme::SunsetGold : (hovBox ? Theme::SunsetAmber : Theme::SunsetPlum));
+            window.draw(valBg);
+
+            std::string displayTxt = m_isEditingGridSize ? (m_gridSizeInput + "_") : (std::to_string(m_gridSize) + "px");
+            Theme::DrawCrispText(window, m_font, displayTxt, 11,
+                m_gridSizeBox.left + m_gridSizeBox.width * 0.5f,
+                m_gridSizeBox.top + m_gridSizeBox.height * 0.5f,
+                m_isEditingGridSize ? Theme::SunsetGold : Theme::SunsetPeach, sf::Color::Transparent, true, true);
+
+            Theme::DrawSunsetButton(window, m_gridPlusBtnBounds, "+", m_font, 13, false, hovPlus, false, 1.0f);
+        }
+        else {
+            m_gridToggleBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+            m_gridMinusBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+            m_gridSizeBox = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+            m_gridPlusBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
         }
         if (m_symmetryActive) {
             float btnW = 150.0f;

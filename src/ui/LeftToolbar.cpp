@@ -51,6 +51,7 @@ void LeftToolbar::init() {
     makeBtn("magic_wand", "Wand");
     makeBtn("shapes", "Shapes");
     makeBtn("symmetry", "Symmetry");
+    makeBtn("grid", "Grid");
     makeBtn("perspective", "Perspective");
     makeBtn("ai_gen", "AI Gen", true);
     makeBtn("asset_browser", "Assets");

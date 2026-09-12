@@ -10,7 +10,7 @@
 #include "DitherManager.h"
 #include "../core/PerspectiveSystem.h"
 
-enum class ToolType { None, Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text, Gradient, Curve, FilledContour };
+enum class ToolType { None, Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text, Gradient, Curve, FilledContour, Grid };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 enum class TransformState { None, Scaling };
 
@@ -159,6 +159,8 @@ private:
     bool isPixelMode;
     int pixelBrushSize;
     bool pixelGridEnabled;
+    bool customGridEnabled{ false };
+    int customGridSize{ 16 };
     bool pixelSnapEnabled;
     bool tileModeX;
     bool tileModeY;
@@ -304,6 +306,11 @@ public:
     void cyclePixelBrushSize();
     void togglePixelGrid();
     bool isPixelGridEnabled() const;
+    void setCustomGridEnabled(bool enabled) { customGridEnabled = enabled; }
+    bool isCustomGridEnabled() const { return customGridEnabled; }
+    void toggleCustomGrid() { customGridEnabled = !customGridEnabled; }
+    void setCustomGridSize(int size) { customGridSize = std::max(1, size); }
+    int getCustomGridSize() const { return customGridSize; }
     void togglePixelSnap();
     bool isPixelSnapEnabled() const;
     void toggleTileMode();

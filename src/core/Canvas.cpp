@@ -3120,7 +3120,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         }
         window.draw(checkerboard, innerStates);
 
-        if (pixelGridEnabled && viewScale > 0.1f) {
+        if (pixelGridEnabled && !customGridEnabled && viewScale > 0.1f) {
             sf::VertexArray lines(sf::Lines);
             sf::Color gridLine(180, 180, 180, 210);
             unsigned int step = 1;
@@ -3134,7 +3134,6 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             }
             window.draw(lines, innerStates);
         }
-
     }
 
     if (symmetryManager.visible) {
@@ -3377,6 +3376,21 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         window.draw(leftEdge, frameStates);
         window.draw(rightEdge, frameStates);
         window.draw(innerShadow, frameStates);
+    }
+
+    if (customGridEnabled && customGridSize >= 1) {
+        sf::VertexArray lines(sf::Lines);
+        sf::Color gridLine = isPixelMode ? sf::Color(160, 160, 160, 180) : sf::Color(70, 130, 210, 160);
+        unsigned int step = static_cast<unsigned int>(customGridSize);
+        for (unsigned int x = 0; x <= canvasLogicalSize.x; x += step) {
+            lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), 0.f), gridLine));
+            lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), static_cast<float>(canvasLogicalSize.y)), gridLine));
+        }
+        for (unsigned int y = 0; y <= canvasLogicalSize.y; y += step) {
+            lines.append(sf::Vertex(sf::Vector2f(0.f, static_cast<float>(y)), gridLine));
+            lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(canvasLogicalSize.x), static_cast<float>(y)), gridLine));
+        }
+        window.draw(lines, innerStates);
     }
 
     selection.draw(window, innerStates);

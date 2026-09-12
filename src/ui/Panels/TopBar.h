@@ -47,7 +47,17 @@ namespace WisdomUI {
         bool m_symmetryActive{ false };
         std::function<void()> m_onDisableSymmetry;
         sf::FloatRect m_symmetryBtnBounds;
-
+        bool m_gridControlsVisible{ false };
+        bool m_gridActive{ false };
+        int m_gridSize{ 16 };
+        bool m_isEditingGridSize{ false };
+        std::string m_gridSizeInput;
+        std::function<void(bool)> m_onToggleGrid;
+        std::function<void(int)> m_onChangeGridSize;
+        sf::FloatRect m_gridToggleBtnBounds;
+        sf::FloatRect m_gridMinusBtnBounds;
+        sf::FloatRect m_gridSizeBox;
+        sf::FloatRect m_gridPlusBtnBounds;
         sf::FloatRect getDropdownItemBounds(int menuIndex, int actionIndex) const;
         sf::FloatRect getDropdownPanelBounds(int menuIndex) const;
 
@@ -68,6 +78,15 @@ namespace WisdomUI {
         void SetSymmetryState(bool active, std::function<void()> onDisable) {
             m_symmetryActive = active;
             m_onDisableSymmetry = onDisable;
+        }
+        void SetGridControls(bool visible, bool active, int size,
+            std::function<void(bool)> onToggle,
+            std::function<void(int)> onChangeSize) {
+            m_gridControlsVisible = visible;
+            m_gridActive = active;
+            m_gridSize = size;
+            m_onToggleGrid = onToggle;
+            m_onChangeGridSize = onChangeSize;
         }
         void SetBounds(const sf::FloatRect& bounds);
         void Update(float deltaTime, const sf::Vector2f& mousePos);

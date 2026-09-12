@@ -441,6 +441,12 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     m_toolDock.AddTool("shapes", "Shapes Tool (U)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Shapes); m_toolDock.SetActiveTool("shapes"); });
     m_toolDock.AddTool("text", "Text Tool (T)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Text); m_toolDock.SetActiveTool("text"); });
     m_toolDock.AddTool("gradient", "Gradient Tool (G)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Gradient); m_toolDock.SetActiveTool("gradient"); });
+    m_toolDock.AddTool("grid", "Grid Overlay (#)", [this, baseCanvas]() {
+        baseCanvas->setActiveTool(ToolType::Grid);
+        m_toolDock.SetActiveTool("grid");
+        baseCanvas->setCustomGridEnabled(true);
+        showMessage("Grid Enabled (Adjust in Top Bar)", sf::Color::Cyan);
+        });
     m_toolDock.AddTool("symmetry", "Symmetry Axis", [this, baseCanvas]() {
         if (baseCanvas->getActiveTool() == ToolType::Symmetry) {
             baseCanvas->clearSymmetry();
@@ -2472,6 +2478,19 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 showMessage("Symmetry Deactivated", sf::Color::Cyan);
             }
         );
+        m_topBar.SetGridControls(
+            canvas.getActiveTool() == ToolType::Grid,
+            canvas.isCustomGridEnabled(),
+            canvas.getCustomGridSize(),
+            [this, &canvas](bool active) {
+                canvas.setCustomGridEnabled(active);
+                showMessage(active ? "Grid: ON" : "Grid: OFF", sf::Color::Cyan);
+            },
+            [this, &canvas](int newSize) {
+                canvas.setCustomGridSize(newSize);
+                showMessage("Grid Size: " + std::to_string(newSize) + "px", sf::Color::Yellow);
+            }
+        );
 
         m_toolOptionsBar.SetBounds(regions.optionsBar);
         std::string toolName = "Brush";
@@ -2485,6 +2504,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         else if (canvas.getActiveTool() == ToolType::Gradient) toolName = "Gradient";
         else if (canvas.getActiveTool() == ToolType::Perspective) toolName = "Perspective";
         else if (canvas.getActiveTool() == ToolType::Symmetry) toolName = "Symmetry";
+        else if (canvas.getActiveTool() == ToolType::Grid) toolName = "Grid";
 
         float curSize = canvas.getPixelMode() ? static_cast<float>(canvas.getPixelBrushSize()) : canvas.getBrushSize();
         m_toolOptionsBar.SyncState(toolName, curSize, canvas.getPixelMode(), canvas.isPixelPerfectEnabled(), canvas.getStabilizer());
