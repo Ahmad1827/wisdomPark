@@ -13,6 +13,7 @@ private:
     bool m_isDraggingPanel = false;
     sf::Vector2f m_dragOffset;
     bool m_presetsOpen;
+    std::vector<std::pair<sf::FloatRect, sf::Color>> m_colorSwatches;
 
     void drawButton(sf::RenderWindow& window, sf::FloatRect bounds, const std::string& text, sf::Color bgColor);
     void drawToggle(sf::RenderWindow& window, sf::FloatRect bounds, const std::string& text, bool state);

@@ -6,7 +6,7 @@ VanishingPoint::VanishingPoint(sf::Vector2f pos, std::string n)
     : position(pos), locked(false), visible(true), color(sf::Color(0, 191, 255, 180)), name(n) {}
 
 PerspectiveGuide::PerspectiveGuide()
-    : density(20), thickness(1.0f), guideColor(sf::Color(255, 255, 255, 60)), activeColor(sf::Color(0, 255, 100, 200)),
+    : density(20), thickness(1.0f), guideColor(sf::Color(0, 160, 235, 190)), activeColor(sf::Color(255, 80, 80, 230)),
     brushSnap(true), shapeSnap(true), transformSnap(true), selectionSnap(true),
     visible(true), locked(false) {}
 

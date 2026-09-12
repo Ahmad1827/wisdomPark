@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-PerspectivePanel::PerspectivePanel() : m_pm(nullptr), m_position(64.f, 78.f), m_size(280.f, 510.f), m_presetsOpen(false) {}
+PerspectivePanel::PerspectivePanel() : m_pm(nullptr), m_position(64.f, 78.f), m_size(280.f, 560.f), m_presetsOpen(false) {}
 
 void PerspectivePanel::init(PerspectiveManager* pm) {
     m_pm = pm;
@@ -70,6 +70,45 @@ void PerspectivePanel::draw(sf::RenderWindow& window) {
         y += 36.f;
 
         WisdomUI::Theme::DrawCrispText(window, m_font, "Density: " + std::to_string(activeCfg->guideSettings.density), 13, m_position.x + 16.f, y + 2.f, WisdomUI::Theme::TextSecondary);
+        y += 28.f;
+
+        WisdomUI::Theme::DrawCrispText(window, m_font, "Line Color:", 12, m_position.x + 16.f, y + 2.f, WisdomUI::Theme::TextPrimary);
+        y += 22.f;
+
+        m_colorSwatches.clear();
+        std::vector<sf::Color> palette = {
+            sf::Color(0, 160, 235, 200),    // Cyan
+            sf::Color(40, 40, 48, 220),     // Charcoal / Black
+            sf::Color(235, 55, 75, 210),    // Red
+            sf::Color(170, 50, 230, 210),   // Violet
+            sf::Color(35, 190, 100, 210),   // Emerald
+            sf::Color(255, 175, 0, 220),    // Amber
+            sf::Color(245, 245, 245, 200)   // Pure White
+        };
+
+        float swatchSize = 28.f;
+        float spacing = 8.f;
+        float startX = m_position.x + 14.f;
+
+        sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+        for (size_t i = 0; i < palette.size(); ++i) {
+            sf::FloatRect sRect(startX + i * (swatchSize + spacing), y, swatchSize, swatchSize);
+            m_colorSwatches.push_back({ sRect, palette[i] });
+
+            sf::RectangleShape swatch(sf::Vector2f(swatchSize, swatchSize));
+            swatch.setPosition(sRect.left, sRect.top);
+            swatch.setFillColor(palette[i]);
+
+            bool isSelected = (activeCfg->guideSettings.guideColor.r == palette[i].r &&
+                activeCfg->guideSettings.guideColor.g == palette[i].g &&
+                activeCfg->guideSettings.guideColor.b == palette[i].b);
+            bool isHovered = sRect.contains(mPos);
+
+            swatch.setOutlineThickness(isSelected ? 2.5f : (isHovered ? 1.5f : 1.0f));
+            swatch.setOutlineColor(isSelected ? WisdomUI::Theme::SunsetAmber : (isHovered ? sf::Color::White : sf::Color(60, 60, 70)));
+            window.draw(swatch);
+        }
     }
 }
 
@@ -118,6 +157,13 @@ void PerspectivePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos
             if (sf::FloatRect(bx + 144.f, y, 122.f, 28.f).contains(mousePos)) activeCfg->guideSettings.locked = !activeCfg->guideSettings.locked;
             y += 36.f;
             if (sf::FloatRect(bx + 12.f, y, 254.f, 28.f).contains(mousePos)) activeCfg->guideSettings.brushSnap = !activeCfg->guideSettings.brushSnap;
+
+            for (const auto& swatch : m_colorSwatches) {
+                if (swatch.first.contains(mousePos)) {
+                    activeCfg->guideSettings.guideColor = swatch.second;
+                    return;
+                }
+            }
         }
     }
     else if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
