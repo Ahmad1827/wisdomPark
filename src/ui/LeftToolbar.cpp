@@ -221,6 +221,10 @@ std::string LeftToolbar::handleClick(sf::Vector2f mousePos, bool isAIConfigured,
         if (tool.rect.getGlobalBounds().contains(mousePos)) {
             if (tool.isAiTool && !isAIConfigured) return "ai_disabled";
             if (tool.id != "import_img" && tool.id != "audio_panel" && tool.id != "dither_toggle" && tool.id != "asset_browser") {
+                if (activeToolId == tool.id && tool.id != "brush") {
+                    activeToolId = "brush";
+                    return "brush";
+                }
                 activeToolId = tool.id;
             }
             return tool.id;

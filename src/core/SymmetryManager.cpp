@@ -25,52 +25,59 @@ void SymmetryManager::updateVectors() {
     }
 }
 
-std::vector<sf::Vector2f> SymmetryManager::getSymmetricPoints(sf::Vector2f point) {
-    std::vector<sf::Vector2f> points;
-    points.push_back(point);
-
+std::vector<sf::Vector2f> SymmetryManager::getSymmetricPoints(const sf::Vector2f& point) const {
     if (!enabled || (direction.x == 0.f && direction.y == 0.f)) {
-        return points;
+        return { point };
     }
 
-    sf::Vector2f v = point - startPoint;
-    float dotProduct = v.x * direction.x + v.y * direction.y;
-    sf::Vector2f projection = startPoint + direction * dotProduct;
-    sf::Vector2f reflected = point + 2.0f * (projection - point);
+    sf::Vector2f v = endPoint - startPoint;
+    float lenSq = v.x * v.x + v.y * v.y;
+    if (lenSq < 0.0001f) return { point };
 
-    points.push_back(reflected);
-    return points;
+    float t = ((point.x - startPoint.x) * v.x + (point.y - startPoint.y) * v.y) / lenSq;
+    if (t < 0.0f || t > 1.0f) {
+        return { point };
+    }
+
+    sf::Vector2f proj = startPoint + t * v;
+    sf::Vector2f reflected = point + 2.0f * (proj - point);
+    return { point, reflected };
 }
 
 void SymmetryManager::drawGuides(sf::RenderWindow& window, const sf::RenderStates& states, const sf::FloatRect& drawArea, float scale) {
-    if (!visible || !enabled || (direction.x == 0.f && direction.y == 0.f)) return;
+    if (!visible || (direction.x == 0.f && direction.y == 0.f)) return;
 
-    float angle = std::atan2(direction.y, direction.x) * 180.f / 3.14159265f;
-    float extent = 10000.f;
+    float len = std::hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y);
+    if (len < 1.0f) return;
 
+    float angle = std::atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x) * 180.f / 3.14159265f;
+
+    // Dark outline behind the line for contrast
     sf::RectangleShape darkLine;
-    darkLine.setSize(sf::Vector2f(extent * 2.f, (guideThickness + 2.0f) / scale));
-    darkLine.setOrigin(extent, ((guideThickness + 2.0f) / scale) * 0.5f);
+    darkLine.setSize(sf::Vector2f(len, (guideThickness + 2.0f) / scale));
+    darkLine.setOrigin(0.f, ((guideThickness + 2.0f) / scale) * 0.5f);
     darkLine.setPosition(startPoint);
     darkLine.setRotation(angle);
-    darkLine.setFillColor(sf::Color(14, 6, 20, 180));
+    darkLine.setFillColor(sf::Color(14, 6, 20, 220));
     window.draw(darkLine, states);
 
+    // Cyan core line from point to point
     sf::RectangleShape coreLine;
-    coreLine.setSize(sf::Vector2f(extent * 2.f, guideThickness / scale));
-    coreLine.setOrigin(extent, (guideThickness / scale) * 0.5f);
+    coreLine.setSize(sf::Vector2f(len, guideThickness / scale));
+    coreLine.setOrigin(0.f, (guideThickness / scale) * 0.5f);
     coreLine.setPosition(startPoint);
     coreLine.setRotation(angle);
     coreLine.setFillColor(sf::Color(0, 220, 255, 230));
     window.draw(coreLine, states);
 
+    // Endpoint control handles (grab to lengthen, shorten, or rotate)
     auto drawHandle = [&](sf::Vector2f pos) {
-        float r = 6.f / scale;
+        float r = 7.f / scale;
         sf::CircleShape h(r);
         h.setOrigin(r, r);
         h.setPosition(pos);
         h.setFillColor(sf::Color(255, 215, 60));
-        h.setOutlineThickness(1.5f / scale);
+        h.setOutlineThickness(2.f / scale);
         h.setOutlineColor(sf::Color(14, 6, 20));
         window.draw(h, states);
         };

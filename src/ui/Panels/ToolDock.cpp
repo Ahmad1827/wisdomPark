@@ -71,6 +71,12 @@ namespace WisdomUI {
             sf::Vector2f mousePos = window.mapPixelToCoords({ event.mouseButton.x, event.mouseButton.y });
             for (auto& tool : m_tools) {
                 if (tool.bounds.contains(mousePos)) {
+                    if (m_activeToolId == tool.id) {
+                        // Deselect: uncheck this tool completely
+                        m_activeToolId = "";
+                        if (m_onDeselect) m_onDeselect();
+                        return true;
+                    }
                     SetActiveTool(tool.id);
                     if (tool.onSelect) tool.onSelect();
                     return true;
@@ -84,7 +90,7 @@ namespace WisdomUI {
     void ToolDock::Render(sf::RenderWindow& window) {
         Theme::DrawSunsetPanel(window, m_bounds, 1.0f);
 
-        if (!m_tools.empty()) {
+        if (!m_tools.empty() && !m_activeToolId.empty()) {
             float btnSize = 36.0f;
             float startX = m_bounds.left + (m_bounds.width - btnSize) / 2.0f;
             sf::FloatRect activeIndicatorBounds(std::floor(startX), std::floor(m_selectionSliderY), btnSize, btnSize);

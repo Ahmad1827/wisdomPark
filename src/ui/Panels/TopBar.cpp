@@ -131,6 +131,10 @@ namespace WisdomUI {
     bool TopBar::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
             sf::Vector2f mousePos = window.mapPixelToCoords({ event.mouseButton.x, event.mouseButton.y });
+            if (m_symmetryActive && m_symmetryBtnBounds.contains(mousePos)) {
+                if (m_onDisableSymmetry) m_onDisableSymmetry();
+                return true;
+            }
 
             if (m_openMenuIndex != -1) {
                 auto& openMenu = m_menus[m_openMenuIndex];
@@ -214,6 +218,18 @@ namespace WisdomUI {
 
             sf::Vector2f iconPos(qb.bounds.left + 4.0f, qb.bounds.top + 4.0f);
             Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
+        }
+        if (m_symmetryActive) {
+            float btnW = 150.0f;
+            float btnH = 26.0f;
+            float btnX = m_quickBtns.empty() ? (m_bounds.left + m_bounds.width - btnW - 14.f) : (m_quickBtns.front().bounds.left - btnW - 14.f);
+            m_symmetryBtnBounds = sf::FloatRect(btnX, m_bounds.top + 5.0f, btnW, btnH);
+
+            bool isHov = m_symmetryBtnBounds.contains(mPos);
+            Theme::DrawSunsetButton(window, m_symmetryBtnBounds, "Symmetry ON [X]", m_font, 11, true, isHov, true, 1.0f);
+        }
+        else {
+            m_symmetryBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
         }
 
         for (size_t i = 0; i < m_menus.size(); ++i) {

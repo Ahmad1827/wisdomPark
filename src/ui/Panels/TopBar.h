@@ -44,6 +44,9 @@ namespace WisdomUI {
 
         float m_globalTime = 0.0f;
         float m_shimmerOffset = -200.0f;
+        bool m_symmetryActive{ false };
+        std::function<void()> m_onDisableSymmetry;
+        sf::FloatRect m_symmetryBtnBounds;
 
         sf::FloatRect getDropdownItemBounds(int menuIndex, int actionIndex) const;
         sf::FloatRect getDropdownPanelBounds(int menuIndex) const;
@@ -62,6 +65,10 @@ namespace WisdomUI {
             std::function<void()> onExit);
 
         void SetProjectName(const std::string& name, bool isDirty);
+        void SetSymmetryState(bool active, std::function<void()> onDisable) {
+            m_symmetryActive = active;
+            m_onDisableSymmetry = onDisable;
+        }
         void SetBounds(const sf::FloatRect& bounds);
         void Update(float deltaTime, const sf::Vector2f& mousePos);
         bool HandleEvent(const sf::Event& event, const sf::RenderWindow& window);

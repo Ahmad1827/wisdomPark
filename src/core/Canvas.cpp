@@ -1337,11 +1337,9 @@ void Canvas::setActiveTool(ToolType tool, int currentFrame) {
     isDeforming = false;
 
     if (tool == ToolType::Symmetry) {
-        symmetryManager.enabled = true;
-        symmetryManager.visible = true;
-        if (symmetryManager.direction.x == 0.f && symmetryManager.direction.y == 0.f) {
-            float midX = static_cast<float>(canvasLogicalSize.x) * 0.5f;
-            symmetryManager.setEndpoints(sf::Vector2f(midX, 0.f), sf::Vector2f(midX, static_cast<float>(canvasLogicalSize.y)));
+        m_symmetryDragMode = SymmetryDragMode::None;
+        if (std::hypot(symmetryManager.direction.x, symmetryManager.direction.y) > 0.001f) {
+            symmetryManager.visible = true;
         }
     }
     deformPixels.clear();
@@ -1909,6 +1907,7 @@ bool Canvas::isImageResourceActive(int currentFrame) const {
 
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    if (activeTool == ToolType::None) return;
 
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
     float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
@@ -2172,10 +2171,45 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
             if (activeTool == ToolType::Symmetry) {
                 isDrawing = true;
+                float hitRadius = computeHandleHitRadius() * 1.5f;
+
+                float existingLen = std::hypot(symmetryManager.endPoint.x - symmetryManager.startPoint.x,
+                    symmetryManager.endPoint.y - symmetryManager.startPoint.y);
+
+                if (symmetryManager.visible && existingLen > 2.0f) {
+                    // Grab start handle to reposition/resize
+                    if (std::hypot(localPos.x - symmetryManager.startPoint.x, localPos.y - symmetryManager.startPoint.y) <= hitRadius) {
+                        m_symmetryDragMode = SymmetryDragMode::StartHandle;
+                        return;
+                    }
+                    // Grab end handle to reposition/resize
+                    if (std::hypot(localPos.x - symmetryManager.endPoint.x, localPos.y - symmetryManager.endPoint.y) <= hitRadius) {
+                        m_symmetryDragMode = SymmetryDragMode::EndHandle;
+                        return;
+                    }
+                    // Grab line body to translate whole line
+                    sf::Vector2f pA = symmetryManager.startPoint;
+                    sf::Vector2f pB = symmetryManager.endPoint;
+                    sf::Vector2f d = pB - pA;
+                    float dLenSq = d.x * d.x + d.y * d.y;
+                    if (dLenSq > 0.001f) {
+                        float t = std::clamp(((localPos.x - pA.x) * d.x + (localPos.y - pA.y) * d.y) / dLenSq, 0.0f, 1.0f);
+                        sf::Vector2f proj = pA + t * d;
+                        if (std::hypot(localPos.x - proj.x, localPos.y - proj.y) <= hitRadius) {
+                            m_symmetryDragMode = SymmetryDragMode::MoveEntire;
+                            m_symmetryDragOffsetStart = symmetryManager.startPoint - localPos;
+                            m_symmetryDragOffsetEnd = symmetryManager.endPoint - localPos;
+                            return;
+                        }
+                    }
+                }
+
+                // If not grabbing existing points/line, drag to create new line
+                m_symmetryDragMode = SymmetryDragMode::NewAxis;
                 startPos = localPos;
-                lastPos = localPos;
-                symmetryManager.enabled = true;
                 symmetryManager.setEndpoints(localPos, localPos);
+                symmetryManager.visible = true;
+                symmetryManager.enabled = false;
                 return;
             }
 
@@ -2454,7 +2488,11 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     if (symmetryManager.enabled) {
                         auto symPts = symmetryManager.getSymmetricPoints(localPos);
                         if (symPts.size() > 1) {
-                            appendVectorCap(m_activeVectorMesh, symPts[1], radius, meshCol);
+                            sf::Vector2f sp = symPts[1];
+                            if (sp.x >= 0.f && sp.x <= static_cast<float>(canvasLogicalSize.x) &&
+                                sp.y >= 0.f && sp.y <= static_cast<float>(canvasLogicalSize.y)) {
+                                appendVectorCap(m_activeVectorMesh, sp, radius, meshCol);
+                            }
                         }
                     }
 
@@ -2471,8 +2509,12 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                             if (symmetryManager.enabled) {
                                 auto symPts = symmetryManager.getSymmetricPoints(localPos);
                                 if (symPts.size() > 1) {
-                                    circle.setPosition(symPts[1]);
-                                    targetTex->draw(circle, rs);
+                                    sf::Vector2f sp = symPts[1];
+                                    if (sp.x >= 0.f && sp.x <= static_cast<float>(canvasLogicalSize.x) &&
+                                        sp.y >= 0.f && sp.y <= static_cast<float>(canvasLogicalSize.y)) {
+                                        circle.setPosition(sp);
+                                        targetTex->draw(circle, rs);
+                                    }
                                 }
                             }
                             targetTex->display();
@@ -2562,6 +2604,17 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
 
     if (activeTool == ToolType::Symmetry) {
         isDrawing = false;
+        float finalLen = std::hypot(symmetryManager.endPoint.x - symmetryManager.startPoint.x,
+            symmetryManager.endPoint.y - symmetryManager.startPoint.y);
+
+        if (finalLen > 10.f) {
+            symmetryManager.enabled = true;
+            symmetryManager.visible = true;
+        }
+        else {
+            clearSymmetry();
+        }
+        m_symmetryDragMode = SymmetryDragMode::None;
         return;
     }
 
@@ -2594,9 +2647,15 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                 auto p2 = symmetryManager.getSymmetricPoints(m_vPrevPoint);
                 auto p3 = symmetryManager.getSymmetricPoints(localPos);
                 if (p1.size() > 1 && p2.size() > 1 && p3.size() > 1) {
-                    appendVectorSegment(m_activeVectorMesh, p1[1], p2[1], radius, meshCol);
-                    appendVectorSegment(m_activeVectorMesh, p2[1], p3[1], radius, meshCol);
-                    appendVectorCap(m_activeVectorMesh, p3[1], radius, meshCol);
+                    float cw = static_cast<float>(canvasLogicalSize.x);
+                    float ch = static_cast<float>(canvasLogicalSize.y);
+                    if (p1[1].x >= 0.f && p1[1].x <= cw && p1[1].y >= 0.f && p1[1].y <= ch &&
+                        p2[1].x >= 0.f && p2[1].x <= cw && p2[1].y >= 0.f && p2[1].y <= ch &&
+                        p3[1].x >= 0.f && p3[1].x <= cw && p3[1].y >= 0.f && p3[1].y <= ch) {
+                        appendVectorSegment(m_activeVectorMesh, p1[1], p2[1], radius, meshCol);
+                        appendVectorSegment(m_activeVectorMesh, p2[1], p3[1], radius, meshCol);
+                        appendVectorCap(m_activeVectorMesh, p3[1], radius, meshCol);
+                    }
                 }
             }
         }
@@ -2608,8 +2667,13 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                 auto p1 = symmetryManager.getSymmetricPoints(m_vPrevMidPoint);
                 auto p2 = symmetryManager.getSymmetricPoints(m_vPrevPoint);
                 if (p1.size() > 1 && p2.size() > 1) {
-                    appendVectorSegment(m_activeVectorMesh, p1[1], p2[1], radius, meshCol);
-                    appendVectorCap(m_activeVectorMesh, p2[1], radius, meshCol);
+                    float cw = static_cast<float>(canvasLogicalSize.x);
+                    float ch = static_cast<float>(canvasLogicalSize.y);
+                    if (p1[1].x >= 0.f && p1[1].x <= cw && p1[1].y >= 0.f && p1[1].y <= ch &&
+                        p2[1].x >= 0.f && p2[1].x <= cw && p2[1].y >= 0.f && p2[1].y <= ch) {
+                        appendVectorSegment(m_activeVectorMesh, p1[1], p2[1], radius, meshCol);
+                        appendVectorCap(m_activeVectorMesh, p2[1], radius, meshCol);
+                    }
                 }
             }
         }
@@ -2692,16 +2756,51 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
 
     if (activeTool == ToolType::Symmetry) {
         if (isDrawing) {
-            sf::Vector2f endPos = localPos;
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) {
-                sf::Vector2f diff = endPos - startPos;
-                float angle = std::atan2(diff.y, diff.x);
-                float snappedAngle = std::round(angle / (3.14159265f / 4.f)) * (3.14159265f / 4.f);
-                float length = std::sqrt(diff.x * diff.x + diff.y * diff.y);
-                endPos.x = startPos.x + length * std::cos(snappedAngle);
-                endPos.y = startPos.y + length * std::sin(snappedAngle);
+            bool shiftSnap = sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift);
+
+            if (m_symmetryDragMode == SymmetryDragMode::StartHandle) {
+                sf::Vector2f newStart = localPos;
+                if (shiftSnap) {
+                    sf::Vector2f diff = newStart - symmetryManager.endPoint;
+                    float angle = std::atan2(diff.y, diff.x);
+                    float snapped = std::round(angle / (3.14159265f / 4.f)) * (3.14159265f / 4.f);
+                    float dLen = std::hypot(diff.x, diff.y);
+                    newStart.x = symmetryManager.endPoint.x + dLen * std::cos(snapped);
+                    newStart.y = symmetryManager.endPoint.y + dLen * std::sin(snapped);
+                }
+                symmetryManager.startPoint = newStart;
+                symmetryManager.updateVectors();
             }
-            symmetryManager.setEndpoints(startPos, endPos);
+            else if (m_symmetryDragMode == SymmetryDragMode::EndHandle) {
+                sf::Vector2f newEnd = localPos;
+                if (shiftSnap) {
+                    sf::Vector2f diff = newEnd - symmetryManager.startPoint;
+                    float angle = std::atan2(diff.y, diff.x);
+                    float snapped = std::round(angle / (3.14159265f / 4.f)) * (3.14159265f / 4.f);
+                    float dLen = std::hypot(diff.x, diff.y);
+                    newEnd.x = symmetryManager.startPoint.x + dLen * std::cos(snapped);
+                    newEnd.y = symmetryManager.startPoint.y + dLen * std::sin(snapped);
+                }
+                symmetryManager.endPoint = newEnd;
+                symmetryManager.updateVectors();
+            }
+            else if (m_symmetryDragMode == SymmetryDragMode::MoveEntire) {
+                symmetryManager.startPoint = localPos + m_symmetryDragOffsetStart;
+                symmetryManager.endPoint = localPos + m_symmetryDragOffsetEnd;
+                symmetryManager.updateVectors();
+            }
+            else if (m_symmetryDragMode == SymmetryDragMode::NewAxis) {
+                sf::Vector2f endPos = localPos;
+                if (shiftSnap) {
+                    sf::Vector2f diff = endPos - startPos;
+                    float angle = std::atan2(diff.y, diff.x);
+                    float snapped = std::round(angle / (3.14159265f / 4.f)) * (3.14159265f / 4.f);
+                    float dLen = std::hypot(diff.x, diff.y);
+                    endPos.x = startPos.x + dLen * std::cos(snapped);
+                    endPos.y = startPos.y + dLen * std::sin(snapped);
+                }
+                symmetryManager.setEndpoints(startPos, endPos);
+            }
         }
         return;
     }
@@ -2807,7 +2906,14 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                             auto p1Sym = symmetryManager.getSymmetricPoints(lastP);
                             auto p2Sym = symmetryManager.getSymmetricPoints(curveP);
                             if (p1Sym.size() > 1 && p2Sym.size() > 1) {
-                                appendVectorSegment(m_activeVectorMesh, p1Sym[1], p2Sym[1], radius, meshCol);
+                                sf::Vector2f s1 = p1Sym[1];
+                                sf::Vector2f s2 = p2Sym[1];
+                                float cw = static_cast<float>(canvasLogicalSize.x);
+                                float ch = static_cast<float>(canvasLogicalSize.y);
+                                if (s1.x >= 0.f && s1.x <= cw && s1.y >= 0.f && s1.y <= ch &&
+                                    s2.x >= 0.f && s2.x <= cw && s2.y >= 0.f && s2.y <= ch) {
+                                    appendVectorSegment(m_activeVectorMesh, s1, s2, radius, meshCol);
+                                }
                             }
                         }
                         lastP = curveP;
@@ -2838,11 +2944,18 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                                     auto fromSym = symmetryManager.getSymmetricPoints(lastPos);
                                     auto toSym = symmetryManager.getSymmetricPoints(targetPos);
                                     if (fromSym.size() > 1 && toSym.size() > 1) {
-                                        line.setPosition(fromSym[1]);
-                                        line.setRotation(std::atan2(toSym[1].y - fromSym[1].y, toSym[1].x - fromSym[1].x) * 180.f / 3.14159265f);
-                                        circle.setPosition(toSym[1]);
-                                        targetTex->draw(line, rs);
-                                        targetTex->draw(circle, rs);
+                                        sf::Vector2f s1 = fromSym[1];
+                                        sf::Vector2f s2 = toSym[1];
+                                        float cw = static_cast<float>(canvasLogicalSize.x);
+                                        float ch = static_cast<float>(canvasLogicalSize.y);
+                                        if (s1.x >= 0.f && s1.x <= cw && s1.y >= 0.f && s1.y <= ch &&
+                                            s2.x >= 0.f && s2.x <= cw && s2.y >= 0.f && s2.y <= ch) {
+                                            line.setPosition(s1);
+                                            line.setRotation(std::atan2(s2.y - s1.y, s2.x - s1.x) * 180.f / 3.14159265f);
+                                            circle.setPosition(s2);
+                                            targetTex->draw(line, rs);
+                                            targetTex->draw(circle, rs);
+                                        }
                                     }
                                 }
                                 targetTex->display();
@@ -3024,8 +3137,37 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     }
 
-    if (symmetryManager.enabled && symmetryManager.visible) {
+    if (symmetryManager.visible) {
         symmetryManager.drawGuides(window, innerStates, sf::FloatRect(0, 0, static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y)), viewScale);
+    }
+
+    // Prominent instructional banner when Symmetry tool is active
+    bool hasLine = (std::hypot(symmetryManager.endPoint.x - symmetryManager.startPoint.x,
+        symmetryManager.endPoint.y - symmetryManager.startPoint.y) > 2.0f);
+
+    if (!isPlaying && activeTool == ToolType::Symmetry && !hasLine && !isDrawing) {
+        float cx = drawArea.left + drawArea.width * 0.5f;
+        float cy = drawArea.top + 20.f;
+        float bannerW = 260.f;
+        float bannerH = 28.f;
+
+        sf::RectangleShape bannerBg(sf::Vector2f(bannerW, bannerH));
+        bannerBg.setPosition(cx - bannerW * 0.5f, cy);
+        bannerBg.setFillColor(sf::Color(15, 12, 22, 180));
+        bannerBg.setOutlineThickness(1.f);
+        bannerBg.setOutlineColor(sf::Color(0, 220, 255, 140));
+        window.draw(bannerBg, states);
+
+        static sf::Font promptFont;
+        static bool pfLoaded = promptFont.loadFromFile("assets/font.otf");
+        if (pfLoaded) {
+            sf::Text msg("Click & drag to draw symmetry line", promptFont, 11);
+            sf::FloatRect mb = msg.getLocalBounds();
+            msg.setOrigin(mb.left + mb.width * 0.5f, mb.top + mb.height * 0.5f);
+            msg.setPosition(cx, cy + bannerH * 0.5f);
+            msg.setFillColor(sf::Color(255, 226, 110));
+            window.draw(msg, states);
+        }
     }
 
     if (!isPlaying && onionSkinEnabled) {

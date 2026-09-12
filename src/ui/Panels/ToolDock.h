@@ -21,6 +21,8 @@ namespace WisdomUI {
         void Initialize(const sf::Font& font);
         void SetBounds(const sf::FloatRect& bounds);
         void AddTool(const std::string& id, const std::string& tooltip, std::function<void()> onSelect);
+        void SetDeselectCallback(std::function<void()> onDeselect) { m_onDeselect = onDeselect; }
+        std::string GetActiveTool() const { return m_activeToolId; }
         void SetActiveTool(const std::string& id);
 
         bool HandleEvent(const sf::Event& event, const sf::RenderWindow& window);
@@ -33,6 +35,7 @@ namespace WisdomUI {
         sf::Font m_font;
         std::vector<ToolItem> m_tools;
         std::string m_activeToolId{ "brush" };
+        std::function<void()> m_onDeselect;
 
         float m_selectionSliderY{ 0.0f };
         float m_targetSelectionSliderY{ 0.0f };

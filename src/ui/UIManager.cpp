@@ -386,6 +386,9 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     m_toolOptionsBar.Initialize(font);
     m_toolDock.Initialize(font);
+    m_toolDock.SetDeselectCallback([this, baseCanvas]() {
+        baseCanvas->setActiveTool(ToolType::None);
+    });
 
     m_rightDockTabs.Initialize(
         font,
@@ -438,7 +441,24 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     m_toolDock.AddTool("shapes", "Shapes Tool (U)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Shapes); m_toolDock.SetActiveTool("shapes"); });
     m_toolDock.AddTool("text", "Text Tool (T)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Text); m_toolDock.SetActiveTool("text"); });
     m_toolDock.AddTool("gradient", "Gradient Tool (G)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Gradient); m_toolDock.SetActiveTool("gradient"); });
-    m_toolDock.AddTool("symmetry", "Symmetry Axis", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Symmetry); m_toolDock.SetActiveTool("symmetry"); });
+    m_toolDock.AddTool("symmetry", "Symmetry Axis", [this, baseCanvas]() {
+        if (baseCanvas->getActiveTool() == ToolType::Symmetry) {
+            baseCanvas->clearSymmetry();
+            baseCanvas->setActiveTool(ToolType::Brush);
+            m_toolDock.SetActiveTool("brush");
+            showMessage("Symmetry Removed", sf::Color::Cyan);
+        }
+        else {
+            baseCanvas->setActiveTool(ToolType::Symmetry);
+            m_toolDock.SetActiveTool("symmetry");
+            if (!baseCanvas->getSymmetryManager().enabled) {
+                showMessage("Click & drag to draw symmetry line (Hold Shift to snap)", sf::Color::Yellow);
+            }
+            else {
+                showMessage("Drag handles to adjust line, or click Symmetry again to remove", sf::Color::Yellow);
+            }
+        }
+        });
     m_toolDock.AddTool("perspective", "Perspective Grid", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Perspective); m_toolDock.SetActiveTool("perspective"); });
     m_toolDock.AddTool("ai_gen", "AI Generator", [this]() { g_aiPanel.toggle(); m_toolDock.SetActiveTool("ai_gen"); });
 
@@ -2441,6 +2461,17 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         m_topBar.SetBounds(regions.topBar);
         m_topBar.SetProjectName(activeProjectName, canvas.getIsDirty());
         m_topBar.Update(dt, mousePos);
+        m_topBar.SetSymmetryState(
+            canvas.getSymmetryManager().enabled,
+            [this, &canvas]() {
+                canvas.clearSymmetry();
+                if (canvas.getActiveTool() == ToolType::Symmetry) {
+                    canvas.setActiveTool(ToolType::None);
+                    m_toolDock.SetActiveTool("");
+                }
+                showMessage("Symmetry Deactivated", sf::Color::Cyan);
+            }
+        );
 
         m_toolOptionsBar.SetBounds(regions.optionsBar);
         std::string toolName = "Brush";

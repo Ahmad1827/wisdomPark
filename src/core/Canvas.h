@@ -10,7 +10,7 @@
 #include "DitherManager.h"
 #include "../core/PerspectiveSystem.h"
 
-enum class ToolType { Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text, Gradient, Curve, FilledContour };
+enum class ToolType { None, Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text, Gradient, Curve, FilledContour };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 enum class TransformState { None, Scaling };
 
@@ -115,6 +115,10 @@ private:
     float m_vDeformMaxY{ 0.f };
 
     std::vector<sf::Vector2f> m_contourPoints;
+    enum class SymmetryDragMode { None, NewAxis, StartHandle, EndHandle, MoveEntire };
+    SymmetryDragMode m_symmetryDragMode{ SymmetryDragMode::None };
+    sf::Vector2f m_symmetryDragOffsetStart{ 0.f, 0.f };
+    sf::Vector2f m_symmetryDragOffsetEnd{ 0.f, 0.f };
 
     struct VectorStroke {
         sf::VertexArray mesh;
@@ -319,6 +323,14 @@ public:
     bool isTransforming() const;
 
     SymmetryManager& getSymmetryManager() { return symmetryManager; }
+    void clearSymmetry() {
+        symmetryManager.enabled = false;
+        symmetryManager.visible = false;
+        symmetryManager.direction = { 0.f, 0.f };
+        symmetryManager.startPoint = { 0.f, 0.f };
+        symmetryManager.endPoint = { 0.f, 0.f };
+        m_symmetryDragMode = SymmetryDragMode::None;
+    }
     DitherManager& getDitherManager() { return ditherManager; }
     SelectionManager& getSelectionManager() { return selection; }
     void toggleDithering() { useDithering = !useDithering; }

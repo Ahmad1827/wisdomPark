@@ -8,7 +8,7 @@ public:
 
     void setEndpoints(sf::Vector2f start, sf::Vector2f end);
     void updateVectors();
-    std::vector<sf::Vector2f> getSymmetricPoints(sf::Vector2f point);
+    std::vector<sf::Vector2f> getSymmetricPoints(const sf::Vector2f& point) const;
     void drawGuides(sf::RenderWindow& window, const sf::RenderStates& states, const sf::FloatRect& drawArea, float scale);
 
     sf::Vector2f startPoint;
