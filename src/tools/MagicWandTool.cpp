@@ -260,6 +260,35 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
             int w = m_canvas.getCanvasSize().x;
             int h = m_canvas.getCanvasSize().y;
 
+            if (!m_canvas.getPixelMode()) {
+                sf::RenderTexture scratch;
+                if (m_canvas.renderLayerToTexture(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), scratch)) {
+                    sf::Image sampleImg = scratch.getTexture().copyToImage();
+                    if (logicalPos.x >= 0 && logicalPos.x < w && logicalPos.y >= 0 && logicalPos.y < h) {
+                        if (sampleImg.getPixel(logicalPos.x, logicalPos.y).a > 20) {
+                            const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+                            const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+                            for (int pass = 0; pass < 2; ++pass) {
+                                std::vector<bool> passMask = mask;
+                                for (int y = 0; y < h; ++y) {
+                                    for (int x = 0; x < w; ++x) {
+                                        if (passMask[y * w + x]) {
+                                            for (int d = 0; d < 8; ++d) {
+                                                int nx = x + dx8[d];
+                                                int ny = y + dy8[d];
+                                                if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                                                    mask[ny * w + nx] = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             std::vector<std::vector<sf::Vector2f>> polygons;
             std::vector<bool> visited(w * h, false);
 

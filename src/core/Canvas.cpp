@@ -1149,7 +1149,6 @@ void Canvas::fillSelection(sf::Color color, int currentFrame) {
         bool isErase = (color == sf::Color::Transparent || color.a == 0);
         bool recoloredAny = false;
 
-        // 1. Recolor floating vector strokes if active
         if (!m_floatingVectorStrokes.empty()) {
             for (auto& vs : m_floatingVectorStrokes) {
                 for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
@@ -1160,19 +1159,24 @@ void Canvas::fillSelection(sf::Color color, int currentFrame) {
             recoloredAny = true;
         }
 
-        // 2. Recolor existing vector strokes within selection
         for (auto& vs : m_vectorStrokes) {
             if (vs.frame == currentFrame && vs.layer == activeLayer && !vs.isErase) {
-                for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
-                    if (selection.isPointInsideSelection(vs.mesh[v].position)) {
+                for (size_t v = 0; v + 2 < vs.mesh.getVertexCount(); v += 3) {
+                    sf::Vector2f centroid = (vs.mesh[v].position + vs.mesh[v + 1].position + vs.mesh[v + 2].position) / 3.0f;
+                    if (selection.isPointInsideSelection(centroid) ||
+                        selection.isPointInsideSelection(vs.mesh[v].position) ||
+                        selection.isPointInsideSelection(vs.mesh[v + 1].position) ||
+                        selection.isPointInsideSelection(vs.mesh[v + 2].position)) {
+
                         vs.mesh[v].color = isErase ? sf::Color::White : color;
+                        vs.mesh[v + 1].color = isErase ? sf::Color::White : color;
+                        vs.mesh[v + 2].color = isErase ? sf::Color::White : color;
                         recoloredAny = true;
                     }
                 }
             }
         }
 
-        // 3. If an empty area was selected (not a line), fill ONLY inside the lasso polygon
         if (!recoloredAny && !isErase && selection.isActive()) {
             sf::FloatRect bb = selection.getBoundingBox();
             int x0 = std::max(0, static_cast<int>(std::floor(bb.left)));
@@ -2139,6 +2143,48 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     if (pixelPos.x < 0 || pixelPos.x >= w || pixelPos.y < 0 || pixelPos.y >= h) return;
 
                     sf::Color targetCol = img.getPixel(pixelPos.x, pixelPos.y);
+
+                    // =========================================================================
+                    // 1. RECOLOR STROKE DIRECTLY IF CLICKED ON A LINE / STROKE
+                    // =========================================================================
+                    if (targetCol.a > 120) {
+                        auto sign = [](sf::Vector2f p1, sf::Vector2f p2, sf::Vector2f p3) {
+                            return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+                            };
+                        auto ptInTri = [&](sf::Vector2f pt, sf::Vector2f v1, sf::Vector2f v2, sf::Vector2f v3) {
+                            float d1 = sign(pt, v1, v2);
+                            float d2 = sign(pt, v2, v3);
+                            float d3 = sign(pt, v3, v1);
+                            return !(((d1 < 0) || (d2 < 0) || (d3 < 0)) && ((d1 > 0) || (d2 > 0) || (d3 > 0)));
+                            };
+
+                        int hitStrokeIdx = -1;
+                        for (int s = static_cast<int>(m_vectorStrokes.size()) - 1; s >= 0; --s) {
+                            auto& vs = m_vectorStrokes[s];
+                            if (vs.frame == currentFrame && vs.layer == activeLayer && !vs.isErase) {
+                                for (size_t v = 0; v + 2 < vs.mesh.getVertexCount(); v += 3) {
+                                    if (ptInTri(localPos, vs.mesh[v].position, vs.mesh[v + 1].position, vs.mesh[v + 2].position)) {
+                                        hitStrokeIdx = s;
+                                        break;
+                                    }
+                                }
+                                if (hitStrokeIdx != -1) break;
+                            }
+                        }
+
+                        if (hitStrokeIdx != -1) {
+                            saveUndoState();
+                            for (size_t v = 0; v < m_vectorStrokes[hitStrokeIdx].mesh.getVertexCount(); ++v) {
+                                m_vectorStrokes[hitStrokeIdx].mesh[v].color = drawCol;
+                            }
+                            isDirty = true;
+                            return;
+                        }
+                    }
+
+                    // =========================================================================
+                    // 2. FILL ENCLOSED AREA (TUCKED UNDER SOLID CORE OF THE STROKE)
+                    // =========================================================================
                     if (colorMatches(targetCol, drawCol)) return;
 
                     std::vector<bool> fillMask(w * h, false);
@@ -2156,7 +2202,9 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                             int nx = p.x + dx[d];
                             int ny = p.y + dy[d];
                             if (nx >= 0 && nx < w && ny >= 0 && ny < h && !fillMask[ny * w + nx]) {
-                                if (colorMatches(img.getPixel(nx, ny), targetCol)) {
+                                sf::Color c = img.getPixel(nx, ny);
+                                // Traverse empty space and faint anti-aliased edges (alpha <= 120)
+                                if (c.a <= 120) {
                                     fillMask[ny * w + nx] = true;
                                     q.push({ nx, ny });
                                 }
@@ -2164,6 +2212,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                         }
                     }
 
+                    // 8-way 2px dilation pushes the fill completely under the solid core of the stroke
                     std::vector<bool> dilatedMask = fillMask;
                     const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
                     const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
@@ -2222,7 +2271,6 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
                     if (vs.mesh.getVertexCount() > 0) {
                         saveUndoState();
-                        // Insert behind strokes on this layer so stroke outlines stay crisp on top
                         auto insertPos = m_vectorStrokes.end();
                         for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ++it) {
                             if (it->frame == currentFrame && it->layer == activeLayer) {
