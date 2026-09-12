@@ -99,19 +99,47 @@ void ShapeTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& wind
     else if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left && m_isDragging) {
         m_isDragging = false;
 
-        auto* target = m_canvas.getActiveRenderTexture(m_timeline.getCurrentFrame());
-        if (target) {
-            m_canvas.saveUndoState();
+        if (m_canvas.getPixelMode()) {
+            auto* target = m_canvas.getActiveRenderTexture(m_timeline.getCurrentFrame());
+            if (target) {
+                m_canvas.saveUndoState();
 
-            if (m_canvas.getSymmetryManager().enabled) {
-                m_shapeManager.activeShape->applySymmetry(m_canvas.getSymmetryManager().startPoint, m_canvas.getSymmetryManager().endPoint);
+                if (m_canvas.getSymmetryManager().enabled) {
+                    m_shapeManager.activeShape->applySymmetry(m_canvas.getSymmetryManager().startPoint, m_canvas.getSymmetryManager().endPoint);
+                }
+
+                m_shapeManager.rasterizeActive(*target, true);
+                target->display();
             }
-
-            m_shapeManager.rasterizeActive(*target, m_canvas.getPixelMode());
-            target->display();
-
-            m_shapeManager.clearActive();
         }
+        else {
+            if (m_shapeManager.activeShape) {
+                m_canvas.saveUndoState();
+                sf::VertexArray mesh = m_shapeManager.activeShape->toVectorMesh();
+
+                if (m_canvas.getSymmetryManager().enabled) {
+                    sf::Vector2f symStart = m_canvas.getSymmetryManager().startPoint;
+                    sf::Vector2f symEnd = m_canvas.getSymmetryManager().endPoint;
+                    sf::Vector2f dir = symEnd - symStart;
+                    float lenSq = dir.x * dir.x + dir.y * dir.y;
+                    if (lenSq > 0.0001f) {
+                        size_t count = mesh.getVertexCount();
+                        for (size_t i = 0; i < count; ++i) {
+                            sf::Vector2f p = mesh[i].position;
+                            sf::Vector2f v = p - symStart;
+                            float t = (v.x * dir.x + v.y * dir.y) / lenSq;
+                            sf::Vector2f proj = symStart + dir * t;
+                            sf::Vector2f reflected = p + 2.0f * (proj - p);
+                            mesh.append(sf::Vertex(reflected, mesh[i].color));
+                        }
+                    }
+                }
+
+                m_canvas.addVectorMesh(mesh, m_timeline.getCurrentFrame(), m_canvas.getActiveLayer());
+            }
+        }
+
+        m_shapeManager.clearActive();
     }
 }
 
@@ -134,6 +162,24 @@ void ShapeTool::Render(sf::RenderWindow& window) {
     previewStates.transform = m_canvas.getTransform() * innerTransform;
 
     m_shapeManager.drawActive(window, m_canvas.getPixelMode(), previewStates);
+
+    if (m_canvas.getSymmetryManager().enabled && m_shapeManager.activeShape && !m_canvas.getPixelMode()) {
+        sf::VertexArray symPreview = m_shapeManager.activeShape->toVectorMesh();
+        sf::Vector2f symStart = m_canvas.getSymmetryManager().startPoint;
+        sf::Vector2f symEnd = m_canvas.getSymmetryManager().endPoint;
+        sf::Vector2f dir = symEnd - symStart;
+        float lenSq = dir.x * dir.x + dir.y * dir.y;
+        if (lenSq > 0.0001f) {
+            for (size_t i = 0; i < symPreview.getVertexCount(); ++i) {
+                sf::Vector2f p = symPreview[i].position;
+                sf::Vector2f v = p - symStart;
+                float t = (v.x * dir.x + v.y * dir.y) / lenSq;
+                sf::Vector2f proj = symStart + dir * t;
+                symPreview[i].position = p + 2.0f * (proj - p);
+            }
+            window.draw(symPreview, previewStates);
+        }
+    }
 
     drawPropertiesPanel(window);
 }

@@ -21,6 +21,7 @@ public:
     virtual void setBounds(const sf::Vector2f& start, const sf::Vector2f& end, bool lockProportions, bool fromCenter) = 0;
     virtual void rasterize(sf::RenderTexture& target, bool isPixelMode) = 0;
     virtual void applySymmetry(const sf::Vector2f& symStart, const sf::Vector2f& symEnd) = 0;
+    virtual sf::VertexArray toVectorMesh() = 0;
 
     sf::Color strokeColor = sf::Color::Black;
     sf::Color fillColor = sf::Color::Transparent;
@@ -53,6 +54,7 @@ public:
     void setBounds(const sf::Vector2f& start, const sf::Vector2f& end, bool lockProportions, bool fromCenter) override;
     void rasterize(sf::RenderTexture& target, bool isPixelMode) override;
     void applySymmetry(const sf::Vector2f& symStart, const sf::Vector2f& symEnd) override;
+    sf::VertexArray toVectorMesh() override;
 
 private:
     void generatePoints();

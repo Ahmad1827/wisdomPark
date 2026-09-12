@@ -1,5 +1,50 @@
 #include "ShapeSystem.h"
 
+static void appendShapeSegment(sf::VertexArray& va, sf::Vector2f p1, sf::Vector2f p2, float radius, sf::Color color) {
+    sf::Vector2f dir = p2 - p1;
+    float len = std::hypot(dir.x, dir.y);
+    if (len < 0.001f) return;
+
+    sf::Vector2f normal(-dir.y / len * radius, dir.x / len * radius);
+
+    sf::Vector2f a = p1 + normal;
+    sf::Vector2f b = p1 - normal;
+    sf::Vector2f c = p2 + normal;
+    sf::Vector2f d = p2 - normal;
+
+    va.append(sf::Vertex(a, color));
+    va.append(sf::Vertex(b, color));
+    va.append(sf::Vertex(c, color));
+
+    va.append(sf::Vertex(b, color));
+    va.append(sf::Vertex(d, color));
+    va.append(sf::Vertex(c, color));
+
+    const int steps = 12;
+    for (int i = 0; i < steps; ++i) {
+        float a1 = static_cast<float>(i) / static_cast<float>(steps) * 6.2831853f;
+        float a2 = static_cast<float>(i + 1) / static_cast<float>(steps) * 6.2831853f;
+        sf::Vector2f j1 = p2 + sf::Vector2f(std::cos(a1) * radius, std::sin(a1) * radius);
+        sf::Vector2f j2 = p2 + sf::Vector2f(std::cos(a2) * radius, std::sin(a2) * radius);
+        va.append(sf::Vertex(p2, color));
+        va.append(sf::Vertex(j1, color));
+        va.append(sf::Vertex(j2, color));
+    }
+}
+
+static void appendShapeCap(sf::VertexArray& va, sf::Vector2f center, float radius, sf::Color color) {
+    const int steps = 16;
+    for (int i = 0; i < steps; ++i) {
+        float a1 = static_cast<float>(i) / static_cast<float>(steps) * 6.2831853f;
+        float a2 = static_cast<float>(i + 1) / static_cast<float>(steps) * 6.2831853f;
+        sf::Vector2f p1 = center + sf::Vector2f(std::cos(a1) * radius, std::sin(a1) * radius);
+        sf::Vector2f p2 = center + sf::Vector2f(std::cos(a2) * radius, std::sin(a2) * radius);
+        va.append(sf::Vertex(center, color));
+        va.append(sf::Vertex(p1, color));
+        va.append(sf::Vertex(p2, color));
+    }
+}
+
 PathShape::PathShape(ShapeId t) {
     shapeId = t;
     if (t == ShapeId::FilledRectangle || t == ShapeId::FilledRoundedRectangle || t == ShapeId::FilledCircle ||
@@ -174,29 +219,85 @@ void PathShape::drawBresenham(sf::RenderTarget& target, sf::RenderStates states)
     target.draw(lines, states);
 }
 
-void PathShape::drawSmooth(sf::RenderTarget& target, sf::RenderStates states) {
-    if (points.empty()) return;
+sf::VertexArray PathShape::toVectorMesh() {
+    generatePoints();
+    sf::VertexArray va(sf::Triangles);
+    if (points.empty()) return va;
 
-    if (isFilled) {
-        sf::ConvexShape convex;
-        convex.setPointCount(points.size());
-        for (size_t i = 0; i < points.size(); ++i) {
-            convex.setPoint(i, points[i]);
+    // 1. Fill geometry
+    if (isFilled && fillColor.a > 0 && points.size() >= 3) {
+        if (shapeId == ShapeId::Arrow || shapeId == ShapeId::FilledArrow) {
+            if (points.size() >= 7) {
+                // Shaft
+                va.append(sf::Vertex(points[0], fillColor));
+                va.append(sf::Vertex(points[1], fillColor));
+                va.append(sf::Vertex(points[2], fillColor));
+
+                va.append(sf::Vertex(points[0], fillColor));
+                va.append(sf::Vertex(points[2], fillColor));
+                va.append(sf::Vertex(points[6], fillColor));
+
+                // Head
+                va.append(sf::Vertex(points[3], fillColor));
+                va.append(sf::Vertex(points[4], fillColor));
+                va.append(sf::Vertex(points[5], fillColor));
+            }
         }
-        convex.setFillColor(fillColor);
-        convex.setOutlineColor(strokeColor);
-        convex.setOutlineThickness(strokeWidth);
-        target.draw(convex, states);
+        else if (shapeId == ShapeId::BezierCurve) {
+            if (points.size() >= 3) {
+                va.append(sf::Vertex(points[0], fillColor));
+                va.append(sf::Vertex(points[1], fillColor));
+                va.append(sf::Vertex(points[2], fillColor));
+            }
+        }
+        else {
+            sf::Vector2f c(bounds.left + bounds.width * 0.5f, bounds.top + bounds.height * 0.5f);
+            for (size_t i = 0; i < points.size(); ++i) {
+                size_t next = (i + 1) % points.size();
+                va.append(sf::Vertex(c, fillColor));
+                va.append(sf::Vertex(points[i], fillColor));
+                va.append(sf::Vertex(points[next], fillColor));
+            }
+        }
     }
-    else {
-        sf::VertexArray lines(shapeId == ShapeId::Line || shapeId == ShapeId::Arrow ? sf::Lines : sf::LineStrip, points.size() + 1);
-        for (size_t i = 0; i < points.size(); ++i) {
-            lines[i].position = points[i];
-            lines[i].color = strokeColor;
+
+    // 2. Stroke outline geometry
+    if (strokeColor.a > 0 && strokeWidth > 0.0f && points.size() >= 2) {
+        float radius = std::max(0.5f, strokeWidth * 0.5f);
+        if (shapeId == ShapeId::Line) {
+            appendShapeCap(va, points[0], radius, strokeColor);
+            appendShapeSegment(va, points[0], points[1], radius, strokeColor);
+            appendShapeCap(va, points[1], radius, strokeColor);
         }
-        lines[points.size()].position = points[0];
-        lines[points.size()].color = strokeColor;
-        target.draw(lines, states);
+        else if (shapeId == ShapeId::BezierCurve && points.size() >= 3) {
+            sf::Vector2f prevP = points[0];
+            appendShapeCap(va, prevP, radius, strokeColor);
+            const int segs = 24;
+            for (int i = 1; i <= segs; ++i) {
+                float t = static_cast<float>(i) / segs;
+                float it = 1.0f - t;
+                sf::Vector2f curP = it * it * points[0] + 2.0f * it * t * points[1] + t * t * points[2];
+                appendShapeSegment(va, prevP, curP, radius, strokeColor);
+                appendShapeCap(va, curP, radius, strokeColor);
+                prevP = curP;
+            }
+        }
+        else {
+            for (size_t i = 0; i < points.size(); ++i) {
+                size_t next = (i + 1) % points.size();
+                appendShapeSegment(va, points[i], points[next], radius, strokeColor);
+                appendShapeCap(va, points[next], radius, strokeColor);
+            }
+        }
+    }
+
+    return va;
+}
+
+void PathShape::drawSmooth(sf::RenderTarget& target, sf::RenderStates states) {
+    sf::VertexArray mesh = toVectorMesh();
+    if (mesh.getVertexCount() > 0) {
+        target.draw(mesh, states);
     }
 }
 

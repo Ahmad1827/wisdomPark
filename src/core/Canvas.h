@@ -227,7 +227,7 @@ public:
     Frame* getFrame(int index);
     const Frame* getFrameReadOnly(int index) const;
     sf::RenderTexture* getActiveRenderTexture(int currentFrame);
-
+    void addVectorMesh(const sf::VertexArray& mesh, int frame, int layer);
     sf::Image flattenFrameToImage(int frameIndex, unsigned int scaleFactor = 1);
 
     void setPerspectiveManager(PerspectiveManager* pm) { m_perspectiveManager = pm; }

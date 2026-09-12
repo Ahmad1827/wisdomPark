@@ -3209,6 +3209,17 @@ void Canvas::drawShadows(sf::RenderWindow& window, sf::Vector2f logicalSunPos, c
 sf::FloatRect Canvas::getDrawArea() const { return drawArea; }
 sf::Vector2u Canvas::getCanvasSize() const { return canvasLogicalSize; }
 
+void Canvas::addVectorMesh(const sf::VertexArray& mesh, int frame, int layer) {
+    if (mesh.getVertexCount() == 0) return;
+    VectorStroke vs;
+    vs.mesh = mesh;
+    vs.layer = layer;
+    vs.frame = frame;
+    vs.isErase = false;
+    m_vectorStrokes.push_back(std::move(vs));
+    isDirty = true;
+}
+
 sf::RenderTexture* Canvas::getActiveRenderTexture(int currentFrame) {
     if (currentFrame >= 0 && currentFrame < static_cast<int>(frames.size()) && activeLayer < static_cast<int>(frames[currentFrame].layers.size())) {
         return frames[currentFrame].layers[activeLayer].texture.get();
