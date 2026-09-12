@@ -45,17 +45,36 @@ std::vector<sf::Vector2f> SymmetryManager::getSymmetricPoints(sf::Vector2f point
 void SymmetryManager::drawGuides(sf::RenderWindow& window, const sf::RenderStates& states, const sf::FloatRect& drawArea, float scale) {
     if (!visible || !enabled || (direction.x == 0.f && direction.y == 0.f)) return;
 
-    sf::Vector2f diff = endPoint - startPoint;
-    float length = std::sqrt(diff.x * diff.x + diff.y * diff.y);
+    float angle = std::atan2(direction.y, direction.x) * 180.f / 3.14159265f;
+    float extent = 10000.f;
 
-    sf::RectangleShape lineShape;
-    lineShape.setSize(sf::Vector2f(length, guideThickness / scale));
-    lineShape.setOrigin(0.f, (guideThickness / scale) / 2.f);
-    lineShape.setPosition(startPoint);
+    sf::RectangleShape darkLine;
+    darkLine.setSize(sf::Vector2f(extent * 2.f, (guideThickness + 2.0f) / scale));
+    darkLine.setOrigin(extent, ((guideThickness + 2.0f) / scale) * 0.5f);
+    darkLine.setPosition(startPoint);
+    darkLine.setRotation(angle);
+    darkLine.setFillColor(sf::Color(14, 6, 20, 180));
+    window.draw(darkLine, states);
 
-    float angle = std::atan2(diff.y, diff.x) * 180.f / 3.14159265f;
-    lineShape.setRotation(angle);
-    lineShape.setFillColor(guideColor);
+    sf::RectangleShape coreLine;
+    coreLine.setSize(sf::Vector2f(extent * 2.f, guideThickness / scale));
+    coreLine.setOrigin(extent, (guideThickness / scale) * 0.5f);
+    coreLine.setPosition(startPoint);
+    coreLine.setRotation(angle);
+    coreLine.setFillColor(sf::Color(0, 220, 255, 230));
+    window.draw(coreLine, states);
 
-    window.draw(lineShape, states);
+    auto drawHandle = [&](sf::Vector2f pos) {
+        float r = 6.f / scale;
+        sf::CircleShape h(r);
+        h.setOrigin(r, r);
+        h.setPosition(pos);
+        h.setFillColor(sf::Color(255, 215, 60));
+        h.setOutlineThickness(1.5f / scale);
+        h.setOutlineColor(sf::Color(14, 6, 20));
+        window.draw(h, states);
+        };
+
+    drawHandle(startPoint);
+    drawHandle(endPoint);
 }

@@ -1335,6 +1335,15 @@ void Canvas::setActiveTool(ToolType tool, int currentFrame) {
     activeTool = tool;
     isDrawing = false;
     isDeforming = false;
+
+    if (tool == ToolType::Symmetry) {
+        symmetryManager.enabled = true;
+        symmetryManager.visible = true;
+        if (symmetryManager.direction.x == 0.f && symmetryManager.direction.y == 0.f) {
+            float midX = static_cast<float>(canvasLogicalSize.x) * 0.5f;
+            symmetryManager.setEndpoints(sf::Vector2f(midX, 0.f), sf::Vector2f(midX, static_cast<float>(canvasLogicalSize.y)));
+        }
+    }
     deformPixels.clear();
     currentDeformedPixels.clear();
     m_contourPoints.clear();
@@ -2442,7 +2451,13 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : drawCol;
                     appendVectorCap(m_activeVectorMesh, localPos, radius, meshCol);
 
-                    // Erase directly on the layer texture so text and rasterized items are erased
+                    if (symmetryManager.enabled) {
+                        auto symPts = symmetryManager.getSymmetricPoints(localPos);
+                        if (symPts.size() > 1) {
+                            appendVectorCap(m_activeVectorMesh, symPts[1], radius, meshCol);
+                        }
+                    }
+
                     if (m_activeStrokeIsErase) {
                         sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
                         if (targetTex) {
@@ -2452,6 +2467,14 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                             circle.setPosition(localPos);
                             circle.setFillColor(sf::Color::Transparent);
                             targetTex->draw(circle, rs);
+
+                            if (symmetryManager.enabled) {
+                                auto symPts = symmetryManager.getSymmetricPoints(localPos);
+                                if (symPts.size() > 1) {
+                                    circle.setPosition(symPts[1]);
+                                    targetTex->draw(circle, rs);
+                                }
+                            }
                             targetTex->display();
                         }
                     }
@@ -2565,10 +2588,30 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
             appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, meshCol);
             appendVectorSegment(m_activeVectorMesh, m_vPrevPoint, localPos, radius, meshCol);
             appendVectorCap(m_activeVectorMesh, localPos, radius, meshCol);
+
+            if (symmetryManager.enabled) {
+                auto p1 = symmetryManager.getSymmetricPoints(m_vPrevMidPoint);
+                auto p2 = symmetryManager.getSymmetricPoints(m_vPrevPoint);
+                auto p3 = symmetryManager.getSymmetricPoints(localPos);
+                if (p1.size() > 1 && p2.size() > 1 && p3.size() > 1) {
+                    appendVectorSegment(m_activeVectorMesh, p1[1], p2[1], radius, meshCol);
+                    appendVectorSegment(m_activeVectorMesh, p2[1], p3[1], radius, meshCol);
+                    appendVectorCap(m_activeVectorMesh, p3[1], radius, meshCol);
+                }
+            }
         }
         else {
             appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, meshCol);
             appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, meshCol);
+
+            if (symmetryManager.enabled) {
+                auto p1 = symmetryManager.getSymmetricPoints(m_vPrevMidPoint);
+                auto p2 = symmetryManager.getSymmetricPoints(m_vPrevPoint);
+                if (p1.size() > 1 && p2.size() > 1) {
+                    appendVectorSegment(m_activeVectorMesh, p1[1], p2[1], radius, meshCol);
+                    appendVectorCap(m_activeVectorMesh, p2[1], radius, meshCol);
+                }
+            }
         }
 
         if (m_activeVectorMesh.getVertexCount() > 0) {
@@ -2760,6 +2803,13 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                         float invT = 1.0f - t;
                         sf::Vector2f curveP = (invT * invT * m_vPrevMidPoint) + (2.0f * invT * t * m_vPrevPoint) + (t * t * midPoint);
                         appendVectorSegment(m_activeVectorMesh, lastP, curveP, radius, meshCol);
+                        if (symmetryManager.enabled) {
+                            auto p1Sym = symmetryManager.getSymmetricPoints(lastP);
+                            auto p2Sym = symmetryManager.getSymmetricPoints(curveP);
+                            if (p1Sym.size() > 1 && p2Sym.size() > 1) {
+                                appendVectorSegment(m_activeVectorMesh, p1Sym[1], p2Sym[1], radius, meshCol);
+                            }
+                        }
                         lastP = curveP;
                     }
 
@@ -2783,6 +2833,18 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
 
                                 targetTex->draw(line, rs);
                                 targetTex->draw(circle, rs);
+
+                                if (symmetryManager.enabled) {
+                                    auto fromSym = symmetryManager.getSymmetricPoints(lastPos);
+                                    auto toSym = symmetryManager.getSymmetricPoints(targetPos);
+                                    if (fromSym.size() > 1 && toSym.size() > 1) {
+                                        line.setPosition(fromSym[1]);
+                                        line.setRotation(std::atan2(toSym[1].y - fromSym[1].y, toSym[1].x - fromSym[1].x) * 180.f / 3.14159265f);
+                                        circle.setPosition(toSym[1]);
+                                        targetTex->draw(line, rs);
+                                        targetTex->draw(circle, rs);
+                                    }
+                                }
                                 targetTex->display();
                             }
                         }
@@ -2960,6 +3022,9 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             window.draw(lines, innerStates);
         }
 
+    }
+
+    if (symmetryManager.enabled && symmetryManager.visible) {
         symmetryManager.drawGuides(window, innerStates, sf::FloatRect(0, 0, static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y)), viewScale);
     }
 
