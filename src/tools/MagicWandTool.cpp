@@ -51,15 +51,31 @@ std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
         }
         else {
             sf::RenderTexture scratch;
-           // if (!m_canvas.renderLayerToTexture(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), scratch)) {
-            //    return mask;
-           // }
+            if (!m_canvas.renderLayerToTexture(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), scratch)) {
+                return mask;
+            }
             img = scratch.getTexture().copyToImage();
         }
     }
 
     sf::Color targetCol = img.getPixel(startPos.x, startPos.y);
     const sf::Uint8* pixels = img.getPixelsPtr();
+
+    bool targetIsStroke = (targetCol.a > 20);
+
+    auto matchesTarget = [&](const sf::Color& c) -> bool {
+        if (targetIsStroke) {
+            if (c.a <= 20) return false;
+            // Compare RGB values so anti-aliased margins match the solid center
+            float r = std::abs(static_cast<float>(c.r) - static_cast<float>(targetCol.r));
+            float g = std::abs(static_cast<float>(c.g) - static_cast<float>(targetCol.g));
+            float b = std::abs(static_cast<float>(c.b) - static_cast<float>(targetCol.b));
+            return std::max({ r, g, b }) <= static_cast<float>(m_tolerance);
+        }
+        else {
+            return c.a <= (20 + m_tolerance);
+        }
+        };
 
     if (m_contiguous) {
         std::queue<sf::Vector2i> q;
@@ -79,7 +95,7 @@ std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
                     if (!mask[n.y * w + n.x]) {
                         size_t idx = (n.y * w + n.x) * 4;
                         sf::Color c(pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3]);
-                        if (getPerceptualDistance(c, targetCol) <= m_tolerance) {
+                        if (matchesTarget(c)) {
                             mask[n.y * w + n.x] = true;
                             q.push(n);
                         }
@@ -93,7 +109,7 @@ std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
             for (int x = 0; x < w; ++x) {
                 size_t idx = (y * w + x) * 4;
                 sf::Color c(pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3]);
-                if (getPerceptualDistance(c, targetCol) <= m_tolerance) {
+                if (matchesTarget(c)) {
                     mask[y * w + x] = true;
                 }
             }

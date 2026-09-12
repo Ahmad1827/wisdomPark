@@ -191,7 +191,6 @@ private:
     void drawLayerContent(sf::RenderTarget& target, int frameIndex, int layerIndex,
         const sf::RenderStates& layerStates, bool isActiveLayerForPreview);
     void bakeLayerStrokes(int frameIndex, int layerIndex);
-    bool renderLayerToTexture(int frameIndex, int layerIndex, sf::RenderTexture& out);
 
     void extractFloatingStrokes(int currentFrame);
     void flipFloatingStrokes(bool horizontal);
@@ -269,6 +268,8 @@ public:
     sf::Color getPrimaryColor() const;
     sf::Color getSecondaryColor() const;
     void setFillSettings(float tolerance, bool contiguous);
+
+    bool renderLayerToTexture(int frameIndex, int layerIndex, sf::RenderTexture& out);
 
     void saveUndoState();
     void undo();

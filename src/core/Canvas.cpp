@@ -1146,37 +1146,92 @@ void Canvas::fillSelection(sf::Color color, int currentFrame) {
     saveUndoState();
 
     if (!isPixelMode) {
-        if (selection.isActive() && selection.getBoundingBox().width > 0) {
+        bool isErase = (color == sf::Color::Transparent || color.a == 0);
+        bool recoloredAny = false;
+
+        // 1. Recolor floating vector strokes if active
+        if (!m_floatingVectorStrokes.empty()) {
+            for (auto& vs : m_floatingVectorStrokes) {
+                for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+                    vs.mesh[v].color = isErase ? sf::Color::White : color;
+                }
+                if (isErase) vs.isErase = true;
+            }
+            recoloredAny = true;
+        }
+
+        // 2. Recolor existing vector strokes within selection
+        for (auto& vs : m_vectorStrokes) {
+            if (vs.frame == currentFrame && vs.layer == activeLayer && !vs.isErase) {
+                for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+                    if (selection.isPointInsideSelection(vs.mesh[v].position)) {
+                        vs.mesh[v].color = isErase ? sf::Color::White : color;
+                        recoloredAny = true;
+                    }
+                }
+            }
+        }
+
+        // 3. If an empty area was selected (not a line), fill ONLY inside the lasso polygon
+        if (!recoloredAny && !isErase && selection.isActive()) {
             sf::FloatRect bb = selection.getBoundingBox();
-            std::vector<sf::Vector2f> poly = {
-                { bb.left, bb.top },
-                { bb.left + bb.width, bb.top },
-                { bb.left + bb.width, bb.top + bb.height },
-                { bb.left, bb.top + bb.height }
-            };
+            int x0 = std::max(0, static_cast<int>(std::floor(bb.left)));
+            int y0 = std::max(0, static_cast<int>(std::floor(bb.top)));
+            int x1 = std::min(static_cast<int>(canvasLogicalSize.x), static_cast<int>(std::ceil(bb.left + bb.width)));
+            int y1 = std::min(static_cast<int>(canvasLogicalSize.y), static_cast<int>(std::ceil(bb.top + bb.height)));
 
             VectorStroke vs;
             vs.mesh.setPrimitiveType(sf::Triangles);
             vs.layer = activeLayer;
             vs.frame = currentFrame;
-            vs.isErase = (color == sf::Color::Transparent || color.a == 0);
+            vs.isErase = false;
 
-            sf::Color fillCol = vs.isErase ? sf::Color::White : color;
+            for (int y = y0; y < y1; ++y) {
+                int x = x0;
+                while (x < x1) {
+                    if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
+                        int xStart = x;
+                        while (x < x1 && selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
+                            x++;
+                        }
+                        int xEnd = x;
 
-            vs.mesh.append(sf::Vertex(poly[0], fillCol));
-            vs.mesh.append(sf::Vertex(poly[1], fillCol));
-            vs.mesh.append(sf::Vertex(poly[2], fillCol));
+                        float fx0 = static_cast<float>(xStart);
+                        float fx1 = static_cast<float>(xEnd);
+                        float fy0 = static_cast<float>(y);
+                        float fy1 = static_cast<float>(y + 1);
 
-            vs.mesh.append(sf::Vertex(poly[0], fillCol));
-            vs.mesh.append(sf::Vertex(poly[2], fillCol));
-            vs.mesh.append(sf::Vertex(poly[3], fillCol));
+                        vs.mesh.append(sf::Vertex(sf::Vector2f(fx0, fy0), color));
+                        vs.mesh.append(sf::Vertex(sf::Vector2f(fx1, fy0), color));
+                        vs.mesh.append(sf::Vertex(sf::Vector2f(fx1, fy1), color));
 
-            m_vectorStrokes.push_back(std::move(vs));
-            isDirty = true;
+                        vs.mesh.append(sf::Vertex(sf::Vector2f(fx0, fy0), color));
+                        vs.mesh.append(sf::Vertex(sf::Vector2f(fx1, fy1), color));
+                        vs.mesh.append(sf::Vertex(sf::Vector2f(fx0, fy1), color));
+                    }
+                    else {
+                        x++;
+                    }
+                }
+            }
+
+            if (vs.mesh.getVertexCount() > 0) {
+                auto insertPos = m_vectorStrokes.end();
+                for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ++it) {
+                    if (it->frame == currentFrame && it->layer == activeLayer) {
+                        insertPos = it;
+                        break;
+                    }
+                }
+                m_vectorStrokes.insert(insertPos, std::move(vs));
+            }
         }
+
+        isDirty = true;
         return;
     }
 
+    // --- PIXEL ART MODE (Retained) ---
     sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
     unsigned int w = std::min(img.getSize().x, canvasLogicalSize.x);
     unsigned int h = std::min(img.getSize().y, canvasLogicalSize.y);
@@ -1187,8 +1242,7 @@ void Canvas::fillSelection(sf::Color color, int currentFrame) {
             }
         }
     }
-    sf::Texture newTex;
-    newTex.loadFromImage(img);
+    sf::Texture newTex; newTex.loadFromImage(img);
     frames[currentFrame].layers[activeLayer].texture->clear(sf::Color::Transparent);
     frames[currentFrame].layers[activeLayer].texture->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
     frames[currentFrame].layers[activeLayer].texture->display();
@@ -2110,23 +2164,74 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                         }
                     }
 
-                    std::vector<sf::Vector2f> contour;
-                    for (int y = 0; y < h; ++y) {
-                        for (int x = 0; x < w; ++x) {
-                            if (fillMask[y * w + x]) {
-                                bool edge = (x == 0 || !fillMask[y * w + (x - 1)] ||
-                                    x == w - 1 || !fillMask[y * w + (x + 1)] ||
-                                    y == 0 || !fillMask[(y - 1) * w + x] ||
-                                    y == h - 1 || !fillMask[(y + 1) * w + x]);
-                                if (edge) {
-                                    contour.push_back(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)));
+                    std::vector<bool> dilatedMask = fillMask;
+                    const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+                    const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+
+                    for (int pass = 0; pass < 2; ++pass) {
+                        std::vector<bool> passMask = dilatedMask;
+                        for (int y = 0; y < h; ++y) {
+                            for (int x = 0; x < w; ++x) {
+                                if (passMask[y * w + x]) {
+                                    for (int d = 0; d < 8; ++d) {
+                                        int nx = x + dx8[d];
+                                        int ny = y + dy8[d];
+                                        if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                                            dilatedMask[ny * w + nx] = true;
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
 
-                    if (contour.size() >= 3) {
-                        fillPolygonContour(contour, drawCol, currentFrame);
+                    VectorStroke vs;
+                    vs.mesh.setPrimitiveType(sf::Triangles);
+                    vs.layer = activeLayer;
+                    vs.frame = currentFrame;
+                    vs.isErase = false;
+
+                    for (int y = 0; y < h; ++y) {
+                        int x = 0;
+                        while (x < w) {
+                            if (dilatedMask[y * w + x]) {
+                                int xStart = x;
+                                while (x < w && dilatedMask[y * w + x]) {
+                                    x++;
+                                }
+                                int xEnd = x;
+
+                                float fx0 = static_cast<float>(xStart);
+                                float fx1 = static_cast<float>(xEnd);
+                                float fy0 = static_cast<float>(y);
+                                float fy1 = static_cast<float>(y + 1);
+
+                                vs.mesh.append(sf::Vertex(sf::Vector2f(fx0, fy0), drawCol));
+                                vs.mesh.append(sf::Vertex(sf::Vector2f(fx1, fy0), drawCol));
+                                vs.mesh.append(sf::Vertex(sf::Vector2f(fx1, fy1), drawCol));
+
+                                vs.mesh.append(sf::Vertex(sf::Vector2f(fx0, fy0), drawCol));
+                                vs.mesh.append(sf::Vertex(sf::Vector2f(fx1, fy1), drawCol));
+                                vs.mesh.append(sf::Vertex(sf::Vector2f(fx0, fy1), drawCol));
+                            }
+                            else {
+                                x++;
+                            }
+                        }
+                    }
+
+                    if (vs.mesh.getVertexCount() > 0) {
+                        saveUndoState();
+                        // Insert behind strokes on this layer so stroke outlines stay crisp on top
+                        auto insertPos = m_vectorStrokes.end();
+                        for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ++it) {
+                            if (it->frame == currentFrame && it->layer == activeLayer) {
+                                insertPos = it;
+                                break;
+                            }
+                        }
+                        m_vectorStrokes.insert(insertPos, std::move(vs));
+                        isDirty = true;
                     }
                     return;
                 }

@@ -41,13 +41,13 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
         states.transform *= floatingSprite.getTransform();
     }
 
-    if (pts.size() > 2 && (state == SelectionState::Selected || state == SelectionState::Floating)) {
+    /*if (pts.size() > 2 && (state == SelectionState::Selected || state == SelectionState::Floating)) {
         sf::VertexArray fillPoly(sf::TriangleFan);
         for (const auto& p : pts) {
             fillPoly.append(sf::Vertex(p, sf::Color(0, 160, 255, 35)));
         }
         window.draw(fillPoly, states);
-    }
+    }*/
 
     if (pts.size() > 1) {
         sf::VertexArray darkUnder(sf::LineStrip, pts.size());
