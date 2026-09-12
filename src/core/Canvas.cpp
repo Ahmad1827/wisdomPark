@@ -3120,20 +3120,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         }
         window.draw(checkerboard, innerStates);
 
-        if (pixelGridEnabled && !customGridEnabled && viewScale > 0.1f) {
-            sf::VertexArray lines(sf::Lines);
-            sf::Color gridLine(180, 180, 180, 210);
-            unsigned int step = 1;
-            for (unsigned int x = 0; x <= canvasLogicalSize.x; x += step) {
-                lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), 0.f), gridLine));
-                lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), static_cast<float>(canvasLogicalSize.y)), gridLine));
-            }
-            for (unsigned int y = 0; y <= canvasLogicalSize.y; y += step) {
-                lines.append(sf::Vertex(sf::Vector2f(0.f, static_cast<float>(y)), gridLine));
-                lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(canvasLogicalSize.x), static_cast<float>(y)), gridLine));
-            }
-            window.draw(lines, innerStates);
-        }
+        // Hardcoded 1px pixel grid removed
     }
 
     if (symmetryManager.visible) {
@@ -3558,8 +3545,6 @@ void Canvas::cyclePixelBrushSize() {
     else pixelBrushSize = 1;
 }
 
-void Canvas::togglePixelGrid() { pixelGridEnabled = !pixelGridEnabled; }
-bool Canvas::isPixelGridEnabled() const { return pixelGridEnabled; }
 void Canvas::togglePixelSnap() { pixelSnapEnabled = !pixelSnapEnabled; }
 bool Canvas::isPixelSnapEnabled() const { return pixelSnapEnabled; }
 

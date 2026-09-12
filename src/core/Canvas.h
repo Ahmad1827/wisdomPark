@@ -158,7 +158,7 @@ private:
 
     bool isPixelMode;
     int pixelBrushSize;
-    bool pixelGridEnabled;
+    bool pixelGridEnabled{ false };
     bool customGridEnabled{ false };
     int customGridSize{ 16 };
     sf::Color customGridColor{ sf::Color(70, 130, 210, 180) };
@@ -305,8 +305,8 @@ public:
     void setPixelBrushSize(int size);
     int getPixelBrushSize() const;
     void cyclePixelBrushSize();
-    void togglePixelGrid();
-    bool isPixelGridEnabled() const;
+    void togglePixelGrid() { toggleCustomGrid(); }
+    bool isPixelGridEnabled() const { return customGridEnabled; }
     void setCustomGridEnabled(bool enabled) { customGridEnabled = enabled; }
     bool isCustomGridEnabled() const { return customGridEnabled; }
     void toggleCustomGrid() { customGridEnabled = !customGridEnabled; }

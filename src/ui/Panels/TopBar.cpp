@@ -136,22 +136,9 @@ namespace WisdomUI {
                 return true;
             }
             if (m_gridControlsVisible) {
-                if (m_gridColorDropdownOpen) {
-                    for (const auto& swatch : m_gridColorSwatches) {
-                        if (swatch.first.contains(mousePos)) {
-                            if (m_onChangeGridColor) m_onChangeGridColor(swatch.second);
-                            m_gridColorDropdownOpen = false;
-                            return true;
-                        }
-                    }
-                }
-
                 if (m_gridColorBtnBounds.contains(mousePos)) {
-                    m_gridColorDropdownOpen = !m_gridColorDropdownOpen;
+                    if (m_onPickGridColor) m_onPickGridColor();
                     return true;
-                }
-                else {
-                    m_gridColorDropdownOpen = false;
                 }
 
                 if (m_gridToggleBtnBounds.contains(mousePos)) {
@@ -337,8 +324,8 @@ namespace WisdomUI {
             sf::RectangleShape colorBtn(sf::Vector2f(m_gridColorBtnBounds.width, m_gridColorBtnBounds.height));
             colorBtn.setPosition(m_gridColorBtnBounds.left, m_gridColorBtnBounds.top);
             colorBtn.setFillColor(sf::Color(m_gridColor.r, m_gridColor.g, m_gridColor.b, 255));
-            colorBtn.setOutlineThickness(hovColor || m_gridColorDropdownOpen ? 2.0f : 1.0f);
-            colorBtn.setOutlineColor(m_gridColorDropdownOpen ? Theme::SunsetGold : (hovColor ? sf::Color::White : Theme::SunsetPlum));
+            colorBtn.setOutlineThickness(hovColor ? 2.0f : 1.0f);
+            colorBtn.setOutlineColor(hovColor ? Theme::SunsetGold : Theme::SunsetPlum);
             window.draw(colorBtn);
 
             Theme::DrawSunsetButton(window, m_gridMinusBtnBounds, "-", m_font, 13, false, hovMinus, false, 1.0f);
@@ -358,54 +345,8 @@ namespace WisdomUI {
 
             Theme::DrawSunsetButton(window, m_gridPlusBtnBounds, "+", m_font, 13, false, hovPlus, false, 1.0f);
 
-            m_gridColorSwatches.clear();
-            if (m_gridColorDropdownOpen) {
-                std::vector<sf::Color> palette = {
-                    sf::Color(70, 130, 210, 180),
-                    sf::Color(240, 240, 240, 200),
-                    sf::Color(35, 35, 45, 220),
-                    sf::Color(0, 210, 255, 200),
-                    sf::Color(255, 65, 85, 210),
-                    sf::Color(255, 205, 50, 210),
-                    sf::Color(45, 215, 115, 210),
-                    sf::Color(190, 70, 255, 210)
-                };
-
-                float swatchW = 24.f;
-                float swatchH = 22.f;
-                float pad = 4.f;
-                float dropW = (swatchW + pad) * 4.f + pad;
-                float dropH = (swatchH + pad) * 2.f + pad;
-                float dropX = m_gridColorBtnBounds.left - (dropW - m_gridColorBtnBounds.width) * 0.5f;
-                float dropY = m_gridColorBtnBounds.top + m_gridColorBtnBounds.height + 4.f;
-
-                sf::RectangleShape dropBg(sf::Vector2f(dropW, dropH));
-                dropBg.setPosition(dropX, dropY);
-                dropBg.setFillColor(sf::Color(14, 6, 20, 245));
-                dropBg.setOutlineThickness(1.5f);
-                dropBg.setOutlineColor(Theme::SunsetPlum);
-                window.draw(dropBg);
-
-                for (size_t i = 0; i < palette.size(); ++i) {
-                    float row = static_cast<float>(i / 4);
-                    float col = static_cast<float>(i % 4);
-                    sf::FloatRect sRect(dropX + pad + col * (swatchW + pad), dropY + pad + row * (swatchH + pad), swatchW, swatchH);
-                    m_gridColorSwatches.push_back({ sRect, palette[i] });
-
-                    sf::RectangleShape swatch(sf::Vector2f(swatchW, swatchH));
-                    swatch.setPosition(sRect.left, sRect.top);
-                    swatch.setFillColor(sf::Color(palette[i].r, palette[i].g, palette[i].b, 255));
-
-                    bool isHovered = sRect.contains(mPos);
-                    bool isCur = (m_gridColor.r == palette[i].r && m_gridColor.g == palette[i].g && m_gridColor.b == palette[i].b);
-                    swatch.setOutlineThickness(isCur ? 2.0f : (isHovered ? 1.5f : 1.0f));
-                    swatch.setOutlineColor(isCur ? Theme::SunsetGold : (isHovered ? sf::Color::White : sf::Color(50, 40, 60)));
-                    window.draw(swatch);
-                }
-            }
         }
         else {
-            m_gridColorDropdownOpen = false;
             m_gridToggleBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
             m_gridColorBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
             m_gridMinusBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);

@@ -204,6 +204,7 @@ static sf::Text loadingCancelText;
 
 static bool g_selectingOutlineColor = false;
 static sf::Color g_outlineColor = sf::Color::Black;
+static bool g_selectingGridColor = false;
 
 UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(true), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0), m_debugUseSpriteStudio(false) {}
 
@@ -1797,6 +1798,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     g_outlineColor = canvas.getPrimaryColor();
                     m_toolOptionsBar.SetOutlineColor(g_outlineColor);
                 }
+                if (g_selectingGridColor) {
+                    canvas.setCustomGridColor(canvas.getPrimaryColor());
+                }
                 return;
             }
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
@@ -1805,9 +1809,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     g_outlineColor = canvas.getPrimaryColor();
                     m_toolOptionsBar.SetOutlineColor(g_outlineColor);
                 }
+                if (g_selectingGridColor) {
+                    canvas.setCustomGridColor(canvas.getPrimaryColor());
+                }
                 if (cpAction == "color_close") {
                     m_activeRightTab = RightTabMode::None;
                     g_selectingOutlineColor = false;
+                    g_selectingGridColor = false;
                     return;
                 }
             }
@@ -2491,11 +2499,17 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 canvas.setCustomGridSize(newSize);
                 showMessage("Grid Size: " + std::to_string(newSize) + "px", sf::Color::Yellow);
             },
-            [this, &canvas](sf::Color newCol) {
-                canvas.setCustomGridColor(newCol);
-                showMessage("Grid Color Changed", sf::Color::Green);
+            [this]() {
+                g_selectingGridColor = true;
+                g_selectingOutlineColor = false;
+                m_activeRightTab = RightTabMode::Palette;
+                showMessage("Pick Grid Color from Palette", sf::Color(100, 200, 255));
             }
         );
+
+        if (canvas.getActiveTool() != ToolType::Grid) {
+            g_selectingGridColor = false;
+        }
 
         m_toolOptionsBar.SetBounds(regions.optionsBar);
         std::string toolName = "Brush";
