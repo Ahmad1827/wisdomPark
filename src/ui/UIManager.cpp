@@ -2482,6 +2482,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             canvas.getActiveTool() == ToolType::Grid,
             canvas.isCustomGridEnabled(),
             canvas.getCustomGridSize(),
+            canvas.getCustomGridColor(),
             [this, &canvas](bool active) {
                 canvas.setCustomGridEnabled(active);
                 showMessage(active ? "Grid: ON" : "Grid: OFF", sf::Color::Cyan);
@@ -2489,6 +2490,10 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             [this, &canvas](int newSize) {
                 canvas.setCustomGridSize(newSize);
                 showMessage("Grid Size: " + std::to_string(newSize) + "px", sf::Color::Yellow);
+            },
+            [this, &canvas](sf::Color newCol) {
+                canvas.setCustomGridColor(newCol);
+                showMessage("Grid Color Changed", sf::Color::Green);
             }
         );
 

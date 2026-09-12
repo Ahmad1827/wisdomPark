@@ -3380,7 +3380,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     if (customGridEnabled && customGridSize >= 1) {
         sf::VertexArray lines(sf::Lines);
-        sf::Color gridLine = isPixelMode ? sf::Color(160, 160, 160, 180) : sf::Color(70, 130, 210, 160);
+        sf::Color gridLine = customGridColor;
         unsigned int step = static_cast<unsigned int>(customGridSize);
         for (unsigned int x = 0; x <= canvasLogicalSize.x; x += step) {
             lines.append(sf::Vertex(sf::Vector2f(static_cast<float>(x), 0.f), gridLine));

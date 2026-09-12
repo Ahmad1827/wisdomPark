@@ -54,10 +54,15 @@ namespace WisdomUI {
         std::string m_gridSizeInput;
         std::function<void(bool)> m_onToggleGrid;
         std::function<void(int)> m_onChangeGridSize;
+        sf::Color m_gridColor{ sf::Color(70, 130, 210, 180) };
+        bool m_gridColorDropdownOpen{ false };
+        std::function<void(sf::Color)> m_onChangeGridColor;
         sf::FloatRect m_gridToggleBtnBounds;
+        sf::FloatRect m_gridColorBtnBounds;
         sf::FloatRect m_gridMinusBtnBounds;
         sf::FloatRect m_gridSizeBox;
         sf::FloatRect m_gridPlusBtnBounds;
+        std::vector<std::pair<sf::FloatRect, sf::Color>> m_gridColorSwatches;
         sf::FloatRect getDropdownItemBounds(int menuIndex, int actionIndex) const;
         sf::FloatRect getDropdownPanelBounds(int menuIndex) const;
 
@@ -79,14 +84,17 @@ namespace WisdomUI {
             m_symmetryActive = active;
             m_onDisableSymmetry = onDisable;
         }
-        void SetGridControls(bool visible, bool active, int size,
+        void SetGridControls(bool visible, bool active, int size, sf::Color color,
             std::function<void(bool)> onToggle,
-            std::function<void(int)> onChangeSize) {
+            std::function<void(int)> onChangeSize,
+            std::function<void(sf::Color)> onChangeColor) {
             m_gridControlsVisible = visible;
             m_gridActive = active;
             m_gridSize = size;
+            m_gridColor = color;
             m_onToggleGrid = onToggle;
             m_onChangeGridSize = onChangeSize;
+            m_onChangeGridColor = onChangeColor;
         }
         void SetBounds(const sf::FloatRect& bounds);
         void Update(float deltaTime, const sf::Vector2f& mousePos);

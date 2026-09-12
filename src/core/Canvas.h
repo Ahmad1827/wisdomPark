@@ -161,6 +161,7 @@ private:
     bool pixelGridEnabled;
     bool customGridEnabled{ false };
     int customGridSize{ 16 };
+    sf::Color customGridColor{ sf::Color(70, 130, 210, 180) };
     bool pixelSnapEnabled;
     bool tileModeX;
     bool tileModeY;
@@ -311,6 +312,8 @@ public:
     void toggleCustomGrid() { customGridEnabled = !customGridEnabled; }
     void setCustomGridSize(int size) { customGridSize = std::max(1, size); }
     int getCustomGridSize() const { return customGridSize; }
+    void setCustomGridColor(sf::Color col) { customGridColor = col; }
+    sf::Color getCustomGridColor() const { return customGridColor; }
     void togglePixelSnap();
     bool isPixelSnapEnabled() const;
     void toggleTileMode();
