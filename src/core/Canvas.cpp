@@ -320,6 +320,11 @@ bool Canvas::renderLayerToTexture(int frameIndex, int layerIndex, sf::RenderText
 
     out.clear(sf::Color::Transparent);
     drawLayerContent(out, frameIndex, layerIndex, sf::RenderStates::Default, false);
+
+    if (m_textManager) {
+        m_textManager->render(out, frameIndex, layerIndex, isPixelMode, sf::RenderStates::Default, canvasLogicalSize);
+    }
+
     out.display();
     return true;
 }
@@ -1048,12 +1053,7 @@ void Canvas::commitSelection(int currentFrame) {
                 m_floatingVectorStrokes.clear();
             }
 
-            if (isImageResourceActive(currentFrame)) {
-                selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
-            }
-            else {
-                selection.discardFloating();
-            }
+            selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
         }
         else {
             selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
@@ -1258,7 +1258,7 @@ void Canvas::flipSelectionHorizontal(int currentFrame) {
         if (selection.getState() == SelectionState::Selected) {
             saveUndoState();
             extractFloatingStrokes(currentFrame);
-            selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), isImageResourceActive(currentFrame));
+            selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
         }
         selection.flipHorizontal();
         flipFloatingStrokes(true);
@@ -1270,7 +1270,7 @@ void Canvas::flipSelectionVertical(int currentFrame) {
         if (selection.getState() == SelectionState::Selected) {
             saveUndoState();
             extractFloatingStrokes(currentFrame);
-            selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), isImageResourceActive(currentFrame));
+            selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
         }
         selection.flipVertical();
         flipFloatingStrokes(false);
@@ -1315,6 +1315,18 @@ void Canvas::cropSelection(int currentFrame) {
 }
 
 void Canvas::setActiveTool(ToolType tool, int currentFrame) {
+    if (tool != ToolType::Text && m_textManager) {
+        TextObject* t = m_textManager->getEditingText();
+        if (t) {
+            if (!t->text.isEmpty()) {
+                m_textManager->rasterizeText(currentFrame, activeLayer, t->id, *this);
+            }
+            else {
+                m_textManager->deleteText(currentFrame, t->id);
+            }
+        }
+    }
+
     if (selection.isActive() && tool != ToolType::Select) {
         commitSelection(currentFrame);
         selection.clearSelection();
@@ -1469,6 +1481,10 @@ sf::Image Canvas::flattenFrameToImage(int frameIndex, unsigned int scaleFactor) 
         states.transform.scale(s, s);
 
         drawLayerContent(out, frameIndex, static_cast<int>(i), states, false);
+
+        if (m_textManager) {
+            m_textManager->render(out, frameIndex, static_cast<int>(i), isPixelMode, states, canvasLogicalSize);
+        }
     }
 
     out.display();
@@ -2165,7 +2181,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     if (selection.getState() == SelectionState::Selected) {
                         saveUndoState();
                         extractFloatingStrokes(currentFrame);
-                        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), isImageResourceActive(currentFrame));
+                        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
                     }
                     selection.startDrag(localPos);
                     return;
@@ -2425,6 +2441,20 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     float radius = brushEngine.getActivePreset().size * 0.5f;
                     sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : drawCol;
                     appendVectorCap(m_activeVectorMesh, localPos, radius, meshCol);
+
+                    // Erase directly on the layer texture so text and rasterized items are erased
+                    if (m_activeStrokeIsErase) {
+                        sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                        if (targetTex) {
+                            sf::RenderStates rs(sf::BlendNone);
+                            sf::CircleShape circle(radius);
+                            circle.setOrigin(radius, radius);
+                            circle.setPosition(localPos);
+                            circle.setFillColor(sf::Color::Transparent);
+                            targetTex->draw(circle, rs);
+                            targetTex->display();
+                        }
+                    }
                 }
                 else {
                     brushEngine.resetStroke(localPos);
@@ -2733,6 +2763,31 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                         lastP = curveP;
                     }
 
+                    // Erase line segment directly on layer texture for text/raster content
+                    if (m_activeStrokeIsErase) {
+                        sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                        if (targetTex) {
+                            sf::RenderStates rs(sf::BlendNone);
+                            float length = std::hypot(targetPos.x - lastPos.x, targetPos.y - lastPos.y);
+                            if (length > 0.001f) {
+                                sf::RectangleShape line(sf::Vector2f(length, radius * 2.0f));
+                                line.setOrigin(0.0f, radius);
+                                line.setPosition(lastPos);
+                                line.setRotation(std::atan2(targetPos.y - lastPos.y, targetPos.x - lastPos.x) * 180.f / 3.14159265f);
+                                line.setFillColor(sf::Color::Transparent);
+
+                                sf::CircleShape circle(radius);
+                                circle.setOrigin(radius, radius);
+                                circle.setPosition(targetPos);
+                                circle.setFillColor(sf::Color::Transparent);
+
+                                targetTex->draw(line, rs);
+                                targetTex->draw(circle, rs);
+                                targetTex->display();
+                            }
+                        }
+                    }
+
                     m_vPrevPoint = targetPos;
                     m_vPrevMidPoint = midPoint;
                 }
@@ -2839,6 +2894,10 @@ void Canvas::drawLayerThumbnail(sf::RenderTarget& target, int frameIndex, int la
     states.transform.scale(s, s);
 
     drawLayerContent(target, frameIndex, layerIndex, states, false);
+
+    if (m_textManager) {
+        m_textManager->render(target, frameIndex, layerIndex, isPixelMode, states, canvasLogicalSize);
+    }
 }
 
 void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states) {
@@ -2987,7 +3046,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                     }
                 }
 
-                if (isPixelMode || isImageResourceActive(currentFrame)) {
+                if (selection.getState() == SelectionState::Floating) {
                     selection.drawPixels(window, layerStates);
                 }
             }
@@ -3345,7 +3404,7 @@ void Canvas::enterTransformMode(int currentFrame) {
     if (selection.getState() == SelectionState::Selected) {
         saveUndoState();
         extractFloatingStrokes(currentFrame);
-        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), isImageResourceActive(currentFrame));
+        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
     }
 
     if (selection.getState() == SelectionState::Floating) {

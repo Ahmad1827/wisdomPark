@@ -96,7 +96,12 @@ bool TextPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
             return true;
         }
 
-        if (!sf::FloatRect(m_position.x, m_position.y, m_size.x, m_size.y).contains(mousePos)) {
+        float effectiveH = m_size.y;
+        if (m_fontDropdownOpen) {
+            effectiveH += FontManager::getInstance().getFontNames().size() * 28.f + 20.f;
+        }
+
+        if (!sf::FloatRect(m_position.x, m_position.y, m_size.x, effectiveH).contains(mousePos)) {
             if (m_fontDropdownOpen) m_fontDropdownOpen = false;
             return false;
         }

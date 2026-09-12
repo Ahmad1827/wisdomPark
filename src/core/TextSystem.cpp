@@ -117,14 +117,44 @@ void TextObject::render(sf::RenderTarget& target, bool isPixelMode, sf::RenderSt
 
 sf::FloatRect TextObject::getBounds() const {
     sf::Font* font = FontManager::getInstance().getFont(fontName);
-    if (!font) return sf::FloatRect();
-    sf::Text sfText(text, *font, size);
+    if (!font) {
+        auto names = FontManager::getInstance().getFontNames();
+        if (!names.empty()) font = FontManager::getInstance().getFont(names[0]);
+        if (!font) return sf::FloatRect();
+    }
+
+    sf::Text sfText(text.isEmpty() ? " " : text, *font, size);
+    sf::Uint32 style = sf::Text::Regular;
+    if (bold) style |= sf::Text::Bold;
+    if (italic) style |= sf::Text::Italic;
+    if (underline) style |= sf::Text::Underlined;
+    if (strikethrough) style |= sf::Text::StrikeThrough;
+    sfText.setStyle(style);
+    sfText.setLetterSpacing(letterSpacing);
+    sfText.setLineSpacing(lineSpacing);
+
+    sf::FloatRect local = sfText.getLocalBounds();
+    sf::Vector2f origin(0.f, 0.f);
+    if (!text.isEmpty()) {
+        if (alignH == 1) origin.x = local.width / 2.f;
+        else if (alignH == 2) origin.x = local.width;
+        if (alignV == 1) origin.y = local.height / 2.f;
+        else if (alignV == 2) origin.y = local.height;
+    }
+    sfText.setOrigin(origin);
     sfText.setPosition(position);
     sfText.setRotation(rotation);
     sfText.setScale(scale);
-    sf::FloatRect local = sfText.getLocalBounds();
+
     sf::Transform t = sfText.getTransform();
-    return t.transformRect(local);
+    sf::FloatRect rect = t.transformRect(local);
+
+    const float pad = 8.f;
+    rect.left -= pad;
+    rect.top -= pad;
+    rect.width += pad * 2.f;
+    rect.height += pad * 2.f;
+    return rect;
 }
 
 void TextManager::init() {}
@@ -188,18 +218,27 @@ void TextManager::render(sf::RenderTarget& target, int frame, int layer, bool is
     }
     if (!hasText) return;
 
-    if (m_renderTex.getSize() != logicalSize) {
-        m_renderTex.create(logicalSize.x, logicalSize.y);
-    }
-    m_renderTex.clear(sf::Color::Transparent);
+    if (isPixelMode) {
+        if (m_renderTex.getSize() != logicalSize) {
+            m_renderTex.create(logicalSize.x, logicalSize.y);
+        }
+        m_renderTex.clear(sf::Color::Transparent);
 
-    for (const auto& o : it->second) {
-        if (o.layerIndex == layer) o.render(m_renderTex, isPixelMode);
-    }
+        for (const auto& o : it->second) {
+            if (o.layerIndex == layer) o.render(m_renderTex, true);
+        }
 
-    m_renderTex.display();
-    sf::Sprite spr(m_renderTex.getTexture());
-    target.draw(spr, states);
+        m_renderTex.display();
+        sf::Sprite spr(m_renderTex.getTexture());
+        target.draw(spr, states);
+    }
+    else {
+        for (const auto& o : it->second) {
+            if (o.layerIndex == layer) {
+                o.render(target, false, states);
+            }
+        }
+    }
 }
 
 std::string TextManager::hitTest(int frame, int layer, sf::Vector2f pos) {
@@ -210,6 +249,11 @@ std::string TextManager::hitTest(int frame, int layer, sf::Vector2f pos) {
                 return itObj->id;
             }
         }
+        for (auto itObj = it->second.rbegin(); itObj != it->second.rend(); ++itObj) {
+            if (itObj->getBounds().contains(pos)) {
+                return itObj->id;
+            }
+        }
     }
     return "";
 }
@@ -217,13 +261,22 @@ std::string TextManager::hitTest(int frame, int layer, sf::Vector2f pos) {
 void TextManager::rasterizeText(int frame, int layer, const std::string& id, Canvas& canvas) {
     TextObject* t = getText(frame, id);
     if (!t) return;
-    canvas.saveUndoState();
-    sf::RenderTexture* tex = canvas.getActiveRenderTexture(frame);
-    if (tex) {
-        t->isEditing = false;
-        t->render(*tex, canvas.getPixelMode());
-        tex->display();
+    if (t->text.isEmpty()) {
         deleteText(frame, id);
+        return;
+    }
+
+    canvas.saveUndoState();
+    Frame* f = canvas.getFrame(frame);
+    if (f && layer >= 0 && layer < static_cast<int>(f->layers.size())) {
+        sf::RenderTexture* tex = f->layers[layer].texture.get();
+        if (tex) {
+            t->isEditing = false;
+            t->render(*tex, canvas.getPixelMode());
+            tex->display();
+            deleteText(frame, id);
+            canvas.clearIsDirty();
+        }
     }
 }
 

@@ -2147,17 +2147,14 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (!timeline.isPlaying() && !keybindPanel.isVisible() && !exportModal.getIsOpen() && !newProjectModal.getIsOpen() && !g_aiPanel.getIsVisible() && !g_aiReviewModal.getIsOpen()) {
-            sf::Vector2f shiftedMousePos = mousePos;
-            shiftedMousePos.x -= WisdomUI::Theme::ToolDockWidth;
-
             if (canvas.getActiveTool() == ToolType::Perspective) {
-                m_perspectivePanel.handleEvent(event, shiftedMousePos, canvas.getCanvasSize());
+                m_perspectivePanel.handleEvent(event, mousePos, canvas.getCanvasSize());
             }
             if (canvas.getActiveTool() == ToolType::Text) {
-                if (m_textPanel.handleEvent(event, shiftedMousePos)) return;
+                if (m_textPanel.handleEvent(event, mousePos)) return;
             }
             if (canvas.getActiveTool() == ToolType::Gradient) {
-                if (m_gradientPanel.handleEvent(event, shiftedMousePos)) return;
+                if (m_gradientPanel.handleEvent(event, mousePos)) return;
             }
 
             if (event.type == sf::Event::MouseWheelScrolled && event.mouseWheelScroll.wheel == sf::Mouse::VerticalWheel) {

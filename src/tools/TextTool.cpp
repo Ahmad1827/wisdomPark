@@ -7,6 +7,22 @@ TextTool::TextTool(Canvas& canvas, Timeline& timeline, TextManager& tm)
     m_lastPrimaryColor = m_canvas.getPrimaryColor();
 }
 
+TextTool::~TextTool() {
+    commitText();
+}
+
+void TextTool::commitText() {
+    TextObject* editing = m_tm.getEditingText();
+    if (editing) {
+        if (!editing->text.isEmpty()) {
+            m_tm.rasterizeText(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), editing->id, m_canvas);
+        }
+        else {
+            m_tm.deleteText(m_timeline.getCurrentFrame(), editing->id);
+        }
+    }
+}
+
 void TextTool::Initialize() {
     FontManager::getInstance().loadDefaultFonts();
 }
@@ -34,6 +50,29 @@ void TextTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& windo
         return;
     }
 
+    if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+        if (m_isDraggingText) {
+            m_isDraggingText = false;
+            return;
+        }
+    }
+
+    sf::Vector2f logicalPos = m_canvas.getInverseTransform().transformPoint(mousePos);
+    float scaleX = static_cast<float>(m_canvas.getCanvasSize().x) / m_canvas.getDrawArea().width;
+    float scaleY = static_cast<float>(m_canvas.getCanvasSize().y) / m_canvas.getDrawArea().height;
+    sf::Vector2f trueCanvasPos(
+        (logicalPos.x - m_canvas.getDrawArea().left) * scaleX,
+        (logicalPos.y - m_canvas.getDrawArea().top) * scaleY
+    );
+
+    if (event.type == sf::Event::MouseMoved && m_isDraggingText) {
+        TextObject* editingText = m_tm.getEditingText();
+        if (editingText) {
+            editingText->position = m_textDragStartPos + (trueCanvasPos - m_textDragStartMouse);
+        }
+        return;
+    }
+
     TextObject* editingText = m_tm.getEditingText();
 
     if (event.type == sf::Event::TextEntered && editingText) {
@@ -51,17 +90,12 @@ void TextTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& windo
     }
 
     if (event.type == sf::Event::KeyPressed && editingText) {
-        if (event.key.code == sf::Keyboard::Enter) {
-            m_tm.clearEditingState();
-            return;
-        }
-        if (event.key.code == sf::Keyboard::Escape) {
-            m_tm.clearEditingState();
+        if (event.key.code == sf::Keyboard::Enter || event.key.code == sf::Keyboard::Escape) {
+            commitText();
             return;
         }
     }
 
-    sf::Vector2f logicalPos = m_canvas.getInverseTransform().transformPoint(mousePos);
 
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
 
@@ -82,13 +116,23 @@ void TextTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& windo
             std::string hitId = m_tm.hitTest(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), trueCanvasPos);
 
             if (!hitId.empty()) {
-                m_tm.clearEditingState();
+                commitText();
                 TextObject* hit = m_tm.getText(m_timeline.getCurrentFrame(), hitId);
-                if (hit) hit->isEditing = true;
+                if (hit) {
+                    hit->isEditing = true;
+                    m_canvas.setActiveLayer(hit->layerIndex, m_timeline.getCurrentFrame());
+                    m_isDraggingText = true;
+                    m_textDragStartMouse = trueCanvasPos;
+                    m_textDragStartPos = hit->position;
+                }
             }
             else {
-                m_tm.clearEditingState();
-                m_tm.createText(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), trueCanvasPos);
+                commitText();
+                std::string newId = m_tm.createText(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), trueCanvasPos);
+                TextObject* newObj = m_tm.getText(m_timeline.getCurrentFrame(), newId);
+                if (newObj) {
+                    newObj->color = m_canvas.getPrimaryColor();
+                }
             }
         }
     }
