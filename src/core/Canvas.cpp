@@ -1381,6 +1381,8 @@ void Canvas::undo() {
         isDeforming = false;
         deformPixels.clear();
         currentDeformedPixels.clear();
+        m_deformStrokeIndex = -1;
+        m_originalDeformMesh.clear();
         m_contourPoints.clear();
         m_isVectorStrokeActive = false;
         m_activeStrokeIsErase = false;
@@ -1409,6 +1411,8 @@ void Canvas::redo() {
         isDeforming = false;
         deformPixels.clear();
         currentDeformedPixels.clear();
+        m_deformStrokeIndex = -1;
+        m_originalDeformMesh.clear();
         m_contourPoints.clear();
         m_isVectorStrokeActive = false;
         m_activeStrokeIsErase = false;
@@ -1894,7 +1898,12 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
     if (rightClick) {
         if (activeTool == ToolType::Curve && isDeforming) {
+            if (!isPixelMode && m_deformStrokeIndex >= 0 && m_deformStrokeIndex < static_cast<int>(m_vectorStrokes.size())) {
+                m_vectorStrokes[m_deformStrokeIndex].mesh = m_originalDeformMesh;
+            }
             isDeforming = false;
+            m_deformStrokeIndex = -1;
+            m_originalDeformMesh.clear();
             deformPixels.clear();
             currentDeformedPixels.clear();
         }
@@ -1907,6 +1916,74 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             sf::Color drawCol = primaryColor;
 
             if (activeTool == ToolType::Curve) {
+                if (!isPixelMode) {
+                    auto sign = [](sf::Vector2f p1, sf::Vector2f p2, sf::Vector2f p3) {
+                        return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+                        };
+                    auto ptInTri = [&](sf::Vector2f pt, sf::Vector2f v1, sf::Vector2f v2, sf::Vector2f v3) {
+                        float d1 = sign(pt, v1, v2);
+                        float d2 = sign(pt, v2, v3);
+                        float d3 = sign(pt, v3, v1);
+                        return !(((d1 < 0) || (d2 < 0) || (d3 < 0)) && ((d1 > 0) || (d2 > 0) || (d3 > 0)));
+                        };
+
+                    int hitStrokeIdx = -1;
+                    for (int s = static_cast<int>(m_vectorStrokes.size()) - 1; s >= 0; --s) {
+                        const auto& vs = m_vectorStrokes[s];
+                        if (vs.frame == currentFrame && vs.layer == activeLayer && !vs.isErase) {
+                            for (size_t v = 0; v + 2 < vs.mesh.getVertexCount(); v += 3) {
+                                if (ptInTri(localPos, vs.mesh[v].position, vs.mesh[v + 1].position, vs.mesh[v + 2].position)) {
+                                    hitStrokeIdx = s;
+                                    break;
+                                }
+                                if (std::hypot(vs.mesh[v].position.x - localPos.x, vs.mesh[v].position.y - localPos.y) <= 10.f ||
+                                    std::hypot(vs.mesh[v + 1].position.x - localPos.x, vs.mesh[v + 1].position.y - localPos.y) <= 10.f ||
+                                    std::hypot(vs.mesh[v + 2].position.x - localPos.x, vs.mesh[v + 2].position.y - localPos.y) <= 10.f) {
+                                    hitStrokeIdx = s;
+                                    break;
+                                }
+                            }
+                            if (hitStrokeIdx != -1) break;
+                        }
+                    }
+
+                    if (hitStrokeIdx == -1) return;
+
+                    saveUndoState();
+                    m_deformStrokeIndex = hitStrokeIdx;
+                    m_originalDeformMesh = m_vectorStrokes[hitStrokeIdx].mesh;
+
+                    m_vDeformMinX = m_originalDeformMesh[0].position.x;
+                    m_vDeformMaxX = m_originalDeformMesh[0].position.x;
+                    m_vDeformMinY = m_originalDeformMesh[0].position.y;
+                    m_vDeformMaxY = m_originalDeformMesh[0].position.y;
+
+                    for (size_t v = 1; v < m_originalDeformMesh.getVertexCount(); ++v) {
+                        m_vDeformMinX = std::min(m_vDeformMinX, m_originalDeformMesh[v].position.x);
+                        m_vDeformMaxX = std::max(m_vDeformMaxX, m_originalDeformMesh[v].position.x);
+                        m_vDeformMinY = std::min(m_vDeformMinY, m_originalDeformMesh[v].position.y);
+                        m_vDeformMaxY = std::max(m_vDeformMaxY, m_originalDeformMesh[v].position.y);
+                    }
+
+                    float boxW = std::max(1.f, m_vDeformMaxX - m_vDeformMinX);
+                    float boxH = std::max(1.f, m_vDeformMaxY - m_vDeformMinY);
+                    deformIsHorizontal = (boxW >= boxH);
+
+                    float L = deformIsHorizontal ? boxW : boxH;
+                    float origin = deformIsHorizontal ? m_vDeformMinX : m_vDeformMinY;
+                    float curCoord = deformIsHorizontal ? localPos.x : localPos.y;
+                    deformT0 = (L > 0.0001f) ? std::clamp((curCoord - origin) / L, 0.0f, 1.0f) : 0.5f;
+
+                    if (deformT0 < 0.15f) deformMode = 2;
+                    else if (deformT0 > 0.85f) deformMode = 1;
+                    else deformMode = 0;
+
+                    deformClickPos = localPos;
+                    deformCurrentPos = localPos;
+                    isDeforming = true;
+                    return;
+                }
+
                 sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
                 if (!targetTex) return;
 
@@ -2372,6 +2449,19 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
             deformCurrentPos = localPos;
             sf::Vector2f delta = deformCurrentPos - deformClickPos;
 
+            if (!isPixelMode) {
+                if (std::hypot(delta.x, delta.y) < 1.0f && m_deformStrokeIndex >= 0 && m_deformStrokeIndex < static_cast<int>(m_vectorStrokes.size())) {
+                    m_vectorStrokes[m_deformStrokeIndex].mesh = m_originalDeformMesh;
+                }
+                else {
+                    isDirty = true;
+                }
+                isDeforming = false;
+                m_deformStrokeIndex = -1;
+                m_originalDeformMesh.clear();
+                return;
+            }
+
             if (std::abs(delta.x) >= 1.0f || std::abs(delta.y) >= 1.0f) {
                 saveUndoState();
                 updateDeformPixels(delta);
@@ -2492,7 +2582,27 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     if (activeTool == ToolType::Curve) {
         if (isDeforming) {
             deformCurrentPos = localPos;
-            updateDeformPixels(deformCurrentPos - deformClickPos);
+            if (isPixelMode) {
+                updateDeformPixels(deformCurrentPos - deformClickPos);
+            }
+            else {
+                if (m_deformStrokeIndex >= 0 && m_deformStrokeIndex < static_cast<int>(m_vectorStrokes.size())) {
+                    sf::Vector2f delta = deformCurrentPos - deformClickPos;
+                    float boxW = std::max(1.f, m_vDeformMaxX - m_vDeformMinX);
+                    float boxH = std::max(1.f, m_vDeformMaxY - m_vDeformMinY);
+                    float L = deformIsHorizontal ? boxW : boxH;
+                    float origin = deformIsHorizontal ? m_vDeformMinX : m_vDeformMinY;
+
+                    auto& mesh = m_vectorStrokes[m_deformStrokeIndex].mesh;
+                    for (size_t v = 0; v < mesh.getVertexCount(); ++v) {
+                        float coord = deformIsHorizontal ? m_originalDeformMesh[v].position.x : m_originalDeformMesh[v].position.y;
+                        float t = (L > 0.0001f) ? std::clamp((coord - origin) / L, 0.0f, 1.0f) : 0.5f;
+                        float w = computeDeformWeight(t);
+                        mesh[v].position = m_originalDeformMesh[v].position + delta * w;
+                    }
+                    isDirty = true;
+                }
+            }
         }
         return;
     }
@@ -2888,7 +2998,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         }
     }
 
-    if (activeTool == ToolType::Curve && isDeforming) {
+    if (activeTool == ToolType::Curve && isDeforming && isPixelMode) {
         sf::VertexArray va(sf::Quads);
         for (const auto& dp : currentDeformedPixels) {
             float fx = static_cast<float>(dp.x);

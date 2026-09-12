@@ -107,6 +107,12 @@ private:
     int deformMode{ 0 };
     std::vector<DeformPixel> deformPixels;
     std::vector<DeformPixel> currentDeformedPixels;
+    int m_deformStrokeIndex{ -1 };
+    sf::VertexArray m_originalDeformMesh;
+    float m_vDeformMinX{ 0.f };
+    float m_vDeformMaxX{ 0.f };
+    float m_vDeformMinY{ 0.f };
+    float m_vDeformMaxY{ 0.f };
 
     std::vector<sf::Vector2f> m_contourPoints;
 
