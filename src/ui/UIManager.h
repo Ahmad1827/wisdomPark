@@ -222,7 +222,7 @@ private:
     sf::UdpSocket handTrackerSocket;
     GitImgClient m_gitImgClient;
     bool m_isPushingGitImg{ false };
-    void pushToGitImg(Canvas& canvas, int frameIndex = 0);
+    void pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg);
     bool isTypingPrompt;
     bool showingText;
     float textAlpha;

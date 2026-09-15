@@ -386,8 +386,8 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     );
     m_gitImgClient.setBaseUrl("http://100.102.109.119:8080");
 
-    m_topBar.SetPushGitImgCallback([this, baseCanvas]() {
-        pushToGitImg(*baseCanvas, 0);
+    m_topBar.SetPushGitImgCallback([this, baseCanvas](bool opaqueBg) {
+        pushToGitImg(*baseCanvas, 0, opaqueBg);
         });
     m_toolOptionsBar.Initialize(font);
     m_toolDock.Initialize(font);
@@ -3934,12 +3934,15 @@ bool UIManager::handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& 
     return true;
 }
 
-void UIManager::pushToGitImg(Canvas& canvas, int frameIndex) {
+void UIManager::pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg) {
     if (m_isPushingGitImg) return;
     m_isPushingGitImg = true;
     showMessage("Exporting RAM PNG and pushing to GitImg...", sf::Color::Yellow);
 
-    sf::Image img = ExportManager::flattenFrame(canvas, frameIndex);
+    sf::Image rawImg = ExportManager::flattenFrame(canvas, frameIndex);
+    sf::IntRect fullBounds(0, 0, rawImg.getSize().x, rawImg.getSize().y);
+    sf::Image img = ExportManager::applyCropAndBackground(rawImg, fullBounds, !opaqueBg);
+
     std::string repo = activeProjectName;
     std::string filename = activeProjectName + ".png";
     std::string commitMsg = "Pushed from WisdomPark";

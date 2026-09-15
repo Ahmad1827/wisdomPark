@@ -135,8 +135,18 @@ namespace WisdomUI {
                 if (m_onDisableSymmetry) m_onDisableSymmetry();
                 return true;
             }
+            if (m_opaqueCheckboxBounds.contains(mousePos)) {
+                m_opaqueBg = !m_opaqueBg;
+                return true;
+            }
+
+            if (m_opaqueCheckboxBounds.contains(mousePos)) {
+                m_opaqueBg = !m_opaqueBg;
+                return true;
+            }
+
             if (m_pushGitImgBtnBounds.contains(mousePos)) {
-                if (m_onPushGitImg) m_onPushGitImg();
+                if (m_onPushGitImg) m_onPushGitImg(m_opaqueBg);
                 return true;
             }
             if (m_gridControlsVisible) {
@@ -301,12 +311,35 @@ namespace WisdomUI {
             sf::Vector2f iconPos(qb.bounds.left + 4.0f, qb.bounds.top + 4.0f);
             Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
         }
-        float pushBtnX = 490.0f;
+        float pushBtnX = 470.0f;
         float pushBtnY = m_bounds.top + 5.0f;
-        m_pushGitImgBtnBounds = sf::FloatRect(pushBtnX, pushBtnY, 110.0f, 26.0f);
+        m_pushGitImgBtnBounds = sf::FloatRect(pushBtnX, pushBtnY, 105.0f, 26.0f);
 
         bool hovPush = m_pushGitImgBtnBounds.contains(mPos);
-        Theme::DrawSunsetButton(window, m_pushGitImgBtnBounds, "Push to GitImg", m_font, 11, false, hovPush, false, 1.0f);
+        Theme::DrawSunsetButton(window, m_pushGitImgBtnBounds, "Push GitImg", m_font, 11, false, hovPush, false, 1.0f);
+
+        float chkX = pushBtnX + 115.0f;
+        float chkY = m_bounds.top + 8.0f;
+        m_opaqueCheckboxBounds = sf::FloatRect(chkX, chkY, 80.0f, 20.0f);
+
+        sf::RectangleShape box(sf::Vector2f(14.0f, 14.0f));
+        box.setPosition(chkX, chkY + 3.0f);
+        box.setFillColor(m_opaqueBg ? sf::Color(70, 130, 180) : sf::Color(30, 30, 35));
+        box.setOutlineColor(sf::Color(120, 120, 130));
+        box.setOutlineThickness(1.0f);
+        window.draw(box);
+
+        if (m_opaqueBg) {
+            sf::RectangleShape check(sf::Vector2f(8.0f, 8.0f));
+            check.setPosition(chkX + 3.0f, chkY + 6.0f);
+            check.setFillColor(sf::Color::White);
+            window.draw(check);
+        }
+
+        sf::Text chkLabel("Opaque", m_font, 11);
+        chkLabel.setPosition(chkX + 20.0f, chkY + 2.0f);
+        chkLabel.setFillColor(sf::Color(200, 200, 200));
+        window.draw(chkLabel);
         if (m_gridControlsVisible) {
             float rightAnchor = m_quickBtns.empty() ? (m_bounds.left + m_bounds.width - 14.f) : (m_quickBtns.front().bounds.left - 14.f);
             if (m_symmetryActive) {
