@@ -333,13 +333,19 @@
     <ClCompile Include="src\ui\Panels\TimelineHeader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\Core\Source\StudioEngineFacade.cpp">
+    <ClCompile Include="src\SpriteEngine\Core\Source\Commands\FlipHorizontalCommand.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\UI\Source\main.cpp">
+    <ClCompile Include="src\SpriteEngine\Core\Source\Commands\MergeSpritesCommand.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\UI\Source\SpriteSheetStudioPanel.cpp">
+    <ClCompile Include="src\SpriteEngine\Core\Source\Commands\RemoveArtifactsCommand.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SpriteEngine\Core\Source\Commands\RepackFramesCommand.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\GitImgClient.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -717,6 +723,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\DragDropHandler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\GitImgClient.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
