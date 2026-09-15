@@ -384,7 +384,11 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
             }
         }
     );
+    m_gitImgClient.setBaseUrl("http://100.102.109.119:8080");
 
+    m_topBar.SetPushGitImgCallback([this, baseCanvas]() {
+        pushToGitImg(*baseCanvas, 0);
+        });
     m_toolOptionsBar.Initialize(font);
     m_toolDock.Initialize(font);
     m_toolDock.SetDeselectCallback([this, baseCanvas]() {
@@ -3928,4 +3932,42 @@ bool UIManager::handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& 
         }
     }
     return true;
+}
+
+void UIManager::pushToGitImg(Canvas& canvas, int frameIndex) {
+    if (m_isPushingGitImg) return;
+    m_isPushingGitImg = true;
+    showMessage("Exporting RAM PNG and pushing to GitImg...", sf::Color::Yellow);
+
+    sf::Image img = ExportManager::flattenFrame(canvas, frameIndex);
+    std::string repo = activeProjectName;
+    std::string filename = activeProjectName + ".png";
+    std::string commitMsg = "Pushed from WisdomPark";
+
+    auto doPush = [this, img, repo, filename, commitMsg]() {
+        m_gitImgClient.pushAsync(img, repo, filename, commitMsg, [this](bool success) {
+            m_isPushingGitImg = false;
+            if (success) {
+                showMessage("Successfully pushed to GitImg!", sf::Color::Green);
+            }
+            else {
+                showMessage("Failed to push to GitImg", sf::Color::Red);
+            }
+            });
+        };
+
+    if (!m_gitImgClient.isAuthenticated()) {
+        std::thread([this, doPush]() {
+            if (m_gitImgClient.login("ahmad", "password123")) {
+                doPush();
+            }
+            else {
+                m_isPushingGitImg = false;
+                showMessage("GitImg Authentication Failed", sf::Color::Red);
+            }
+            }).detach();
+    }
+    else {
+        doPush();
+    }
 }

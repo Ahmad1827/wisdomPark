@@ -1,22 +1,91 @@
 #include "GitImgClient.h"
-#include <curl/curl.h>
-#include <thread>
-#include <nlohmann/json.hpp>
 
-size_t GitImgClient::writeCallback(void* contents, size_t size, size_t nmemb, void* userp) {
-    size_t totalSize = size * nmemb;
-    std::string* str = static_cast<std::string*>(userp);
-    str->append(static_cast<char*>(contents), totalSize);
-    return totalSize;
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <winhttp.h>
+#include <thread>
+#include <sstream>
+#include <iomanip>
+
+#pragma comment(lib, "winhttp.lib")
+
+static bool parseUrl(const std::string& url, std::wstring& outHost, INTERNET_PORT& outPort, bool& outIsHttps) {
+    std::string temp = url;
+    outIsHttps = false;
+
+    if (temp.rfind("https://", 0) == 0) {
+        outIsHttps = true;
+        temp = temp.substr(8);
+    }
+    else if (temp.rfind("http://", 0) == 0) {
+        temp = temp.substr(7);
+    }
+
+    size_t slashPos = temp.find('/');
+    if (slashPos != std::string::npos) {
+        temp = temp.substr(0, slashPos);
+    }
+
+    size_t colonPos = temp.find(':');
+    if (colonPos != std::string::npos) {
+        std::string hostStr = temp.substr(0, colonPos);
+        outHost = std::wstring(hostStr.begin(), hostStr.end());
+        try {
+            outPort = static_cast<INTERNET_PORT>(std::stoi(temp.substr(colonPos + 1)));
+        }
+        catch (...) {
+            outPort = outIsHttps ? INTERNET_DEFAULT_HTTPS_PORT : INTERNET_DEFAULT_HTTP_PORT;
+        }
+    }
+    else {
+        outHost = std::wstring(temp.begin(), temp.end());
+        outPort = outIsHttps ? INTERNET_DEFAULT_HTTPS_PORT : INTERNET_DEFAULT_HTTP_PORT;
+    }
+
+    return !outHost.empty();
+}
+
+static std::string urlEncode(const std::string& value) {
+    std::ostringstream escaped;
+    escaped.fill('0');
+    escaped << std::hex;
+    for (char c : value) {
+        if (isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == '.' || c == '~') {
+            escaped << c;
+        }
+        else if (c == ' ') {
+            escaped << '+';
+        }
+        else {
+            escaped << '%' << std::setw(2) << static_cast<int>(static_cast<unsigned char>(c));
+        }
+    }
+    return escaped.str();
+}
+
+static std::string extractJsonToken(const std::string& json) {
+    const std::string key = "\"token\"";
+    size_t pos = json.find(key);
+    if (pos == std::string::npos) return "";
+
+    pos += key.length();
+    while (pos < json.length() && (json[pos] == ' ' || json[pos] == ':' || json[pos] == '\t')) pos++;
+    if (pos < json.length() && json[pos] == '"') {
+        pos++;
+        size_t endPos = json.find('"', pos);
+        if (endPos != std::string::npos) {
+            return json.substr(pos, endPos - pos);
+        }
+    }
+    return "";
 }
 
 GitImgClient::GitImgClient(std::string baseUrl)
     : m_baseUrl(std::move(baseUrl)) {
-    curl_global_init(CURL_GLOBAL_DEFAULT);
 }
 
 GitImgClient::~GitImgClient() {
-    curl_global_cleanup();
 }
 
 void GitImgClient::setBaseUrl(const std::string& baseUrl) {
@@ -46,51 +115,66 @@ bool GitImgClient::isAuthenticated() const {
 }
 
 bool GitImgClient::login(const std::string& username, const std::string& password) {
-    CURL* curl = curl_easy_init();
-    if (!curl) return false;
+    std::wstring host;
+    INTERNET_PORT port = 80;
+    bool isHttps = false;
+    if (!parseUrl(m_baseUrl, host, port, isHttps)) return false;
 
-    std::string endpoint = m_baseUrl + "/auth/login";
-    nlohmann::json reqBody;
-    reqBody["username"] = username;
-    reqBody["password"] = password;
-    std::string jsonStr = reqBody.dump();
+    HINTERNET hSession = WinHttpOpen(L"WisdomPark/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession) return false;
 
-    std::string responseData;
-    struct curl_slist* headers = nullptr;
-    headers = curl_slist_append(headers, "Content-Type: application/json");
-
-    curl_easy_setopt(curl, CURLOPT_URL, endpoint.c_str());
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonStr.c_str());
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(jsonStr.size()));
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseData);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
-
-    CURLcode res = curl_easy_perform(curl);
-    long httpCode = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
-
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
-
-    if (res != CURLE_OK || httpCode < 200 || httpCode >= 300) {
+    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
+    if (!hConnect) {
+        WinHttpCloseHandle(hSession);
         return false;
     }
 
-    try {
-        auto parsed = nlohmann::json::parse(responseData);
-        if (parsed.contains("token") && parsed["token"].is_string()) {
-            setToken(parsed["token"].get<std::string>());
-            return true;
+    DWORD flags = isHttps ? WINHTTP_FLAG_SECURE : 0;
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", L"/auth/login",
+        NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    std::string jsonBody = "{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}";
+    std::wstring headers = L"Content-Type: application/json\r\n";
+
+    BOOL sent = WinHttpSendRequest(hRequest, headers.c_str(), static_cast<DWORD>(headers.length()),
+        const_cast<char*>(jsonBody.data()), static_cast<DWORD>(jsonBody.length()),
+        static_cast<DWORD>(jsonBody.length()), 0);
+
+    bool success = false;
+    if (sent && WinHttpReceiveResponse(hRequest, NULL)) {
+        DWORD statusCode = 0;
+        DWORD size = sizeof(statusCode);
+        WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &size, WINHTTP_NO_HEADER_INDEX);
+
+        if (statusCode >= 200 && statusCode < 300) {
+            std::string responseStr;
+            DWORD bytesAvailable = 0;
+            while (WinHttpQueryDataAvailable(hRequest, &bytesAvailable) && bytesAvailable > 0) {
+                std::vector<char> buffer(bytesAvailable + 1, 0);
+                DWORD bytesRead = 0;
+                if (WinHttpReadData(hRequest, buffer.data(), bytesAvailable, &bytesRead)) {
+                    responseStr.append(buffer.data(), bytesRead);
+                }
+            }
+            std::string parsedToken = extractJsonToken(responseStr);
+            if (!parsedToken.empty()) {
+                setToken(parsedToken);
+                success = true;
+            }
         }
     }
-    catch (...) {
-        return false;
-    }
 
-    return false;
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+    return success;
 }
 
 void GitImgClient::pushAsync(const sf::Image& image,
@@ -108,41 +192,61 @@ void GitImgClient::pushAsync(const sf::Image& image,
     std::string baseUrl = m_baseUrl;
 
     std::thread([baseUrl, token, pngBytes = std::move(pngBytes), repo, filename, commitMsg, callback]() {
-        CURL* curl = curl_easy_init();
-        if (!curl) {
+        std::wstring host;
+        INTERNET_PORT port = 80;
+        bool isHttps = false;
+        if (!parseUrl(baseUrl, host, port, isHttps)) {
             if (callback) callback(false);
             return;
         }
 
-        char* escapedMsg = curl_easy_escape(curl, commitMsg.c_str(), static_cast<int>(commitMsg.length()));
-        std::string queryMsg = escapedMsg ? escapedMsg : "";
-        if (escapedMsg) curl_free(escapedMsg);
+        HINTERNET hSession = WinHttpOpen(L"WisdomPark/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+            WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+        if (!hSession) {
+            if (callback) callback(false);
+            return;
+        }
 
-        std::string url = baseUrl + "/api/push/" + repo + "/" + filename + "?msg=" + queryMsg;
+        HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
+        if (!hConnect) {
+            WinHttpCloseHandle(hSession);
+            if (callback) callback(false);
+            return;
+        }
 
-        struct curl_slist* headers = nullptr;
-        headers = curl_slist_append(headers, "Content-Type: application/octet-stream");
-        std::string authHeader = "Authorization: Bearer " + token;
-        headers = curl_slist_append(headers, authHeader.c_str());
+        std::string pathStr = "/api/push/" + repo + "/" + filename + "?msg=" + urlEncode(commitMsg);
+        std::wstring wPath(pathStr.begin(), pathStr.end());
 
-        std::string responseData;
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_POST, 1L);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, pngBytes.data());
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(pngBytes.size()));
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseData);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+        DWORD flags = isHttps ? WINHTTP_FLAG_SECURE : 0;
+        HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", wPath.c_str(),
+            NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
+        if (!hRequest) {
+            WinHttpCloseHandle(hConnect);
+            WinHttpCloseHandle(hSession);
+            if (callback) callback(false);
+            return;
+        }
 
-        CURLcode res = curl_easy_perform(curl);
-        long httpCode = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+        std::string authHdr = "Content-Type: application/octet-stream\r\nAuthorization: Bearer " + token + "\r\n";
+        std::wstring wHeaders(authHdr.begin(), authHdr.end());
 
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
+        BOOL sent = WinHttpSendRequest(hRequest, wHeaders.c_str(), static_cast<DWORD>(wHeaders.length()),
+            const_cast<sf::Uint8*>(pngBytes.data()), static_cast<DWORD>(pngBytes.size()),
+            static_cast<DWORD>(pngBytes.size()), 0);
 
-        bool success = (res == CURLE_OK && httpCode >= 200 && httpCode < 300);
+        bool success = false;
+        if (sent && WinHttpReceiveResponse(hRequest, NULL)) {
+            DWORD statusCode = 0;
+            DWORD size = sizeof(statusCode);
+            WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &size, WINHTTP_NO_HEADER_INDEX);
+            success = (statusCode >= 200 && statusCode < 300);
+        }
+
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+
         if (callback) {
             callback(success);
         }

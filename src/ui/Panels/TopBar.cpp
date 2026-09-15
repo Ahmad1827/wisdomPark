@@ -135,6 +135,10 @@ namespace WisdomUI {
                 if (m_onDisableSymmetry) m_onDisableSymmetry();
                 return true;
             }
+            if (m_pushGitImgBtnBounds.contains(mousePos)) {
+                if (m_onPushGitImg) m_onPushGitImg();
+                return true;
+            }
             if (m_gridControlsVisible) {
                 if (m_gridColorBtnBounds.contains(mousePos)) {
                     if (m_onPickGridColor) m_onPickGridColor();
@@ -297,6 +301,12 @@ namespace WisdomUI {
             sf::Vector2f iconPos(qb.bounds.left + 4.0f, qb.bounds.top + 4.0f);
             Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
         }
+        float pushBtnX = 490.0f;
+        float pushBtnY = m_bounds.top + 5.0f;
+        m_pushGitImgBtnBounds = sf::FloatRect(pushBtnX, pushBtnY, 110.0f, 26.0f);
+
+        bool hovPush = m_pushGitImgBtnBounds.contains(mPos);
+        Theme::DrawSunsetButton(window, m_pushGitImgBtnBounds, "Push to GitImg", m_font, 11, false, hovPush, false, 1.0f);
         if (m_gridControlsVisible) {
             float rightAnchor = m_quickBtns.empty() ? (m_bounds.left + m_bounds.width - 14.f) : (m_quickBtns.front().bounds.left - 14.f);
             if (m_symmetryActive) {

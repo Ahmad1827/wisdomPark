@@ -29,6 +29,4 @@ private:
     std::string m_baseUrl;
     std::string m_token;
     mutable std::mutex m_tokenMutex;
-
-    static size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp);
 };

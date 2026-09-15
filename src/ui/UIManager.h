@@ -44,7 +44,7 @@
 #include "../UI/Panels/RightDockTabs.h"
 #include "../UI/Panels/TimelineHeader.h"
 #include "../UI/Panels/StatusBar.h"
-
+#include "../core/GitImgClient.h"
 
 enum class GhostPersonality { Shadow, Speedy, Bashful, Pokey };
 enum class CollectibleType { Dot, PowerPellet, Cherry, Orange, Grape, Key };
@@ -220,6 +220,9 @@ private:
     float dragOriginY = 0.0f;
     float zoomOriginY = 0.0f;
     sf::UdpSocket handTrackerSocket;
+    GitImgClient m_gitImgClient;
+    bool m_isPushingGitImg{ false };
+    void pushToGitImg(Canvas& canvas, int frameIndex = 0);
     bool isTypingPrompt;
     bool showingText;
     float textAlpha;
