@@ -6,6 +6,7 @@
 class ExportManager {
 public:
     static sf::Image flattenFrame(Canvas& canvas, int frameIndex);
+    static sf::Image createHorizontalSpriteStrip(Canvas& canvas, bool transparentBg);
     static sf::IntRect calculateAutoCrop(const sf::Image& img);
     static sf::Image applyCropAndBackground(const sf::Image& img, sf::IntRect cropRect, bool transparentBg);
 

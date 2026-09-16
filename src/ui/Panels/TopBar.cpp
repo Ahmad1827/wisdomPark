@@ -149,6 +149,10 @@ namespace WisdomUI {
                 if (m_onPushGitImg) m_onPushGitImg(m_opaqueBg);
                 return true;
             }
+            if (m_pushSheetBtnBounds.contains(mousePos)) {
+                if (m_onPushSpriteSheet) m_onPushSpriteSheet(m_opaqueBg);
+                return true;
+            }
             if (m_gridControlsVisible) {
                 if (m_gridColorBtnBounds.contains(mousePos)) {
                     if (m_onPickGridColor) m_onPickGridColor();
@@ -311,14 +315,20 @@ namespace WisdomUI {
             sf::Vector2f iconPos(qb.bounds.left + 4.0f, qb.bounds.top + 4.0f);
             Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
         }
-        float pushBtnX = 470.0f;
+        float pushBtnX = 450.0f;
         float pushBtnY = m_bounds.top + 5.0f;
-        m_pushGitImgBtnBounds = sf::FloatRect(pushBtnX, pushBtnY, 105.0f, 26.0f);
+        m_pushGitImgBtnBounds = sf::FloatRect(pushBtnX, pushBtnY, 85.0f, 26.0f);
 
         bool hovPush = m_pushGitImgBtnBounds.contains(mPos);
-        Theme::DrawSunsetButton(window, m_pushGitImgBtnBounds, "Push GitImg", m_font, 11, false, hovPush, false, 1.0f);
+        Theme::DrawSunsetButton(window, m_pushGitImgBtnBounds, "Push Frame", m_font, 11, false, hovPush, false, 1.0f);
 
-        float chkX = pushBtnX + 115.0f;
+        float sheetBtnX = pushBtnX + 90.0f;
+        m_pushSheetBtnBounds = sf::FloatRect(sheetBtnX, pushBtnY, 85.0f, 26.0f);
+
+        bool hovSheet = m_pushSheetBtnBounds.contains(mPos);
+        Theme::DrawSunsetButton(window, m_pushSheetBtnBounds, "Push Anim", m_font, 11, false, hovSheet, false, 1.0f);
+
+        float chkX = sheetBtnX + 95.0f;
         float chkY = m_bounds.top + 8.0f;
         m_opaqueCheckboxBounds = sf::FloatRect(chkX, chkY, 80.0f, 20.0f);
 

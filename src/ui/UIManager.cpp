@@ -389,6 +389,9 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     m_topBar.SetPushGitImgCallback([this, baseCanvas](bool opaqueBg) {
         pushToGitImg(*baseCanvas, 0, opaqueBg);
         });
+    m_topBar.SetPushSpriteSheetCallback([this, baseCanvas](bool opaqueBg) {
+        pushSpriteSheetToGitImg(*baseCanvas, opaqueBg);
+        });
     m_toolOptionsBar.Initialize(font);
     m_toolDock.Initialize(font);
     m_toolDock.SetDeselectCallback([this, baseCanvas]() {
@@ -3932,6 +3935,61 @@ bool UIManager::handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& 
         }
     }
     return true;
+}
+
+void UIManager::pushSpriteSheetToGitImg(Canvas& canvas, bool opaqueBg) {
+    if (m_isPushingGitImg) return;
+
+    std::string user, pass;
+    if (!m_gitImgClient.isAuthenticated()) {
+        if (!GitImgClient::loadSavedCredentials(user, pass)) {
+            if (!GitImgClient::promptCredentials(user, pass)) {
+                return;
+            }
+        }
+    }
+
+    std::string commitMsg;
+    if (!GitImgClient::promptCommitMessage(commitMsg)) {
+        return;
+    }
+
+    m_isPushingGitImg = true;
+    showMessage("Exporting sprite strip and pushing to GitImg...", sf::Color::Yellow);
+
+    sf::Image stripImg = ExportManager::createHorizontalSpriteStrip(canvas, !opaqueBg);
+
+    std::string repo = activeProjectName;
+    std::string filename = "Animation_" + activeProjectName + ".png";
+
+    auto doPush = [this, stripImg, repo, filename, commitMsg]() {
+        m_gitImgClient.pushAsync(stripImg, repo, filename, commitMsg, [this](bool success) {
+            m_isPushingGitImg = false;
+            if (success) {
+                showMessage("Successfully pushed animation strip to GitImg!", sf::Color::Green);
+            }
+            else {
+                showMessage("Failed to push animation strip to GitImg", sf::Color::Red);
+            }
+            });
+        };
+
+    if (!m_gitImgClient.isAuthenticated()) {
+        std::thread([this, user, pass, doPush]() {
+            if (m_gitImgClient.login(user, pass)) {
+                GitImgClient::saveCredentials(user, pass);
+                doPush();
+            }
+            else {
+                GitImgClient::clearSavedCredentials();
+                m_isPushingGitImg = false;
+                showMessage("GitImg Authentication Failed", sf::Color::Red);
+            }
+            }).detach();
+    }
+    else {
+        doPush();
+    }
 }
 
 void UIManager::pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg) {

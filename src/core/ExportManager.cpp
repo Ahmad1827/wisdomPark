@@ -164,3 +164,25 @@ bool ExportManager::exportSpriteSheet(Canvas& canvas, const std::string& filepat
 
     return spriteSheet.saveToFile(filepath);
 }
+
+sf::Image ExportManager::createHorizontalSpriteStrip(Canvas& canvas, bool transparentBg) {
+    size_t count = canvas.getFrameCount();
+    if (count == 0) return sf::Image();
+
+    sf::Image first = flattenFrame(canvas, 0);
+    unsigned int fw = first.getSize().x;
+    unsigned int fh = first.getSize().y;
+
+    sf::Image strip;
+    strip.create(fw * static_cast<unsigned int>(count), fh, transparentBg ? sf::Color(0, 0, 0, 0) : sf::Color::White);
+
+    for (size_t i = 0; i < count; ++i) {
+        sf::Image frame = (i == 0) ? first : flattenFrame(canvas, static_cast<int>(i));
+        if (!transparentBg) {
+            sf::IntRect bounds(0, 0, fw, fh);
+            frame = applyCropAndBackground(frame, bounds, false);
+        }
+        strip.copy(frame, static_cast<unsigned int>(i * fw), 0, sf::IntRect(0, 0, fw, fh), false);
+    }
+    return strip;
+}

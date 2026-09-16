@@ -62,7 +62,9 @@ namespace WisdomUI {
         sf::FloatRect m_gridSizeBox;
         sf::FloatRect m_gridPlusBtnBounds;
         std::function<void(bool)> m_onPushGitImg;
+        std::function<void(bool)> m_onPushSpriteSheet;
         sf::FloatRect m_pushGitImgBtnBounds;
+        sf::FloatRect m_pushSheetBtnBounds;
         sf::FloatRect m_opaqueCheckboxBounds;
         bool m_opaqueBg{ true };
         sf::FloatRect getDropdownItemBounds(int menuIndex, int actionIndex) const;
@@ -88,6 +90,9 @@ namespace WisdomUI {
         }
         void SetPushGitImgCallback(std::function<void(bool)> onPush) {
             m_onPushGitImg = onPush;
+        }
+        void SetPushSpriteSheetCallback(std::function<void(bool)> onPushSheet) {
+            m_onPushSpriteSheet = onPushSheet;
         }
         void SetGridControls(bool visible, bool active, int size, sf::Color color,
             std::function<void(bool)> onToggle,

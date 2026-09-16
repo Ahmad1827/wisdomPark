@@ -223,6 +223,7 @@ private:
     GitImgClient m_gitImgClient;
     bool m_isPushingGitImg{ false };
     void pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg);
+    void pushSpriteSheetToGitImg(Canvas& canvas, bool opaqueBg);
     bool isTypingPrompt;
     bool showingText;
     float textAlpha;
