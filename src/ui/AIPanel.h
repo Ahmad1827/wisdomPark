@@ -2,7 +2,22 @@
 #include <SFML/Graphics.hpp>
 #include <string>
 #include <vector>
-#include "../ai/AIProvider.h"
+
+enum class AssistantTab {
+    Tools,
+    Tutorials
+};
+
+struct TutorialStep {
+    std::string title;
+    std::string instruction;
+    sf::Color hintColor;
+};
+
+struct TutorialLesson {
+    std::string name;
+    std::vector<TutorialStep> steps;
+};
 
 class AIPanel {
 private:
@@ -10,25 +25,38 @@ private:
     sf::Vector2f position;
     sf::Vector2f size;
 
-    bool isDraggingPanel = false;
+    bool isVisible;
+    bool isDraggingPanel;
     sf::Vector2f dragOffset;
 
-    std::string currentPrompt;
-    std::string currentNegativePrompt;
+    AssistantTab currentTab;
+    bool isPixelMode;
 
-    sf::FloatRect promptBoxBounds;
-    sf::FloatRect negativePromptBoxBounds;
-    sf::FloatRect generateBtnBounds;
+    sf::FloatRect headerGripBounds;
+    sf::FloatRect toolsTabBounds;
+    sf::FloatRect tutorialsTabBounds;
+    sf::FloatRect modeToggleBounds;
     sf::FloatRect backBtnBounds;
 
-    std::vector<sf::FloatRect> opButtonBounds;
-    std::vector<std::string> opNames;
-    std::vector<AIOperation> opValues;
-    AIOperation currentOp;
+    sf::FloatRect btn1Bounds;
+    sf::FloatRect btn2Bounds;
+    sf::FloatRect btn3Bounds;
+    sf::FloatRect btn4Bounds;
+    sf::FloatRect btn5Bounds;
 
-    bool isVisible;
-    bool isTypingPrompt;
-    bool isTypingNegative;
+    sf::FloatRect tutPrevLessonBounds;
+    sf::FloatRect tutNextLessonBounds;
+    sf::FloatRect tutPrevStepBounds;
+    sf::FloatRect tutNextStepBounds;
+    sf::FloatRect tutToggleGhostBounds;
+
+    bool lightingGuideActive;
+    bool paletteCheckActive;
+    bool ghostOverlayActive;
+
+    std::vector<TutorialLesson> lessons;
+    int currentLessonIdx;
+    int currentStepIdx;
 
 public:
     AIPanel();
@@ -42,5 +70,13 @@ public:
     void toggle();
     bool getIsVisible() const;
 
-    AIRequest buildRequestFromCanvasContext(int w, int h, bool pixelMode, float transparency, bool hasSelection);
+    void setPixelMode(bool pixelMode);
+    bool getPixelMode() const;
+
+    bool isLightingGuideActive() const;
+    bool isPaletteCheckActive() const;
+    bool isGhostOverlayActive() const;
+    const TutorialStep* getCurrentTutorialStep() const;
+
+    static std::vector<sf::Color> generateRampOrHarmony(sf::Color baseColor, bool pixelMode);
 };

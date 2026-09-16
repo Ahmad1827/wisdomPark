@@ -488,7 +488,11 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         }
         });
     m_toolDock.AddTool("perspective", "Perspective Grid", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Perspective); m_toolDock.SetActiveTool("perspective"); });
-    m_toolDock.AddTool("ai_gen", "AI Generator", [this]() { g_aiPanel.toggle(); m_toolDock.SetActiveTool("ai_gen"); });
+    m_toolDock.AddTool("ai_gen", "AI Generator", [this, baseCanvas]() {
+        if (baseCanvas) g_aiPanel.setPixelMode(baseCanvas->getPixelMode());
+        g_aiPanel.toggle();
+        m_toolDock.SetActiveTool("ai_gen");
+        });
 
     baseCanvas->setMaxUndoHistory(uiHistorySize);
     initStartMenu();
@@ -1974,16 +1978,75 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (g_aiPanel.handleEvent(event, mousePos)) {
                 if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
                     std::string action = g_aiPanel.handleClick(mousePos);
-                    if (action == "execute") {
-                        sf::Image currentCanvas = ExportManager::flattenFrame(canvas, timeline.getCurrentFrame());
-                        AIRequest req = g_aiPanel.buildRequestFromCanvasContext(canvas.getCanvasSize().x, canvas.getCanvasSize().y, canvas.getPixelMode(), 1.0f, canvas.getActiveTool() == ToolType::Select);
-                        req.baseImage = currentCanvas;
+                    if (!action.empty()) {
+                        if (action == "tool:toggle_mode") {
+                            showMessage(g_aiPanel.getPixelMode() ? "Mode set to Pixel Art" : "Mode set to High-Res / Normal", sf::Color::Cyan);
+                        }
+                        else if (action == "tool:contour") {
+                            canvas.makeOutline(timeline.getCurrentFrame(), canvas.getPrimaryColor());
+                            showMessage("Applied Contour Outline", sf::Color::Green);
+                        }
+                        else if (action == "tool:jaggies") {
+                            if (g_aiPanel.getPixelMode()) {
+                                if (!canvas.isPixelPerfectEnabled()) {
+                                    canvas.togglePixelPerfect();
+                                }
+                                showMessage("Pixel Perfect Inking Active", sf::Color::Green);
+                            }
+                            else {
+                                showMessage("Edge Smoothing Active", sf::Color::Green);
+                            }
+                        }
+                        else if (action == "tool:lighting") {
+                            showMessage(g_aiPanel.isLightingGuideActive() ? "Lighting Guide Active" : "Lighting Guide Disabled", sf::Color::Yellow);
+                        }
+                        else if (action == "tool:palette") {
+                            showMessage(g_aiPanel.isPaletteCheckActive() ? "Palette Audit Active" : "Palette Audit Disabled", sf::Color::Yellow);
+                        }
+                        else if (action == "tool:contrast") {
+                            int curFrame = static_cast<int>(timeline.getCurrentFrame());
+                            sf::Image img = ExportManager::flattenFrame(canvas, curFrame);
+                            unsigned int imgW = img.getSize().x;
+                            unsigned int imgH = img.getSize().y;
 
-                        showMessage("AI Process Initialized Async...", sf::Color::Yellow);
-                        AIManager::getInstance().executeRequest(req);
-                    }
-                    else if (action == "back") {
-                        showMessage("AI Panel Closed.", sf::Color::Cyan);
+                            for (unsigned int y = 0; y < imgH; ++y) {
+                                for (unsigned int x = 0; x < imgW; ++x) {
+                                    sf::Color c = img.getPixel(x, y);
+                                    if (c.a > 10) {
+                                        c.r = static_cast<uint8_t>(std::clamp((c.r - 128) * 1.25f + 128.f, 0.f, 255.f));
+                                        c.g = static_cast<uint8_t>(std::clamp((c.g - 128) * 1.25f + 128.f, 0.f, 255.f));
+                                        c.b = static_cast<uint8_t>(std::clamp((c.b - 128) * 1.25f + 128.f, 0.f, 255.f));
+                                        img.setPixel(x, y, c);
+                                    }
+                                }
+                            }
+                            canvas.pasteImage(img, curFrame);
+                            showMessage("Boosted Canvas Contrast", sf::Color::Green);
+                        }
+                        else if (action == "tool:ramp") {
+                            sf::Color cur = canvas.getPrimaryColor();
+                            auto ramp = AIPanel::generateRampOrHarmony(cur, g_aiPanel.getPixelMode());
+                            for (const auto& col : ramp) {
+                                colorPalettePanel.getColorManager().addRecentColor(col);
+                            }
+                            m_activeRightTab = RightTabMode::Palette;
+                            showMessage("Generated Swatches Added to Palette", sf::Color::Green);
+                        }
+                        else if (action == "tutorial:lesson_changed" || action == "tutorial:step_changed") {
+                            const TutorialStep* step = g_aiPanel.getCurrentTutorialStep();
+                            if (step) {
+                                canvas.setPrimaryColor(step->hintColor);
+                                colorPalettePanel.setColors(step->hintColor, canvas.getSecondaryColor());
+                                colorPalettePanel.getColorManager().addRecentColor(step->hintColor);
+                                showMessage("Selected Tutorial Step Tone", sf::Color::Cyan);
+                            }
+                        }
+                        else if (action == "tutorial:toggle_ghost") {
+                            showMessage(g_aiPanel.isGhostOverlayActive() ? "Ghost Guide Enabled" : "Ghost Guide Disabled", sf::Color::Yellow);
+                        }
+                        else if (action == "close") {
+                            showMessage("Art Assistant Closed", sf::Color::Cyan);
+                        }
                     }
                 }
                 return;
