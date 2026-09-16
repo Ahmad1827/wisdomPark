@@ -45,6 +45,7 @@
 #include "../UI/Panels/TimelineHeader.h"
 #include "../UI/Panels/StatusBar.h"
 #include "../core/GitImgClient.h"
+#include "../core/HandTracker.h"
 
 enum class GhostPersonality { Shadow, Speedy, Bashful, Pokey };
 enum class CollectibleType { Dot, PowerPellet, Cherry, Orange, Grape, Key };
@@ -222,6 +223,18 @@ private:
     sf::UdpSocket handTrackerSocket;
     GitImgClient m_gitImgClient;
     bool m_isPushingGitImg{ false };
+    sf::Texture m_camTexture;
+    sf::Sprite m_camSprite;
+    bool m_camMinimized{ false };
+    sf::FloatRect m_camWidgetBounds;
+    sf::FloatRect m_camToggleBtnBounds;
+    sf::FloatRect m_camHeaderBounds;
+    sf::Vector2f m_camPos{ -1.0f, -1.0f };
+    bool m_isDraggingCam{ false };
+    sf::Vector2f m_camDragOffset{ 0.0f, 0.0f };
+
+    void drawHandCamWidget(sf::RenderWindow& window);
+    bool handleHandCamWidgetEvents(const sf::Event& event);
     void pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg);
     void pushSpriteSheetToGitImg(Canvas& canvas, bool opaqueBg);
     bool isTypingPrompt;

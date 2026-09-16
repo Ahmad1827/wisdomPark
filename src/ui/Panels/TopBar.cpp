@@ -153,6 +153,11 @@ namespace WisdomUI {
                 if (m_onPushSpriteSheet) m_onPushSpriteSheet(m_opaqueBg);
                 return true;
             }
+            if (m_trackerBtnBounds.contains(mousePos)) {
+                m_trackerActive = !m_trackerActive;
+                if (m_onToggleTracker) m_onToggleTracker(m_trackerActive);
+                return true;
+            }
             if (m_gridControlsVisible) {
                 if (m_gridColorBtnBounds.contains(mousePos)) {
                     if (m_onPickGridColor) m_onPickGridColor();
@@ -350,6 +355,10 @@ namespace WisdomUI {
         chkLabel.setPosition(chkX + 20.0f, chkY + 2.0f);
         chkLabel.setFillColor(sf::Color(200, 200, 200));
         window.draw(chkLabel);
+        float trkX = chkX + 75.0f;
+        m_trackerBtnBounds = sf::FloatRect(trkX, pushBtnY, 75.0f, 26.0f);
+        bool hovTrk = m_trackerBtnBounds.contains(mPos);
+        Theme::DrawSunsetButton(window, m_trackerBtnBounds, m_trackerActive ? "Hand ON" : "Hand OFF", m_font, 11, m_trackerActive, hovTrk, false, 1.0f);
         if (m_gridControlsVisible) {
             float rightAnchor = m_quickBtns.empty() ? (m_bounds.left + m_bounds.width - 14.f) : (m_quickBtns.front().bounds.left - 14.f);
             if (m_symmetryActive) {

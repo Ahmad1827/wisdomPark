@@ -158,6 +158,7 @@
     <ClCompile Include="src\core\AssetManager.cpp" />
     <ClCompile Include="src\core\Canvas.cpp" />
     <ClCompile Include="src\core\GitImgClient.cpp" />
+    <ClCompile Include="src\core\HandTracker.cpp" />
     <ClCompile Include="src\core\ProjectManager.cpp" />
     <ClCompile Include="src\core\SelectionManager.cpp" />
     <ClCompile Include="src\core\KeybindManager.cpp" />
@@ -281,6 +282,7 @@
     <ClInclude Include="src\core\FontManager.h" />
     <ClInclude Include="src\core\GitImgClient.h" />
     <ClInclude Include="src\core\GradientSystem.h" />
+    <ClInclude Include="src\core\HandTracker.h" />
     <ClInclude Include="src\core\TextSystem.h" />
     <ClInclude Include="src\core\PerspectiveSystem.h" />
     <ClInclude Include="src\tools\GradientTool.h" />

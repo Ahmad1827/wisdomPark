@@ -63,10 +63,13 @@ namespace WisdomUI {
         sf::FloatRect m_gridPlusBtnBounds;
         std::function<void(bool)> m_onPushGitImg;
         std::function<void(bool)> m_onPushSpriteSheet;
+        std::function<void(bool)> m_onToggleTracker;
         sf::FloatRect m_pushGitImgBtnBounds;
         sf::FloatRect m_pushSheetBtnBounds;
         sf::FloatRect m_opaqueCheckboxBounds;
+        sf::FloatRect m_trackerBtnBounds;
         bool m_opaqueBg{ true };
+        bool m_trackerActive{ false };
         sf::FloatRect getDropdownItemBounds(int menuIndex, int actionIndex) const;
         sf::FloatRect getDropdownPanelBounds(int menuIndex) const;
 
@@ -93,6 +96,9 @@ namespace WisdomUI {
         }
         void SetPushSpriteSheetCallback(std::function<void(bool)> onPushSheet) {
             m_onPushSpriteSheet = onPushSheet;
+        }
+        void SetToggleTrackerCallback(std::function<void(bool)> onToggleTracker) {
+            m_onToggleTracker = onToggleTracker;
         }
         void SetGridControls(bool visible, bool active, int size, sf::Color color,
             std::function<void(bool)> onToggle,

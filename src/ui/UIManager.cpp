@@ -392,6 +392,20 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     m_topBar.SetPushSpriteSheetCallback([this, baseCanvas](bool opaqueBg) {
         pushSpriteSheetToGitImg(*baseCanvas, opaqueBg);
         });
+    m_topBar.SetToggleTrackerCallback([this](bool active) {
+        if (active) {
+            if (HandTracker::getInstance().start()) {
+                showMessage("Hand Tracker Started", sf::Color::Green);
+            }
+            else {
+                showMessage("Failed to start Hand Tracker", sf::Color::Red);
+            }
+        }
+        else {
+            HandTracker::getInstance().stop();
+            showMessage("Hand Tracker Stopped", sf::Color::Yellow);
+        }
+        });
     m_toolOptionsBar.Initialize(font);
     m_toolDock.Initialize(font);
     m_toolDock.SetDeselectCallback([this, baseCanvas]() {
@@ -1259,6 +1273,7 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
 }
 
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
+    if (handleHandCamWidgetEvents(event)) return;
     if (event.type == sf::Event::Resized) {
         window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(sf::Vector2u(event.size.width, event.size.height)));
     }
@@ -2915,6 +2930,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         m_toolDock.RenderTooltip(window);
     }
+    drawHandCamWidget(window);
 }
 
 bool loadStudioFont(sf::Font& font) {
@@ -4046,5 +4062,122 @@ void UIManager::pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg) {
     }
     else {
         doPush();
+    }
+}
+
+bool UIManager::handleHandCamWidgetEvents(const sf::Event& event) {
+    if (!HandTracker::getInstance().isRunning()) return false;
+
+    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        sf::Vector2f mPos(static_cast<float>(event.mouseButton.x), static_cast<float>(event.mouseButton.y));
+        if (m_camToggleBtnBounds.contains(mPos)) {
+            m_camMinimized = !m_camMinimized;
+            return true;
+        }
+        if (m_camHeaderBounds.contains(mPos)) {
+            m_isDraggingCam = true;
+            m_camDragOffset = mPos - m_camPos;
+            return true;
+        }
+        if (m_camWidgetBounds.contains(mPos)) {
+            return true;
+        }
+    }
+    else if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+        if (m_isDraggingCam) {
+            m_isDraggingCam = false;
+            return true;
+        }
+    }
+    else if (event.type == sf::Event::MouseMoved) {
+        if (m_isDraggingCam) {
+            m_camPos = sf::Vector2f(static_cast<float>(event.mouseMove.x), static_cast<float>(event.mouseMove.y)) - m_camDragOffset;
+            if (m_camPos.x < 0.0f) m_camPos.x = 0.0f;
+            if (m_camPos.y < 0.0f) m_camPos.y = 0.0f;
+            return true;
+        }
+    }
+    return false;
+}
+
+void UIManager::drawHandCamWidget(sf::RenderWindow& window) {
+    if (!HandTracker::getInstance().isRunning()) return;
+
+    HandTracker::getInstance().updateTexture(m_camTexture);
+
+    float winW = static_cast<float>(window.getSize().x);
+    float winH = static_cast<float>(window.getSize().y);
+
+    if (m_camMinimized) {
+        float w = 70.0f;
+        float h = 22.0f;
+
+        if (m_camPos.x < 0.0f) {
+            m_camPos = sf::Vector2f(winW - w - 20.0f, winH - h - 20.0f);
+        }
+
+        m_camWidgetBounds = sf::FloatRect(m_camPos.x, m_camPos.y, w, h);
+        m_camToggleBtnBounds = m_camWidgetBounds;
+        m_camHeaderBounds = m_camWidgetBounds;
+
+        sf::RectangleShape bar(sf::Vector2f(w, h));
+        bar.setPosition(m_camPos);
+        bar.setFillColor(sf::Color(35, 28, 48, 230));
+        bar.setOutlineColor(sf::Color(255, 120, 80));
+        bar.setOutlineThickness(1.0f);
+        window.draw(bar);
+
+        sf::Text txt("Cam +", font, 11);
+        txt.setPosition(m_camPos.x + 12.0f, m_camPos.y + 3.0f);
+        txt.setFillColor(sf::Color::White);
+        window.draw(txt);
+        return;
+    }
+
+    float w = 160.0f;
+    float headerH = 22.0f;
+    float camH = 120.0f;
+    float totalH = headerH + camH;
+
+    if (m_camPos.x < 0.0f) {
+        m_camPos = sf::Vector2f(winW - w - 20.0f, winH - totalH - 20.0f);
+    }
+
+    m_camWidgetBounds = sf::FloatRect(m_camPos.x, m_camPos.y, w, totalH);
+    m_camHeaderBounds = sf::FloatRect(m_camPos.x, m_camPos.y, w - 26.0f, headerH);
+    m_camToggleBtnBounds = sf::FloatRect(m_camPos.x + w - 24.0f, m_camPos.y + 2.0f, 20.0f, 18.0f);
+
+    sf::RectangleShape bg(sf::Vector2f(w, totalH));
+    bg.setPosition(m_camPos);
+    bg.setFillColor(sf::Color(25, 20, 35, 240));
+    bg.setOutlineColor(sf::Color(255, 120, 80));
+    bg.setOutlineThickness(1.0f);
+    window.draw(bg);
+
+    sf::RectangleShape header(sf::Vector2f(w, headerH));
+    header.setPosition(m_camPos);
+    header.setFillColor(sf::Color(45, 30, 60, 255));
+    window.draw(header);
+
+    sf::Text title("Hand Tracker", font, 11);
+    title.setPosition(m_camPos.x + 8.0f, m_camPos.y + 3.0f);
+    title.setFillColor(sf::Color(255, 200, 150));
+    window.draw(title);
+
+    sf::RectangleShape minBtn(sf::Vector2f(m_camToggleBtnBounds.width, m_camToggleBtnBounds.height));
+    minBtn.setPosition(m_camToggleBtnBounds.left, m_camToggleBtnBounds.top);
+    minBtn.setFillColor(sf::Color(70, 45, 90));
+    window.draw(minBtn);
+
+    sf::Text minTxt("-", font, 12);
+    minTxt.setPosition(m_camToggleBtnBounds.left + 6.0f, m_camToggleBtnBounds.top - 1.0f);
+    minTxt.setFillColor(sf::Color::White);
+    window.draw(minTxt);
+
+    if (m_camTexture.getSize().x > 0) {
+        m_camSprite.setTexture(m_camTexture, true);
+        m_camSprite.setPosition(m_camPos.x, m_camPos.y + headerH);
+        m_camSprite.setScale(w / m_camTexture.getSize().x, camH / m_camTexture.getSize().y);
+        window.draw(m_camSprite);
     }
 }

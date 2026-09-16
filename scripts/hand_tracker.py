@@ -2,7 +2,19 @@ import cv2
 import socket
 from cvzone.HandTrackingModule import HandDetector
 
-cap = cv2.VideoCapture(0)
+def open_physical_camera():
+    for idx in range(5):
+        c = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+        if c.isOpened():
+            ret, frame = c.read()
+            if ret and frame is not None:
+                mean_val = frame.mean()
+                if mean_val > 10:
+                    return c
+            c.release()
+    return cv2.VideoCapture(0)
+
+cap = open_physical_camera()
 cap.set(3, 1280)
 cap.set(4, 720)
 
@@ -63,13 +75,15 @@ while True:
         elif zoom_dist > 60:
             zoom_active = 0
         
-        payload = f"{smooth_x:.4f},{smooth_y:.4f},{left_click_active},{right_click_active},{zoom_active}"
+        payload = f"POS:{smooth_x:.4f},{smooth_y:.4f},{left_click_active},{right_click_active},{zoom_active}"
         sock.sendto(payload.encode('utf-8'), server_address)
 
-    cv2.imshow("Wisdom Park Hand Tracker", img)
-    
-    if cv2.waitKey(5) & 0xFF == 27:
+    preview = cv2.resize(img, (160, 120))
+    enc_ok, enc_jpg = cv2.imencode('.jpg', preview, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
+    if enc_ok:
+        sock.sendto(b"IMG:" + enc_jpg.tobytes(), server_address)
+
+    if cv2.waitKey(1) & 0xFF == 27:
         break
 
 cap.release()
-cv2.destroyAllWindows()
