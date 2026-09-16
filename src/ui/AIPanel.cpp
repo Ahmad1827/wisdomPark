@@ -1,56 +1,17 @@
 #include "AIPanel.h"
+#include "../core/ColorManager.h"
 #include "../UI/UITheme.h"
 #include <algorithm>
-#include <cmath>
 
 AIPanel::AIPanel()
     : position(64.f, 78.f),
-    size(320.f, 510.f),
+    size(280.f, 190.f),
     isVisible(false),
-    isDraggingPanel(false),
-    currentTab(AssistantTab::Tools),
-    isPixelMode(true),
-    lightingGuideActive(false),
-    paletteCheckActive(false),
-    ghostOverlayActive(false),
-    currentLessonIdx(0),
-    currentStepIdx(0) {}
+    isDraggingPanel(false) {}
 
 void AIPanel::init() {
     font.loadFromFile("assets/font.otf");
     position = sf::Vector2f(64.f, 78.f);
-
-    lessons.clear();
-
-    TutorialLesson potion;
-    potion.name = "Health Potion";
-    potion.steps = {
-        { "1. Bottle Outline", "Draw the rounded flask and neck silhouette using a dark charcoal outline.", sf::Color(40, 30, 45) },
-        { "2. Base Liquid", "Fill the lower reservoir with a vibrant ruby red tone.", sf::Color(215, 40, 75) },
-        { "3. Glass Highlights", "Place sharp 1px white highlights on the upper left curve of the glass.", sf::Color(255, 255, 255) },
-        { "4. Cork & Shadows", "Add a warm wooden cork on top and shade the bottom right with deep burgundy.", sf::Color(110, 20, 45) }
-    };
-    lessons.push_back(potion);
-
-    TutorialLesson sword;
-    sword.name = "Iron Shortsword";
-    sword.steps = {
-        { "1. Diagonal Blade", "Trace a 45-degree diagonal line for the core blade spine.", sf::Color(70, 80, 95) },
-        { "2. Edge Fill", "Draw lighter steel along the upper edge and darker gunmetal along the bottom.", sf::Color(170, 185, 200) },
-        { "3. Guard & Grip", "Add a perpendicular crossguard in bronze and a 3px leather handle.", sf::Color(180, 110, 45) },
-        { "4. Glint & Contrast", "Place a single pure white glint pixel near the tip of the blade.", sf::Color(255, 255, 255) }
-    };
-    lessons.push_back(sword);
-
-    TutorialLesson tree;
-    tree.name = "Pine Tree";
-    tree.steps = {
-        { "1. Trunk Spine", "Place a straight 3px wide vertical column in dark timber brown.", sf::Color(65, 40, 30) },
-        { "2. Canopy Tiers", "Block out three stacked triangular silhouettes in dark forest green.", sf::Color(25, 75, 40) },
-        { "3. Toplit Needles", "Stipple pale olive green pixels onto the top edges facing the sky.", sf::Color(85, 160, 65) },
-        { "4. Underbrush Shadow", "Add deep blue-green under each foliage shelf for depth.", sf::Color(15, 40, 35) }
-    };
-    lessons.push_back(tree);
 }
 
 void AIPanel::toggle() {
@@ -61,36 +22,6 @@ bool AIPanel::getIsVisible() const {
     return isVisible;
 }
 
-void AIPanel::setPixelMode(bool pixelMode) {
-    isPixelMode = pixelMode;
-}
-
-bool AIPanel::getPixelMode() const {
-    return isPixelMode;
-}
-
-bool AIPanel::isLightingGuideActive() const {
-    return lightingGuideActive;
-}
-
-bool AIPanel::isPaletteCheckActive() const {
-    return paletteCheckActive;
-}
-
-bool AIPanel::isGhostOverlayActive() const {
-    return ghostOverlayActive;
-}
-
-const TutorialStep* AIPanel::getCurrentTutorialStep() const {
-    if (currentLessonIdx >= 0 && currentLessonIdx < static_cast<int>(lessons.size())) {
-        const auto& steps = lessons[currentLessonIdx].steps;
-        if (currentStepIdx >= 0 && currentStepIdx < static_cast<int>(steps.size())) {
-            return &steps[currentStepIdx];
-        }
-    }
-    return nullptr;
-}
-
 void AIPanel::update(float dt) {
     if (!isVisible) return;
 
@@ -98,39 +29,8 @@ void AIPanel::update(float dt) {
     float by = position.y;
 
     headerGripBounds = sf::FloatRect(bx + 8.f, by + 6.f, size.x - 16.f, 26.f);
-
-    float tabW = (size.x - 32.f) / 2.f;
-    toolsTabBounds = sf::FloatRect(bx + 12.f, by + 38.f, tabW, 26.f);
-    tutorialsTabBounds = sf::FloatRect(bx + 20.f + tabW, by + 38.f, tabW, 26.f);
-
-    if (currentTab == AssistantTab::Tools) {
-        modeToggleBounds = sf::FloatRect(bx + 12.f, by + 72.f, size.x - 24.f, 24.f);
-
-        float btnW = size.x - 24.f;
-        float y = by + 120.f;
-
-        btn1Bounds = sf::FloatRect(bx + 12.f, y, btnW, 30.f);
-        y += 36.f;
-        btn2Bounds = sf::FloatRect(bx + 12.f, y, btnW, 30.f);
-        y += 50.f;
-        btn3Bounds = sf::FloatRect(bx + 12.f, y, btnW, 30.f);
-        y += 36.f;
-        btn4Bounds = sf::FloatRect(bx + 12.f, y, btnW, 30.f);
-        y += 36.f;
-        btn5Bounds = sf::FloatRect(bx + 12.f, y, btnW, 30.f);
-    }
-    else {
-        float y = by + 75.f;
-        tutPrevLessonBounds = sf::FloatRect(bx + 12.f, y, 32.f, 26.f);
-        tutNextLessonBounds = sf::FloatRect(bx + size.x - 44.f, y, 32.f, 26.f);
-
-        y = by + 380.f;
-        tutPrevStepBounds = sf::FloatRect(bx + 12.f, y, 80.f, 28.f);
-        tutNextStepBounds = sf::FloatRect(bx + 98.f, y, 80.f, 28.f);
-        tutToggleGhostBounds = sf::FloatRect(bx + 184.f, y, size.x - 196.f, 28.f);
-    }
-
-    backBtnBounds = sf::FloatRect(bx + 12.f, by + size.y - 36.f, size.x - 24.f, 26.f);
+    suggestBtnBounds = sf::FloatRect(bx + 16.f, by + 80.f, size.x - 32.f, 42.f);
+    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 138.f, size.x - 32.f, 28.f);
 }
 
 void AIPanel::draw(sf::RenderWindow& window) {
@@ -146,96 +46,18 @@ void AIPanel::draw(sf::RenderWindow& window) {
     gripBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(gripBg);
 
-    WisdomUI::Theme::DrawCrispText(window, font, ":: ART ASSISTANT ::", 12, headerGripBounds.left + headerGripBounds.width / 2.0f, headerGripBounds.top + headerGripBounds.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, ":: COLOR ASSISTANT ::", 12, headerGripBounds.left + headerGripBounds.width / 2.0f, headerGripBounds.top + headerGripBounds.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
-    bool toolsActive = (currentTab == AssistantTab::Tools);
-    WisdomUI::Theme::DrawSunsetButton(window, toolsTabBounds, "Smart Tools", font, 11, toolsActive, toolsTabBounds.contains(mPos), toolsActive, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, tutorialsTabBounds, "Tutorials", font, 11, !toolsActive, tutorialsTabBounds.contains(mPos), !toolsActive, 1.0f);
+    WisdomUI::Theme::DrawCrispText(window, font, "Generate shading advice ramp", 10, position.x + 16.f, position.y + 42.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawCrispText(window, font, "from active brush color.", 10, position.x + 16.f, position.y + 56.f, WisdomUI::Theme::TextSecondary);
 
-    if (currentTab == AssistantTab::Tools) {
-        std::string modeLabel = isPixelMode ? "Target Mode: [ PIXEL ART ]" : "Target Mode: [ HIGH-RES / NORMAL ]";
-        WisdomUI::Theme::DrawSunsetButton(window, modeToggleBounds, modeLabel, font, 10, isPixelMode, modeToggleBounds.contains(mPos), isPixelMode, 1.0f);
+    bool hovSuggest = suggestBtnBounds.contains(mPos);
+    WisdomUI::Theme::DrawSunsetButton(window, suggestBtnBounds, "+ Get Palette Advice", font, 12, false, hovSuggest, true, 1.0f);
 
-        std::string s1Title = isPixelMode ? "SILHOUETTE & INKING" : "LINEWORK & SHAPES";
-        WisdomUI::Theme::DrawCrispText(window, font, s1Title, 10, position.x + 14.f, position.y + 104.f, WisdomUI::Theme::TextSecondary);
-
-        std::string b1 = isPixelMode ? "Auto-Contour (1px)" : "Outer Stroke Contour";
-        std::string b2 = isPixelMode ? "Clean Corner Jaggies" : "Edge Anti-Alias / Soften";
-        WisdomUI::Theme::DrawSunsetButton(window, btn1Bounds, b1, font, 11, false, btn1Bounds.contains(mPos), false, 1.0f);
-        WisdomUI::Theme::DrawSunsetButton(window, btn2Bounds, b2, font, 11, false, btn2Bounds.contains(mPos), false, 1.0f);
-
-        std::string s2Title = isPixelMode ? "SHADING & PALETTE" : "LIGHTING & COLOR";
-        WisdomUI::Theme::DrawCrispText(window, font, s2Title, 10, position.x + 14.f, position.y + 224.f, WisdomUI::Theme::TextSecondary);
-
-        std::string b3 = isPixelMode ? (lightingGuideActive ? "Lighting Guide [ON]" : "Lighting Guide [OFF]") : (lightingGuideActive ? "Vignette Lighting [ON]" : "Vignette Lighting [OFF]");
-        std::string b4 = isPixelMode ? (paletteCheckActive ? "Palette Audit [ON]" : "Palette Audit [OFF]") : "Auto Contrast Boost";
-        std::string b5 = isPixelMode ? "Generate 4-Step Cel Ramp" : "Generate Harmonious Swatches";
-
-        WisdomUI::Theme::DrawSunsetButton(window, btn3Bounds, b3, font, 11, lightingGuideActive, btn3Bounds.contains(mPos), lightingGuideActive, 1.0f);
-        WisdomUI::Theme::DrawSunsetButton(window, btn4Bounds, b4, font, 11, isPixelMode && paletteCheckActive, btn4Bounds.contains(mPos), isPixelMode && paletteCheckActive, 1.0f);
-        WisdomUI::Theme::DrawSunsetButton(window, btn5Bounds, b5, font, 11, false, btn5Bounds.contains(mPos), false, 1.0f);
-
-        sf::FloatRect tipBox(position.x + 12.f, position.y + 385.f, size.x - 24.f, 48.f);
-        sf::RectangleShape box(sf::Vector2f(tipBox.width, tipBox.height));
-        box.setPosition(tipBox.left, tipBox.top);
-        box.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-        box.setOutlineThickness(1.0f);
-        box.setOutlineColor(WisdomUI::Theme::SunsetPlum);
-        window.draw(box);
-
-        std::string tip1 = isPixelMode ? "Pixel Mode: Enforces strict grid and palette." : "Normal Mode: Allows smooth blends & strokes.";
-        WisdomUI::Theme::DrawCrispText(window, font, tip1, 10, tipBox.left + 8.f, tipBox.top + 6.f, WisdomUI::Theme::SunsetGold);
-        WisdomUI::Theme::DrawCrispText(window, font, "Actions apply directly to the active canvas layer.", 9, tipBox.left + 8.f, tipBox.top + 26.f, WisdomUI::Theme::TextSecondary);
-    }
-    else {
-        WisdomUI::Theme::DrawSunsetButton(window, tutPrevLessonBounds, "<", font, 11, false, tutPrevLessonBounds.contains(mPos), false, 1.0f);
-        WisdomUI::Theme::DrawSunsetButton(window, tutNextLessonBounds, ">", font, 11, false, tutNextLessonBounds.contains(mPos), false, 1.0f);
-
-        std::string lessonTitle = lessons.empty() ? "None" : lessons[currentLessonIdx].name;
-        WisdomUI::Theme::DrawCrispText(window, font, lessonTitle, 12, position.x + size.x / 2.f, position.y + 88.f, WisdomUI::Theme::SunsetGold, sf::Color::Black, true, true);
-
-        const TutorialStep* step = getCurrentTutorialStep();
-        if (step) {
-            std::string stepProg = "Step " + std::to_string(currentStepIdx + 1) + " of " + std::to_string(lessons[currentLessonIdx].steps.size());
-            WisdomUI::Theme::DrawCrispText(window, font, stepProg, 10, position.x + 14.f, position.y + 115.f, WisdomUI::Theme::TextSecondary);
-            WisdomUI::Theme::DrawCrispText(window, font, step->title, 12, position.x + 14.f, position.y + 132.f, WisdomUI::Theme::SunsetAmber);
-
-            sf::FloatRect cardBox(position.x + 12.f, position.y + 155.f, size.x - 24.f, 150.f);
-            sf::RectangleShape card(sf::Vector2f(cardBox.width, cardBox.height));
-            card.setPosition(cardBox.left, cardBox.top);
-            card.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-            card.setOutlineThickness(1.0f);
-            card.setOutlineColor(WisdomUI::Theme::SunsetPlum);
-            window.draw(card);
-
-            WisdomUI::Theme::DrawCrispText(window, font, "INSTRUCTIONS:", 10, cardBox.left + 10.f, cardBox.top + 10.f, WisdomUI::Theme::SunsetGold);
-
-            std::string text = step->instruction;
-            float lineY = cardBox.top + 30.f;
-            size_t maxCharsPerLine = 34;
-            for (size_t i = 0; i < text.size(); i += maxCharsPerLine) {
-                std::string line = text.substr(i, maxCharsPerLine);
-                WisdomUI::Theme::DrawCrispText(window, font, line, 10, cardBox.left + 10.f, lineY, WisdomUI::Theme::TextPrimary);
-                lineY += 16.f;
-            }
-
-            WisdomUI::Theme::DrawCrispText(window, font, "Suggested Tone:", 10, cardBox.left + 10.f, cardBox.top + 115.f, WisdomUI::Theme::TextSecondary);
-            sf::RectangleShape swatch(sf::Vector2f(22.f, 22.f));
-            swatch.setPosition(cardBox.left + 115.f, cardBox.top + 112.f);
-            swatch.setFillColor(step->hintColor);
-            swatch.setOutlineThickness(1.f);
-            swatch.setOutlineColor(sf::Color::White);
-            window.draw(swatch);
-        }
-
-        WisdomUI::Theme::DrawSunsetButton(window, tutPrevStepBounds, "< Prev", font, 11, false, tutPrevStepBounds.contains(mPos), false, 1.0f);
-        WisdomUI::Theme::DrawSunsetButton(window, tutNextStepBounds, "Next >", font, 11, false, tutNextStepBounds.contains(mPos), false, 1.0f);
-        WisdomUI::Theme::DrawSunsetButton(window, tutToggleGhostBounds, ghostOverlayActive ? "Guide [ON]" : "Guide [OFF]", font, 10, ghostOverlayActive, tutToggleGhostBounds.contains(mPos), ghostOverlayActive, 1.0f);
-    }
-
-    WisdomUI::Theme::DrawSunsetButton(window, backBtnBounds, "< CLOSE ASSISTANT", font, 11, false, backBtnBounds.contains(mPos), false, 1.0f);
+    bool hovClose = closeBtnBounds.contains(mPos);
+    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Close", font, 11, false, hovClose, false, 1.0f);
 }
 
 bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
@@ -247,22 +69,9 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
             dragOffset = mousePos - position;
             return true;
         }
-
-        if (!sf::FloatRect(position.x, position.y, size.x, size.y).contains(mousePos)) {
-            return false;
-        }
-
-        if (toolsTabBounds.contains(mousePos)) {
-            currentTab = AssistantTab::Tools;
+        if (sf::FloatRect(position.x, position.y, size.x, size.y).contains(mousePos)) {
             return true;
         }
-
-        if (tutorialsTabBounds.contains(mousePos)) {
-            currentTab = AssistantTab::Tutorials;
-            return true;
-        }
-
-        return true;
     }
     else if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
         if (isDraggingPanel) {
@@ -283,113 +92,111 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
 std::string AIPanel::handleClick(sf::Vector2f mousePos) {
     if (!isVisible) return "";
 
-    if (backBtnBounds.contains(mousePos)) {
+    if (suggestBtnBounds.contains(mousePos)) return "action:get_advice";
+    if (closeBtnBounds.contains(mousePos)) {
         toggle();
         return "close";
-    }
-
-    if (currentTab == AssistantTab::Tools) {
-        if (modeToggleBounds.contains(mousePos)) {
-            isPixelMode = !isPixelMode;
-            return "tool:toggle_mode";
-        }
-        if (btn1Bounds.contains(mousePos)) return "tool:contour";
-        if (btn2Bounds.contains(mousePos)) return "tool:jaggies";
-        if (btn3Bounds.contains(mousePos)) {
-            lightingGuideActive = !lightingGuideActive;
-            return "tool:lighting";
-        }
-        if (btn4Bounds.contains(mousePos)) {
-            if (isPixelMode) {
-                paletteCheckActive = !paletteCheckActive;
-                return "tool:palette";
-            }
-            else {
-                return "tool:contrast";
-            }
-        }
-        if (btn5Bounds.contains(mousePos)) return "tool:ramp";
-    }
-    else {
-        if (tutPrevLessonBounds.contains(mousePos)) {
-            if (!lessons.empty()) {
-                currentLessonIdx = (currentLessonIdx - 1 + static_cast<int>(lessons.size())) % static_cast<int>(lessons.size());
-                currentStepIdx = 0;
-            }
-            return "tutorial:lesson_changed";
-        }
-        if (tutNextLessonBounds.contains(mousePos)) {
-            if (!lessons.empty()) {
-                currentLessonIdx = (currentLessonIdx + 1) % static_cast<int>(lessons.size());
-                currentStepIdx = 0;
-            }
-            return "tutorial:lesson_changed";
-        }
-        if (tutPrevStepBounds.contains(mousePos)) {
-            if (currentStepIdx > 0) currentStepIdx--;
-            return "tutorial:step_changed";
-        }
-        if (tutNextStepBounds.contains(mousePos)) {
-            if (currentLessonIdx >= 0 && currentLessonIdx < static_cast<int>(lessons.size())) {
-                if (currentStepIdx < static_cast<int>(lessons[currentLessonIdx].steps.size()) - 1) {
-                    currentStepIdx++;
-                }
-            }
-            return "tutorial:step_changed";
-        }
-        if (tutToggleGhostBounds.contains(mousePos)) {
-            ghostOverlayActive = !ghostOverlayActive;
-            return "tutorial:toggle_ghost";
-        }
     }
     return "";
 }
 
+std::vector<sf::Color> AIPanel::createColorAdvice(sf::Color base, int variation) {
+    int vMode = std::abs(variation) % 6;
+    float h = 0.f, s = 0.f, v = 0.f;
+    ColorManager::rgbToHsv(base, h, s, v);
 
+    if (v < 0.12f) {
+        if (vMode == 0) return { sf::Color(115, 130, 165), sf::Color(65, 75, 105), sf::Color(32, 34, 52), sf::Color(12, 12, 18) };
+        if (vMode == 1) return { sf::Color(165, 125, 95), sf::Color(105, 75, 60), sf::Color(55, 35, 30), sf::Color(22, 14, 12) };
+        if (vMode == 2) return { sf::Color(100, 185, 175), sf::Color(45, 110, 115), sf::Color(22, 55, 65), sf::Color(10, 20, 26) };
+        if (vMode == 3) return { sf::Color(175, 105, 155), sf::Color(115, 55, 95), sf::Color(60, 25, 50), sf::Color(25, 10, 20) };
+        if (vMode == 4) return { sf::Color(180, 180, 195), sf::Color(120, 120, 135), sf::Color(60, 60, 75), sf::Color(18, 18, 24) };
+        return { sf::Color(150, 135, 110), sf::Color(90, 80, 65), sf::Color(45, 40, 32), sf::Color(16, 14, 10) };
+    }
 
-std::vector<sf::Color> AIPanel::generateRampOrHarmony(sf::Color baseColor, bool pixelMode) {
-    std::vector<sf::Color> result;
-    if (pixelMode) {
-        sf::Color highlight(
-            static_cast<uint8_t>(std::min(255, baseColor.r + 45)),
-            static_cast<uint8_t>(std::min(255, baseColor.g + 45)),
-            static_cast<uint8_t>(std::min(255, baseColor.b + 20)),
-            255
-        );
-        sf::Color shadow(
-            static_cast<uint8_t>(std::max(0, baseColor.r - 40)),
-            static_cast<uint8_t>(std::max(0, baseColor.g - 45)),
-            static_cast<uint8_t>(std::max(0, baseColor.b - 20)),
-            255
-        );
-        sf::Color deepShadow(
-            static_cast<uint8_t>(std::max(0, shadow.r - 40)),
-            static_cast<uint8_t>(std::max(0, shadow.g - 40)),
-            static_cast<uint8_t>(std::max(0, shadow.b - 15)),
-            255
-        );
-        result = { highlight, baseColor, shadow, deepShadow };
+    if (v > 0.92f && s < 0.10f) {
+        if (vMode == 0) return { sf::Color(255, 255, 255), sf::Color(245, 235, 210), sf::Color(190, 175, 160), sf::Color(125, 110, 105) };
+        if (vMode == 1) return { sf::Color(255, 255, 255), sf::Color(230, 245, 250), sf::Color(165, 190, 210), sf::Color(105, 125, 155) };
+        if (vMode == 2) return { sf::Color(255, 255, 255), sf::Color(245, 230, 245), sf::Color(195, 165, 200), sf::Color(135, 105, 145) };
+        if (vMode == 3) return { sf::Color(255, 255, 255), sf::Color(235, 245, 230), sf::Color(175, 195, 170), sf::Color(115, 135, 110) };
+        if (vMode == 4) return { sf::Color(255, 255, 255), sf::Color(225, 225, 235), sf::Color(160, 160, 175), sf::Color(95, 95, 115) };
+        return { sf::Color(255, 255, 255), sf::Color(250, 240, 220), sf::Color(180, 170, 150), sf::Color(110, 100, 85) };
+    }
+
+    float hL = h, sL = s, vL = v;
+    float hS = h, sS = s, vS = v;
+    float hD = h, sD = s, vD = v;
+
+    if (vMode == 0) {
+        hL = (h >= 50.f && h <= 230.f) ? std::max(45.f, h - 22.f) : std::min(55.f, h + 16.f);
+        sL = std::max(0.12f, s * 0.72f);
+        vL = std::min(1.0f, v * 1.25f + 0.12f);
+        hS = (h < 245.f && h >= 45.f) ? std::min(255.f, h + 24.f) : std::max(0.f, h - 20.f);
+        sS = std::min(1.0f, s * 1.22f + 0.08f);
+        vS = std::max(0.08f, v * 0.68f);
+        hD = (hS < 255.f) ? std::min(270.f, hS + 16.f) : hS;
+        sD = std::min(1.0f, sS * 1.15f + 0.06f);
+        vD = std::max(0.04f, vS * 0.58f);
+    }
+    else if (vMode == 1) {
+        hL = std::min(210.f, std::max(170.f, h + 18.f));
+        sL = std::max(0.10f, s * 0.68f);
+        vL = std::min(1.0f, v * 1.22f + 0.10f);
+        hS = (h > 200.f) ? std::max(200.f, h - 25.f) : std::min(240.f, h + 30.f);
+        sS = std::min(1.0f, s * 1.15f + 0.10f);
+        vS = std::max(0.08f, v * 0.62f);
+        hD = std::min(265.f, hS + 18.f);
+        sD = std::min(1.0f, sS * 1.20f + 0.08f);
+        vD = std::max(0.04f, vS * 0.52f);
+    }
+    else if (vMode == 2) {
+        hL = h;
+        sL = std::max(0.05f, s * 0.50f);
+        vL = 1.0f;
+        hS = (h < 240.f) ? std::min(250.f, h + 15.f) : h;
+        sS = std::min(1.0f, s * 1.35f + 0.12f);
+        vS = std::max(0.06f, v * 0.55f);
+        hD = hS;
+        sD = std::min(1.0f, sS * 1.20f + 0.10f);
+        vD = std::max(0.03f, vS * 0.50f);
+    }
+    else if (vMode == 3) {
+        hL = (h >= 60.f) ? h - 12.f : h + 12.f;
+        sL = std::max(0.08f, s * 0.55f);
+        vL = std::min(1.0f, v * 1.15f + 0.15f);
+        hS = (h <= 260.f) ? h + 12.f : h - 12.f;
+        sS = std::max(0.15f, s * 0.85f);
+        vS = std::max(0.15f, v * 0.78f);
+        hD = hS;
+        sD = std::min(1.0f, sS * 1.10f);
+        vD = std::max(0.08f, vS * 0.72f);
+    }
+    else if (vMode == 4) {
+        hL = std::fmod(h + 30.f, 360.f);
+        sL = std::max(0.15f, s * 0.80f);
+        vL = std::min(1.0f, v * 1.20f + 0.10f);
+        hS = std::fmod(h + 180.f, 360.f);
+        sS = std::min(1.0f, s * 1.10f + 0.15f);
+        vS = std::max(0.10f, v * 0.65f);
+        hD = hS;
+        sD = std::min(1.0f, sS * 1.20f);
+        vD = std::max(0.05f, vS * 0.55f);
     }
     else {
-        sf::Color comp(
-            static_cast<uint8_t>(255 - baseColor.r),
-            static_cast<uint8_t>(255 - baseColor.g),
-            static_cast<uint8_t>(255 - baseColor.b),
-            255
-        );
-        sf::Color warm(
-            static_cast<uint8_t>(std::min(255, baseColor.r + 30)),
-            static_cast<uint8_t>(baseColor.g),
-            static_cast<uint8_t>(std::max(0, baseColor.b - 20)),
-            255
-        );
-        sf::Color cool(
-            static_cast<uint8_t>(std::max(0, baseColor.r - 20)),
-            static_cast<uint8_t>(baseColor.g),
-            static_cast<uint8_t>(std::min(255, baseColor.b + 30)),
-            255
-        );
-        result = { baseColor, comp, warm, cool };
+        hL = std::fmod(h + 340.f, 360.f);
+        sL = std::min(1.0f, s * 1.30f);
+        vL = std::min(1.0f, v * 1.30f);
+        hS = std::fmod(h + 40.f, 360.f);
+        sS = std::max(0.20f, s * 0.70f);
+        vS = std::max(0.10f, v * 0.50f);
+        hD = std::fmod(h + 60.f, 360.f);
+        sD = std::max(0.30f, s * 0.60f);
+        vD = std::max(0.04f, v * 0.35f);
     }
-    return result;
+
+    sf::Color highlight = ColorManager::hsvToRgb(hL, sL, vL);
+    sf::Color shadow = ColorManager::hsvToRgb(hS, sS, vS);
+    sf::Color deepShadow = ColorManager::hsvToRgb(hD, sD, vD);
+
+    return { highlight, base, shadow, deepShadow };
 }

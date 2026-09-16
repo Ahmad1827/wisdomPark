@@ -84,6 +84,20 @@ private:
 
     int activeInputIndex;
     std::string inputBuffer;
+    struct AdvicePalette {
+        std::vector<sf::Color> colors;
+        int useCount = 0;
+        bool isPinned = false;
+    };
+
+    std::vector<AdvicePalette> m_advicePalettes;
+    std::vector<std::pair<sf::FloatRect, std::pair<sf::Color, size_t>>> m_adviceSwatchBounds;
+    std::vector<std::pair<sf::FloatRect, size_t>> m_advicePinBtnBounds;
+    std::vector<std::pair<sf::FloatRect, size_t>> m_adviceDeleteBtnBounds;
+    sf::FloatRect m_adviceClearAllBounds;
+
+    void saveAdvicePalettes() const;
+    void loadAdvicePalettes();
 
     void updatePickerImages();
     void updateFromRGB(sf::Color c);
@@ -103,6 +117,10 @@ public:
     bool handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canvas& canvas);
 
     void setColors(sf::Color primary, sf::Color secondary);
+
+    bool addAdvicePalette(const std::vector<sf::Color>& ramp);
+    void removeAdvicePalette(size_t index);
+    void clearAdvicePalettes();
 
     float getCurrentX() const;
     void forceClose();

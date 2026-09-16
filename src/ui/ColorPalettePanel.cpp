@@ -2,6 +2,7 @@
 #include "../UI/UITheme.h"
 #include <iomanip>
 #include <sstream>
+#include <fstream>
 #include <algorithm>
 #include <iostream>
 
@@ -104,6 +105,7 @@ void ColorPalettePanel::init() {
     alphaSelector.setFillColor(WisdomUI::Theme::Gold);
 
     updatePickerImages();
+    loadAdvicePalettes();
 }
 
 std::string ColorPalettePanel::colorToHex(sf::Color c) const {
@@ -398,6 +400,89 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
                 if (sx > pickerX + pickerSize - 22.f) { sx = pickerX; sy += 26.f; }
             }
         }
+
+        m_adviceSwatchBounds.clear();
+        m_advicePinBtnBounds.clear();
+        m_adviceDeleteBtnBounds.clear();
+
+        sx = pickerX;
+        sy += 30.f;
+
+        if (sy + 22.f < panelY + panelH) {
+            sf::Text at("Color Advice (Max 5)", font, 11);
+            at.setPosition(std::floor(sx), std::floor(sy));
+            at.setFillColor(WisdomUI::Theme::Gold);
+            window.draw(at);
+
+            m_adviceClearAllBounds = sf::FloatRect(pickerX + pickerSize - 40.f, sy - 1.f, 40.f, 16.f);
+            bool hovClear = m_adviceClearAllBounds.contains(mousePos);
+            sf::RectangleShape clearBtn(sf::Vector2f(m_adviceClearAllBounds.width, m_adviceClearAllBounds.height));
+            clearBtn.setPosition(m_adviceClearAllBounds.left, m_adviceClearAllBounds.top);
+            clearBtn.setFillColor(hovClear ? sf::Color(140, 30, 45) : WisdomUI::Theme::PanelInset);
+            clearBtn.setOutlineThickness(1.f);
+            clearBtn.setOutlineColor(WisdomUI::Theme::Border);
+            window.draw(clearBtn);
+
+            sf::Text clrTxt("Clear", font, 9);
+            clrTxt.setPosition(m_adviceClearAllBounds.left + 8.f, m_adviceClearAllBounds.top + 1.f);
+            clrTxt.setFillColor(hovClear ? sf::Color::White : WisdomUI::Theme::TextSecondary);
+            window.draw(clrTxt);
+
+            sy += 20.f;
+
+            for (size_t pIdx = 0; pIdx < m_advicePalettes.size(); ++pIdx) {
+                if (sy + 22.f >= panelY + panelH - 4.f) break;
+
+                const auto& pal = m_advicePalettes[pIdx];
+                float advX = pickerX;
+
+                for (size_t cIdx = 0; cIdx < pal.colors.size(); ++cIdx) {
+                    sf::FloatRect swRect(std::floor(advX), std::floor(sy), 22.f, 22.f);
+                    sf::RectangleShape s(sf::Vector2f(swRect.width, swRect.height));
+                    s.setPosition(swRect.left, swRect.top);
+                    s.setFillColor(pal.colors[cIdx]);
+                    s.setOutlineThickness(1.f);
+                    s.setOutlineColor(WisdomUI::Theme::BorderHighlight);
+                    window.draw(s);
+
+                    m_adviceSwatchBounds.push_back({ swRect, { pal.colors[cIdx], pIdx } });
+                    advX += 26.f;
+                }
+
+                sf::FloatRect pinRect(pickerX + pickerSize - 42.f, sy + 2.f, 19.f, 18.f);
+                bool hovPin = pinRect.contains(mousePos);
+                sf::RectangleShape pinBtn(sf::Vector2f(pinRect.width, pinRect.height));
+                pinBtn.setPosition(pinRect.left, pinRect.top);
+                pinBtn.setFillColor(pal.isPinned ? sf::Color(220, 160, 40) : (hovPin ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset));
+                pinBtn.setOutlineThickness(1.f);
+                pinBtn.setOutlineColor(pal.isPinned ? WisdomUI::Theme::Gold : WisdomUI::Theme::Border);
+                window.draw(pinBtn);
+
+                sf::Text pinTxt("P", font, 11);
+                pinTxt.setPosition(pinRect.left + 5.f, pinRect.top - 1.f);
+                pinTxt.setFillColor(pal.isPinned ? sf::Color(14, 6, 20) : (hovPin ? sf::Color::White : WisdomUI::Theme::TextSecondary));
+                window.draw(pinTxt);
+
+                m_advicePinBtnBounds.push_back({ pinRect, pIdx });
+
+                sf::FloatRect delRect(pickerX + pickerSize - 20.f, sy + 2.f, 18.f, 18.f);
+                bool hovDel = delRect.contains(mousePos);
+                sf::RectangleShape delBtn(sf::Vector2f(delRect.width, delRect.height));
+                delBtn.setPosition(delRect.left, delRect.top);
+                delBtn.setFillColor(pal.isPinned ? sf::Color(30, 20, 30, 120) : (hovDel ? sf::Color(180, 40, 55) : WisdomUI::Theme::PanelInset));
+                delBtn.setOutlineThickness(1.f);
+                delBtn.setOutlineColor(WisdomUI::Theme::Border);
+                window.draw(delBtn);
+
+                sf::Text xTxt("x", font, 11);
+                xTxt.setPosition(delRect.left + 5.f, delRect.top - 1.f);
+                xTxt.setFillColor(pal.isPinned ? sf::Color(80, 70, 80) : (hovDel ? sf::Color::White : WisdomUI::Theme::TextSecondary));
+                window.draw(xTxt);
+
+                m_adviceDeleteBtnBounds.push_back({ delRect, pIdx });
+                sy += 26.f;
+            }
+        }
     }
 
     if (isDetached) {
@@ -545,7 +630,41 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
 
         sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
         curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
+        if (m_adviceClearAllBounds.contains(mousePos)) {
+            clearAdvicePalettes();
+            return true;
+        }
 
+        for (const auto& item : m_advicePinBtnBounds) {
+            if (item.first.contains(mousePos)) {
+                size_t pIdx = item.second;
+                if (pIdx < m_advicePalettes.size()) {
+                    m_advicePalettes[pIdx].isPinned = !m_advicePalettes[pIdx].isPinned;
+                    saveAdvicePalettes();
+                }
+                return true;
+            }
+        }
+
+        for (const auto& item : m_adviceDeleteBtnBounds) {
+            if (item.first.contains(mousePos)) {
+                removeAdvicePalette(item.second);
+                return true;
+            }
+        }
+
+        for (const auto& item : m_adviceSwatchBounds) {
+            if (item.first.contains(mousePos)) {
+                sf::Color picked = item.second.first;
+                size_t palIdx = item.second.second;
+                if (palIdx < m_advicePalettes.size()) {
+                    m_advicePalettes[palIdx].useCount++;
+                }
+                updateFromRGB(picked);
+                canvas.setPrimaryColor(picked);
+                return true;
+            }
+        }
         float sy = std::floor(inputY + 44.f + 16.f);
         float sx = pickerX;
         for (const auto& c : colorManager.getRecentColors()) {
@@ -688,3 +807,102 @@ void ColorPalettePanel::setEyedropperActive(bool active) { isEyedropperActive = 
 
 bool ColorPalettePanel::getIsDetached() const { return isDetached; }
 void ColorPalettePanel::setIsDetached(bool detached) { isDetached = detached; }
+
+void ColorPalettePanel::saveAdvicePalettes() const {
+    std::ofstream out("color_advice.dat");
+    if (!out.is_open()) return;
+
+    out << m_advicePalettes.size() << "\n";
+    for (const auto& pal : m_advicePalettes) {
+        out << (pal.isPinned ? 1 : 0) << " " << pal.useCount << " " << pal.colors.size() << " ";
+        for (const auto& c : pal.colors) {
+            out << static_cast<int>(c.r) << " " << static_cast<int>(c.g) << " " << static_cast<int>(c.b) << " " << static_cast<int>(c.a) << " ";
+        }
+        out << "\n";
+    }
+}
+
+void ColorPalettePanel::loadAdvicePalettes() {
+    std::ifstream in("color_advice.dat");
+    if (!in.is_open()) return;
+
+    size_t total = 0;
+    if (!(in >> total)) return;
+
+    m_advicePalettes.clear();
+    for (size_t i = 0; i < total; ++i) {
+        int pinned = 0, useCount = 0;
+        size_t numCols = 0;
+        if (!(in >> pinned >> useCount >> numCols)) break;
+
+        AdvicePalette pal;
+        pal.isPinned = (pinned != 0);
+        pal.useCount = useCount;
+
+        for (size_t c = 0; c < numCols; ++c) {
+            int r = 0, g = 0, b = 0, a = 255;
+            in >> r >> g >> b >> a;
+            pal.colors.push_back(sf::Color(static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b), static_cast<uint8_t>(a)));
+        }
+
+        if (!pal.colors.empty()) {
+            m_advicePalettes.push_back(pal);
+        }
+    }
+}
+
+bool ColorPalettePanel::addAdvicePalette(const std::vector<sf::Color>& ramp) {
+    if (ramp.empty()) return false;
+
+    for (size_t i = 0; i < m_advicePalettes.size(); ++i) {
+        if (m_advicePalettes[i].colors == ramp) {
+            bool pinnedState = m_advicePalettes[i].isPinned;
+            int uses = m_advicePalettes[i].useCount + 1;
+            m_advicePalettes.erase(m_advicePalettes.begin() + i);
+            m_advicePalettes.push_back({ ramp, uses, pinnedState });
+            saveAdvicePalettes();
+            return true;
+        }
+    }
+
+    if (m_advicePalettes.size() >= 5) {
+        int victimIdx = -1;
+        int minUses = 2147483647;
+
+        for (size_t i = 0; i < m_advicePalettes.size(); ++i) {
+            if (!m_advicePalettes[i].isPinned) {
+                if (victimIdx == -1 || m_advicePalettes[i].useCount < minUses) {
+                    minUses = m_advicePalettes[i].useCount;
+                    victimIdx = static_cast<int>(i);
+                }
+            }
+        }
+
+        if (victimIdx == -1) {
+            return false;
+        }
+
+        m_advicePalettes.erase(m_advicePalettes.begin() + victimIdx);
+    }
+
+    m_advicePalettes.push_back({ ramp, 0, false });
+    saveAdvicePalettes();
+    return true;
+}
+
+void ColorPalettePanel::removeAdvicePalette(size_t index) {
+    if (index < m_advicePalettes.size()) {
+        if (m_advicePalettes[index].isPinned) return;
+        m_advicePalettes.erase(m_advicePalettes.begin() + index);
+        saveAdvicePalettes();
+    }
+}
+
+void ColorPalettePanel::clearAdvicePalettes() {
+    m_advicePalettes.erase(
+        std::remove_if(m_advicePalettes.begin(), m_advicePalettes.end(),
+            [](const AdvicePalette& p) { return !p.isPinned; }),
+        m_advicePalettes.end()
+    );
+    saveAdvicePalettes();
+}
