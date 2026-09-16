@@ -125,6 +125,9 @@ void HandTracker::stop() {
 
     m_impl->running.store(false);
 
+    mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+    mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+
     if (m_impl->sock != INVALID_SOCKET) {
         closesocket(m_impl->sock);
         m_impl->sock = INVALID_SOCKET;
@@ -151,10 +154,24 @@ void HandTracker::Impl::listenLoop() {
 
     int prevLeft = 0;
     int prevRight = 0;
+    int prevZoom = 0;
+    float zoomAnchorY = -1.0f;
 
     while (running.load()) {
         int bytes = recvfrom(sock, buffer.data(), static_cast<int>(buffer.size()), 0, reinterpret_cast<sockaddr*>(&clientAddr), &clientLen);
-        if (bytes <= 0) continue;
+        if (bytes <= 0) {
+            if (prevLeft == 1) {
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                prevLeft = 0;
+            }
+            if (prevRight == 1) {
+                mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+                prevRight = 0;
+            }
+            prevZoom = 0;
+            zoomAnchorY = -1.0f;
+            continue;
+        }
 
         if (bytes > 4 && memcmp(buffer.data(), "IMG:", 4) == 0) {
             std::lock_guard<std::mutex> lock(frameMutex);
@@ -178,12 +195,29 @@ void HandTracker::Impl::listenLoop() {
             tokens.push_back(item);
         }
 
+        if (tokens.empty()) continue;
+
+        if (tokens[0] == "LOST") {
+            if (prevLeft == 1) {
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                prevLeft = 0;
+            }
+            if (prevRight == 1) {
+                mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+                prevRight = 0;
+            }
+            prevZoom = 0;
+            zoomAnchorY = -1.0f;
+            continue;
+        }
+
         if (tokens.size() < 5) continue;
 
         float normX = std::stof(tokens[0]);
         float normY = std::stof(tokens[1]);
         int leftClick = std::stoi(tokens[2]);
         int rightClick = std::stoi(tokens[3]);
+        int zoomActive = std::stoi(tokens[4]);
 
         if (hwnd && IsWindow(hwnd)) {
             RECT rect;
@@ -197,24 +231,42 @@ void HandTracker::Impl::listenLoop() {
             int targetX = topLeft.x + static_cast<int>(normX * width);
             int targetY = topLeft.y + static_cast<int>(normY * height);
 
-            SetCursorPos(targetX, targetY);
+            if (zoomActive == 1) {
+                if (prevZoom == 0 || zoomAnchorY < 0.0f) {
+                    zoomAnchorY = normY;
+                }
+                float dy = normY - zoomAnchorY;
+                if (dy < -0.035f) {
+                    mouse_event(MOUSEEVENTF_WHEEL, 0, 0, WHEEL_DELTA, 0);
+                    zoomAnchorY = normY;
+                }
+                else if (dy > 0.035f) {
+                    mouse_event(MOUSEEVENTF_WHEEL, 0, 0, -WHEEL_DELTA, 0);
+                    zoomAnchorY = normY;
+                }
+            }
+            else {
+                zoomAnchorY = -1.0f;
+                SetCursorPos(targetX, targetY);
 
-            if (leftClick == 1 && prevLeft == 0) {
-                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-            }
-            else if (leftClick == 0 && prevLeft == 1) {
-                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-            }
+                if (leftClick == 1 && prevLeft == 0) {
+                    mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                }
+                else if (leftClick == 0 && prevLeft == 1) {
+                    mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                }
 
-            if (rightClick == 1 && prevRight == 0) {
-                mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
-            }
-            else if (rightClick == 0 && prevRight == 1) {
-                mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
-            }
+                if (rightClick == 1 && prevRight == 0) {
+                    mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
+                }
+                else if (rightClick == 0 && prevRight == 1) {
+                    mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+                }
 
-            prevLeft = leftClick;
-            prevRight = rightClick;
+                prevLeft = leftClick;
+                prevRight = rightClick;
+            }
+            prevZoom = zoomActive;
         }
     }
 }

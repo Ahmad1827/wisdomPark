@@ -4074,6 +4074,12 @@ bool UIManager::handleHandCamWidgetEvents(const sf::Event& event) {
             m_camMinimized = !m_camMinimized;
             return true;
         }
+        if (!m_camMinimized && m_camResizeBounds.contains(mPos)) {
+            m_isResizingCam = true;
+            m_resizeStartPos = mPos;
+            m_resizeStartSize = m_camSize;
+            return true;
+        }
         if (m_camHeaderBounds.contains(mPos)) {
             m_isDraggingCam = true;
             m_camDragOffset = mPos - m_camPos;
@@ -4088,12 +4094,24 @@ bool UIManager::handleHandCamWidgetEvents(const sf::Event& event) {
             m_isDraggingCam = false;
             return true;
         }
+        if (m_isResizingCam) {
+            m_isResizingCam = false;
+            return true;
+        }
     }
     else if (event.type == sf::Event::MouseMoved) {
+        sf::Vector2f mPos(static_cast<float>(event.mouseMove.x), static_cast<float>(event.mouseMove.y));
         if (m_isDraggingCam) {
-            m_camPos = sf::Vector2f(static_cast<float>(event.mouseMove.x), static_cast<float>(event.mouseMove.y)) - m_camDragOffset;
+            m_camPos = mPos - m_camDragOffset;
             if (m_camPos.x < 0.0f) m_camPos.x = 0.0f;
             if (m_camPos.y < 0.0f) m_camPos.y = 0.0f;
+            return true;
+        }
+        if (m_isResizingCam) {
+            float newW = m_resizeStartSize.x + (mPos.x - m_resizeStartPos.x);
+            newW = std::max(130.0f, std::min(480.0f, newW));
+            m_camSize.x = newW;
+            m_camSize.y = newW * 0.75f;
             return true;
         }
     }
@@ -4103,7 +4121,9 @@ bool UIManager::handleHandCamWidgetEvents(const sf::Event& event) {
 void UIManager::drawHandCamWidget(sf::RenderWindow& window) {
     if (!HandTracker::getInstance().isRunning()) return;
 
-    HandTracker::getInstance().updateTexture(m_camTexture);
+    if (HandTracker::getInstance().updateTexture(m_camTexture)) {
+        m_camTexture.setSmooth(true);
+    }
 
     float winW = static_cast<float>(window.getSize().x);
     float winH = static_cast<float>(window.getSize().y);
@@ -4119,6 +4139,7 @@ void UIManager::drawHandCamWidget(sf::RenderWindow& window) {
         m_camWidgetBounds = sf::FloatRect(m_camPos.x, m_camPos.y, w, h);
         m_camToggleBtnBounds = m_camWidgetBounds;
         m_camHeaderBounds = m_camWidgetBounds;
+        m_camResizeBounds = sf::FloatRect(0, 0, 0, 0);
 
         sf::RectangleShape bar(sf::Vector2f(w, h));
         bar.setPosition(m_camPos);
@@ -4134,9 +4155,9 @@ void UIManager::drawHandCamWidget(sf::RenderWindow& window) {
         return;
     }
 
-    float w = 160.0f;
     float headerH = 22.0f;
-    float camH = 120.0f;
+    float w = m_camSize.x;
+    float camH = m_camSize.y;
     float totalH = headerH + camH;
 
     if (m_camPos.x < 0.0f) {
@@ -4146,10 +4167,11 @@ void UIManager::drawHandCamWidget(sf::RenderWindow& window) {
     m_camWidgetBounds = sf::FloatRect(m_camPos.x, m_camPos.y, w, totalH);
     m_camHeaderBounds = sf::FloatRect(m_camPos.x, m_camPos.y, w - 26.0f, headerH);
     m_camToggleBtnBounds = sf::FloatRect(m_camPos.x + w - 24.0f, m_camPos.y + 2.0f, 20.0f, 18.0f);
+    m_camResizeBounds = sf::FloatRect(m_camPos.x + w - 14.0f, m_camPos.y + totalH - 14.0f, 14.0f, 14.0f);
 
     sf::RectangleShape bg(sf::Vector2f(w, totalH));
     bg.setPosition(m_camPos);
-    bg.setFillColor(sf::Color(25, 20, 35, 240));
+    bg.setFillColor(sf::Color(25, 20, 35, 245));
     bg.setOutlineColor(sf::Color(255, 120, 80));
     bg.setOutlineThickness(1.0f);
     window.draw(bg);
@@ -4177,7 +4199,23 @@ void UIManager::drawHandCamWidget(sf::RenderWindow& window) {
     if (m_camTexture.getSize().x > 0) {
         m_camSprite.setTexture(m_camTexture, true);
         m_camSprite.setPosition(m_camPos.x, m_camPos.y + headerH);
-        m_camSprite.setScale(w / m_camTexture.getSize().x, camH / m_camTexture.getSize().y);
+        m_camSprite.setScale(w / static_cast<float>(m_camTexture.getSize().x), camH / static_cast<float>(m_camTexture.getSize().y));
         window.draw(m_camSprite);
     }
+
+    sf::VertexArray grip(sf::Lines, 6);
+    float rx = m_camPos.x + w;
+    float ry = m_camPos.y + totalH;
+
+    grip[0].position = sf::Vector2f(rx - 3.0f, ry - 11.0f);
+    grip[1].position = sf::Vector2f(rx - 11.0f, ry - 3.0f);
+    grip[2].position = sf::Vector2f(rx - 3.0f, ry - 7.0f);
+    grip[3].position = sf::Vector2f(rx - 7.0f, ry - 3.0f);
+    grip[4].position = sf::Vector2f(rx - 3.0f, ry - 3.0f);
+    grip[5].position = sf::Vector2f(rx - 3.0f, ry - 3.0f);
+
+    for (size_t i = 0; i < 6; ++i) {
+        grip[i].color = sf::Color(255, 160, 100);
+    }
+    window.draw(grip);
 }

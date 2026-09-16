@@ -229,9 +229,14 @@ private:
     sf::FloatRect m_camWidgetBounds;
     sf::FloatRect m_camToggleBtnBounds;
     sf::FloatRect m_camHeaderBounds;
+    sf::FloatRect m_camResizeBounds;
     sf::Vector2f m_camPos{ -1.0f, -1.0f };
+    sf::Vector2f m_camSize{ 180.0f, 135.0f };
     bool m_isDraggingCam{ false };
+    bool m_isResizingCam{ false };
     sf::Vector2f m_camDragOffset{ 0.0f, 0.0f };
+    sf::Vector2f m_resizeStartPos{ 0.0f, 0.0f };
+    sf::Vector2f m_resizeStartSize{ 0.0f, 0.0f };
 
     void drawHandCamWidget(sf::RenderWindow& window);
     bool handleHandCamWidgetEvents(const sf::Event& event);
