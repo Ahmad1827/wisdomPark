@@ -7,6 +7,7 @@
 #include <thread>
 #include <sstream>
 #include <iomanip>
+#include <fstream>
 
 #pragma comment(lib, "winhttp.lib")
 
@@ -79,6 +80,192 @@ static std::string extractJsonToken(const std::string& json) {
         }
     }
     return "";
+}
+
+struct DlgData {
+    HWND hFirst = NULL;
+    HWND hSecond = NULL;
+    bool ok = false;
+    std::string first;
+    std::string second;
+};
+
+static LRESULT CALLBACK GitImgDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    DlgData* data = reinterpret_cast<DlgData*>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+    if (msg == WM_COMMAND) {
+        int id = LOWORD(wParam);
+        if (id == 1 && data) {
+            char buf1[256] = { 0 };
+            char buf2[256] = { 0 };
+            if (data->hFirst) GetWindowTextA(data->hFirst, buf1, sizeof(buf1));
+            if (data->hSecond) GetWindowTextA(data->hSecond, buf2, sizeof(buf2));
+            data->first = buf1;
+            data->second = buf2;
+            data->ok = true;
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        else if (id == 2) {
+            if (data) data->ok = false;
+            DestroyWindow(hwnd);
+            return 0;
+        }
+    }
+    else if (msg == WM_CLOSE) {
+        if (data) data->ok = false;
+        DestroyWindow(hwnd);
+        return 0;
+    }
+    return DefWindowProcA(hwnd, msg, wParam, lParam);
+}
+
+static void registerDlgClass() {
+    static bool registered = false;
+    if (registered) return;
+    WNDCLASSA wc = { 0 };
+    wc.lpfnWndProc = GitImgDlgProc;
+    wc.hInstance = GetModuleHandle(NULL);
+    wc.lpszClassName = "GitImgInputDlgClass";
+    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    RegisterClassA(&wc);
+    registered = true;
+}
+
+bool GitImgClient::loadSavedCredentials(std::string& outUser, std::string& outPass) {
+    std::ifstream file("gitimg_auth.cfg");
+    if (!file.is_open()) return false;
+    if (std::getline(file, outUser) && std::getline(file, outPass)) {
+        return !outUser.empty() && !outPass.empty();
+    }
+    return false;
+}
+
+void GitImgClient::saveCredentials(const std::string& user, const std::string& pass) {
+    std::ofstream file("gitimg_auth.cfg");
+    if (file.is_open()) {
+        file << user << "\n" << pass << "\n";
+    }
+}
+
+void GitImgClient::clearSavedCredentials() {
+    std::remove("gitimg_auth.cfg");
+}
+
+bool GitImgClient::promptCredentials(std::string& outUser, std::string& outPass) {
+    registerDlgClass();
+    DlgData data;
+    int w = 340;
+    int h = 185;
+    int scrW = GetSystemMetrics(SM_CXSCREEN);
+    int scrH = GetSystemMetrics(SM_CYSCREEN);
+
+    HWND hwnd = CreateWindowExA(WS_EX_TOPMOST | WS_EX_DLGMODALFRAME, "GitImgInputDlgClass", "GitImg Authentication",
+        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+        (scrW - w) / 2, (scrH - h) / 2, w, h, NULL, NULL, GetModuleHandle(NULL), NULL);
+    if (!hwnd) return false;
+
+    SetWindowLongPtrA(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&data));
+
+    HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+
+    HWND lblU = CreateWindowA("STATIC", "Username:", WS_CHILD | WS_VISIBLE, 20, 20, 75, 20, hwnd, NULL, NULL, NULL);
+    data.hFirst = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", outUser.c_str(), WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL, 100, 18, 200, 22, hwnd, NULL, NULL, NULL);
+
+    HWND lblP = CreateWindowA("STATIC", "Password:", WS_CHILD | WS_VISIBLE, 20, 52, 75, 20, hwnd, NULL, NULL, NULL);
+    data.hSecond = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "", WS_CHILD | WS_VISIBLE | ES_PASSWORD | ES_AUTOHSCROLL, 100, 50, 200, 22, hwnd, NULL, NULL, NULL);
+
+    HWND btnOk = CreateWindowA("BUTTON", "Login", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 70, 95, 85, 28, hwnd, (HMENU)1, NULL, NULL);
+    HWND btnCancel = CreateWindowA("BUTTON", "Cancel", WS_CHILD | WS_VISIBLE, 175, 95, 85, 28, hwnd, (HMENU)2, NULL, NULL);
+
+    SendMessageA(lblU, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageA(data.hFirst, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageA(lblP, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageA(data.hSecond, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageA(btnOk, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageA(btnCancel, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    SetFocus(outUser.empty() ? data.hFirst : data.hSecond);
+
+    MSG msg;
+    while (IsWindow(hwnd) && GetMessageA(&msg, NULL, 0, 0)) {
+        if (msg.message == WM_KEYDOWN) {
+            if (msg.wParam == VK_RETURN) {
+                SendMessageA(hwnd, WM_COMMAND, 1, 0);
+                break;
+            }
+            else if (msg.wParam == VK_ESCAPE) {
+                SendMessageA(hwnd, WM_COMMAND, 2, 0);
+                break;
+            }
+        }
+        TranslateMessage(&msg);
+        DispatchMessageA(&msg);
+    }
+
+    if (data.ok) {
+        outUser = data.first;
+        outPass = data.second;
+        return !outUser.empty() && !outPass.empty();
+    }
+    return false;
+}
+
+bool GitImgClient::promptCommitMessage(std::string& outMsg) {
+    registerDlgClass();
+    DlgData data;
+    int w = 360;
+    int h = 150;
+    int scrW = GetSystemMetrics(SM_CXSCREEN);
+    int scrH = GetSystemMetrics(SM_CYSCREEN);
+
+    HWND hwnd = CreateWindowExA(WS_EX_TOPMOST | WS_EX_DLGMODALFRAME, "GitImgInputDlgClass", "Commit Artwork",
+        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+        (scrW - w) / 2, (scrH - h) / 2, w, h, NULL, NULL, GetModuleHandle(NULL), NULL);
+    if (!hwnd) return false;
+
+    SetWindowLongPtrA(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&data));
+
+    HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+
+    HWND lbl = CreateWindowA("STATIC", "Commit Message:", WS_CHILD | WS_VISIBLE, 20, 15, 200, 18, hwnd, NULL, NULL, NULL);
+    data.hFirst = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "Pushed from WisdomPark", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL, 20, 36, 305, 22, hwnd, NULL, NULL, NULL);
+
+    HWND btnOk = CreateWindowA("BUTTON", "Push", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 80, 72, 85, 28, hwnd, (HMENU)1, NULL, NULL);
+    HWND btnCancel = CreateWindowA("BUTTON", "Cancel", WS_CHILD | WS_VISIBLE, 185, 72, 85, 28, hwnd, (HMENU)2, NULL, NULL);
+
+    SendMessageA(lbl, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageA(data.hFirst, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageA(btnOk, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageA(btnCancel, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    SendMessageA(data.hFirst, EM_SETSEL, 0, -1);
+    SetFocus(data.hFirst);
+
+    MSG msg;
+    while (IsWindow(hwnd) && GetMessageA(&msg, NULL, 0, 0)) {
+        if (msg.message == WM_KEYDOWN) {
+            if (msg.wParam == VK_RETURN) {
+                SendMessageA(hwnd, WM_COMMAND, 1, 0);
+                break;
+            }
+            else if (msg.wParam == VK_ESCAPE) {
+                SendMessageA(hwnd, WM_COMMAND, 2, 0);
+                break;
+            }
+        }
+        TranslateMessage(&msg);
+        DispatchMessageA(&msg);
+    }
+
+    if (data.ok) {
+        outMsg = data.first;
+        if (outMsg.empty()) {
+            outMsg = "Update artwork";
+        }
+        return true;
+    }
+    return false;
 }
 
 GitImgClient::GitImgClient(std::string baseUrl)

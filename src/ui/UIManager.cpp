@@ -3936,6 +3936,21 @@ bool UIManager::handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& 
 
 void UIManager::pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg) {
     if (m_isPushingGitImg) return;
+
+    std::string user, pass;
+    if (!m_gitImgClient.isAuthenticated()) {
+        if (!GitImgClient::loadSavedCredentials(user, pass)) {
+            if (!GitImgClient::promptCredentials(user, pass)) {
+                return;
+            }
+        }
+    }
+
+    std::string commitMsg;
+    if (!GitImgClient::promptCommitMessage(commitMsg)) {
+        return;
+    }
+
     m_isPushingGitImg = true;
     showMessage("Exporting RAM PNG and pushing to GitImg...", sf::Color::Yellow);
 
@@ -3945,7 +3960,6 @@ void UIManager::pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg) {
 
     std::string repo = activeProjectName;
     std::string filename = activeProjectName + ".png";
-    std::string commitMsg = "Pushed from WisdomPark";
 
     auto doPush = [this, img, repo, filename, commitMsg]() {
         m_gitImgClient.pushAsync(img, repo, filename, commitMsg, [this](bool success) {
@@ -3960,11 +3974,13 @@ void UIManager::pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg) {
         };
 
     if (!m_gitImgClient.isAuthenticated()) {
-        std::thread([this, doPush]() {
-            if (m_gitImgClient.login("ahmad", "password123")) {
+        std::thread([this, user, pass, doPush]() {
+            if (m_gitImgClient.login(user, pass)) {
+                GitImgClient::saveCredentials(user, pass);
                 doPush();
             }
             else {
+                GitImgClient::clearSavedCredentials();
                 m_isPushingGitImg = false;
                 showMessage("GitImg Authentication Failed", sf::Color::Red);
             }

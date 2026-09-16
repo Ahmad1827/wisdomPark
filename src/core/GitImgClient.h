@@ -19,6 +19,11 @@ public:
     bool isAuthenticated() const;
 
     bool login(const std::string& username, const std::string& password);
+    static bool loadSavedCredentials(std::string& outUser, std::string& outPass);
+    static void saveCredentials(const std::string& user, const std::string& pass);
+    static void clearSavedCredentials();
+    static bool promptCredentials(std::string& outUser, std::string& outPass);
+    static bool promptCommitMessage(std::string& outMsg);
     void pushAsync(const sf::Image& image,
         const std::string& repo,
         const std::string& filename,
