@@ -3,6 +3,11 @@
 #include <string>
 #include <vector>
 
+struct LospecPalette {
+    std::string name;
+    std::vector<sf::Color> colors;
+};
+
 class AIPanel {
 private:
     sf::Font font;
@@ -14,8 +19,24 @@ private:
     sf::Vector2f dragOffset;
 
     sf::FloatRect headerGripBounds;
+    sf::FloatRect dropdownBtnBounds;
     sf::FloatRect suggestBtnBounds;
     sf::FloatRect closeBtnBounds;
+
+    std::vector<LospecPalette> palettes;
+    int selectedPaletteIdx;
+    bool isDropdownOpen;
+    float dropdownScroll;
+    float dropdownMaxScroll;
+    std::vector<std::pair<sf::FloatRect, int>> dropdownItemBounds;
+    sf::FloatRect dropdownListArea;
+
+    std::string pendingAction;
+
+    void loadPalettes();
+    sf::Color hexToColor(const std::string& hex) const;
+    float getColorDistance(sf::Color c1, sf::Color c2) const;
+    float getLuminance(sf::Color c) const;
 
 public:
     AIPanel();
@@ -29,5 +50,5 @@ public:
     void toggle();
     bool getIsVisible() const;
 
-    static std::vector<sf::Color> createColorAdvice(sf::Color baseColor, int variation = 0);
+    std::vector<sf::Color> generateAdvice(sf::Color base, int variation);
 };

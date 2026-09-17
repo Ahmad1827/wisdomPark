@@ -1996,7 +1996,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     if (action == "action:get_advice") {
                         sf::Color cur = canvas.getPrimaryColor();
                         static int s_adviceCounter = 0;
-                        auto ramp = AIPanel::createColorAdvice(cur, s_adviceCounter++);
+                        auto ramp = g_aiPanel.generateAdvice(cur, s_adviceCounter++);
                         if (!colorPalettePanel.addAdvicePalette(ramp)) {
                             m_activeRightTab = RightTabMode::Palette;
                             showMessage("All 5 Palettes Pinned! Unpin one to replace.", sf::Color::Yellow);

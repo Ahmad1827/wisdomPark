@@ -1,25 +1,118 @@
 #include "AIPanel.h"
 #include "../core/ColorManager.h"
 #include "../UI/UITheme.h"
+#include <fstream>
+#include <sstream>
 #include <algorithm>
+#include <cmath>
 
 AIPanel::AIPanel()
     : position(64.f, 78.f),
-    size(280.f, 190.f),
+    size(320.f, 250.f),
     isVisible(false),
-    isDraggingPanel(false) {}
+    isDraggingPanel(false),
+    selectedPaletteIdx(0),
+    isDropdownOpen(false),
+    dropdownScroll(0.f),
+    dropdownMaxScroll(0.f) {}
 
 void AIPanel::init() {
     font.loadFromFile("assets/font.otf");
     position = sf::Vector2f(64.f, 78.f);
+    loadPalettes();
 }
 
 void AIPanel::toggle() {
     isVisible = !isVisible;
+    if (!isVisible) {
+        isDropdownOpen = false;
+        pendingAction = "";
+    }
 }
 
 bool AIPanel::getIsVisible() const {
     return isVisible;
+}
+
+sf::Color AIPanel::hexToColor(const std::string& hex) const {
+    std::string clean = hex;
+    if (!clean.empty() && clean[0] == '#') clean = clean.substr(1);
+    if (clean.length() == 6) {
+        int r = std::stoi(clean.substr(0, 2), nullptr, 16);
+        int g = std::stoi(clean.substr(2, 2), nullptr, 16);
+        int b = std::stoi(clean.substr(4, 2), nullptr, 16);
+        return sf::Color(static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b), 255);
+    }
+    return sf::Color::White;
+}
+
+void AIPanel::loadPalettes() {
+    palettes.clear();
+    std::ifstream file("assets/palettes.txt");
+    if (file.is_open()) {
+        std::string nameLine, colorsLine;
+        while (std::getline(file, nameLine) && std::getline(file, colorsLine)) {
+            if (nameLine.empty() || colorsLine.empty()) continue;
+            LospecPalette p;
+            p.name = nameLine;
+            std::stringstream ss(colorsLine);
+            std::string hexStr;
+            while (ss >> hexStr) {
+                p.colors.push_back(hexToColor(hexStr));
+            }
+            if (p.colors.size() >= 4) {
+                palettes.push_back(p);
+            }
+        }
+    }
+
+    if (palettes.empty()) {
+        palettes.push_back({ "Sunset Warmth (Desert 32)", {
+            sf::Color(190,74,47), sf::Color(215,118,67), sf::Color(234,212,170), sf::Color(228,166,114),
+            sf::Color(184,111,86), sf::Color(115,62,57), sf::Color(62,39,49), sf::Color(38,23,30),
+            sf::Color(162,38,51), sf::Color(228,59,68), sf::Color(247,118,34), sf::Color(254,174,52),
+            sf::Color(254,231,97), sf::Color(99,199,77), sf::Color(62,137,72), sf::Color(38,92,66),
+            sf::Color(25,60,62), sf::Color(18,78,137), sf::Color(0,153,219), sf::Color(44,232,245)
+        } });
+        palettes.push_back({ "Neon Cyberpunk (Apollo 32)", {
+            sf::Color(5,5,15), sf::Color(25,15,45), sf::Color(60,20,80), sf::Color(130,25,95),
+            sf::Color(215,35,100), sf::Color(255,95,130), sf::Color(255,160,180), sf::Color(255,230,240),
+            sf::Color(15,40,70), sf::Color(25,90,130), sf::Color(35,160,190), sf::Color(70,230,230),
+            sf::Color(40,180,100), sf::Color(120,240,110), sf::Color(245,235,90), sf::Color(255,140,40)
+        } });
+        palettes.push_back({ "Pastel Fantasy (Sweetie 16)", {
+            sf::Color(26,28,44), sf::Color(93,39,93), sf::Color(177,62,83), sf::Color(239,125,87),
+            sf::Color(255,205,117), sf::Color(167,240,112), sf::Color(56,183,100), sf::Color(37,113,121),
+            sf::Color(41,54,111), sf::Color(59,93,201), sf::Color(65,166,246), sf::Color(115,239,247),
+            sf::Color(244,244,244), sf::Color(148,176,194), sf::Color(86,108,134), sf::Color(51,60,87)
+        } });
+        palettes.push_back({ "Gothic Dungeon (Resurrect 64)", {
+            sf::Color(46,34,47), sf::Color(62,53,70), sf::Color(98,85,101), sf::Color(150,108,108),
+            sf::Color(171,148,122), sf::Color(105,123,91), sf::Color(82,101,66), sf::Color(79,143,186),
+            sf::Color(194,133,105), sf::Color(162,83,83), sf::Color(116,47,47), sf::Color(68,28,28)
+        } });
+        palettes.push_back({ "Retro 8-Bit (Pico-8)", {
+            sf::Color(0,0,0), sf::Color(29,43,83), sf::Color(126,37,83), sf::Color(0,135,81),
+            sf::Color(171,82,54), sf::Color(95,87,79), sf::Color(194,195,199), sf::Color(255,241,232),
+            sf::Color(255,0,77), sf::Color(255,163,0), sf::Color(255,236,39), sf::Color(0,228,54),
+            sf::Color(41,173,255), sf::Color(131,118,156), sf::Color(255,119,168), sf::Color(255,204,170)
+        } });
+        palettes.push_back({ "Deep Space (Cosmic 8)", {
+            sf::Color(15,10,25), sf::Color(35,20,55), sf::Color(70,35,90), sf::Color(125,55,125),
+            sf::Color(190,85,135), sf::Color(240,140,140), sf::Color(255,210,185), sf::Color(255,255,255)
+        } });
+    }
+}
+
+float AIPanel::getLuminance(sf::Color c) const {
+    return 0.299f * c.r + 0.587f * c.g + 0.114f * c.b;
+}
+
+float AIPanel::getColorDistance(sf::Color c1, sf::Color c2) const {
+    float dr = static_cast<float>(c1.r) - static_cast<float>(c2.r);
+    float dg = static_cast<float>(c1.g) - static_cast<float>(c2.g);
+    float db = static_cast<float>(c1.b) - static_cast<float>(c2.b);
+    return std::sqrt(dr * dr + dg * dg + db * db);
 }
 
 void AIPanel::update(float dt) {
@@ -29,8 +122,22 @@ void AIPanel::update(float dt) {
     float by = position.y;
 
     headerGripBounds = sf::FloatRect(bx + 8.f, by + 6.f, size.x - 16.f, 26.f);
-    suggestBtnBounds = sf::FloatRect(bx + 16.f, by + 80.f, size.x - 32.f, 42.f);
-    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 138.f, size.x - 32.f, 28.f);
+    dropdownBtnBounds = sf::FloatRect(bx + 16.f, by + 68.f, size.x - 32.f, 32.f);
+    suggestBtnBounds = sf::FloatRect(bx + 16.f, by + 120.f, size.x - 32.f, 44.f);
+    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 182.f, size.x - 32.f, 28.f);
+
+    float listY = dropdownBtnBounds.top + dropdownBtnBounds.height + 3.f;
+    float listH = 175.f;
+    dropdownListArea = sf::FloatRect(bx + 16.f, listY, size.x - 32.f, listH);
+
+    dropdownItemBounds.clear();
+    float itemH = 26.f;
+    float curY = listY - dropdownScroll;
+    for (size_t i = 0; i < palettes.size(); ++i) {
+        dropdownItemBounds.push_back({ sf::FloatRect(bx + 16.f, curY, size.x - 32.f, itemH), static_cast<int>(i) });
+        curY += itemH + 2.f;
+    }
+    dropdownMaxScroll = std::max(0.f, static_cast<float>(palettes.size()) * (itemH + 2.f) - listH);
 }
 
 void AIPanel::draw(sf::RenderWindow& window) {
@@ -50,25 +157,110 @@ void AIPanel::draw(sf::RenderWindow& window) {
 
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
-    WisdomUI::Theme::DrawCrispText(window, font, "Generate shading advice ramp", 10, position.x + 16.f, position.y + 42.f, WisdomUI::Theme::TextSecondary);
-    WisdomUI::Theme::DrawCrispText(window, font, "from active brush color.", 10, position.x + 16.f, position.y + 56.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawCrispText(window, font, "Vibe / Palette Preset:", 10, position.x + 16.f, position.y + 44.f, WisdomUI::Theme::TextSecondary);
+
+    std::string currentPalName = palettes.empty() ? "None" : palettes[selectedPaletteIdx].name;
+    bool hovDrop = dropdownBtnBounds.contains(mPos);
+    WisdomUI::Theme::DrawSunsetButton(window, dropdownBtnBounds, currentPalName + "  v", font, 11, false, hovDrop, isDropdownOpen, 1.0f);
 
     bool hovSuggest = suggestBtnBounds.contains(mPos);
     WisdomUI::Theme::DrawSunsetButton(window, suggestBtnBounds, "+ Get Palette Advice", font, 12, false, hovSuggest, true, 1.0f);
 
     bool hovClose = closeBtnBounds.contains(mPos);
     WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Close", font, 11, false, hovClose, false, 1.0f);
+
+    if (isDropdownOpen) {
+        sf::RectangleShape shadow(sf::Vector2f(dropdownListArea.width + 6.f, dropdownListArea.height + 6.f));
+        shadow.setPosition(dropdownListArea.left - 3.f, dropdownListArea.top - 3.f);
+        shadow.setFillColor(sf::Color(0, 0, 0, 220));
+        window.draw(shadow);
+
+        sf::RectangleShape listBg(sf::Vector2f(dropdownListArea.width, dropdownListArea.height));
+        listBg.setPosition(dropdownListArea.left, dropdownListArea.top);
+        listBg.setFillColor(sf::Color(16, 10, 22, 252));
+        listBg.setOutlineThickness(1.5f);
+        listBg.setOutlineColor(WisdomUI::Theme::SunsetGold);
+        window.draw(listBg);
+
+        for (const auto& item : dropdownItemBounds) {
+            if (item.first.top + item.first.height < dropdownListArea.top || item.first.top > dropdownListArea.top + dropdownListArea.height) {
+                continue;
+            }
+            bool isHov = item.first.contains(mPos);
+            bool isSel = (item.second == selectedPaletteIdx);
+
+            sf::RectangleShape r(sf::Vector2f(item.first.width - 4.f, item.first.height));
+            r.setPosition(item.first.left + 2.f, item.first.top);
+            r.setFillColor(isSel ? WisdomUI::Theme::SunsetSkyMid : (isHov ? sf::Color(45, 28, 55) : sf::Color::Transparent));
+            window.draw(r);
+
+            WisdomUI::Theme::DrawCrispText(window, font, palettes[item.second].name, 10, item.first.left + 6.f, item.first.top + 6.f, isSel ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
+
+            float pX = item.first.left + item.first.width - 50.f;
+            for (size_t c = 0; c < std::min(static_cast<size_t>(4), palettes[item.second].colors.size()); ++c) {
+                sf::RectangleShape sw(sf::Vector2f(9.f, 9.f));
+                sw.setPosition(pX + c * 11.f, item.first.top + 8.f);
+                sw.setFillColor(palettes[item.second].colors[c]);
+                window.draw(sw);
+            }
+        }
+    }
 }
 
 bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
     if (!isVisible) return false;
 
+    if (isDropdownOpen && event.type == sf::Event::MouseWheelScrolled) {
+        if (dropdownListArea.contains(mousePos)) {
+            dropdownScroll = std::clamp(dropdownScroll - event.mouseWheelScroll.delta * 26.0f, 0.0f, dropdownMaxScroll);
+            return true;
+        }
+    }
+
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        if (isDropdownOpen) {
+            if (dropdownListArea.contains(mousePos)) {
+                for (const auto& item : dropdownItemBounds) {
+                    if (item.first.contains(mousePos)) {
+                        selectedPaletteIdx = item.second;
+                        isDropdownOpen = false;
+                        pendingAction = "";
+                        return true;
+                    }
+                }
+                return true;
+            }
+            if (dropdownBtnBounds.contains(mousePos)) {
+                isDropdownOpen = false;
+                return true;
+            }
+            isDropdownOpen = false;
+            return true;
+        }
+
         if (headerGripBounds.contains(mousePos)) {
             isDraggingPanel = true;
             dragOffset = mousePos - position;
             return true;
         }
+
+        if (dropdownBtnBounds.contains(mousePos)) {
+            isDropdownOpen = true;
+            dropdownScroll = 0.f;
+            return true;
+        }
+
+        if (suggestBtnBounds.contains(mousePos)) {
+            pendingAction = "action:get_advice";
+            return true;
+        }
+
+        if (closeBtnBounds.contains(mousePos)) {
+            toggle();
+            pendingAction = "close";
+            return true;
+        }
+
         if (sf::FloatRect(position.x, position.y, size.x, size.y).contains(mousePos)) {
             return true;
         }
@@ -86,117 +278,74 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
         return true;
     }
 
+    if (isDropdownOpen && dropdownListArea.contains(mousePos)) {
+        return true;
+    }
+
     return sf::FloatRect(position.x, position.y, size.x, size.y).contains(mousePos);
 }
 
 std::string AIPanel::handleClick(sf::Vector2f mousePos) {
-    if (!isVisible) return "";
-
-    if (suggestBtnBounds.contains(mousePos)) return "action:get_advice";
-    if (closeBtnBounds.contains(mousePos)) {
-        toggle();
-        return "close";
-    }
-    return "";
+    std::string act = pendingAction;
+    pendingAction = "";
+    return act;
 }
 
-std::vector<sf::Color> AIPanel::createColorAdvice(sf::Color base, int variation) {
-    int vMode = std::abs(variation) % 6;
-    float h = 0.f, s = 0.f, v = 0.f;
-    ColorManager::rgbToHsv(base, h, s, v);
-
-    if (v < 0.12f) {
-        if (vMode == 0) return { sf::Color(115, 130, 165), sf::Color(65, 75, 105), sf::Color(32, 34, 52), sf::Color(12, 12, 18) };
-        if (vMode == 1) return { sf::Color(165, 125, 95), sf::Color(105, 75, 60), sf::Color(55, 35, 30), sf::Color(22, 14, 12) };
-        if (vMode == 2) return { sf::Color(100, 185, 175), sf::Color(45, 110, 115), sf::Color(22, 55, 65), sf::Color(10, 20, 26) };
-        if (vMode == 3) return { sf::Color(175, 105, 155), sf::Color(115, 55, 95), sf::Color(60, 25, 50), sf::Color(25, 10, 20) };
-        if (vMode == 4) return { sf::Color(180, 180, 195), sf::Color(120, 120, 135), sf::Color(60, 60, 75), sf::Color(18, 18, 24) };
-        return { sf::Color(150, 135, 110), sf::Color(90, 80, 65), sf::Color(45, 40, 32), sf::Color(16, 14, 10) };
+std::vector<sf::Color> AIPanel::generateAdvice(sf::Color base, int variation) {
+    if (palettes.empty() || selectedPaletteIdx >= static_cast<int>(palettes.size())) {
+        return { base, base, base, base };
     }
 
-    if (v > 0.92f && s < 0.10f) {
-        if (vMode == 0) return { sf::Color(255, 255, 255), sf::Color(245, 235, 210), sf::Color(190, 175, 160), sf::Color(125, 110, 105) };
-        if (vMode == 1) return { sf::Color(255, 255, 255), sf::Color(230, 245, 250), sf::Color(165, 190, 210), sf::Color(105, 125, 155) };
-        if (vMode == 2) return { sf::Color(255, 255, 255), sf::Color(245, 230, 245), sf::Color(195, 165, 200), sf::Color(135, 105, 145) };
-        if (vMode == 3) return { sf::Color(255, 255, 255), sf::Color(235, 245, 230), sf::Color(175, 195, 170), sf::Color(115, 135, 110) };
-        if (vMode == 4) return { sf::Color(255, 255, 255), sf::Color(225, 225, 235), sf::Color(160, 160, 175), sf::Color(95, 95, 115) };
-        return { sf::Color(255, 255, 255), sf::Color(250, 240, 220), sf::Color(180, 170, 150), sf::Color(110, 100, 85) };
+    auto pColors = palettes[selectedPaletteIdx].colors;
+    if (pColors.size() < 4) {
+        return { base, base, base, base };
     }
 
-    float hL = h, sL = s, vL = v;
-    float hS = h, sS = s, vS = v;
-    float hD = h, sD = s, vD = v;
+    std::sort(pColors.begin(), pColors.end(), [this](sf::Color a, sf::Color b) {
+        return getLuminance(a) < getLuminance(b);
+        });
 
-    if (vMode == 0) {
-        hL = (h >= 50.f && h <= 230.f) ? std::max(45.f, h - 22.f) : std::min(55.f, h + 16.f);
-        sL = std::max(0.12f, s * 0.72f);
-        vL = std::min(1.0f, v * 1.25f + 0.12f);
-        hS = (h < 245.f && h >= 45.f) ? std::min(255.f, h + 24.f) : std::max(0.f, h - 20.f);
-        sS = std::min(1.0f, s * 1.22f + 0.08f);
-        vS = std::max(0.08f, v * 0.68f);
-        hD = (hS < 255.f) ? std::min(270.f, hS + 16.f) : hS;
-        sD = std::min(1.0f, sS * 1.15f + 0.06f);
-        vD = std::max(0.04f, vS * 0.58f);
+    int N = static_cast<int>(pColors.size());
+    int bestIdx = 0;
+    float bestDist = getColorDistance(base, pColors[0]);
+    for (int i = 1; i < N; ++i) {
+        float d = getColorDistance(base, pColors[i]);
+        if (d < bestDist) {
+            bestDist = d;
+            bestIdx = i;
+        }
     }
-    else if (vMode == 1) {
-        hL = std::min(210.f, std::max(170.f, h + 18.f));
-        sL = std::max(0.10f, s * 0.68f);
-        vL = std::min(1.0f, v * 1.22f + 0.10f);
-        hS = (h > 200.f) ? std::max(200.f, h - 25.f) : std::min(240.f, h + 30.f);
-        sS = std::min(1.0f, s * 1.15f + 0.10f);
-        vS = std::max(0.08f, v * 0.62f);
-        hD = std::min(265.f, hS + 18.f);
-        sD = std::min(1.0f, sS * 1.20f + 0.08f);
-        vD = std::max(0.04f, vS * 0.52f);
+
+    int varOffset = (variation % 4) - 1;
+    int baseIdx = std::clamp(bestIdx + varOffset, 0, N - 1);
+
+    int highIdx = 0, midIdx = 0, shdIdx = 0, deepIdx = 0;
+
+    if (baseIdx <= 1) {
+        deepIdx = 0;
+        shdIdx = std::min(N - 1, 1 + (variation % 2));
+        midIdx = std::min(N - 1, 3 + (variation % 3));
+        highIdx = std::min(N - 1, 6 + (variation % (N - 6 > 0 ? N - 6 : 1)));
     }
-    else if (vMode == 2) {
-        hL = h;
-        sL = std::max(0.05f, s * 0.50f);
-        vL = 1.0f;
-        hS = (h < 240.f) ? std::min(250.f, h + 15.f) : h;
-        sS = std::min(1.0f, s * 1.35f + 0.12f);
-        vS = std::max(0.06f, v * 0.55f);
-        hD = hS;
-        sD = std::min(1.0f, sS * 1.20f + 0.10f);
-        vD = std::max(0.03f, vS * 0.50f);
-    }
-    else if (vMode == 3) {
-        hL = (h >= 60.f) ? h - 12.f : h + 12.f;
-        sL = std::max(0.08f, s * 0.55f);
-        vL = std::min(1.0f, v * 1.15f + 0.15f);
-        hS = (h <= 260.f) ? h + 12.f : h - 12.f;
-        sS = std::max(0.15f, s * 0.85f);
-        vS = std::max(0.15f, v * 0.78f);
-        hD = hS;
-        sD = std::min(1.0f, sS * 1.10f);
-        vD = std::max(0.08f, vS * 0.72f);
-    }
-    else if (vMode == 4) {
-        hL = std::fmod(h + 30.f, 360.f);
-        sL = std::max(0.15f, s * 0.80f);
-        vL = std::min(1.0f, v * 1.20f + 0.10f);
-        hS = std::fmod(h + 180.f, 360.f);
-        sS = std::min(1.0f, s * 1.10f + 0.15f);
-        vS = std::max(0.10f, v * 0.65f);
-        hD = hS;
-        sD = std::min(1.0f, sS * 1.20f);
-        vD = std::max(0.05f, vS * 0.55f);
+    else if (baseIdx >= N - 2) {
+        highIdx = N - 1;
+        midIdx = std::max(0, N - 2 - (variation % 2));
+        shdIdx = std::max(0, N - 4 - (variation % 3));
+        deepIdx = std::max(0, N - 7 - (variation % (N - 7 > 0 ? N - 7 : 1)));
     }
     else {
-        hL = std::fmod(h + 340.f, 360.f);
-        sL = std::min(1.0f, s * 1.30f);
-        vL = std::min(1.0f, v * 1.30f);
-        hS = std::fmod(h + 40.f, 360.f);
-        sS = std::max(0.20f, s * 0.70f);
-        vS = std::max(0.10f, v * 0.50f);
-        hD = std::fmod(h + 60.f, 360.f);
-        sD = std::max(0.30f, s * 0.60f);
-        vD = std::max(0.04f, v * 0.35f);
+        midIdx = baseIdx;
+        int stepUp = std::max(1, (N - 1 - midIdx) / 2);
+        highIdx = std::min(N - 1, midIdx + stepUp + (variation % 2));
+        int stepDown = std::max(1, midIdx / 2);
+        shdIdx = std::max(0, midIdx - stepDown);
+        deepIdx = std::max(0, shdIdx - stepDown - (variation % 2));
     }
 
-    sf::Color highlight = ColorManager::hsvToRgb(hL, sL, vL);
-    sf::Color shadow = ColorManager::hsvToRgb(hS, sS, vS);
-    sf::Color deepShadow = ColorManager::hsvToRgb(hD, sD, vD);
+    sf::Color highlight = pColors[highIdx];
+    sf::Color midtone = pColors[midIdx];
+    sf::Color shadow = pColors[shdIdx];
+    sf::Color deepShadow = pColors[deepIdx];
 
-    return { highlight, base, shadow, deepShadow };
+    return { highlight, midtone, shadow, deepShadow };
 }

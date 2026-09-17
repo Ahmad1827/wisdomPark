@@ -6,10 +6,7 @@
 #include "../core/ColorManager.h"
 
 enum class PalettePanelState { Hidden, Visible, Pinned };
-
-enum class PaletteResizeDir {
-    None, Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight
-};
+enum class PaletteResizeDir { None, Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight };
 
 class ColorPalettePanel {
 private:
@@ -84,10 +81,12 @@ private:
 
     int activeInputIndex;
     std::string inputBuffer;
+
     struct AdvicePalette {
         std::vector<sf::Color> colors;
         int useCount = 0;
         bool isPinned = false;
+        uint32_t order = 0;
     };
 
     std::vector<AdvicePalette> m_advicePalettes;
@@ -117,7 +116,6 @@ public:
     bool handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canvas& canvas);
 
     void setColors(sf::Color primary, sf::Color secondary);
-
     bool addAdvicePalette(const std::vector<sf::Color>& ramp);
     void removeAdvicePalette(size_t index);
     void clearAdvicePalettes();
