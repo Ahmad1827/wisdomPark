@@ -496,17 +496,36 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
             window.draw(plus);
 
             sy += 20.f;
-            for (const auto& c : colorManager.getCustomSwatches()) {
+            float swatchStartY = sy;
+            m_customSwatchBounds.clear();
+
+            for (size_t i = 0; i < colorManager.getCustomSwatches().size(); ++i) {
                 if (sy + 22.f >= panelY + panelH - 4.f) break;
+                sf::Color c = colorManager.getCustomSwatches()[i];
+                sf::FloatRect swRect(std::floor(sx), std::floor(sy), 22.f, 22.f);
+                m_customSwatchBounds.push_back({ swRect, i });
+
+                bool isSelected = std::find(m_selectedSwatchIndices.begin(), m_selectedSwatchIndices.end(), i) != m_selectedSwatchIndices.end();
+
                 sf::RectangleShape s(sf::Vector2f(22.f, 22.f));
                 s.setPosition(std::floor(sx), std::floor(sy));
                 s.setFillColor(c);
-                s.setOutlineThickness(1.f);
-                s.setOutlineColor(WisdomUI::Theme::Border);
+                s.setOutlineThickness(isSelected ? 2.f : 1.f);
+                s.setOutlineColor(isSelected ? sf::Color(0, 220, 255) : WisdomUI::Theme::Border);
                 window.draw(s);
+
+                if (isSelected) {
+                    sf::RectangleShape selCover(sf::Vector2f(22.f, 22.f));
+                    selCover.setPosition(std::floor(sx), std::floor(sy));
+                    selCover.setFillColor(sf::Color(0, 220, 255, 60));
+                    window.draw(selCover);
+                }
+
                 sx += 26.f;
                 if (sx > pickerX + pickerSize - 22.f) { sx = pickerX; sy += 26.f; }
             }
+
+            m_swatchAreaBounds = sf::FloatRect(pickerX, swatchStartY, pickerSize, std::max(26.f, sy - swatchStartY + 26.f));
         }
 
         m_adviceSwatchBounds.clear();
@@ -602,6 +621,37 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
         }
     }
 
+    if (m_isBoxSelectingSwatches) {
+        float left = std::min(m_swatchSelectStart.x, m_swatchSelectEnd.x);
+        float top = std::min(m_swatchSelectStart.y, m_swatchSelectEnd.y);
+        float w = std::abs(m_swatchSelectEnd.x - m_swatchSelectStart.x);
+        float h = std::abs(m_swatchSelectEnd.y - m_swatchSelectStart.y);
+        sf::RectangleShape selRect(sf::Vector2f(w, h));
+        selRect.setPosition(left, top);
+        selRect.setFillColor(sf::Color(0, 200, 255, 40));
+        selRect.setOutlineThickness(1.f);
+        selRect.setOutlineColor(sf::Color(0, 220, 255, 200));
+        window.draw(selRect);
+    }
+
+    if (m_showSwatchContextMenu) {
+        sf::RectangleShape menuBox(sf::Vector2f(m_swatchDeleteBtnBounds.width, m_swatchDeleteBtnBounds.height));
+        menuBox.setPosition(m_swatchDeleteBtnBounds.left, m_swatchDeleteBtnBounds.top);
+        menuBox.setFillColor(sf::Color(18, 10, 24, 250));
+        menuBox.setOutlineThickness(1.5f);
+        menuBox.setOutlineColor(WisdomUI::Theme::SunsetGold);
+        window.draw(menuBox);
+
+        bool hovMenuDel = m_swatchDeleteBtnBounds.contains(mousePos);
+        sf::RectangleShape btnInner(sf::Vector2f(m_swatchDeleteBtnBounds.width - 4.f, m_swatchDeleteBtnBounds.height - 4.f));
+        btnInner.setPosition(m_swatchDeleteBtnBounds.left + 2.f, m_swatchDeleteBtnBounds.top + 2.f);
+        btnInner.setFillColor(hovMenuDel ? sf::Color(180, 35, 50) : sf::Color(120, 25, 35));
+        window.draw(btnInner);
+
+        std::string delStr = "Delete (" + std::to_string(m_selectedSwatchIndices.size()) + ")";
+        WisdomUI::Theme::DrawCrispText(window, font, delStr, 11, m_swatchDeleteBtnBounds.left + m_swatchDeleteBtnBounds.width / 2.f, m_swatchDeleteBtnBounds.top + m_swatchDeleteBtnBounds.height / 2.f, sf::Color::White, sf::Color::Transparent, true, true);
+    }
+
     if (isDetached) {
         PaletteResizeDir dir = isResizing ? activeResizeDir : getResizeDirection(mousePos);
         if (dir != PaletteResizeDir::None) {
@@ -614,33 +664,6 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
             window.draw(guide);
         }
     }
-}
-
-std::string ColorPalettePanel::processClick(sf::Vector2f mousePos, Canvas& canvas) {
-    if (closeBtn.getGlobalBounds().contains(mousePos)) {
-        forceClose();
-        return "color_close";
-    }
-
-    if (detachBtn.getGlobalBounds().contains(mousePos)) {
-        isDetached = !isDetached;
-        if (isDetached) state = PalettePanelState::Visible;
-        return "color_detach";
-    }
-
-    if (!isDetached && pinBtn.getGlobalBounds().contains(mousePos)) {
-        state = (state == PalettePanelState::Pinned) ? PalettePanelState::Visible : PalettePanelState::Pinned;
-        return "color_pin";
-    }
-    return "";
-}
-
-bool ColorPalettePanel::handleClick(sf::Vector2f mousePos, Canvas& canvas) {
-    return !processClick(mousePos, canvas).empty();
-}
-
-bool ColorPalettePanel::handlePaletteClick(sf::Vector2f mousePos, sf::Color& outPrimary, sf::Color& outSecondary) {
-    return false;
 }
 
 bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canvas& canvas) {
@@ -680,147 +703,180 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
         }
     }
 
-    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        if (closeBtn.getGlobalBounds().contains(mousePos)) {
-            forceClose();
-            return true;
-        }
-
-        if (detachBtn.getGlobalBounds().contains(mousePos)) {
-            isDetached = !isDetached;
-            if (isDetached) state = PalettePanelState::Visible;
-            return true;
-        }
-
-        if (!isDetached && pinBtn.getGlobalBounds().contains(mousePos)) {
-            state = (state == PalettePanelState::Pinned) ? PalettePanelState::Visible : PalettePanelState::Pinned;
-            return true;
-        }
-
-        if (isDetached) {
-            PaletteResizeDir dir = getResizeDirection(mousePos);
-            if (dir != PaletteResizeDir::None) {
-                isResizing = true;
-                activeResizeDir = dir;
-                resizeStartMouse = mousePos;
-                resizeStartBounds = sf::FloatRect(detachedPos, detachedSize);
-                return true;
-            }
-        }
-
-        if (headerBg.getGlobalBounds().contains(mousePos)) {
-            if (!isDetached) {
-                isDetached = true;
-                detachedPos = sf::Vector2f(currentX, 68.f);
-                detachedSize = sf::Vector2f(width, 640.f);
-            }
-            isDraggingWindow = true;
-            windowDragOffset = mousePos - detachedPos;
-            return true;
-        }
-
-        if (eyedropperBtn.getGlobalBounds().contains(mousePos)) {
-            isEyedropperActive = !isEyedropperActive;
-            return true;
-        }
-
-        if (svSprite.getGlobalBounds().contains(mousePos)) isDraggingSV = true;
-        else if (hueSprite.getGlobalBounds().contains(mousePos)) isDraggingHue = true;
-        else if (alphaSprite.getGlobalBounds().contains(mousePos)) isDraggingAlpha = true;
-
-        float inputY = std::floor(alphaSprite.getPosition().y + 26.f + 14.f);
-        float boxW = 34.f;
-        float hexW = 66.f;
-        float boxSpacing = (pickerSize - (4.f * boxW) - hexW) / 4.f;
-        boxSpacing = std::max(2.f, boxSpacing);
-
-        float curInputX = pickerX;
-        if (sf::FloatRect(curInputX, inputY, boxW, 24.f).contains(mousePos)) { activeInputIndex = 0; inputBuffer = ""; return true; } curInputX += boxW + boxSpacing;
-        if (sf::FloatRect(curInputX, inputY, boxW, 24.f).contains(mousePos)) { activeInputIndex = 1; inputBuffer = ""; return true; } curInputX += boxW + boxSpacing;
-        if (sf::FloatRect(curInputX, inputY, boxW, 24.f).contains(mousePos)) { activeInputIndex = 2; inputBuffer = ""; return true; } curInputX += boxW + boxSpacing;
-        if (sf::FloatRect(curInputX, inputY, boxW, 24.f).contains(mousePos)) { activeInputIndex = 3; inputBuffer = ""; return true; } curInputX += boxW + boxSpacing;
-        if (sf::FloatRect(curInputX, inputY, hexW, 24.f).contains(mousePos)) { activeInputIndex = 4; inputBuffer = ""; return true; }
-
-        activeInputIndex = -1;
-
-        if (m_adviceClearAllBounds.contains(mousePos)) {
-            clearAdvicePalettes();
-            return true;
-        }
-
-        for (const auto& item : m_advicePinBtnBounds) {
-            if (item.first.contains(mousePos)) {
-                size_t pIdx = item.second;
-                if (pIdx < m_advicePalettes.size()) {
-                    m_advicePalettes[pIdx].isPinned = !m_advicePalettes[pIdx].isPinned;
-                    saveAdvicePalettes();
+    if (m_showSwatchContextMenu) {
+        if (event.type == sf::Event::MouseButtonPressed) {
+            if (event.mouseButton.button == sf::Mouse::Left && m_swatchDeleteBtnBounds.contains(mousePos)) {
+                std::sort(m_selectedSwatchIndices.rbegin(), m_selectedSwatchIndices.rend());
+                m_selectedSwatchIndices.erase(std::unique(m_selectedSwatchIndices.begin(), m_selectedSwatchIndices.end()), m_selectedSwatchIndices.end());
+                for (size_t idx : m_selectedSwatchIndices) {
+                    colorManager.removeCustomSwatch(static_cast<int>(idx));
                 }
+                m_selectedSwatchIndices.clear();
+                m_showSwatchContextMenu = false;
+                return true;
+            }
+            m_showSwatchContextMenu = false;
+        }
+    }
+
+    if (event.type == sf::Event::MouseButtonPressed) {
+        if (event.mouseButton.button == sf::Mouse::Right) {
+            if (!m_selectedSwatchIndices.empty() && m_swatchAreaBounds.contains(mousePos)) {
+                m_showSwatchContextMenu = true;
+                m_swatchDeleteBtnBounds = sf::FloatRect(mousePos.x, mousePos.y, 110.f, 26.f);
                 return true;
             }
         }
+        else if (event.mouseButton.button == sf::Mouse::Left) {
+            if (m_swatchAreaBounds.contains(mousePos)) {
+                m_isBoxSelectingSwatches = true;
+                m_swatchSelectStart = mousePos;
+                m_swatchSelectEnd = mousePos;
+                m_selectedSwatchIndices.clear();
+                m_showSwatchContextMenu = false;
+            }
 
-        for (const auto& item : m_adviceDeleteBtnBounds) {
-            if (item.first.contains(mousePos)) {
-                removeAdvicePalette(item.second);
+            if (closeBtn.getGlobalBounds().contains(mousePos)) {
+                forceClose();
                 return true;
             }
-        }
 
-        for (const auto& item : m_adviceSwatchBounds) {
-            if (item.first.contains(mousePos)) {
-                sf::Color picked = item.second.first;
-                size_t palIdx = item.second.second;
-                if (palIdx < m_advicePalettes.size()) {
-                    m_advicePalettes[palIdx].useCount++;
-                    m_advicePalettes[palIdx].order = s_orderCounter++;
-                    saveAdvicePalettes();
+            if (detachBtn.getGlobalBounds().contains(mousePos)) {
+                isDetached = !isDetached;
+                if (isDetached) state = PalettePanelState::Visible;
+                return true;
+            }
+
+            if (!isDetached && pinBtn.getGlobalBounds().contains(mousePos)) {
+                state = (state == PalettePanelState::Pinned) ? PalettePanelState::Visible : PalettePanelState::Pinned;
+                return true;
+            }
+
+            if (isDetached) {
+                PaletteResizeDir dir = getResizeDirection(mousePos);
+                if (dir != PaletteResizeDir::None) {
+                    isResizing = true;
+                    activeResizeDir = dir;
+                    resizeStartMouse = mousePos;
+                    resizeStartBounds = sf::FloatRect(detachedPos, detachedSize);
+                    return true;
                 }
-                updateFromRGB(picked);
-                canvas.setPrimaryColor(picked);
-                return true;
             }
-        }
 
-        sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
-        curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
-
-        float sy = std::floor(inputY + 44.f + 16.f);
-        float sx = pickerX;
-        for (const auto& c : colorManager.getRecentColors()) {
-            if (sf::FloatRect(sx, sy, 20.f, 20.f).contains(mousePos)) {
-                updateFromRGB(c);
-                canvas.setPrimaryColor(c);
-                return true;
-            }
-            sx += 24.f;
-            if (sx > pickerX + pickerSize - 20.f) { sx = pickerX; sy += 24.f; }
-        }
-
-        sx = pickerX;
-        sy += 28.f;
-        if (sf::FloatRect(pickerX + pickerSize - 18.f, sy, 18.f, 18.f).contains(mousePos)) {
-            colorManager.addCustomSwatch(curC);
-            return true;
-        }
-
-        sy += 20.f;
-        int removeIdx = -1;
-        for (size_t i = 0; i < colorManager.getCustomSwatches().size(); ++i) {
-            if (sf::FloatRect(sx, sy, 22.f, 22.f).contains(mousePos)) {
-                if (sf::Keyboard::isKeyPressed(sf::Keyboard::LAlt)) removeIdx = static_cast<int>(i);
-                else {
-                    updateFromRGB(colorManager.getCustomSwatches()[i]);
-                    canvas.setPrimaryColor(colorManager.getCustomSwatches()[i]);
+            if (headerBg.getGlobalBounds().contains(mousePos)) {
+                if (!isDetached) {
+                    isDetached = true;
+                    detachedPos = sf::Vector2f(currentX, 68.f);
+                    detachedSize = sf::Vector2f(width, 640.f);
                 }
+                isDraggingWindow = true;
+                windowDragOffset = mousePos - detachedPos;
                 return true;
             }
-            sx += 26.f;
-            if (sx > pickerX + pickerSize - 22.f) { sx = pickerX; sy += 26.f; }
+
+            if (eyedropperBtn.getGlobalBounds().contains(mousePos)) {
+                isEyedropperActive = !isEyedropperActive;
+                return true;
+            }
+
+            if (svSprite.getGlobalBounds().contains(mousePos)) isDraggingSV = true;
+            else if (hueSprite.getGlobalBounds().contains(mousePos)) isDraggingHue = true;
+            else if (alphaSprite.getGlobalBounds().contains(mousePos)) isDraggingAlpha = true;
+
+            float inputY = std::floor(alphaSprite.getPosition().y + 26.f + 14.f);
+            float boxW = 34.f;
+            float hexW = 66.f;
+            float boxSpacing = (pickerSize - (4.f * boxW) - hexW) / 4.f;
+            boxSpacing = std::max(2.f, boxSpacing);
+
+            float curInputX = pickerX;
+            if (sf::FloatRect(curInputX, inputY, boxW, 24.f).contains(mousePos)) { activeInputIndex = 0; inputBuffer = ""; return true; } curInputX += boxW + boxSpacing;
+            if (sf::FloatRect(curInputX, inputY, boxW, 24.f).contains(mousePos)) { activeInputIndex = 1; inputBuffer = ""; return true; } curInputX += boxW + boxSpacing;
+            if (sf::FloatRect(curInputX, inputY, boxW, 24.f).contains(mousePos)) { activeInputIndex = 2; inputBuffer = ""; return true; } curInputX += boxW + boxSpacing;
+            if (sf::FloatRect(curInputX, inputY, boxW, 24.f).contains(mousePos)) { activeInputIndex = 3; inputBuffer = ""; return true; } curInputX += boxW + boxSpacing;
+            if (sf::FloatRect(curInputX, inputY, hexW, 24.f).contains(mousePos)) { activeInputIndex = 4; inputBuffer = ""; return true; }
+
+            activeInputIndex = -1;
+
+            if (m_adviceClearAllBounds.contains(mousePos)) {
+                clearAdvicePalettes();
+                return true;
+            }
+
+            for (const auto& item : m_advicePinBtnBounds) {
+                if (item.first.contains(mousePos)) {
+                    size_t pIdx = item.second;
+                    if (pIdx < m_advicePalettes.size()) {
+                        m_advicePalettes[pIdx].isPinned = !m_advicePalettes[pIdx].isPinned;
+                        saveAdvicePalettes();
+                    }
+                    return true;
+                }
+            }
+
+            for (const auto& item : m_adviceDeleteBtnBounds) {
+                if (item.first.contains(mousePos)) {
+                    removeAdvicePalette(item.second);
+                    return true;
+                }
+            }
+
+            for (const auto& item : m_adviceSwatchBounds) {
+                if (item.first.contains(mousePos)) {
+                    sf::Color picked = item.second.first;
+                    size_t palIdx = item.second.second;
+                    if (palIdx < m_advicePalettes.size()) {
+                        m_advicePalettes[palIdx].useCount++;
+                        m_advicePalettes[palIdx].order = s_orderCounter++;
+                        saveAdvicePalettes();
+                    }
+                    updateFromRGB(picked);
+                    canvas.setPrimaryColor(picked);
+                    return true;
+                }
+            }
+
+            sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
+            curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
+
+            float sy = std::floor(inputY + 44.f + 16.f);
+            float sx = pickerX;
+            for (const auto& c : colorManager.getRecentColors()) {
+                if (sf::FloatRect(sx, sy, 20.f, 20.f).contains(mousePos)) {
+                    updateFromRGB(c);
+                    canvas.setPrimaryColor(c);
+                    return true;
+                }
+                sx += 24.f;
+                if (sx > pickerX + pickerSize - 20.f) { sx = pickerX; sy += 24.f; }
+            }
+
+            sx = pickerX;
+            sy += 28.f;
+            if (sf::FloatRect(pickerX + pickerSize - 18.f, sy, 18.f, 18.f).contains(mousePos)) {
+                colorManager.addCustomSwatch(curC);
+                return true;
+            }
         }
-        if (removeIdx != -1) colorManager.removeCustomSwatch(removeIdx);
     }
 
     if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+        if (m_isBoxSelectingSwatches) {
+            float dist = std::hypot(m_swatchSelectEnd.x - m_swatchSelectStart.x, m_swatchSelectEnd.y - m_swatchSelectStart.y);
+            if (dist < 5.f) {
+                for (const auto& item : m_customSwatchBounds) {
+                    if (item.first.contains(m_swatchSelectStart)) {
+                        sf::Color c = colorManager.getCustomSwatches()[item.second];
+                        updateFromRGB(c);
+                        canvas.setPrimaryColor(c);
+                        break;
+                    }
+                }
+                m_selectedSwatchIndices.clear();
+            }
+            m_isBoxSelectingSwatches = false;
+        }
+
         if (isDraggingSV || isDraggingHue || isDraggingAlpha) {
             sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
             curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
@@ -836,6 +892,23 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
     }
 
     if (event.type == sf::Event::MouseMoved) {
+        if (m_isBoxSelectingSwatches) {
+            m_swatchSelectEnd = mousePos;
+            float left = std::min(m_swatchSelectStart.x, m_swatchSelectEnd.x);
+            float top = std::min(m_swatchSelectStart.y, m_swatchSelectEnd.y);
+            float w = std::abs(m_swatchSelectEnd.x - m_swatchSelectStart.x);
+            float h = std::abs(m_swatchSelectEnd.y - m_swatchSelectStart.y);
+            sf::FloatRect box(left, top, w, h);
+
+            m_selectedSwatchIndices.clear();
+            for (const auto& item : m_customSwatchBounds) {
+                if (box.intersects(item.first)) {
+                    m_selectedSwatchIndices.push_back(item.second);
+                }
+            }
+            return true;
+        }
+
         if (isResizing && isDetached) {
             float dx = mousePos.x - resizeStartMouse.x;
             float dy = mousePos.y - resizeStartMouse.y;
@@ -910,6 +983,34 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
 
     return background.getGlobalBounds().contains(mousePos);
 }
+
+std::string ColorPalettePanel::processClick(sf::Vector2f mousePos, Canvas& canvas) {
+    if (closeBtn.getGlobalBounds().contains(mousePos)) {
+        forceClose();
+        return "color_close";
+    }
+
+    if (detachBtn.getGlobalBounds().contains(mousePos)) {
+        isDetached = !isDetached;
+        if (isDetached) state = PalettePanelState::Visible;
+        return "color_detach";
+    }
+
+    if (!isDetached && pinBtn.getGlobalBounds().contains(mousePos)) {
+        state = (state == PalettePanelState::Pinned) ? PalettePanelState::Visible : PalettePanelState::Pinned;
+        return "color_pin";
+    }
+    return "";
+}
+
+bool ColorPalettePanel::handleClick(sf::Vector2f mousePos, Canvas& canvas) {
+    return !processClick(mousePos, canvas).empty();
+}
+
+bool ColorPalettePanel::handlePaletteClick(sf::Vector2f mousePos, sf::Color& outPrimary, sf::Color& outSecondary) {
+    return false;
+}
+
 
 void ColorPalettePanel::setColors(sf::Color primary, sf::Color secondary) {
     updateFromRGB(primary);

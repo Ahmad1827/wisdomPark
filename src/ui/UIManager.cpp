@@ -1993,7 +1993,48 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (g_aiPanel.handleEvent(event, mousePos)) {
                 if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
                     std::string action = g_aiPanel.handleClick(mousePos);
-                    if (action == "action:get_advice") {
+                    if (action == "action:paste_palette") {
+                        if (g_aiPanel.importFromClipboard()) {
+                            const auto& colors = g_aiPanel.getSelectedPaletteColors();
+                            for (const auto& col : colors) {
+                                colorPalettePanel.getColorManager().addCustomSwatch(col);
+                            }
+                            auto ramp = g_aiPanel.generateAdvice(canvas.getPrimaryColor(), 0);
+                            colorPalettePanel.addAdvicePalette(ramp);
+                            m_activeRightTab = RightTabMode::Palette;
+                            showMessage("Imported & Loaded: " + g_aiPanel.getSelectedPaletteName(), sf::Color::Green);
+                        }
+                        else {
+                            showMessage("Clipboard must contain a Lospec link, slug, or hex codes!", sf::Color::Red);
+                        }
+                    }
+                    else if (action == "action:random_palette") {
+                        g_aiPanel.pickRandomPalette();
+                        const auto& colors = g_aiPanel.getSelectedPaletteColors();
+                        for (const auto& col : colors) {
+                            colorPalettePanel.getColorManager().addCustomSwatch(col);
+                        }
+                        auto ramp = g_aiPanel.generateAdvice(canvas.getPrimaryColor(), 0);
+                        colorPalettePanel.addAdvicePalette(ramp);
+                        m_activeRightTab = RightTabMode::Palette;
+                        showMessage("Random Palette: " + g_aiPanel.getSelectedPaletteName(), sf::Color::Green);
+                    }
+                    else if (action == "action:send_all_swatches") {
+                        const auto& colors = g_aiPanel.getSelectedPaletteColors();
+                        for (const auto& col : colors) {
+                            colorPalettePanel.getColorManager().addCustomSwatch(col);
+                        }
+                        m_activeRightTab = RightTabMode::Palette;
+                        showMessage("Sent " + std::to_string(colors.size()) + " colors to Swatches!", sf::Color::Green);
+                    }
+                    else if (action == "action:swatch_picked") {
+                        sf::Color picked = g_aiPanel.getLastPickedColor();
+                        canvas.setPrimaryColor(picked);
+                        colorPalettePanel.setColors(picked, canvas.getSecondaryColor());
+                        colorPalettePanel.getColorManager().addRecentColor(picked);
+                        showMessage("Color Picked", sf::Color::Cyan);
+                    }
+                    else if (action == "action:get_advice") {
                         sf::Color cur = canvas.getPrimaryColor();
                         static int s_adviceCounter = 0;
                         auto ramp = g_aiPanel.generateAdvice(cur, s_adviceCounter++);

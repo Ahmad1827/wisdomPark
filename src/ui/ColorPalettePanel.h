@@ -95,6 +95,16 @@ private:
     std::vector<std::pair<sf::FloatRect, size_t>> m_adviceDeleteBtnBounds;
     sf::FloatRect m_adviceClearAllBounds;
 
+    std::vector<std::pair<sf::FloatRect, size_t>> m_customSwatchBounds;
+    std::vector<size_t> m_selectedSwatchIndices;
+    bool m_isBoxSelectingSwatches = false;
+    sf::Vector2f m_swatchSelectStart;
+    sf::Vector2f m_swatchSelectEnd;
+    bool m_showSwatchContextMenu = false;
+    sf::Vector2f m_swatchContextMenuPos;
+    sf::FloatRect m_swatchDeleteBtnBounds;
+    sf::FloatRect m_swatchAreaBounds;
+
     void saveAdvicePalettes() const;
     void loadAdvicePalettes();
 

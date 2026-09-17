@@ -20,8 +20,14 @@ private:
 
     sf::FloatRect headerGripBounds;
     sf::FloatRect dropdownBtnBounds;
+    sf::FloatRect pasteBtnBounds;
+    sf::FloatRect randomBtnBounds;
     sf::FloatRect suggestBtnBounds;
+    sf::FloatRect sendAllBtnBounds;
     sf::FloatRect closeBtnBounds;
+
+    std::vector<std::pair<sf::FloatRect, sf::Color>> paletteSwatchBounds;
+    sf::Color lastPickedColor;
 
     std::vector<LospecPalette> palettes;
     int selectedPaletteIdx;
@@ -35,6 +41,7 @@ private:
 
     void loadPalettes();
     sf::Color hexToColor(const std::string& hex) const;
+    std::string colorToHex(sf::Color c) const;
     float getColorDistance(sf::Color c1, sf::Color c2) const;
     float getLuminance(sf::Color c) const;
 
@@ -49,6 +56,12 @@ public:
 
     void toggle();
     bool getIsVisible() const;
+
+    bool importFromClipboard();
+    void pickRandomPalette();
+    std::string getSelectedPaletteName() const;
+    const std::vector<sf::Color>& getSelectedPaletteColors() const;
+    sf::Color getLastPickedColor() const;
 
     std::vector<sf::Color> generateAdvice(sf::Color base, int variation);
 };
