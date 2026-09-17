@@ -4,9 +4,16 @@
 #include <iostream>
 #include <stack>
 #include <queue>
+#include <filesystem>
+#include <map>
 #include "TextSystem.h"
 
 static const sf::RenderWindow* g_activeWindow = nullptr;
+static sf::Image s_globalClipboardImage;
+static bool s_hasGlobalClipboard = false;
+static std::vector<VectorStroke> s_globalClipboardVectorStrokes;
+static bool s_hasGlobalVectorClipboard = false;
+static sf::Vector2f s_globalVectorClipboardOrigin;
 
 static sf::BlendMode eraseBlendMode() {
     return sf::BlendMode(
@@ -447,8 +454,11 @@ void Canvas::initCustom(int width, int height) {
     }
 
     canvasSprite.setScale(targetWidth / canvasSprite.getLocalBounds().width, targetHeight / canvasSprite.getLocalBounds().height);
-    canvasSprite.setOrigin(canvasSprite.getLocalBounds().width / 2.f, canvasSprite.getLocalBounds().height / 2.f);
-    canvasSprite.setPosition(1920.f / 2.f, deskSprite.getPosition().y - (379.f / 2.f) - (targetHeight / 2.f) + 120.f);
+    canvasSprite.setOrigin(0.f, 0.f);
+    canvasSprite.setPosition(
+        std::floor(1920.f / 2.f - targetWidth / 2.f),
+        std::floor(deskSprite.getPosition().y - (379.f / 2.f) - targetHeight + 120.f)
+    );
 
     sf::FloatRect cBounds = canvasSprite.getGlobalBounds();
     drawArea = cBounds;
@@ -1064,58 +1074,268 @@ void Canvas::commitSelection(int currentFrame) {
 }
 
 void Canvas::copySelection(int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
-        if (!isPixelMode) {
-            sf::RenderTexture tmp;
-            if (renderLayerToTexture(currentFrame, activeLayer, tmp)) {
-                selection.copy(&tmp);
-                return;
+    if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    if (!selection.isActive()) return;
+
+    sf::FloatRect bb = selection.getBoundingBox();
+
+    if (!isPixelMode) {
+        s_globalClipboardVectorStrokes.clear();
+        s_globalVectorClipboardOrigin = sf::Vector2f(bb.left, bb.top);
+
+        for (const auto& vs : m_vectorStrokes) {
+            if (vs.frame != currentFrame || vs.layer != activeLayer) continue;
+
+            VectorStroke copied;
+            copied.layer = activeLayer;
+            copied.frame = currentFrame;
+            copied.isErase = vs.isErase;
+            copied.mesh.setPrimitiveType(sf::Triangles);
+
+            for (size_t v = 0; v + 2 < vs.mesh.getVertexCount(); v += 3) {
+                sf::Vector2f centroid = (vs.mesh[v].position + vs.mesh[v + 1].position + vs.mesh[v + 2].position) / 3.0f;
+                if (selection.isPointInsideSelection(centroid)) {
+                    for (int k = 0; k < 3; ++k) {
+                        sf::Vertex vert = vs.mesh[v + k];
+                        vert.position -= s_globalVectorClipboardOrigin;
+                        copied.mesh.append(vert);
+                    }
+                }
+            }
+
+            if (copied.mesh.getVertexCount() > 0) {
+                s_globalClipboardVectorStrokes.push_back(std::move(copied));
             }
         }
-        selection.copy(frames[currentFrame].layers[activeLayer].texture.get());
+
+        if (!s_globalClipboardVectorStrokes.empty()) {
+            s_hasGlobalVectorClipboard = true;
+        }
     }
+
+    sf::RenderTexture tmp;
+    sf::Image layerImg;
+    if (!isPixelMode) {
+        if (renderLayerToTexture(currentFrame, activeLayer, tmp)) {
+            selection.copy(&tmp);
+            layerImg = tmp.getTexture().copyToImage();
+        }
+    }
+    else {
+        auto tex = frames[currentFrame].layers[activeLayer].texture;
+        if (tex) {
+            selection.copy(tex.get());
+            layerImg = tex->getTexture().copyToImage();
+        }
+    }
+
+    if (layerImg.getSize().x > 0) {
+        int minX = std::max(0, static_cast<int>(std::floor(bb.left)));
+        int minY = std::max(0, static_cast<int>(std::floor(bb.top)));
+        int maxX = std::min(static_cast<int>(canvasLogicalSize.x), static_cast<int>(std::ceil(bb.left + bb.width)));
+        int maxY = std::min(static_cast<int>(canvasLogicalSize.y), static_cast<int>(std::ceil(bb.top + bb.height)));
+
+        int w = maxX - minX;
+        int h = maxY - minY;
+        if (w > 0 && h > 0) {
+            sf::Image clipImg;
+            clipImg.create(w, h, sf::Color::Transparent);
+            for (int y = 0; y < h; ++y) {
+                for (int x = 0; x < w; ++x) {
+                    int srcX = minX + x;
+                    int srcY = minY + y;
+                    if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(srcX), static_cast<float>(srcY)))) {
+                        clipImg.setPixel(x, y, layerImg.getPixel(srcX, srcY));
+                    }
+                }
+            }
+            s_globalClipboardImage = clipImg;
+            s_hasGlobalClipboard = true;
+            std::filesystem::create_directories("assets");
+            s_globalClipboardImage.saveToFile("assets/clipboard_cache.png");
+        }
+    }
+}
+
+bool Canvas::hasGlobalClipboard() const {
+    if (s_hasGlobalClipboard && s_globalClipboardImage.getSize().x > 0) return true;
+    if (std::filesystem::exists("assets/clipboard_cache.png")) {
+        if (s_globalClipboardImage.loadFromFile("assets/clipboard_cache.png")) {
+            s_hasGlobalClipboard = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+void Canvas::pasteVectorStrokes(const std::vector<VectorStroke>& strokes, sf::Vector2f offset, int currentFrame) {
+    if (strokes.empty()) return;
+    saveUndoState();
+
+    addLayer(currentFrame, "Pasted Vector");
+
+    for (const auto& vs : strokes) {
+        VectorStroke placed;
+        placed.layer = activeLayer;
+        placed.frame = currentFrame;
+        placed.isErase = vs.isErase;
+        placed.mesh.setPrimitiveType(sf::Triangles);
+
+        for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+            sf::Vertex vert = vs.mesh[v];
+            vert.position += offset;
+            placed.mesh.append(vert);
+        }
+
+        m_vectorStrokes.push_back(std::move(placed));
+    }
+
+    isDirty = true;
+}
+
+bool Canvas::pasteGlobalClipboard(int currentFrame) {
+    if (!isPixelMode && s_hasGlobalVectorClipboard && !s_globalClipboardVectorStrokes.empty()) {
+        float minX = 99999.f, maxX = -99999.f, minY = 99999.f, maxY = -99999.f;
+        for (const auto& vs : s_globalClipboardVectorStrokes) {
+            for (size_t i = 0; i < vs.mesh.getVertexCount(); ++i) {
+                minX = std::min(minX, vs.mesh[i].position.x);
+                maxX = std::max(maxX, vs.mesh[i].position.x);
+                minY = std::min(minY, vs.mesh[i].position.y);
+                maxY = std::max(maxY, vs.mesh[i].position.y);
+            }
+        }
+        float w = maxX - minX;
+        float h = maxY - minY;
+
+        sf::Vector2f targetPos(
+            std::floor((static_cast<float>(canvasLogicalSize.x) - w) * 0.5f),
+            std::floor((static_cast<float>(canvasLogicalSize.y) - h) * 0.5f)
+        );
+
+        pasteVectorStrokes(s_globalClipboardVectorStrokes, targetPos, currentFrame);
+        return true;
+    }
+
+    if (!hasGlobalClipboard()) return false;
+    pasteImage(s_globalClipboardImage, currentFrame);
+    return true;
+}
+
+void Canvas::resizeCanvas(unsigned int newWidth, unsigned int newHeight) {
+    if (newWidth == 0 || newHeight == 0) return;
+    if (newWidth == canvasLogicalSize.x && newHeight == canvasLogicalSize.y) return;
+
+    saveUndoState();
+
+    canvasLogicalSize = sf::Vector2u(newWidth, newHeight);
+
+    sf::ContextSettings ctx;
+    ctx.antialiasingLevel = isPixelMode ? 0 : 8;
+
+    std::map<sf::RenderTexture*, std::shared_ptr<sf::RenderTexture>> replaced;
+
+    for (auto& frame : frames) {
+        for (auto& layer : frame.layers) {
+            if (!layer.texture) continue;
+
+            auto it = replaced.find(layer.texture.get());
+            if (it != replaced.end()) {
+                layer.texture = it->second;
+            }
+            else {
+                auto oldTex = layer.texture;
+                sf::Image oldImg = oldTex->getTexture().copyToImage();
+
+                auto newTex = std::make_shared<sf::RenderTexture>();
+                if (!newTex->create(newWidth, newHeight, ctx)) {
+                    newTex->create(newWidth, newHeight);
+                }
+                newTex->setSmooth(!isPixelMode);
+                newTex->clear(sf::Color::Transparent);
+
+                sf::Texture backup;
+                backup.setSmooth(false);
+                backup.loadFromImage(oldImg);
+
+                sf::Sprite spr(backup);
+                spr.setPosition(0.f, 0.f);
+
+                newTex->setView(sf::View(sf::FloatRect(0.f, 0.f, static_cast<float>(newWidth), static_cast<float>(newHeight))));
+                newTex->draw(spr, sf::RenderStates(sf::BlendNone));
+                newTex->display();
+
+                replaced[oldTex.get()] = newTex;
+                layer.texture = newTex;
+            }
+        }
+    }
+
+    float maxViewportHeight = 700.f;
+    float maxViewportWidth = 1400.f;
+
+    float aspectCanvas = static_cast<float>(canvasLogicalSize.x) / static_cast<float>(canvasLogicalSize.y);
+
+    float targetHeight = maxViewportHeight;
+    float targetWidth = targetHeight * aspectCanvas;
+
+    if (targetWidth > maxViewportWidth) {
+        targetWidth = maxViewportWidth;
+        targetHeight = targetWidth / aspectCanvas;
+    }
+
+    if (canvasSprite.getLocalBounds().width > 0.f && canvasSprite.getLocalBounds().height > 0.f) {
+        canvasSprite.setScale(targetWidth / canvasSprite.getLocalBounds().width, targetHeight / canvasSprite.getLocalBounds().height);
+        canvasSprite.setOrigin(0.f, 0.f);
+        canvasSprite.setPosition(
+            std::floor(1920.f / 2.f - targetWidth / 2.f),
+            std::floor(deskSprite.getPosition().y - (379.f / 2.f) - targetHeight + 120.f)
+        );
+    }
+
+    drawArea = canvasSprite.getGlobalBounds();
+    selection.clearSelection();
+    isDirty = true;
 }
 
 void Canvas::pasteImage(const sf::Image& img, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
     saveUndoState();
-
-    addLayer(currentFrame, "Pasted Clipboard");
+    addLayer(currentFrame, "Pasted Object");
 
     auto& targetLayer = frames[currentFrame].layers[activeLayer];
-    targetLayer.isImageResource = true;
+    targetLayer.isImageResource = false;
     auto tex = std::make_shared<sf::Texture>();
+    tex->setSmooth(false);
     tex->loadFromImage(img);
     targetLayer.staticTexture = tex;
 
     sf::Vector2u texSize = img.getSize();
+    float tw = static_cast<float>(texSize.x);
+    float th = static_cast<float>(texSize.y);
 
-    float maxW = static_cast<float>(canvasLogicalSize.x) * 0.9f;
-    float maxH = static_cast<float>(canvasLogicalSize.y) * 0.9f;
-    float scale = std::min(maxW / static_cast<float>(texSize.x), maxH / static_cast<float>(texSize.y));
-    scale = std::min(scale, 1.0f);
+    float centerX = std::floor((static_cast<float>(canvasLogicalSize.x) - tw) * 0.5f);
+    float centerY = std::floor((static_cast<float>(canvasLogicalSize.y) - th) * 0.5f);
 
     sf::Sprite importSprite(*tex);
-    importSprite.setScale(scale, scale);
-
-    float scaledW = static_cast<float>(texSize.x) * scale;
-    float scaledH = static_cast<float>(texSize.y) * scale;
-    float centerX = (canvasLogicalSize.x / 2.0f) - (scaledW / 2.0f);
-    float centerY = (canvasLogicalSize.y / 2.0f) - (scaledH / 2.0f);
     importSprite.setPosition(centerX, centerY);
 
+    targetLayer.texture->setSmooth(false);
     targetLayer.texture->clear(sf::Color::Transparent);
-    targetLayer.texture->draw(importSprite, sf::RenderStates(sf::BlendAlpha));
+
+    sf::View savedView = targetLayer.texture->getView();
+    targetLayer.texture->setView(sf::View(sf::FloatRect(0.f, 0.f, static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y))));
+    targetLayer.texture->draw(importSprite, sf::RenderStates(sf::BlendNone));
     targetLayer.texture->display();
+    targetLayer.texture->setView(savedView);
 
     isDirty = true;
 
     commitSelection(currentFrame);
     selection.startLasso(sf::Vector2f(centerX, centerY), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY + scaledH), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(centerX, centerY + scaledH), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(centerX + tw, centerY), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(centerX + tw, centerY + th), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(centerX, centerY + th), canvasLogicalSize);
     selection.endLasso();
     selection.extractFromLayer(targetLayer.texture.get(), true);
     setActiveTool(ToolType::Select);

@@ -1293,6 +1293,10 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
 
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
     if (handleHandCamWidgetEvents(event)) return;
+
+    if (m_showResizeModal) {
+        if (handleResizeModalEvent(event, window, canvas, timeline)) return;
+    }
     if (event.type == sf::Event::Resized) {
         window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(sf::Vector2u(event.size.width, event.size.height)));
     }
@@ -2206,7 +2210,19 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     m_toolDock.SetActiveTool("brush");
                 }
 
-                if (keybindManager.isActionTriggered("edit_copy", event)) canvas.copySelection(timeline.getCurrentFrame());
+                if (event.key.control && event.key.code == sf::Keyboard::R) {
+                    m_showResizeModal = true;
+                    m_resizeWBuf = std::to_string(canvas.getCanvasSize().x);
+                    m_resizeHBuf = std::to_string(canvas.getCanvasSize().y);
+                    m_activeResizeField = 0;
+                    return;
+                }
+
+                if (keybindManager.isActionTriggered("edit_copy", event)) {
+                    canvas.copySelection(timeline.getCurrentFrame());
+                    showMessage("Selection Copied to Clipboard", sf::Color::Green);
+                }
+
                 if (keybindManager.isActionTriggered("edit_paste", event)) {
 #if defined(_WIN32)
                     sf::Image clipImg;
@@ -2214,11 +2230,21 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         canvas.pasteImage(clipImg, timeline.getCurrentFrame());
                         showMessage("Pasted from Clipboard", sf::Color::Green);
                     }
+                    else if (canvas.hasGlobalClipboard()) {
+                        canvas.pasteGlobalClipboard(timeline.getCurrentFrame());
+                        showMessage("Pasted Selection from Clipboard", sf::Color::Green);
+                    }
                     else {
                         canvas.pasteSelection(timeline.getCurrentFrame());
                     }
 #else
-                    canvas.pasteSelection(timeline.getCurrentFrame());
+                    if (canvas.hasGlobalClipboard()) {
+                        canvas.pasteGlobalClipboard(timeline.getCurrentFrame());
+                        showMessage("Pasted Selection from Clipboard", sf::Color::Green);
+                    }
+                    else {
+                        canvas.pasteSelection(timeline.getCurrentFrame());
+                    }
 #endif
                 }
                 if (keybindManager.isActionTriggered("edit_dup_sel", event)) canvas.duplicateSelection(timeline.getCurrentFrame());
@@ -2994,9 +3020,155 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             drawEscapeMenu(window, canvas, timeline);
         }
 
+        if (m_showResizeModal) {
+            drawResizeModal(window);
+        }
+
         m_toolDock.RenderTooltip(window);
     }
     drawHandCamWidget(window);
+}
+
+void UIManager::drawResizeModal(sf::RenderWindow& window) {
+    sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
+    overlay.setFillColor(sf::Color(10, 4, 16, 210));
+    window.draw(overlay);
+
+    float modalW = 430.f;
+    float modalH = 260.f;
+    float mx = (1920.f - modalW) * 0.5f;
+    float my = (1080.f - modalH) * 0.5f;
+    m_resizeModalBounds = sf::FloatRect(mx, my, modalW, modalH);
+
+    WisdomUI::Theme::DrawSunsetPanel(window, m_resizeModalBounds, 1.0f);
+    WisdomUI::Theme::DrawCrispText(window, font, "RESIZE CANVAS", 20, mx + modalW / 2.f, my + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "ADJUST LOGICAL RESOLUTION", 12, mx + modalW / 2.f, my + 50.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 6, 20), true, true);
+
+    float inputW = 160.f;
+    float inputH = 40.f;
+    m_resizeWBox = sf::FloatRect(mx + 36.f, my + 94.f, inputW, inputH);
+    m_resizeHBox = sf::FloatRect(mx + modalW - 36.f - inputW, my + 94.f, inputW, inputH);
+
+    WisdomUI::Theme::DrawCrispText(window, font, "Width (px):", 13, m_resizeWBox.left, m_resizeWBox.top - 20.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawCrispText(window, font, "Height (px):", 13, m_resizeHBox.left, m_resizeHBox.top - 20.f, WisdomUI::Theme::TextSecondary);
+
+    sf::RectangleShape wBox(sf::Vector2f(m_resizeWBox.width, m_resizeWBox.height));
+    wBox.setPosition(m_resizeWBox.left, m_resizeWBox.top);
+    wBox.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    wBox.setOutlineThickness(1.5f);
+    wBox.setOutlineColor(m_activeResizeField == 0 ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
+    window.draw(wBox);
+
+    std::string wDisp = m_resizeWBuf + (m_activeResizeField == 0 ? "_" : "");
+    WisdomUI::Theme::DrawCrispText(window, font, wDisp, 16, m_resizeWBox.left + 14.f, m_resizeWBox.top + 10.f, WisdomUI::Theme::SunsetGold);
+
+    sf::RectangleShape hBox(sf::Vector2f(m_resizeHBox.width, m_resizeHBox.height));
+    hBox.setPosition(m_resizeHBox.left, m_resizeHBox.top);
+    hBox.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    hBox.setOutlineThickness(1.5f);
+    hBox.setOutlineColor(m_activeResizeField == 1 ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
+    window.draw(hBox);
+
+    std::string hDisp = m_resizeHBuf + (m_activeResizeField == 1 ? "_" : "");
+    WisdomUI::Theme::DrawCrispText(window, font, hDisp, 16, m_resizeHBox.left + 14.f, m_resizeHBox.top + 10.f, WisdomUI::Theme::SunsetGold);
+
+    float btnW = 160.f;
+    float btnH = 44.f;
+    m_resizeApplyBtn = sf::FloatRect(mx + 36.f, my + 175.f, btnW, btnH);
+    m_resizeCancelBtn = sf::FloatRect(mx + modalW - 36.f - btnW, my + 175.f, btnW, btnH);
+
+    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    WisdomUI::Theme::DrawSunsetButton(window, m_resizeApplyBtn, "Apply", font, 15, false, m_resizeApplyBtn.contains(mPos), true, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_resizeCancelBtn, "Cancel", font, 15, false, m_resizeCancelBtn.contains(mPos), false, 1.0f);
+}
+
+bool UIManager::handleResizeModalEvent(const sf::Event& event, sf::RenderWindow& window, Canvas& canvas, Timeline& timeline) {
+    if (!m_showResizeModal) return false;
+
+    sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+    if (event.type == sf::Event::TextEntered) {
+        if (event.text.unicode == '\b') {
+            if (m_activeResizeField == 0 && !m_resizeWBuf.empty()) m_resizeWBuf.pop_back();
+            else if (m_activeResizeField == 1 && !m_resizeHBuf.empty()) m_resizeHBuf.pop_back();
+        }
+        else if (event.text.unicode >= '0' && event.text.unicode <= '9') {
+            if (m_activeResizeField == 0 && m_resizeWBuf.length() < 5) m_resizeWBuf += static_cast<char>(event.text.unicode);
+            else if (m_activeResizeField == 1 && m_resizeHBuf.length() < 5) m_resizeHBuf += static_cast<char>(event.text.unicode);
+        }
+        return true;
+    }
+
+    if (event.type == sf::Event::KeyPressed) {
+        if (event.key.code == sf::Keyboard::Escape) {
+            m_showResizeModal = false;
+            return true;
+        }
+        if (event.key.code == sf::Keyboard::Tab) {
+            m_activeResizeField = (m_activeResizeField == 0) ? 1 : 0;
+            return true;
+        }
+        if (event.key.code == sf::Keyboard::Enter) {
+            try {
+                int nw = std::stoi(m_resizeWBuf);
+                int nh = std::stoi(m_resizeHBuf);
+                if (nw >= 8 && nh >= 8 && nw <= 8192 && nh <= 8192) {
+                    canvas.resizeCanvas(nw, nh);
+                    if (projManager && !activeProjectPath.empty()) {
+                        projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode());
+                    }
+                    showMessage("Canvas Resized to " + std::to_string(nw) + "x" + std::to_string(nh), sf::Color::Green);
+                    m_showResizeModal = false;
+                }
+                else {
+                    showMessage("Size must be between 8 and 8192 px", sf::Color::Red);
+                }
+            }
+            catch (...) {
+                showMessage("Invalid dimensions entered", sf::Color::Red);
+            }
+            return true;
+        }
+    }
+
+    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        if (m_resizeWBox.contains(mousePos)) {
+            m_activeResizeField = 0;
+            return true;
+        }
+        if (m_resizeHBox.contains(mousePos)) {
+            m_activeResizeField = 1;
+            return true;
+        }
+        if (m_resizeApplyBtn.contains(mousePos)) {
+            try {
+                int nw = std::stoi(m_resizeWBuf);
+                int nh = std::stoi(m_resizeHBuf);
+                if (nw >= 8 && nh >= 8 && nw <= 8192 && nh <= 8192) {
+                    canvas.resizeCanvas(nw, nh);
+                    if (projManager && !activeProjectPath.empty()) {
+                        projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode());
+                    }
+                    showMessage("Canvas Resized to " + std::to_string(nw) + "x" + std::to_string(nh), sf::Color::Green);
+                    m_showResizeModal = false;
+                }
+                else {
+                    showMessage("Size must be between 8 and 8192 px", sf::Color::Red);
+                }
+            }
+            catch (...) {
+                showMessage("Invalid dimensions entered", sf::Color::Red);
+            }
+            return true;
+        }
+        if (m_resizeCancelBtn.contains(mousePos)) {
+            m_showResizeModal = false;
+            return true;
+        }
+        return true;
+    }
+
+    return true;
 }
 
 bool loadStudioFont(sf::Font& font) {
@@ -3901,7 +4073,7 @@ void UIManager::drawEscapeMenu(sf::RenderWindow& window, Canvas& canvas, Timelin
     sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
     float modalW = 480.f;
-    float modalH = 580.f;
+    float modalH = 636.f;
     float modalX = (1920.f - modalW) / 2.f;
     float modalY = (1080.f - modalH) / 2.f;
 
@@ -3918,6 +4090,7 @@ void UIManager::drawEscapeMenu(sf::RenderWindow& window, Canvas& canvas, Timelin
 
     std::vector<std::pair<std::string, std::string>> menuItems = {
         { "resume", "Resume Studio" },
+        { "resize", "Resize Canvas (Ctrl+R)" },
         { "save", "Save Project (Ctrl+S)" },
         { "save_as", "Save Project As..." },
         { "export", "Export Sequence (Ctrl+E)" },
@@ -3951,10 +4124,11 @@ bool UIManager::handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& 
     }
 
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+        sf::Vector2i pixelPos(event.mouseButton.x, event.mouseButton.y);
+        sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
 
         float modalW = 480.f;
-        float modalH = 580.f;
+        float modalH = 636.f;
         float modalX = (1920.f - modalW) / 2.f;
         float modalY = (1080.f - modalH) / 2.f;
 
@@ -3964,7 +4138,16 @@ bool UIManager::handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& 
         float btnH = 46.f;
         float spacing = 12.f;
 
-        std::vector<std::string> actions = { "resume", "save", "save_as", "export", "fullscreen", "main_menu", "exit" };
+        std::vector<std::string> actions = {
+            "resume",
+            "resize",
+            "save",
+            "save_as",
+            "export",
+            "fullscreen",
+            "main_menu",
+            "exit"
+        };
 
         for (size_t i = 0; i < actions.size(); ++i) {
             sf::FloatRect bRect(btnX, btnY + static_cast<float>(i) * (btnH + spacing), btnW, btnH);
@@ -3973,6 +4156,13 @@ bool UIManager::handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& 
 
                 if (action == "resume") {
                     m_showEscapeMenu = false;
+                }
+                else if (action == "resize") {
+                    m_showEscapeMenu = false;
+                    m_showResizeModal = true;
+                    m_resizeWBuf = std::to_string(canvas.getCanvasSize().x);
+                    m_resizeHBuf = std::to_string(canvas.getCanvasSize().y);
+                    m_activeResizeField = 0;
                 }
                 else if (action == "save") {
                     if (triggerSave(canvas, timeline)) {

@@ -49,6 +49,13 @@ struct DeformPixel {
     sf::Color color;
 };
 
+struct VectorStroke {
+    sf::VertexArray mesh;
+    int layer;
+    int frame;
+    bool isErase = false;
+};
+
 class Canvas {
 private:
     PerspectiveManager* m_perspectiveManager = nullptr;
@@ -120,12 +127,6 @@ private:
     sf::Vector2f m_symmetryDragOffsetStart{ 0.f, 0.f };
     sf::Vector2f m_symmetryDragOffsetEnd{ 0.f, 0.f };
 
-    struct VectorStroke {
-        sf::VertexArray mesh;
-        int layer;
-        int frame;
-        bool isErase = false;
-    };
 
     struct UndoState {
         std::vector<Frame> frames;
@@ -289,6 +290,10 @@ public:
     void redo();
 
     void copySelection(int currentFrame);
+    void resizeCanvas(unsigned int newWidth, unsigned int newHeight);
+    bool hasGlobalClipboard() const;
+    bool pasteGlobalClipboard(int currentFrame);
+    void pasteVectorStrokes(const std::vector<VectorStroke>& strokes, sf::Vector2f offset, int currentFrame);
     sf::RenderStates getSFMLBlendMode(BlendMode mode) const;
 
     void handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame);
