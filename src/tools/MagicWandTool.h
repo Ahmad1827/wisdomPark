@@ -49,4 +49,5 @@ private:
     std::vector<bool> extractSelectionMask(sf::Vector2i startPos);
     std::vector<sf::Vector2f> traceBoundary(const std::vector<bool>& mask, int w, int h, sf::Vector2i startNode);
     void drawPropertiesPanel(sf::RenderWindow& window);
+    void drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos);
 };

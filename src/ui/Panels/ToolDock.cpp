@@ -2,6 +2,7 @@
 #include "../UITheme.h"
 #include "../UIIcons.h"
 #include <cmath>
+#include <algorithm>
 
 namespace WisdomUI {
 
@@ -13,8 +14,21 @@ namespace WisdomUI {
 
     void ToolDock::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        float startY = bounds.top + 8.0f;
-        float btnSize = 36.0f;
+
+        float availableHeight = bounds.height - 20.0f;
+        float btnSize = 40.0f;
+        float gap = 6.0f;
+
+        if (!m_tools.empty()) {
+            float totalNeeded = static_cast<float>(m_tools.size()) * btnSize + static_cast<float>(m_tools.size() - 1) * gap;
+            if (totalNeeded > availableHeight && availableHeight > 100.0f) {
+                btnSize = std::floor((availableHeight - static_cast<float>(m_tools.size() - 1) * 3.0f) / static_cast<float>(m_tools.size()));
+                btnSize = std::clamp(btnSize, 26.0f, 40.0f);
+                gap = 3.0f;
+            }
+        }
+
+        float startY = bounds.top + 10.0f;
         float startX = bounds.left + (bounds.width - btnSize) / 2.0f;
 
         for (auto& tool : m_tools) {
@@ -23,7 +37,7 @@ namespace WisdomUI {
                 m_selectionSliderY = startY;
                 m_targetSelectionSliderY = startY;
             }
-            startY += btnSize + 6.0f;
+            startY += btnSize + gap;
         }
     }
 
@@ -59,7 +73,15 @@ namespace WisdomUI {
             if (isHov) {
                 hasHover = true;
                 m_hoveredTooltip = tool.tooltip;
-                m_tooltipPos = sf::Vector2f(std::floor(tool.bounds.left + tool.bounds.width + 10.0f), std::floor(tool.bounds.top + 4.0f));
+
+                sf::Text dummy(tool.tooltip, m_font, 14);
+                float tw = dummy.getLocalBounds().width + 28.0f;
+                float th = 34.0f;
+                float tipX = std::floor(m_bounds.left + m_bounds.width + 12.0f);
+                float tipY = std::floor(tool.bounds.top + (tool.bounds.height - th) / 2.0f);
+                tipY = std::clamp(tipY, 10.0f, 1080.0f - th - 10.0f);
+
+                m_tooltipPos = sf::Vector2f(tipX, tipY);
             }
         }
 
@@ -72,7 +94,6 @@ namespace WisdomUI {
             for (auto& tool : m_tools) {
                 if (tool.bounds.contains(mousePos)) {
                     if (m_activeToolId == tool.id) {
-                        // Deselect: uncheck this tool completely
                         m_activeToolId = "";
                         if (m_onDeselect) m_onDeselect();
                         return true;
@@ -91,7 +112,7 @@ namespace WisdomUI {
         Theme::DrawSunsetPanel(window, m_bounds, 1.0f);
 
         if (!m_tools.empty() && !m_activeToolId.empty()) {
-            float btnSize = 36.0f;
+            float btnSize = m_tools.front().bounds.width;
             float startX = m_bounds.left + (m_bounds.width - btnSize) / 2.0f;
             sf::FloatRect activeIndicatorBounds(std::floor(startX), std::floor(m_selectionSliderY), btnSize, btnSize);
             Theme::DrawSunsetButton(window, activeIndicatorBounds, "", m_font, 11, true, false, true, 1.0f);
@@ -112,16 +133,20 @@ namespace WisdomUI {
                 Theme::DrawSunsetButton(window, tool.bounds, "", m_font, 11, false, tool.hoverAlpha > 0.5f, false, tool.scale);
             }
 
+            float iconSize = std::clamp(tool.bounds.width - 16.0f, 16.0f, 24.0f);
+            float iconX = std::floor(tool.bounds.left + (tool.bounds.width - iconSize) / 2.0f);
+            float iconY = std::floor(tool.bounds.top + (tool.bounds.height - iconSize) / 2.0f);
+
             sf::Color iconColor = isActive ? sf::Color::White : (tool.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
-            Icons::Draw(window, tool.id, sf::Vector2f(std::floor(tool.bounds.left + 8.0f), std::floor(tool.bounds.top + 8.0f)), 20.0f, iconColor);
+            Icons::Draw(window, tool.id, sf::Vector2f(iconX, iconY), iconSize, iconColor);
         }
     }
 
     void ToolDock::RenderTooltip(sf::RenderWindow& window) {
         if (m_tooltipAlpha > 0.02f) {
-            sf::Text dummy(m_hoveredTooltip, m_font, 12);
-            float tw = dummy.getLocalBounds().width + 24.0f;
-            float th = 28.0f;
+            sf::Text dummy(m_hoveredTooltip, m_font, 14);
+            float tw = dummy.getLocalBounds().width + 28.0f;
+            float th = 34.0f;
 
             sf::FloatRect tipBounds(m_tooltipPos.x, m_tooltipPos.y, tw, th);
             Theme::DrawSunsetPanel(window, tipBounds, m_tooltipAlpha);
@@ -130,7 +155,7 @@ namespace WisdomUI {
             tipTextCol.a = static_cast<sf::Uint8>(255 * m_tooltipAlpha);
             sf::Color shadowCol = sf::Color(14, 6, 20, static_cast<sf::Uint8>(230 * m_tooltipAlpha));
 
-            Theme::DrawCrispText(window, m_font, m_hoveredTooltip, 12, tipBounds.left + tw / 2.0f, tipBounds.top + th / 2.0f, tipTextCol, shadowCol, true, true);
+            Theme::DrawCrispText(window, m_font, m_hoveredTooltip, 14, tipBounds.left + tw / 2.0f, tipBounds.top + th / 2.0f, tipTextCol, shadowCol, true, true);
         }
     }
 

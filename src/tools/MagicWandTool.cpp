@@ -7,7 +7,7 @@
 MagicWandTool::MagicWandTool(Canvas& canvas, Timeline& timeline)
     : m_canvas(canvas), m_timeline(timeline), m_tolerance(10),
     m_contiguous(true), m_sampleAllLayers(false), m_isPanning(false),
-    m_panelPos(64.f, 78.f), m_panelSize(250.f, 250.f), m_isDraggingPanel(false),
+    m_panelPos(64.f, 78.f), m_panelSize(290.f, 280.f), m_isDraggingPanel(false),
     m_requestColorPanelOpen(false) {
     m_lastPrimaryColor = canvas.getPrimaryColor();
 }
@@ -66,7 +66,6 @@ std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
     auto matchesTarget = [&](const sf::Color& c) -> bool {
         if (targetIsStroke) {
             if (c.a <= 20) return false;
-            // Compare RGB values so anti-aliased margins match the solid center
             float r = std::abs(static_cast<float>(c.r) - static_cast<float>(targetCol.r));
             float g = std::abs(static_cast<float>(c.g) - static_cast<float>(targetCol.g));
             float b = std::abs(static_cast<float>(c.b) - static_cast<float>(targetCol.b));
@@ -371,11 +370,39 @@ void MagicWandTool::Render(sf::RenderWindow& window) {
     drawPropertiesPanel(window);
 }
 
+void MagicWandTool::drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos) {
+    sf::Text tipText(text, m_font, 13);
+    sf::FloatRect bounds = tipText.getLocalBounds();
+
+    float padX = 10.f;
+    float padY = 6.f;
+    float w = bounds.width + padX * 2.f;
+    float h = bounds.height + padY * 2.f + 4.f;
+
+    float x = pos.x - w - 12.f;
+    float y = pos.y + 14.f;
+
+    if (x < 10.f) x = pos.x + 16.f;
+    if (y + h > 1070.f) y = pos.y - h - 6.f;
+
+    sf::RectangleShape bg(sf::Vector2f(w, h));
+    bg.setPosition(x, y);
+    bg.setFillColor(sf::Color(18, 12, 24, 250));
+    bg.setOutlineThickness(1.5f);
+    bg.setOutlineColor(WisdomUI::Theme::Gold);
+
+    tipText.setPosition(x + padX, y + padY - 2.f);
+    tipText.setFillColor(sf::Color::White);
+
+    window.draw(bg);
+    window.draw(tipText);
+}
+
 void MagicWandTool::drawPropertiesPanel(sf::RenderWindow& window) {
     sf::FloatRect panelBounds(m_panelPos.x, m_panelPos.y, m_panelSize.x, m_panelSize.y);
     WisdomUI::Theme::DrawSunsetPanel(window, panelBounds, 1.0f);
 
-    sf::FloatRect headerGrip(m_panelPos.x + 8.f, m_panelPos.y + 6.f, m_panelSize.x - 16.f, 26.f);
+    sf::FloatRect headerGrip(m_panelPos.x + 8.f, m_panelPos.y + 6.f, m_panelSize.x - 16.f, 32.f);
     sf::RectangleShape gripBg(sf::Vector2f(headerGrip.width, headerGrip.height));
     gripBg.setPosition(headerGrip.left, headerGrip.top);
     gripBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
@@ -383,35 +410,55 @@ void MagicWandTool::drawPropertiesPanel(sf::RenderWindow& window) {
     gripBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(gripBg);
 
-    WisdomUI::Theme::DrawCrispText(window, m_font, ":: MAGIC WAND ::", 12, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, m_font, ":: MAGIC WAND ::", 15, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    std::string hoveredTooltip = "";
+
     float bx = m_panelPos.x;
-    float y = m_panelPos.y + 40.f;
+    float y = m_panelPos.y + 48.f;
 
-    WisdomUI::Theme::DrawCrispText(window, m_font, "Tolerance: " + std::to_string(m_tolerance), 11, bx + 14.f, y + 4.f, WisdomUI::Theme::TextPrimary);
+    WisdomUI::Theme::DrawCrispText(window, m_font, "Tolerance: " + std::to_string(m_tolerance), 14, bx + 16.f, y + 6.f, WisdomUI::Theme::TextPrimary);
 
-    m_tolMinusRect = sf::FloatRect(bx + 140.f, y, 42.f, 22.f);
-    m_tolPlusRect = sf::FloatRect(bx + 190.f, y, 42.f, 22.f);
-    WisdomUI::Theme::DrawSunsetButton(window, m_tolMinusRect, "-5", m_font, 10, false, m_tolMinusRect.contains(mPos), false, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, m_tolPlusRect, "+5", m_font, 10, false, m_tolPlusRect.contains(mPos), true, 1.0f);
-    y += 32.f;
+    m_tolMinusRect = sf::FloatRect(bx + 165.f, y, 48.f, 28.f);
+    m_tolPlusRect = sf::FloatRect(bx + 225.f, y, 48.f, 28.f);
 
-    m_contigRect = sf::FloatRect(bx + 12.f, y, m_panelSize.x - 24.f, 26.f);
-    WisdomUI::Theme::DrawSunsetButton(window, m_contigRect, m_contiguous ? "Contiguous: ON" : "Contiguous: OFF", m_font, 11, m_contiguous, m_contigRect.contains(mPos), m_contiguous, 1.0f);
-    y += 32.f;
+    bool hovMinus = m_tolMinusRect.contains(mPos);
+    bool hovPlus = m_tolPlusRect.contains(mPos);
 
-    m_sampleRect = sf::FloatRect(bx + 12.f, y, m_panelSize.x - 24.f, 26.f);
-    WisdomUI::Theme::DrawSunsetButton(window, m_sampleRect, m_sampleAllLayers ? "Sample: All Layers" : "Sample: Current Layer", m_font, 11, m_sampleAllLayers, m_sampleRect.contains(mPos), m_sampleAllLayers, 1.0f);
-    y += 36.f;
+    if (hovMinus) hoveredTooltip = "Decrease color match tolerance (-5)";
+    if (hovPlus) hoveredTooltip = "Increase color match tolerance (+5)";
 
-    WisdomUI::Theme::DrawCrispText(window, m_font, "Fill Color:", 11, bx + 14.f, y + 5.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawSunsetButton(window, m_tolMinusRect, "-5", m_font, 13, false, hovMinus, false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_tolPlusRect, "+5", m_font, 13, false, hovPlus, true, 1.0f);
+    y += 38.f;
 
-    m_colorBoxRect = sf::FloatRect(bx + 110.f, y, m_panelSize.x - 122.f, 24.f);
+    m_contigRect = sf::FloatRect(bx + 16.f, y, m_panelSize.x - 32.f, 32.f);
+    bool hovContig = m_contigRect.contains(mPos);
+    if (hovContig) hoveredTooltip = m_contiguous ? "Contiguous: Only select adjacent pixels" : "Non-contiguous: Select all matching pixels on canvas";
+    WisdomUI::Theme::DrawSunsetButton(window, m_contigRect, m_contiguous ? "Contiguous: ON" : "Contiguous: OFF", m_font, 13, m_contiguous, hovContig, m_contiguous, 1.0f);
+    y += 38.f;
+
+    m_sampleRect = sf::FloatRect(bx + 16.f, y, m_panelSize.x - 32.f, 32.f);
+    bool hovSample = m_sampleRect.contains(mPos);
+    if (hovSample) hoveredTooltip = m_sampleAllLayers ? "Sample all visible layers combined" : "Sample only the currently active layer";
+    WisdomUI::Theme::DrawSunsetButton(window, m_sampleRect, m_sampleAllLayers ? "Sample: All Layers" : "Sample: Current Layer", m_font, 13, m_sampleAllLayers, hovSample, m_sampleAllLayers, 1.0f);
+    y += 42.f;
+
+    WisdomUI::Theme::DrawCrispText(window, m_font, "Fill Color:", 14, bx + 16.f, y + 6.f, WisdomUI::Theme::TextSecondary);
+
+    m_colorBoxRect = sf::FloatRect(bx + 120.f, y, m_panelSize.x - 136.f, 28.f);
+    bool hovColor = m_colorBoxRect.contains(mPos);
+    if (hovColor) hoveredTooltip = "Click to open Palette and pick fill color";
+
     sf::RectangleShape colorBox(sf::Vector2f(m_colorBoxRect.width, m_colorBoxRect.height));
     colorBox.setPosition(m_colorBoxRect.left, m_colorBoxRect.top);
     colorBox.setFillColor(m_canvas.getPrimaryColor());
     colorBox.setOutlineThickness(1.5f);
-    colorBox.setOutlineColor(m_colorBoxRect.contains(mPos) ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber);
+    colorBox.setOutlineColor(hovColor ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber);
     window.draw(colorBox);
+
+    if (!hoveredTooltip.empty() && !m_isDraggingPanel) {
+        drawTooltip(window, hoveredTooltip, mPos);
+    }
 }

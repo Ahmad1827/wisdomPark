@@ -35,6 +35,8 @@ private:
     int onionPrev;
     int onionNext;
 
+    void drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos);
+
 public:
     BottomTimeline();
     void init();

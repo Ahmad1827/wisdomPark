@@ -11,7 +11,7 @@
 
 AIPanel::AIPanel()
     : position(64.f, 78.f),
-    size(320.f, 310.f),
+    size(360.f, 350.f),
     isVisible(false),
     isDraggingPanel(false),
     selectedPaletteIdx(0),
@@ -239,6 +239,33 @@ float AIPanel::getColorDistance(sf::Color c1, sf::Color c2) const {
     return std::sqrt(dr * dr + dg * dg + db * db);
 }
 
+void AIPanel::drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos) {
+    sf::Text tipText(text, font, 13);
+    sf::FloatRect bounds = tipText.getLocalBounds();
+
+    float padX = 10.f;
+    float padY = 6.f;
+    float w = bounds.width + padX * 2.f;
+    float h = bounds.height + padY * 2.f + 4.f;
+
+    float x = pos.x - w - 12.f;
+    float y = pos.y + 14.f;
+
+    if (x < 10.f) x = pos.x + 16.f;
+    if (y + h > 1070.f) y = pos.y - h - 6.f;
+
+    sf::RectangleShape bg(sf::Vector2f(w, h));
+    bg.setPosition(x, y);
+    bg.setFillColor(sf::Color(18, 12, 24, 250));
+    bg.setOutlineThickness(1.5f);
+    bg.setOutlineColor(WisdomUI::Theme::Gold);
+
+    tipText.setPosition(x + padX, y + padY - 2.f);
+    tipText.setFillColor(sf::Color::White);
+
+    window.draw(bg);
+    window.draw(tipText);
+}
 
 void AIPanel::update(float dt) {
     if (!isVisible) return;
@@ -246,20 +273,20 @@ void AIPanel::update(float dt) {
     float bx = position.x;
     float by = position.y;
 
-    headerGripBounds = sf::FloatRect(bx + 8.f, by + 6.f, size.x - 16.f, 24.f);
-    dropdownBtnBounds = sf::FloatRect(bx + 16.f, by + 56.f, size.x - 32.f, 28.f);
+    headerGripBounds = sf::FloatRect(bx + 8.f, by + 6.f, size.x - 16.f, 30.f);
+    dropdownBtnBounds = sf::FloatRect(bx + 16.f, by + 60.f, size.x - 32.f, 32.f);
 
-    float splitW = (size.x - 36.f) / 2.f;
-    pasteBtnBounds = sf::FloatRect(bx + 16.f, by + 88.f, splitW, 24.f);
-    randomBtnBounds = sf::FloatRect(bx + 16.f + splitW + 4.f, by + 88.f, splitW, 24.f);
+    float splitW = (size.x - 40.f) / 2.f;
+    pasteBtnBounds = sf::FloatRect(bx + 16.f, by + 98.f, splitW, 28.f);
+    randomBtnBounds = sf::FloatRect(bx + 20.f + splitW, by + 98.f, splitW, 28.f);
 
     paletteSwatchBounds.clear();
     if (!palettes.empty() && selectedPaletteIdx < static_cast<int>(palettes.size())) {
         const auto& cols = palettes[selectedPaletteIdx].colors;
         float startX = bx + 16.f;
-        float startY = by + 132.f;
-        float swSize = 18.f;
-        float spacing = 22.f;
+        float startY = by + 150.f;
+        float swSize = 20.f;
+        float spacing = 26.f;
         int perRow = 12;
 
         for (size_t i = 0; i < cols.size(); ++i) {
@@ -271,16 +298,16 @@ void AIPanel::update(float dt) {
         }
     }
 
-    suggestBtnBounds = sf::FloatRect(bx + 16.f, by + 188.f, size.x - 32.f, 38.f);
-    sendAllBtnBounds = sf::FloatRect(bx + 16.f, by + 230.f, size.x - 32.f, 26.f);
-    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 262.f, size.x - 32.f, 24.f);
+    suggestBtnBounds = sf::FloatRect(bx + 16.f, by + 214.f, size.x - 32.f, 40.f);
+    sendAllBtnBounds = sf::FloatRect(bx + 16.f, by + 260.f, size.x - 32.f, 32.f);
+    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 298.f, size.x - 32.f, 28.f);
 
     float listY = dropdownBtnBounds.top + dropdownBtnBounds.height + 2.f;
-    float listH = 150.f;
+    float listH = 160.f;
     dropdownListArea = sf::FloatRect(bx + 16.f, listY, size.x - 32.f, listH);
 
     dropdownItemBounds.clear();
-    float itemH = 24.f;
+    float itemH = 28.f;
     float curY = listY - dropdownScroll;
     for (size_t i = 0; i < palettes.size(); ++i) {
         dropdownItemBounds.push_back({ sf::FloatRect(bx + 16.f, curY, size.x - 32.f, itemH), static_cast<int>(i) });
@@ -292,6 +319,9 @@ void AIPanel::update(float dt) {
 void AIPanel::draw(sf::RenderWindow& window) {
     if (!isVisible) return;
 
+    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    std::string hoveredTooltip = "";
+
     sf::FloatRect panelBounds(position.x, position.y, size.x, size.y);
     WisdomUI::Theme::DrawSunsetPanel(window, panelBounds, 1.0f);
 
@@ -302,25 +332,26 @@ void AIPanel::draw(sf::RenderWindow& window) {
     gripBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(gripBg);
 
-    WisdomUI::Theme::DrawCrispText(window, font, ":: COLOR ASSISTANT ::", 11, headerGripBounds.left + headerGripBounds.width / 2.0f, headerGripBounds.top + headerGripBounds.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, ":: COLOR ASSISTANT ::", 15, headerGripBounds.left + headerGripBounds.width / 2.0f, headerGripBounds.top + headerGripBounds.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
-    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-
-    WisdomUI::Theme::DrawCrispText(window, font, "Vibe / Preset Palette:", 10, position.x + 16.f, position.y + 38.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawCrispText(window, font, "Preset Palette:", 13, position.x + 16.f, position.y + 40.f, WisdomUI::Theme::TextSecondary);
 
     std::string currentPalName = palettes.empty() ? "None" : palettes[selectedPaletteIdx].name;
     bool hovDrop = dropdownBtnBounds.contains(mPos);
-    WisdomUI::Theme::DrawSunsetButton(window, dropdownBtnBounds, currentPalName + "  v", font, 11, false, hovDrop, isDropdownOpen, 1.0f);
+    if (hovDrop && !isDropdownOpen) hoveredTooltip = "Choose active palette preset";
+    WisdomUI::Theme::DrawSunsetButton(window, dropdownBtnBounds, currentPalName + "  v", font, 13, false, hovDrop, isDropdownOpen, 1.0f);
 
     bool hovPaste = pasteBtnBounds.contains(mPos);
-    WisdomUI::Theme::DrawSunsetButton(window, pasteBtnBounds, "+ Paste Link", font, 10, false, hovPaste, false, 1.0f);
+    if (hovPaste) hoveredTooltip = "Import from Lospec link or hex list in clipboard";
+    WisdomUI::Theme::DrawSunsetButton(window, pasteBtnBounds, "+ Paste Link", font, 12, false, hovPaste, false, 1.0f);
 
     bool hovRand = randomBtnBounds.contains(mPos);
-    WisdomUI::Theme::DrawSunsetButton(window, randomBtnBounds, "Random Vibe", font, 10, false, hovRand, false, 1.0f);
+    if (hovRand) hoveredTooltip = "Pick a random stylized palette";
+    WisdomUI::Theme::DrawSunsetButton(window, randomBtnBounds, "Random Vibe", font, 12, false, hovRand, false, 1.0f);
 
     size_t colCount = (!palettes.empty() && selectedPaletteIdx < static_cast<int>(palettes.size())) ? palettes[selectedPaletteIdx].colors.size() : 0;
     std::string swLabel = "Palette Swatches (" + std::to_string(colCount) + "):";
-    WisdomUI::Theme::DrawCrispText(window, font, swLabel, 9, position.x + 16.f, position.y + 116.f, WisdomUI::Theme::SunsetGold);
+    WisdomUI::Theme::DrawCrispText(window, font, swLabel, 12, position.x + 16.f, position.y + 132.f, WisdomUI::Theme::SunsetGold);
 
     for (const auto& item : paletteSwatchBounds) {
         sf::RectangleShape r(sf::Vector2f(item.first.width, item.first.height));
@@ -328,18 +359,22 @@ void AIPanel::draw(sf::RenderWindow& window) {
         r.setFillColor(item.second);
         r.setOutlineThickness(1.f);
         bool hovSw = item.first.contains(mPos);
+        if (hovSw) hoveredTooltip = "Click swatch to set primary color (" + colorToHex(item.second) + ")";
         r.setOutlineColor(hovSw ? sf::Color::White : WisdomUI::Theme::Border);
         window.draw(r);
     }
 
     bool hovSuggest = suggestBtnBounds.contains(mPos);
-    WisdomUI::Theme::DrawSunsetButton(window, suggestBtnBounds, "+ Get 4-Color Ramp Advice", font, 11, false, hovSuggest, true, 1.0f);
+    if (hovSuggest) hoveredTooltip = "Calculate 4-color shading ramp advice from current color";
+    WisdomUI::Theme::DrawSunsetButton(window, suggestBtnBounds, "+ Get 4-Color Ramp Advice", font, 14, false, hovSuggest, true, 1.0f);
 
     bool hovSend = sendAllBtnBounds.contains(mPos);
-    WisdomUI::Theme::DrawSunsetButton(window, sendAllBtnBounds, "--> Send All to Colors Panel", font, 10, false, hovSend, false, 1.0f);
+    if (hovSend) hoveredTooltip = "Transfer all swatches from this palette to Colors panel";
+    WisdomUI::Theme::DrawSunsetButton(window, sendAllBtnBounds, "--> Send All to Colors Panel", font, 13, false, hovSend, false, 1.0f);
 
     bool hovClose = closeBtnBounds.contains(mPos);
-    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Close", font, 11, false, hovClose, false, 1.0f);
+    if (hovClose) hoveredTooltip = "Close Color Assistant";
+    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Close", font, 13, false, hovClose, false, 1.0f);
 
     if (isDropdownOpen) {
         sf::RectangleShape shadow(sf::Vector2f(dropdownListArea.width + 6.f, dropdownListArea.height + 6.f));
@@ -366,16 +401,20 @@ void AIPanel::draw(sf::RenderWindow& window) {
             r.setFillColor(isSel ? WisdomUI::Theme::SunsetSkyMid : (isHov ? sf::Color(45, 28, 55) : sf::Color::Transparent));
             window.draw(r);
 
-            WisdomUI::Theme::DrawCrispText(window, font, palettes[item.second].name, 10, item.first.left + 6.f, item.first.top + 6.f, isSel ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
+            WisdomUI::Theme::DrawCrispText(window, font, palettes[item.second].name, 12, item.first.left + 8.f, item.first.top + 6.f, isSel ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
 
-            float pX = item.first.left + item.first.width - 50.f;
+            float pX = item.first.left + item.first.width - 56.f;
             for (size_t c = 0; c < std::min(static_cast<size_t>(4), palettes[item.second].colors.size()); ++c) {
-                sf::RectangleShape sw(sf::Vector2f(9.f, 9.f));
-                sw.setPosition(pX + c * 11.f, item.first.top + 8.f);
+                sf::RectangleShape sw(sf::Vector2f(10.f, 10.f));
+                sw.setPosition(pX + c * 12.f, item.first.top + 9.f);
                 sw.setFillColor(palettes[item.second].colors[c]);
                 window.draw(sw);
             }
         }
+    }
+
+    if (!hoveredTooltip.empty() && !isDropdownOpen) {
+        drawTooltip(window, hoveredTooltip, mPos);
     }
 }
 

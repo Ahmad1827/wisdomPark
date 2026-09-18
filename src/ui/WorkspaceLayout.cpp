@@ -40,16 +40,17 @@ namespace WisdomUI {
 
         float midHeight = bottomBarY - currentY - timelineH;
 
-        m_currentLayout.toolDock = sf::FloatRect(0, currentY, Theme::ToolDockWidth, midHeight);
+        const float toolDockW = 52.0f;
+        m_currentLayout.toolDock = sf::FloatRect(0, currentY, toolDockW, midHeight);
 
-        const float rightTabsW = 44.0f;
+        const float rightTabsW = 52.0f;
         m_currentLayout.rightDockTabs = sf::FloatRect(W - rightTabsW, currentY, rightTabsW, midHeight);
 
         float rightDockW = showRightDock ? Theme::RightDockWidth : 0.0f;
         m_currentLayout.rightDock = sf::FloatRect(W - rightTabsW - rightDockW, currentY, rightDockW, midHeight);
 
-        float canvasX = Theme::ToolDockWidth;
-        float canvasW = W - Theme::ToolDockWidth - rightTabsW - rightDockW;
+        float canvasX = toolDockW;
+        float canvasW = W - toolDockW - rightTabsW - rightDockW;
         m_currentLayout.canvas = sf::FloatRect(canvasX, currentY, std::max(0.0f, canvasW), std::max(0.0f, midHeight));
 
         return m_currentLayout;

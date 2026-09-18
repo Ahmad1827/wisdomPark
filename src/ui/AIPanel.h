@@ -44,6 +44,7 @@ private:
     std::string colorToHex(sf::Color c) const;
     float getColorDistance(sf::Color c1, sf::Color c2) const;
     float getLuminance(sf::Color c) const;
+    void drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos);
 
 public:
     AIPanel();

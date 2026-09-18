@@ -21,6 +21,7 @@ private:
     void drawToggle(sf::RenderWindow& window, sf::FloatRect bounds, const std::string& text, bool state);
     void sortStops();
     void updateBlendMode();
+    void drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos);
 
 public:
     GradientPanel();

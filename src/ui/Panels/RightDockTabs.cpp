@@ -2,6 +2,7 @@
 #include "../UITheme.h"
 #include "../UIIcons.h"
 #include <cmath>
+#include <algorithm>
 
 namespace WisdomUI {
 
@@ -25,8 +26,8 @@ namespace WisdomUI {
 
     void RightDockTabs::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        float startY = bounds.top + 8.0f;
-        float btnSize = 36.0f;
+        float startY = bounds.top + 10.0f;
+        float btnSize = 40.0f;
         float startX = bounds.left + (bounds.width - btnSize) / 2.0f;
 
         for (auto& tab : m_tabs) {
@@ -53,9 +54,14 @@ namespace WisdomUI {
             if (isHov) {
                 hasHover = true;
                 m_hoveredTooltip = tab.tooltip;
-                sf::Text t(tab.tooltip, m_font, 12);
-                float w = t.getLocalBounds().width + 24.0f;
-                m_tooltipPos = sf::Vector2f(std::floor(tab.bounds.left - w - 10.0f), std::floor(tab.bounds.top + 4.0f));
+                sf::Text t(tab.tooltip, m_font, 14);
+                float tw = t.getLocalBounds().width + 28.0f;
+                float th = 34.0f;
+                float tipX = std::floor(tab.bounds.left - tw - 12.0f);
+                float tipY = std::floor(tab.bounds.top + (tab.bounds.height - th) / 2.0f);
+                tipY = std::clamp(tipY, 10.0f, 1080.0f - th - 10.0f);
+
+                m_tooltipPos = sf::Vector2f(tipX, tipY);
             }
         }
         m_tooltipAlpha += ((hasHover ? 1.0f : 0.0f) - m_tooltipAlpha) * 16.0f * deltaTime;
@@ -82,14 +88,18 @@ namespace WisdomUI {
         for (const auto& tab : m_tabs) {
             Theme::DrawSunsetButton(window, tab.bounds, "", m_font, 11, tab.isToggled, tab.hoverAlpha > 0.5f, tab.isToggled, tab.scale);
 
+            float iconSize = 22.0f;
+            float iconX = std::floor(tab.bounds.left + (tab.bounds.width - iconSize) / 2.0f);
+            float iconY = std::floor(tab.bounds.top + (tab.bounds.height - iconSize) / 2.0f);
+
             sf::Color iconCol = tab.isToggled ? sf::Color::White : (tab.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
-            Icons::Draw(window, tab.id, sf::Vector2f(std::floor(tab.bounds.left + 8.0f), std::floor(tab.bounds.top + 8.0f)), 20.0f, iconCol);
+            Icons::Draw(window, tab.id, sf::Vector2f(iconX, iconY), iconSize, iconCol);
         }
 
         if (m_tooltipAlpha > 0.02f) {
-            sf::Text t(m_hoveredTooltip, m_font, 12);
-            float tw = t.getLocalBounds().width + 24.0f;
-            float th = 28.0f;
+            sf::Text t(m_hoveredTooltip, m_font, 14);
+            float tw = t.getLocalBounds().width + 28.0f;
+            float th = 34.0f;
 
             sf::FloatRect tipBounds(m_tooltipPos.x, m_tooltipPos.y, tw, th);
             Theme::DrawSunsetPanel(window, tipBounds, m_tooltipAlpha);
@@ -98,7 +108,7 @@ namespace WisdomUI {
             tipTextCol.a = static_cast<sf::Uint8>(255 * m_tooltipAlpha);
             sf::Color shadowCol = sf::Color(14, 6, 20, static_cast<sf::Uint8>(230 * m_tooltipAlpha));
 
-            Theme::DrawCrispText(window, m_font, m_hoveredTooltip, 12, tipBounds.left + tw / 2.0f, tipBounds.top + th / 2.0f, tipTextCol, shadowCol, true, true);
+            Theme::DrawCrispText(window, m_font, m_hoveredTooltip, 14, tipBounds.left + tw / 2.0f, tipBounds.top + th / 2.0f, tipTextCol, shadowCol, true, true);
         }
     }
 
