@@ -35,11 +35,8 @@ static sf::Image DownscaleIcon(const sf::Image& src, unsigned int targetSize = 3
 void ApplyWindowIcon(sf::RenderWindow& window) {
     sf::Image appIcon;
     bool loaded = appIcon.loadFromFile("wisdomParkicon.png") ||
-        appIcon.loadFromFile("wisdomParkicon.jpg") ||
         appIcon.loadFromFile("Resources/wisdomParkicon.png") ||
-        appIcon.loadFromFile("Resources/wisdomParkicon.jpg") ||
-        appIcon.loadFromFile("assets/wisdomParkicon.png") ||
-        appIcon.loadFromFile("assets/wisdomParkicon.jpg");
+        appIcon.loadFromFile("assets/wisdomParkicon.png");
 
     if (loaded) {
         sf::Image safeIcon = DownscaleIcon(appIcon, 32);

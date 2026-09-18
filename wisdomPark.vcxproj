@@ -263,6 +263,7 @@
     <ClCompile Include="src\SpriteEngine\Core\Source\Commands\RepackFramesCommand.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="resource.h" />
     <ClInclude Include="src\ai\AIHelper.h" />
     <ClInclude Include="src\ai\AIProvider.h" />
     <ClInclude Include="src\ai\AIManager.h" />
@@ -393,6 +394,9 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="E:\my files\Downloads\landofmakebelieve2.jfif" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="app.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
