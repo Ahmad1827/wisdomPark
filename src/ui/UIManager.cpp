@@ -406,6 +406,9 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
             showMessage("Hand Tracker Stopped", sf::Color::Yellow);
         }
         });
+    m_topBar.SetCheckoutCommitCallback([this](const std::string& hash) {
+        m_pendingCheckoutHash = hash;
+        });
     m_toolOptionsBar.Initialize(font);
     m_toolDock.Initialize(font);
     m_toolDock.SetDeselectCallback([this, baseCanvas]() {
@@ -1775,6 +1778,20 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (m_fullscreenToggleRequested) {
                 m_fullscreenToggleRequested = false;
                 toggleFullscreen(window, settings);
+            }
+            if (!m_pendingCheckoutHash.empty()) {
+                std::string hash = m_pendingCheckoutHash;
+                m_pendingCheckoutHash.clear();
+
+                if (GitImgClient::checkoutCommit(hash)) {
+                    if (projManager) {
+                        std::string path = activeProjectPath.empty() ? "project.wpk" : activeProjectPath;
+                        int loadedFps = 12;
+                        bool loadedPixelMode = false;
+                        projManager->loadProject(path, canvas, loadedFps, loadedPixelMode);
+                    }
+                    canvas.clearIsDirty();
+                }
             }
             return;
         }

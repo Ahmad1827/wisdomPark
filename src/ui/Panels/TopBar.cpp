@@ -126,20 +126,164 @@ namespace WisdomUI {
             qb.hoverAlpha += ((hover ? 1.0f : 0.0f) - qb.hoverAlpha) * 14.0f * deltaTime;
             qb.scale += ((hover ? 1.10f : 1.0f) - qb.scale) * 16.0f * deltaTime;
         }
+
+        float pullTarget = m_isPullOpen ? 1.0f : 0.0f;
+        m_pullOpenProgress += (pullTarget - m_pullOpenProgress) * 18.0f * deltaTime;
+        m_pullOpenProgress = std::clamp(m_pullOpenProgress, 0.0f, 1.0f);
+    }
+
+    void TopBar::renderPullDropdown(sf::RenderWindow& window, sf::Vector2f mousePos) {
+        if (m_pullOpenProgress < 0.02f) return;
+
+        float dropW = 340.0f;
+        float totalH = 360.0f;
+        float currentH = totalH * m_pullOpenProgress;
+        float dropX = std::floor(m_pullBtnBounds.left);
+        float dropY = std::floor(m_bounds.top + m_bounds.height + 3.0f);
+
+        m_pullDropdownBounds = sf::FloatRect(dropX, dropY, dropW, currentH);
+
+        Theme::DrawSunsetPanel(window, m_pullDropdownBounds, m_pullOpenProgress);
+
+        if (m_pullOpenProgress < 0.4f) return;
+
+        float headerH = 26.0f;
+        sf::RectangleShape header(sf::Vector2f(dropW - 12.0f, headerH));
+        header.setPosition(dropX + 6.0f, dropY + 6.0f);
+        header.setFillColor(Theme::SunsetDeepDark);
+        window.draw(header);
+
+        Theme::DrawCrispText(window, m_font, "VERSION HISTORY (RESTORE)", 11, dropX + 14.0f, dropY + 11.0f, Theme::SunsetAmber);
+
+        float listY = dropY + headerH + 10.0f;
+        float listH = currentH - headerH - 18.0f;
+        if (listH <= 20.0f) return;
+
+        float rowH = 46.0f;
+        float totalContentH = static_cast<float>(m_commits.size()) * rowH;
+        m_pullMaxScroll = std::max(0.0f, totalContentH - listH);
+        m_pullScrollOffset = std::clamp(m_pullScrollOffset, 0.0f, m_pullMaxScroll);
+
+        m_commitRowBounds.clear();
+
+        if (m_commits.empty()) {
+            Theme::DrawCrispText(window, m_font, "No commits found in repository.", 12, dropX + dropW / 2.0f, dropY + currentH / 2.0f, Theme::SunsetPlum, sf::Color::Transparent, true, true);
+            return;
+        }
+
+        sf::View savedView = window.getView();
+        sf::FloatRect letterboxVp = savedView.getViewport();
+
+        float normX = (dropX + 6.0f) / 1920.0f;
+        float normY = listY / 1080.0f;
+        float normW = (dropW - 12.0f) / 1920.0f;
+        float normH = listH / 1080.0f;
+
+        sf::FloatRect subVp(
+            letterboxVp.left + normX * letterboxVp.width,
+            letterboxVp.top + normY * letterboxVp.height,
+            normW * letterboxVp.width,
+            normH * letterboxVp.height
+        );
+
+        sf::View clipView(sf::FloatRect(dropX + 6.0f, listY, dropW - 12.0f, listH));
+        clipView.setViewport(subVp);
+        window.setView(clipView);
+
+        float curY = listY - m_pullScrollOffset;
+        for (size_t i = 0; i < m_commits.size(); ++i) {
+            sf::FloatRect rowRect(dropX + 6.0f, curY, dropW - 18.0f, rowH - 4.0f);
+
+            if (curY + rowH >= listY && curY <= listY + listH) {
+                bool isHov = rowRect.contains(mousePos) && m_pullDropdownBounds.contains(mousePos);
+
+                sf::RectangleShape rowBg(sf::Vector2f(rowRect.width, rowRect.height));
+                rowBg.setPosition(rowRect.left, rowRect.top);
+                rowBg.setFillColor(isHov ? sf::Color(46, 30, 58, 230) : sf::Color(26, 18, 34, 180));
+                rowBg.setOutlineThickness(1.0f);
+                rowBg.setOutlineColor(isHov ? Theme::SunsetAmber : sf::Color(50, 36, 64));
+                window.draw(rowBg);
+
+                Theme::DrawCrispText(window, m_font, m_commits[i].shortHash, 11, rowRect.left + 8.0f, rowRect.top + 5.0f, Theme::SunsetGold);
+                Theme::DrawCrispText(window, m_font, m_commits[i].dateFormatted, 11, rowRect.left + 72.0f, rowRect.top + 5.0f, Theme::SunsetPeach);
+
+                std::string msg = m_commits[i].message;
+                if (msg.length() > 34) {
+                    msg = msg.substr(0, 32) + "..";
+                }
+                Theme::DrawCrispText(window, m_font, msg, 12, rowRect.left + 8.0f, rowRect.top + 22.0f, sf::Color::White);
+
+                m_commitRowBounds.push_back({ rowRect, m_commits[i].hash });
+            }
+
+            curY += rowH;
+        }
+
+        window.setView(savedView);
+
+        if (m_pullMaxScroll > 0.0f) {
+            float trackX = dropX + dropW - 8.0f;
+            sf::RectangleShape track(sf::Vector2f(3.0f, listH));
+            track.setPosition(trackX, listY);
+            track.setFillColor(sf::Color(10, 6, 14));
+            window.draw(track);
+
+            float thumbH = std::max(20.0f, (listH / totalContentH) * listH);
+            float thumbY = listY + (m_pullScrollOffset / m_pullMaxScroll) * (listH - thumbH);
+            sf::RectangleShape thumb(sf::Vector2f(3.0f, thumbH));
+            thumb.setPosition(trackX, thumbY);
+            thumb.setFillColor(Theme::SunsetGold);
+            window.draw(thumb);
+        }
     }
 
     bool TopBar::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
+        sf::Vector2f mousePos = window.mapPixelToCoords({ event.mouseButton.x, event.mouseButton.y });
+
+        if (m_isPullOpen) {
+            if (event.type == sf::Event::MouseWheelScrolled) {
+                sf::Vector2f scrollPos = window.mapPixelToCoords({ event.mouseWheelScroll.x, event.mouseWheelScroll.y });
+                if (m_pullDropdownBounds.contains(scrollPos)) {
+                    m_pullScrollOffset = std::clamp(m_pullScrollOffset - event.mouseWheelScroll.delta * 32.0f, 0.0f, m_pullMaxScroll);
+                    return true;
+                }
+            }
+
+            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                if (m_pullDropdownBounds.contains(mousePos)) {
+                    for (const auto& item : m_commitRowBounds) {
+                        if (item.first.contains(mousePos)) {
+                            std::string targetHash = item.second;
+                            m_isPullOpen = false;
+                            if (m_onCheckoutCommit) {
+                                m_onCheckoutCommit(targetHash);
+                            }
+                            return true;
+                        }
+                    }
+                    return true;
+                }
+                else if (!m_pullBtnBounds.contains(mousePos)) {
+                    m_isPullOpen = false;
+                }
+            }
+        }
+
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            sf::Vector2f mousePos = window.mapPixelToCoords({ event.mouseButton.x, event.mouseButton.y });
+            if (m_pullBtnBounds.contains(mousePos)) {
+                m_isPullOpen = !m_isPullOpen;
+                if (m_isPullOpen) {
+                    m_commits = GitImgClient::getCommitHistory();
+                    m_pullScrollOffset = 0.0f;
+                    m_openMenuIndex = -1;
+                }
+                return true;
+            }
+
             if (m_symmetryActive && m_symmetryBtnBounds.contains(mousePos)) {
                 if (m_onDisableSymmetry) m_onDisableSymmetry();
                 return true;
             }
-            if (m_opaqueCheckboxBounds.contains(mousePos)) {
-                m_opaqueBg = !m_opaqueBg;
-                return true;
-            }
-
             if (m_opaqueCheckboxBounds.contains(mousePos)) {
                 m_opaqueBg = !m_opaqueBg;
                 return true;
@@ -211,6 +355,7 @@ namespace WisdomUI {
             for (size_t i = 0; i < m_menus.size(); ++i) {
                 if (m_menus[i].bounds.contains(mousePos)) {
                     m_openMenuIndex = (m_openMenuIndex == static_cast<int>(i)) ? -1 : static_cast<int>(i);
+                    if (m_openMenuIndex != -1) m_isPullOpen = false;
                     return true;
                 }
             }
@@ -231,6 +376,7 @@ namespace WisdomUI {
 
             m_openMenuIndex = -1;
         }
+
         if (m_gridControlsVisible && m_isEditingGridSize) {
             if (event.type == sf::Event::TextEntered) {
                 if (event.text.unicode == '\b') {
@@ -320,6 +466,7 @@ namespace WisdomUI {
             sf::Vector2f iconPos(qb.bounds.left + 4.0f, qb.bounds.top + 4.0f);
             Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
         }
+
         float pushBtnX = 450.0f;
         float pushBtnY = m_bounds.top + 5.0f;
         m_pushGitImgBtnBounds = sf::FloatRect(pushBtnX, pushBtnY, 85.0f, 26.0f);
@@ -333,7 +480,12 @@ namespace WisdomUI {
         bool hovSheet = m_pushSheetBtnBounds.contains(mPos);
         Theme::DrawSunsetButton(window, m_pushSheetBtnBounds, "Push Anim", m_font, 11, false, hovSheet, false, 1.0f);
 
-        float chkX = sheetBtnX + 95.0f;
+        float pullBtnX = sheetBtnX + 90.0f;
+        m_pullBtnBounds = sf::FloatRect(pullBtnX, pushBtnY, 65.0f, 26.0f);
+        bool hovPull = m_pullBtnBounds.contains(mPos);
+        Theme::DrawSunsetButton(window, m_pullBtnBounds, "Pull", m_font, 11, m_isPullOpen, hovPull, m_isPullOpen, 1.0f);
+
+        float chkX = pullBtnX + 72.0f;
         float chkY = m_bounds.top + 8.0f;
         m_opaqueCheckboxBounds = sf::FloatRect(chkX, chkY, 80.0f, 20.0f);
 
@@ -355,10 +507,12 @@ namespace WisdomUI {
         chkLabel.setPosition(chkX + 20.0f, chkY + 2.0f);
         chkLabel.setFillColor(sf::Color(200, 200, 200));
         window.draw(chkLabel);
+
         float trkX = chkX + 75.0f;
         m_trackerBtnBounds = sf::FloatRect(trkX, pushBtnY, 75.0f, 26.0f);
         bool hovTrk = m_trackerBtnBounds.contains(mPos);
         Theme::DrawSunsetButton(window, m_trackerBtnBounds, m_trackerActive ? "Hand ON" : "Hand OFF", m_font, 11, m_trackerActive, hovTrk, false, 1.0f);
+
         if (m_gridControlsVisible) {
             float rightAnchor = m_quickBtns.empty() ? (m_bounds.left + m_bounds.width - 14.f) : (m_quickBtns.front().bounds.left - 14.f);
             if (m_symmetryActive) {
@@ -415,6 +569,7 @@ namespace WisdomUI {
             m_gridSizeBox = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
             m_gridPlusBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
         }
+
         if (m_symmetryActive) {
             float btnW = 150.0f;
             float btnH = 26.0f;
@@ -458,6 +613,8 @@ namespace WisdomUI {
                 }
             }
         }
+
+        renderPullDropdown(window, mPos);
     }
 
 }

@@ -6,6 +6,13 @@
 #include <functional>
 #include <mutex>
 
+struct GitImgCommit {
+    std::string hash;
+    std::string shortHash;
+    std::string dateFormatted;
+    std::string message;
+};
+
 class GitImgClient {
 public:
     GitImgClient(std::string baseUrl = "http://localhost:8080");
@@ -29,6 +36,9 @@ public:
         const std::string& filename,
         const std::string& commitMsg,
         std::function<void(bool)> callback);
+
+    static std::vector<GitImgCommit> getCommitHistory();
+    static bool checkoutCommit(const std::string& commitHash);
 
 private:
     std::string m_baseUrl;

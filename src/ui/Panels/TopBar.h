@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include "../../core/GitImgClient.h"
 
 namespace WisdomUI {
 
@@ -70,8 +71,20 @@ namespace WisdomUI {
         sf::FloatRect m_trackerBtnBounds;
         bool m_opaqueBg{ true };
         bool m_trackerActive{ false };
+
+        sf::FloatRect m_pullBtnBounds;
+        sf::FloatRect m_pullDropdownBounds;
+        bool m_isPullOpen{ false };
+        float m_pullOpenProgress{ 0.0f };
+        float m_pullScrollOffset{ 0.0f };
+        float m_pullMaxScroll{ 0.0f };
+        std::vector<GitImgCommit> m_commits;
+        std::vector<std::pair<sf::FloatRect, std::string>> m_commitRowBounds;
+        std::function<void(const std::string&)> m_onCheckoutCommit;
+
         sf::FloatRect getDropdownItemBounds(int menuIndex, int actionIndex) const;
         sf::FloatRect getDropdownPanelBounds(int menuIndex) const;
+        void renderPullDropdown(sf::RenderWindow& window, sf::Vector2f mousePos);
 
     public:
         TopBar();
@@ -99,6 +112,9 @@ namespace WisdomUI {
         }
         void SetToggleTrackerCallback(std::function<void(bool)> onToggleTracker) {
             m_onToggleTracker = onToggleTracker;
+        }
+        void SetCheckoutCommitCallback(std::function<void(const std::string&)> onCheckout) {
+            m_onCheckoutCommit = onCheckout;
         }
         void SetGridControls(bool visible, bool active, int size, sf::Color color,
             std::function<void(bool)> onToggle,

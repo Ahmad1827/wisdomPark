@@ -363,6 +363,8 @@ private:
 
     bool triggerSave(Canvas& canvas, Timeline& timeline);
 
+    std::string m_pendingCheckoutHash;
+
 public:
     UIManager();
     void init(ProjectManager* pm, Canvas* baseCanvas);

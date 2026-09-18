@@ -8,8 +8,88 @@
 #include <sstream>
 #include <iomanip>
 #include <fstream>
+#include <array>
+#include <ctime>
+#include <algorithm>
 
 #pragma comment(lib, "winhttp.lib")
+
+#if defined(_WIN32)
+#define POPEN_CMD _popen
+#define PCLOSE_CMD _pclose
+#else
+#define POPEN_CMD popen
+#define PCLOSE_CMD pclose
+#endif
+
+static std::string execCommand(const std::string& cmd) {
+    std::array<char, 256> buffer;
+    std::string result;
+    FILE* pipe = POPEN_CMD(cmd.c_str(), "r");
+    if (!pipe) return "";
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+        result += buffer.data();
+    }
+    PCLOSE_CMD(pipe);
+    return result;
+}
+
+static std::string formatEpoch(time_t rawTime) {
+    struct tm timeinfo;
+#if defined(_WIN32)
+    localtime_s(&timeinfo, &rawTime);
+#else
+    localtime_r(&rawTime, &timeinfo);
+#endif
+    char buf[64];
+    std::strftime(buf, sizeof(buf), "%b %d, %H:%M", &timeinfo);
+    return std::string(buf);
+}
+
+std::vector<GitImgCommit> GitImgClient::getCommitHistory() {
+    std::vector<GitImgCommit> commits;
+    std::string output = execCommand("gitimg log");
+    if (output.empty()) return commits;
+
+    std::istringstream stream(output);
+    std::string line;
+    while (std::getline(stream, line)) {
+        while (!line.empty() && (line.back() == '\r' || line.back() == '\n' || line.back() == ' ')) {
+            line.pop_back();
+        }
+        if (line.empty()) continue;
+
+        std::stringstream lineStream(line);
+        std::string hash, timeStr, message;
+        if (std::getline(lineStream, hash, '|') &&
+            std::getline(lineStream, timeStr, '|') &&
+            std::getline(lineStream, message)) {
+
+            GitImgCommit c;
+            c.hash = hash;
+            c.shortHash = hash.substr(0, std::min<size_t>(7, hash.length()));
+
+            try {
+                time_t t = static_cast<time_t>(std::stoll(timeStr));
+                c.dateFormatted = formatEpoch(t);
+            }
+            catch (...) {
+                c.dateFormatted = timeStr;
+            }
+
+            c.message = message;
+            commits.push_back(c);
+        }
+    }
+    return commits;
+}
+
+bool GitImgClient::checkoutCommit(const std::string& commitHash) {
+    if (commitHash.empty()) return false;
+    std::string cmd = "gitimg checkout " + commitHash;
+    int code = std::system(cmd.c_str());
+    return code == 0;
+}
 
 static bool parseUrl(const std::string& url, std::wstring& outHost, INTERNET_PORT& outPort, bool& outIsHttps) {
     std::string temp = url;
