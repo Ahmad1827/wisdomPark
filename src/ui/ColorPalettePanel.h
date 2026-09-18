@@ -112,6 +112,7 @@ private:
     void updateFromRGB(sf::Color c);
     std::string colorToHex(sf::Color c) const;
     PaletteResizeDir getResizeDirection(sf::Vector2f mousePos) const;
+    void drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos);
 
 public:
     ColorPalettePanel();

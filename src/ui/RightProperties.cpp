@@ -4,7 +4,7 @@
 #include <sstream>
 #include <iomanip>
 
-RightProperties::RightProperties() : width(260.f), currentX(1920.f), targetX(1920.f), state(RightPanelState::Hidden), hovered(false), pinned(false) {}
+RightProperties::RightProperties() : width(290.f), currentX(1920.f), targetX(1920.f), state(RightPanelState::Hidden), hovered(false), pinned(false) {}
 
 void RightProperties::init() {
     font.loadFromFile("assets/font.otf");
@@ -16,26 +16,26 @@ void RightProperties::init() {
     headerBg.setFillColor(WisdomUI::Theme::PanelInset);
     headerText.setFont(font);
     headerText.setString("PROPERTIES");
-    headerText.setCharacterSize(13);
+    headerText.setCharacterSize(16);
     headerText.setFillColor(WisdomUI::Theme::Gold);
 
-    closeBtn.setSize(sf::Vector2f(22.f, 22.f));
+    closeBtn.setSize(sf::Vector2f(28.f, 28.f));
     closeBtn.setFillColor(WisdomUI::Theme::PanelInset);
     closeBtn.setOutlineThickness(1.f);
     closeBtn.setOutlineColor(WisdomUI::Theme::Border);
     closeText.setFont(font);
     closeText.setString("X");
-    closeText.setCharacterSize(11);
+    closeText.setCharacterSize(14);
     closeText.setFillColor(WisdomUI::Theme::TextSecondary);
 
-    pinBtn.setSize(sf::Vector2f(width - 24.f, 22.f));
+    pinBtn.setSize(sf::Vector2f(width - 24.f, 28.f));
     pinBtn.setFillColor(WisdomUI::Theme::PanelInset);
     pinBtn.setOutlineThickness(1.f);
     pinBtn.setOutlineColor(WisdomUI::Theme::Border);
 
     pinLabel.setFont(font);
     pinLabel.setString("Pin Panel");
-    pinLabel.setCharacterSize(11);
+    pinLabel.setCharacterSize(13);
     pinLabel.setFillColor(WisdomUI::Theme::TextSecondary);
 
     auto createSection = [&](std::string id, std::string title, std::vector<std::pair<std::string, std::string>> btns) {
@@ -43,27 +43,27 @@ void RightProperties::init() {
         sec.id = id;
         sec.isOpen = true;
 
-        sec.headerRect.setSize(sf::Vector2f(width - 24.f, 26.f));
+        sec.headerRect.setSize(sf::Vector2f(width - 24.f, 32.f));
         sec.headerRect.setFillColor(WisdomUI::Theme::PanelInset);
         sec.headerRect.setOutlineThickness(1.f);
         sec.headerRect.setOutlineColor(WisdomUI::Theme::Border);
 
         sec.headerLabel.setFont(font);
         sec.headerLabel.setString(title);
-        sec.headerLabel.setCharacterSize(12);
+        sec.headerLabel.setCharacterSize(14);
         sec.headerLabel.setFillColor(WisdomUI::Theme::Gold);
 
         for (const auto& pair : btns) {
             PropItem item;
             item.id = pair.first;
-            item.rect.setSize(sf::Vector2f(width - 32.f, 24.f));
+            item.rect.setSize(sf::Vector2f(width - 32.f, 28.f));
             item.rect.setFillColor(WisdomUI::Theme::PanelInset);
             item.rect.setOutlineThickness(1.f);
             item.rect.setOutlineColor(WisdomUI::Theme::Border);
 
             item.label.setFont(font);
             item.label.setString(pair.second);
-            item.label.setCharacterSize(11);
+            item.label.setCharacterSize(13);
             item.label.setFillColor(WisdomUI::Theme::TextPrimary);
             sec.items.push_back(item);
         }
@@ -80,23 +80,25 @@ void RightProperties::init() {
 }
 
 void RightProperties::update(float dt, bool focusMode, bool isOpen) {
+    width = 290.f;
+
     if (focusMode || !isOpen) targetX = 1920.f;
     else targetX = 1920.f - 44.f - width;
 
     currentX += (targetX - currentX) * 16.0f * dt;
 
-    background.setPosition(currentX, 36.f + 32.f);
-    background.setSize(sf::Vector2f(width, 1080.f - (36.f + 32.f + 24.f)));
+    background.setPosition(currentX, 68.f);
+    background.setSize(sf::Vector2f(width, 1080.f - 92.f));
 
-    headerBg.setPosition(currentX, 36.f + 32.f);
-    headerBg.setSize(sf::Vector2f(width, 32.f));
-    headerText.setPosition(currentX + 12.f, 36.f + 32.f + 7.f);
+    headerBg.setPosition(currentX, 68.f);
+    headerBg.setSize(sf::Vector2f(width, 38.f));
+    headerText.setPosition(currentX + 14.f, 76.f);
 
-    closeBtn.setPosition(currentX + width - 30.f, 36.f + 32.f + 5.f);
-    closeText.setPosition(currentX + width - 23.f, 36.f + 32.f + 7.f);
+    closeBtn.setPosition(currentX + width - 36.f, 73.f);
+    closeText.setPosition(currentX + width - 27.f, 76.f);
 
-    pinBtn.setPosition(currentX + 12.f, 36.f + 32.f + 38.f);
-    pinLabel.setPosition(currentX + 22.f, 36.f + 32.f + 41.f);
+    pinBtn.setPosition(currentX + 12.f, 114.f);
+    pinLabel.setPosition(currentX + 24.f, 118.f);
 
     if (state == RightPanelState::Pinned) {
         pinLabel.setString("Unpin Panel");
@@ -113,19 +115,19 @@ void RightProperties::update(float dt, bool focusMode, bool isOpen) {
 }
 
 void RightProperties::updateLayout() {
-    float startY = 36.f + 32.f + 68.f;
+    float startY = 152.f;
     for (auto& sec : sections) {
         sec.headerRect.setPosition(currentX + 12.f, startY);
-        sec.headerLabel.setPosition(currentX + 20.f, startY + 5.f);
-        startY += 30.f;
+        sec.headerLabel.setPosition(currentX + 20.f, startY + 6.f);
+        startY += 36.f;
 
         if (sec.isOpen) {
             for (auto& item : sec.items) {
                 item.rect.setPosition(currentX + 16.f, startY);
-                item.label.setPosition(currentX + 24.f, startY + 4.f);
-                startY += 28.f;
+                item.label.setPosition(currentX + 26.f, startY + 5.f);
+                startY += 32.f;
             }
-            startY += 6.f;
+            startY += 8.f;
         }
     }
 }
@@ -140,44 +142,99 @@ void RightProperties::updateHover(sf::Vector2f mousePos, bool canOpen) {
     }
 }
 
+void RightProperties::drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos) {
+    sf::Text tipText(text, font, 13);
+    sf::FloatRect bounds = tipText.getLocalBounds();
+
+    float padX = 10.f;
+    float padY = 6.f;
+    float w = bounds.width + padX * 2.f;
+    float h = bounds.height + padY * 2.f + 4.f;
+
+    float x = pos.x - w - 12.f;
+    float y = pos.y + 14.f;
+
+    if (x < 10.f) x = pos.x + 16.f;
+    if (y + h > 1070.f) y = pos.y - h - 6.f;
+
+    sf::RectangleShape bg(sf::Vector2f(w, h));
+    bg.setPosition(x, y);
+    bg.setFillColor(sf::Color(18, 12, 24, 250));
+    bg.setOutlineThickness(1.5f);
+    bg.setOutlineColor(WisdomUI::Theme::Gold);
+
+    tipText.setPosition(x + padX, y + padY - 2.f);
+    tipText.setFillColor(sf::Color::White);
+
+    window.draw(bg);
+    window.draw(tipText);
+}
+
 void RightProperties::draw(sf::RenderWindow& window) {
     if (currentX >= 1918.f) return;
+
+    sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    std::string hoveredTooltip = "";
 
     WisdomUI::Theme::DrawFiligreePanel(window, background.getGlobalBounds(), 1.0f);
 
     window.draw(headerBg);
     window.draw(headerText);
+
+    bool hovClose = closeBtn.getGlobalBounds().contains(mousePos);
+    if (hovClose) hoveredTooltip = "Close Properties Panel";
+    closeBtn.setFillColor(hovClose ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
+    closeBtn.setOutlineColor(hovClose ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
+    closeText.setFillColor(hovClose ? sf::Color::White : WisdomUI::Theme::TextSecondary);
     window.draw(closeBtn);
     window.draw(closeText);
 
-    auto styleBtn = [&](sf::RectangleShape& r, sf::Text& t) {
-        bool hov = r.getGlobalBounds().contains(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
-        r.setFillColor(hov ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
-        r.setOutlineColor(hov ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
-        window.draw(r);
-        window.draw(t);
-        };
-
-    styleBtn(pinBtn, pinLabel);
+    bool hovPin = pinBtn.getGlobalBounds().contains(mousePos);
+    if (hovPin) hoveredTooltip = (state == RightPanelState::Pinned) ? "Unpin properties panel" : "Pin properties panel open";
+    pinBtn.setFillColor(hovPin ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
+    pinBtn.setOutlineColor(hovPin ? WisdomUI::Theme::BorderHighlight : (state == RightPanelState::Pinned ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border));
+    window.draw(pinBtn);
+    window.draw(pinLabel);
 
     for (auto& sec : sections) {
+        bool hovHeader = sec.headerRect.getGlobalBounds().contains(mousePos);
+        if (hovHeader) hoveredTooltip = "Click to " + std::string(sec.isOpen ? "collapse " : "expand ") + sec.headerLabel.getString().toAnsiString();
+        sec.headerRect.setFillColor(hovHeader ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
+        sec.headerRect.setOutlineColor(hovHeader ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
         window.draw(sec.headerRect);
 
-        sf::Text arrow(sec.isOpen ? "v" : ">", font, 11);
+        sf::Text arrow(sec.isOpen ? "v" : ">", font, 13);
         arrow.setFillColor(WisdomUI::Theme::Gold);
-        arrow.setPosition(currentX + width - 26.f, sec.headerRect.getPosition().y + 5.f);
+        arrow.setPosition(currentX + width - 30.f, sec.headerRect.getPosition().y + 6.f);
         window.draw(arrow);
         window.draw(sec.headerLabel);
 
         if (sec.isOpen) {
             for (auto& item : sec.items) {
+                bool hov = item.rect.getGlobalBounds().contains(mousePos);
+
+                if (hov) {
+                    if (item.id == "fps_up") hoveredTooltip = "Increase animation playback rate by 1 FPS";
+                    else if (item.id == "fps_down") hoveredTooltip = "Decrease animation playback rate by 1 FPS";
+                    else if (item.id == "fps_display") hoveredTooltip = "Current timeline playback rate";
+                    else if (item.id == "onion_toggle") hoveredTooltip = "Toggle adjacent frames visibility overlay";
+                    else if (item.id == "onion_op_up") hoveredTooltip = "Increase onion skin overlay opacity";
+                    else if (item.id == "onion_op_down") hoveredTooltip = "Decrease onion skin overlay opacity";
+                    else if (item.id == "theme_all") hoveredTooltip = "Show all object themes and assets";
+                    else if (item.id == "theme_struct") hoveredTooltip = "Filter AI generation to structures only";
+                    else if (item.id == "theme_clutter") hoveredTooltip = "Filter AI generation to clutter and props";
+                    else if (item.id == "theme_custom") hoveredTooltip = "Filter AI generation to custom artwork";
+                    else if (item.id == "theme_wfc") hoveredTooltip = "Toggle procedural Wave Function Collapse synthesis";
+                    else if (item.id == "toggle_terrain") hoveredTooltip = "Toggle terrain surface rendering layer";
+                    else if (item.id == "toggle_light") hoveredTooltip = "Toggle directional sun lighting & drop shadows";
+                }
+
                 if (item.isActive) {
                     item.rect.setFillColor(WisdomUI::Theme::Accent);
                     item.rect.setOutlineColor(WisdomUI::Theme::BorderHighlight);
                     item.label.setFillColor(sf::Color::White);
                 }
                 else {
-                    bool hov = item.rect.getGlobalBounds().contains(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
                     item.rect.setFillColor(hov ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
                     item.rect.setOutlineColor(hov ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
                     item.label.setFillColor(hov ? WisdomUI::Theme::Gold : WisdomUI::Theme::TextPrimary);
@@ -186,6 +243,10 @@ void RightProperties::draw(sf::RenderWindow& window) {
                 window.draw(item.label);
             }
         }
+    }
+
+    if (!hoveredTooltip.empty()) {
+        drawTooltip(window, hoveredTooltip, mousePos);
     }
 }
 

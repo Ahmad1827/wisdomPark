@@ -34,6 +34,7 @@ private:
     sf::FloatRect closeBtnBounds;
 
     void generateWaveform(AudioClip& clip, float w, float h);
+    void drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos);
 
 public:
     AudioPanel();

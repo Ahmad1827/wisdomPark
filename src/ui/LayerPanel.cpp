@@ -7,13 +7,10 @@ LayerPanel::LayerPanel()
     : scrollOffset(0.f), maxScroll(0.f), isDraggingScrollbar(false), scrollDragStartY(0.f), scrollDragStartOffset(0.f),
     renamingLayerIndex(-1), draggedLayerIndex(-1), dropVisualSlot(-1), isDragging(false),
     activeOpacityIndex(-1), isDraggingOpacity(false), lastClickedLayerIndex(-1),
-    currentX(1920.f), targetX(1920.f), width(330.f), state(LayerPanelState::Hidden) {}
+    currentX(1920.f), targetX(1920.f), width(350.f), state(LayerPanelState::Hidden) {}
 
 void LayerPanel::init() {
     font.loadFromFile("assets/font.otf");
-    const_cast<sf::Texture&>(font.getTexture(12)).setSmooth(false);
-    const_cast<sf::Texture&>(font.getTexture(13)).setSmooth(false);
-    const_cast<sf::Texture&>(font.getTexture(14)).setSmooth(false);
 
     background.setFillColor(WisdomUI::Theme::Panel);
     background.setOutlineThickness(1.f);
@@ -22,55 +19,55 @@ void LayerPanel::init() {
     headerBg.setFillColor(WisdomUI::Theme::PanelInset);
     headerText.setFont(font);
     headerText.setString("LAYERS");
-    headerText.setCharacterSize(14);
+    headerText.setCharacterSize(16);
     headerText.setFillColor(WisdomUI::Theme::Gold);
 
-    closeBtn.setSize(sf::Vector2f(26.f, 26.f));
+    closeBtn.setSize(sf::Vector2f(28.f, 28.f));
     closeBtn.setFillColor(WisdomUI::Theme::PanelInset);
     closeBtn.setOutlineThickness(1.f);
     closeBtn.setOutlineColor(WisdomUI::Theme::Border);
     closeText.setFont(font);
     closeText.setString("X");
-    closeText.setCharacterSize(12);
+    closeText.setCharacterSize(14);
     closeText.setFillColor(WisdomUI::Theme::TextSecondary);
 
-    pinBtn.setSize(sf::Vector2f(44.f, 26.f));
+    pinBtn.setSize(sf::Vector2f(50.f, 28.f));
     pinBtn.setFillColor(WisdomUI::Theme::PanelInset);
     pinBtn.setOutlineThickness(1.f);
     pinBtn.setOutlineColor(WisdomUI::Theme::Border);
     pinText.setFont(font);
     pinText.setString("Pin");
-    pinText.setCharacterSize(12);
+    pinText.setCharacterSize(13);
     pinText.setFillColor(WisdomUI::Theme::TextSecondary);
 
     auto setupBtn = [&](sf::RectangleShape& r, sf::Text& t, const std::string& str, float w) {
-        r.setSize(sf::Vector2f(w, 28.f));
+        r.setSize(sf::Vector2f(w, 32.f));
         r.setFillColor(WisdomUI::Theme::PanelInset);
         r.setOutlineThickness(1.f);
         r.setOutlineColor(WisdomUI::Theme::Border);
         t.setFont(font);
         t.setString(str);
-        t.setCharacterSize(12);
+        t.setCharacterSize(13);
         t.setFillColor(WisdomUI::Theme::Gold);
         };
 
-    setupBtn(addBtn, addText, "+ New", 52.f);
-    setupBtn(dupBtn, dupText, "Dup", 40.f);
-    setupBtn(delBtn, delText, "Del", 40.f);
-    setupBtn(mergeDownBtn, mergeDownText, "Merge", 50.f);
-    setupBtn(mergeVisBtn, mergeVisText, "Flat", 42.f);
-    setupBtn(pushBtn, pushText, "Ext", 42.f);
+    setupBtn(addBtn, addText, "+ New", 56.f);
+    setupBtn(dupBtn, dupText, "Dup", 44.f);
+    setupBtn(delBtn, delText, "Del", 44.f);
+    setupBtn(mergeDownBtn, mergeDownText, "Merge", 58.f);
+    setupBtn(mergeVisBtn, mergeVisText, "Flat", 50.f);
+    setupBtn(pushBtn, pushText, "Ext", 48.f);
 
     renameBox.setFillColor(WisdomUI::Theme::Background);
     renameBox.setOutlineThickness(1.f);
     renameBox.setOutlineColor(WisdomUI::Theme::Gold);
     renameText.setFont(font);
-    renameText.setCharacterSize(13);
+    renameText.setCharacterSize(15);
     renameText.setFillColor(sf::Color::White);
 }
 
 void LayerPanel::update(float dt, bool focusMode, bool isOpen) {
-    width = 330.f;
+    width = 350.f;
 
     if (focusMode || !isOpen) targetX = 1920.f;
     else targetX = 1920.f - 44.f - width;
@@ -83,22 +80,22 @@ void LayerPanel::update(float dt, bool focusMode, bool isOpen) {
     background.setSize(sf::Vector2f(width, 1080.f - 92.f));
 
     headerBg.setPosition(drawX, 68.f);
-    headerBg.setSize(sf::Vector2f(width, 36.f));
-    headerText.setPosition(drawX + 14.f, 76.f);
+    headerBg.setSize(sf::Vector2f(width, 40.f));
+    headerText.setPosition(drawX + 16.f, 78.f);
 
-    closeBtn.setPosition(drawX + width - 32.f, 73.f);
+    closeBtn.setPosition(drawX + width - 36.f, 74.f);
     closeText.setPosition(std::floor(closeBtn.getPosition().x + 8.f), std::floor(closeBtn.getPosition().y + 5.f));
 
-    pinBtn.setPosition(drawX + width - 82.f, 73.f);
-    pinText.setPosition(std::floor(pinBtn.getPosition().x + 12.f), std::floor(pinBtn.getPosition().y + 5.f));
+    pinBtn.setPosition(drawX + width - 92.f, 74.f);
+    pinText.setPosition(std::floor(pinBtn.getPosition().x + 14.f), std::floor(pinBtn.getPosition().y + 5.f));
 
-    float actionY = 110.f;
-    float btnX = drawX + 8.f;
-    float gap = 5.f;
+    float actionY = 114.f;
+    float btnX = drawX + 10.f;
+    float gap = 6.f;
 
     auto placeBtn = [&](sf::RectangleShape& r, sf::Text& t) {
         r.setPosition(std::floor(btnX), std::floor(actionY));
-        t.setPosition(std::floor(btnX + (r.getSize().x - t.getLocalBounds().width) / 2.f), std::floor(actionY + 5.f));
+        t.setPosition(std::floor(btnX + (r.getSize().x - t.getLocalBounds().width) / 2.f), std::floor(actionY + 6.f));
         btnX += r.getSize().x + gap;
         };
 
@@ -144,13 +141,13 @@ void LayerPanel::renderEyeIcon(sf::RenderWindow& window, sf::FloatRect bounds, b
     float cy = std::floor(bounds.top + bounds.height * 0.5f);
 
     if (visible) {
-        sf::CircleShape pupil(3.f);
-        pupil.setOrigin(3.f, 3.f);
+        sf::CircleShape pupil(3.5f);
+        pupil.setOrigin(3.5f, 3.5f);
         pupil.setPosition(cx, cy);
         pupil.setFillColor(WisdomUI::Theme::Gold);
 
-        sf::RectangleShape hLine(sf::Vector2f(12.f, 2.f));
-        hLine.setOrigin(6.f, 1.f);
+        sf::RectangleShape hLine(sf::Vector2f(14.f, 2.f));
+        hLine.setOrigin(7.f, 1.f);
         hLine.setPosition(cx, cy);
         hLine.setFillColor(WisdomUI::Theme::Gold);
 
@@ -158,8 +155,8 @@ void LayerPanel::renderEyeIcon(sf::RenderWindow& window, sf::FloatRect bounds, b
         window.draw(pupil);
     }
     else {
-        sf::RectangleShape slash(sf::Vector2f(14.f, 2.f));
-        slash.setOrigin(7.f, 1.f);
+        sf::RectangleShape slash(sf::Vector2f(15.f, 2.f));
+        slash.setOrigin(7.5f, 1.f);
         slash.setPosition(cx, cy);
         slash.setRotation(45.f);
         slash.setFillColor(WisdomUI::Theme::TextMuted);
@@ -171,18 +168,18 @@ void LayerPanel::renderLockIcon(sf::RenderWindow& window, sf::FloatRect bounds, 
     float cx = std::floor(bounds.left + bounds.width * 0.5f);
     float cy = std::floor(bounds.top + bounds.height * 0.5f);
 
-    sf::RectangleShape body(sf::Vector2f(10.f, 8.f));
-    body.setOrigin(5.f, 3.f);
+    sf::RectangleShape body(sf::Vector2f(12.f, 9.f));
+    body.setOrigin(6.f, 3.5f);
     body.setPosition(cx, cy + 1.f);
-    body.setFillColor(locked ? sf::Color(220, 75, 75) : WisdomUI::Theme::TextMuted);
+    body.setFillColor(locked ? sf::Color(230, 75, 75) : WisdomUI::Theme::TextMuted);
     window.draw(body);
 
-    sf::CircleShape loop(4.f);
-    loop.setOrigin(4.f, 4.f);
-    loop.setPosition(cx, cy - 3.f);
+    sf::CircleShape loop(4.5f);
+    loop.setOrigin(4.5f, 4.5f);
+    loop.setPosition(cx, cy - 3.5f);
     loop.setFillColor(sf::Color::Transparent);
     loop.setOutlineThickness(1.5f);
-    loop.setOutlineColor(locked ? sf::Color(220, 75, 75) : WisdomUI::Theme::TextMuted);
+    loop.setOutlineColor(locked ? sf::Color(230, 75, 75) : WisdomUI::Theme::TextMuted);
     window.draw(loop);
 }
 
@@ -190,35 +187,65 @@ void LayerPanel::renderPersistIcon(sf::RenderWindow& window, sf::FloatRect bound
     float cx = std::floor(bounds.left + bounds.width * 0.5f);
     float cy = std::floor(bounds.top + bounds.height * 0.5f);
 
-    sf::CircleShape c1(3.5f);
-    c1.setOrigin(3.5f, 3.5f);
-    c1.setPosition(cx - 3.f, cy);
+    sf::CircleShape c1(4.f);
+    c1.setOrigin(4.f, 4.f);
+    c1.setPosition(cx - 3.5f, cy);
     c1.setFillColor(sf::Color::Transparent);
     c1.setOutlineThickness(1.5f);
     c1.setOutlineColor(persistent ? WisdomUI::Theme::Gold : WisdomUI::Theme::TextMuted);
     window.draw(c1);
 
-    sf::CircleShape c2(3.5f);
-    c2.setOrigin(3.5f, 3.5f);
-    c2.setPosition(cx + 3.f, cy);
+    sf::CircleShape c2(4.f);
+    c2.setOrigin(4.f, 4.f);
+    c2.setPosition(cx + 3.5f, cy);
     c2.setFillColor(sf::Color::Transparent);
     c2.setOutlineThickness(1.5f);
     c2.setOutlineColor(persistent ? WisdomUI::Theme::Gold : WisdomUI::Theme::TextMuted);
     window.draw(c2);
 }
 
+void LayerPanel::drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos) {
+    sf::Text tipText(text, font, 13);
+    sf::FloatRect bounds = tipText.getLocalBounds();
+
+    float padX = 10.f;
+    float padY = 6.f;
+    float w = bounds.width + padX * 2.f;
+    float h = bounds.height + padY * 2.f + 4.f;
+
+    float x = pos.x - w - 10.f;
+    float y = pos.y + 14.f;
+
+    if (x < 10.f) x = pos.x + 16.f;
+    if (y + h > 1070.f) y = pos.y - h - 6.f;
+
+    sf::RectangleShape bg(sf::Vector2f(w, h));
+    bg.setPosition(x, y);
+    bg.setFillColor(sf::Color(18, 12, 24, 250));
+    bg.setOutlineThickness(1.5f);
+    bg.setOutlineColor(WisdomUI::Theme::Gold);
+
+    tipText.setPosition(x + padX, y + padY - 2.f);
+    tipText.setFillColor(sf::Color::White);
+
+    window.draw(bg);
+    window.draw(tipText);
+}
+
 void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame) {
     if (currentX >= 1918.f) return;
 
     sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    std::string hoveredTooltip = "";
 
     WisdomUI::Theme::DrawFiligreePanel(window, background.getGlobalBounds(), 1.0f);
 
     window.draw(headerBg);
     window.draw(headerText);
 
-    auto drawHeaderBtn = [&](sf::RectangleShape& r, sf::Text& t, bool active) {
+    auto drawHeaderBtn = [&](sf::RectangleShape& r, sf::Text& t, bool active, const std::string& tip) {
         bool hov = r.getGlobalBounds().contains(mousePos);
+        if (hov) hoveredTooltip = tip;
         r.setFillColor(active ? WisdomUI::Theme::Gold : (hov ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset));
         r.setOutlineColor(hov || active ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
         t.setFillColor(active ? sf::Color::Black : (hov ? sf::Color::White : WisdomUI::Theme::TextSecondary));
@@ -226,11 +253,12 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         window.draw(t);
         };
 
-    drawHeaderBtn(closeBtn, closeText, false);
-    drawHeaderBtn(pinBtn, pinText, state == LayerPanelState::Pinned);
+    drawHeaderBtn(closeBtn, closeText, false, "Close Layer Panel");
+    drawHeaderBtn(pinBtn, pinText, state == LayerPanelState::Pinned, "Pin Panel Open");
 
-    auto drawActionBtn = [&](sf::RectangleShape& r, sf::Text& t, bool isDelete = false) {
+    auto drawActionBtn = [&](sf::RectangleShape& r, sf::Text& t, const std::string& tip, bool isDelete = false) {
         bool hov = r.getGlobalBounds().contains(mousePos);
+        if (hov) hoveredTooltip = tip;
         if (isDelete && hov) {
             r.setFillColor(sf::Color(180, 45, 45));
             r.setOutlineColor(sf::Color(240, 90, 90));
@@ -245,12 +273,12 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         window.draw(t);
         };
 
-    drawActionBtn(addBtn, addText);
-    drawActionBtn(dupBtn, dupText);
-    drawActionBtn(delBtn, delText, true);
-    drawActionBtn(mergeDownBtn, mergeDownText);
-    drawActionBtn(mergeVisBtn, mergeVisText);
-    drawActionBtn(pushBtn, pushText);
+    drawActionBtn(addBtn, addText, "+ New: Add a fresh layer");
+    drawActionBtn(dupBtn, dupText, "Dup: Duplicate active layer");
+    drawActionBtn(delBtn, delText, "Del: Delete active layer", true);
+    drawActionBtn(mergeDownBtn, mergeDownText, "Merge: Merge into layer below");
+    drawActionBtn(mergeVisBtn, mergeVisText, "Flat: Flatten all visible layers");
+    drawActionBtn(pushBtn, pushText, "Ext: Extend layer to next frame");
 
     const Frame* frame = canvas.getFrameReadOnly(currentFrame);
     if (!frame) return;
@@ -259,8 +287,8 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
     rowCache.clear();
     rowCache.resize(layerCount);
 
-    float rowHeight = 56.f;
-    float startY = 146.f;
+    float rowHeight = 62.f;
+    float startY = 154.f;
     float bottomLimit = 1080.f - 24.f;
     float viewHeight = bottomLimit - startY;
 
@@ -276,18 +304,18 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
     for (int i = static_cast<int>(layerCount) - 1; i >= 0; --i) {
         float curY = std::floor(startY + (layerCount - 1 - i) * rowHeight - scrollOffset);
         if (isDragging && draggedLayerIndex == i) {
-            curY = std::floor(mousePos.y - 28.f);
+            curY = std::floor(mousePos.y - 30.f);
         }
 
-        rowCache[i].bounds = sf::FloatRect(std::floor(currentX + 6.f), curY, width - 16.f, rowHeight - 4.f);
-        rowCache[i].colorTagBounds = sf::FloatRect(std::floor(currentX + 8.f), curY + 3.f, 4.f, rowHeight - 10.f);
-        rowCache[i].eyeBounds = sf::FloatRect(std::floor(currentX + 18.f), curY + 17.f, 22.f, 22.f);
-        rowCache[i].lockBounds = sf::FloatRect(std::floor(currentX + 44.f), curY + 17.f, 22.f, 22.f);
-        rowCache[i].persistBounds = sf::FloatRect(std::floor(currentX + 70.f), curY + 17.f, 22.f, 22.f);
-        rowCache[i].thumbBounds = sf::FloatRect(std::floor(currentX + 98.f), curY + 8.f, 40.f, 40.f);
-        rowCache[i].nameBounds = sf::FloatRect(std::floor(currentX + 146.f), curY + 8.f, 108.f, 18.f);
-        rowCache[i].opacityBounds = sf::FloatRect(std::floor(currentX + 146.f), curY + 32.f, 86.f, 12.f);
-        rowCache[i].blendBounds = sf::FloatRect(std::floor(currentX + 258.f), curY + 8.f, 60.f, 18.f);
+        rowCache[i].bounds = sf::FloatRect(std::floor(currentX + 8.f), curY, width - 20.f, rowHeight - 4.f);
+        rowCache[i].colorTagBounds = sf::FloatRect(std::floor(currentX + 10.f), curY + 4.f, 5.f, rowHeight - 12.f);
+        rowCache[i].eyeBounds = sf::FloatRect(std::floor(currentX + 22.f), curY + 19.f, 24.f, 24.f);
+        rowCache[i].lockBounds = sf::FloatRect(std::floor(currentX + 50.f), curY + 19.f, 24.f, 24.f);
+        rowCache[i].persistBounds = sf::FloatRect(std::floor(currentX + 78.f), curY + 19.f, 24.f, 24.f);
+        rowCache[i].thumbBounds = sf::FloatRect(std::floor(currentX + 108.f), curY + 8.f, 44.f, 44.f);
+        rowCache[i].nameBounds = sf::FloatRect(std::floor(currentX + 160.f), curY + 8.f, 110.f, 20.f);
+        rowCache[i].opacityBounds = sf::FloatRect(std::floor(currentX + 160.f), curY + 34.f, 96.f, 14.f);
+        rowCache[i].blendBounds = sf::FloatRect(std::floor(currentX + 276.f), curY + 8.f, 62.f, 20.f);
 
         if (curY + rowHeight < startY || curY > bottomLimit) continue;
 
@@ -303,7 +331,7 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
             rowBg.setOutlineColor(WisdomUI::Theme::BorderHighlight);
         }
         else {
-            rowBg.setFillColor(isHoveredRow ? sf::Color(32, 24, 40, 200) : WisdomUI::Theme::PanelInset);
+            rowBg.setFillColor(isHoveredRow ? sf::Color(34, 26, 44, 210) : WisdomUI::Theme::PanelInset);
             rowBg.setOutlineThickness(1.f);
             rowBg.setOutlineColor(WisdomUI::Theme::Border);
         }
@@ -314,23 +342,27 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         colorTag.setFillColor(getTagColor(frame->layers[i].colorTag));
         window.draw(colorTag);
 
-        auto drawIconToggle = [&](sf::FloatRect bounds, bool active, auto renderIcon) {
+        auto drawIconToggle = [&](sf::FloatRect bounds, bool active, const std::string& tip, auto renderIcon) {
             bool hov = bounds.contains(mousePos);
+            if (hov) hoveredTooltip = tip;
             sf::RectangleShape box(sf::Vector2f(bounds.width, bounds.height));
             box.setPosition(bounds.left, bounds.top);
-            box.setFillColor(hov ? sf::Color(255, 255, 255, 20) : sf::Color(0, 0, 0, 40));
+            box.setFillColor(hov ? sf::Color(255, 255, 255, 24) : sf::Color(0, 0, 0, 45));
             box.setOutlineThickness(1.f);
             box.setOutlineColor(hov ? WisdomUI::Theme::Gold : WisdomUI::Theme::Border);
             window.draw(box);
             renderIcon(window, bounds, active);
             };
 
-        drawIconToggle(rowCache[i].eyeBounds, frame->layers[i].visible,
+        drawIconToggle(rowCache[i].eyeBounds, frame->layers[i].visible, "Toggle Visibility (Show/Hide)",
             [this](sf::RenderWindow& w, sf::FloatRect b, bool v) { renderEyeIcon(w, b, v); });
-        drawIconToggle(rowCache[i].lockBounds, frame->layers[i].locked,
+        drawIconToggle(rowCache[i].lockBounds, frame->layers[i].locked, "Toggle Layer Lock",
             [this](sf::RenderWindow& w, sf::FloatRect b, bool l) { renderLockIcon(w, b, l); });
-        drawIconToggle(rowCache[i].persistBounds, frame->layers[i].persistent,
+        drawIconToggle(rowCache[i].persistBounds, frame->layers[i].persistent, "Toggle Persistence (Span All Frames)",
             [this](sf::RenderWindow& w, sf::FloatRect b, bool p) { renderPersistIcon(w, b, p); });
+
+        if (rowCache[i].colorTagBounds.contains(mousePos)) hoveredTooltip = "Click to cycle color tag";
+        if (rowCache[i].thumbBounds.contains(mousePos)) hoveredTooltip = "Hold & drag to reorder layer";
 
         sf::RectangleShape thumbBase(sf::Vector2f(rowCache[i].thumbBounds.width, rowCache[i].thumbBounds.height));
         thumbBase.setPosition(rowCache[i].thumbBounds.left, rowCache[i].thumbBounds.top);
@@ -350,10 +382,11 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
             window.draw(renameText);
         }
         else {
-            sf::Text nText(frame->layers[i].name, font, 13);
-            nText.setPosition(rowCache[i].nameBounds.left, rowCache[i].nameBounds.top);
+            sf::Text nText(frame->layers[i].name, font, 15);
+            nText.setPosition(rowCache[i].nameBounds.left, rowCache[i].nameBounds.top - 1.f);
             nText.setFillColor(isSelected ? WisdomUI::Theme::Gold : WisdomUI::Theme::TextPrimary);
             window.draw(nText);
+            if (rowCache[i].nameBounds.contains(mousePos)) hoveredTooltip = "Double-click to rename";
         }
 
         sf::RectangleShape opTrack(sf::Vector2f(rowCache[i].opacityBounds.width, rowCache[i].opacityBounds.height));
@@ -369,14 +402,17 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         opFill.setFillColor(WisdomUI::Theme::SunsetCoral);
         window.draw(opFill);
 
-        sf::Text opPercent(std::to_string(static_cast<int>(std::round(std::clamp(opVal, 0.f, 1.f) * 100.f))) + "%", font, 11);
-        opPercent.setPosition(rowCache[i].opacityBounds.left + rowCache[i].opacityBounds.width + 4.f, rowCache[i].opacityBounds.top - 2.f);
+        sf::Text opPercent(std::to_string(static_cast<int>(std::round(std::clamp(opVal, 0.f, 1.f) * 100.f))) + "%", font, 12);
+        opPercent.setPosition(rowCache[i].opacityBounds.left + rowCache[i].opacityBounds.width + 6.f, rowCache[i].opacityBounds.top - 2.f);
         opPercent.setFillColor(WisdomUI::Theme::TextSecondary);
         window.draw(opPercent);
+
+        if (rowCache[i].opacityBounds.contains(mousePos)) hoveredTooltip = "Drag to adjust opacity";
 
         sf::RectangleShape blendBox(sf::Vector2f(rowCache[i].blendBounds.width, rowCache[i].blendBounds.height));
         blendBox.setPosition(rowCache[i].blendBounds.left, rowCache[i].blendBounds.top);
         bool hovBlend = rowCache[i].blendBounds.contains(mousePos);
+        if (hovBlend) hoveredTooltip = "Click to cycle blend mode";
         blendBox.setFillColor(hovBlend ? WisdomUI::Theme::PanelHover : sf::Color(20, 14, 25));
         blendBox.setOutlineThickness(1.f);
         blendBox.setOutlineColor(hovBlend ? WisdomUI::Theme::Gold : WisdomUI::Theme::Border);
@@ -388,8 +424,8 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         else if (frame->layers[i].blendMode == BlendMode::Screen) modeStr = "Screen";
         else if (frame->layers[i].blendMode == BlendMode::Overlay) modeStr = "Overlay";
 
-        sf::Text bText(modeStr, font, 11);
-        bText.setPosition(rowCache[i].blendBounds.left + 4.f, rowCache[i].blendBounds.top + 1.f);
+        sf::Text bText(modeStr, font, 12);
+        bText.setPosition(rowCache[i].blendBounds.left + 5.f, rowCache[i].blendBounds.top + 1.f);
         bText.setFillColor(WisdomUI::Theme::TextSecondary);
         window.draw(bText);
     }
@@ -397,8 +433,8 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
     if (isDragging && dropVisualSlot != -1) {
         float lineY = std::floor(startY + dropVisualSlot * rowHeight - scrollOffset);
         if (lineY >= startY - 2.f && lineY <= bottomLimit + 2.f) {
-            sf::RectangleShape indicator(sf::Vector2f(width - 16.f, 3.f));
-            indicator.setPosition(std::floor(currentX + 6.f), lineY - 1.5f);
+            sf::RectangleShape indicator(sf::Vector2f(width - 20.f, 3.f));
+            indicator.setPosition(std::floor(currentX + 8.f), lineY - 1.5f);
             indicator.setFillColor(WisdomUI::Theme::Gold);
             window.draw(indicator);
         }
@@ -417,6 +453,10 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
         scrollThumb.setPosition(scrollTrackX, thumbY);
         scrollThumb.setFillColor(isDraggingScrollbar ? WisdomUI::Theme::Gold : WisdomUI::Theme::BorderHighlight);
         window.draw(scrollThumb);
+    }
+
+    if (!hoveredTooltip.empty() && !isDragging) {
+        drawTooltip(window, hoveredTooltip, mousePos);
     }
 }
 
@@ -438,7 +478,7 @@ std::string LayerPanel::processClick(sf::Vector2f mousePos, Canvas& canvas, int 
     if (mergeVisBtn.getGlobalBounds().contains(mousePos)) { canvas.mergeVisible(currentFrame); return "layer_merge_v"; }
     if (pushBtn.getGlobalBounds().contains(mousePos)) { canvas.extendLayerToNextFrame(currentFrame, canvas.getActiveLayer()); return "layer_push"; }
 
-    float startY = 146.f;
+    float startY = 154.f;
     float bottomLimit = 1080.f - 24.f;
     float viewHeight = bottomLimit - startY;
 
@@ -559,7 +599,7 @@ bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canv
         }
 
         if (isDraggingScrollbar && maxScroll > 0.f) {
-            float startY = 146.f;
+            float startY = 154.f;
             float bottomLimit = 1080.f - 24.f;
             float viewHeight = bottomLimit - startY;
             float deltaY = mousePos.y - scrollDragStartY;
@@ -600,7 +640,7 @@ bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canv
     }
 
     if (event.type == sf::Event::MouseWheelScrolled && background.getGlobalBounds().contains(mousePos)) {
-        scrollOffset -= event.mouseWheelScroll.delta * 24.f;
+        scrollOffset -= event.mouseWheelScroll.delta * 28.f;
         scrollOffset = std::clamp(scrollOffset, 0.f, maxScroll);
         return true;
     }

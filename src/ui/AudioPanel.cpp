@@ -4,13 +4,13 @@
 #include <cmath>
 #include <filesystem>
 
-AudioPanel::AudioPanel() : position(1260.f, 78.f), size(600.f, 340.f), isVisible(false) {}
+AudioPanel::AudioPanel() : position(1240.f, 75.f), size(630.f, 360.f), isVisible(false) {}
 
 AudioPanel::~AudioPanel() {}
 
 void AudioPanel::init() {
     font.loadFromFile("assets/font.otf");
-    position = sf::Vector2f(1260.f, 78.f);
+    position = sf::Vector2f(1240.f, 75.f);
 
     tracks.clear();
     AudioTrack defaultTrack;
@@ -48,13 +48,44 @@ void AudioPanel::generateWaveform(AudioClip& clip, float w, float h) {
     clip.needsWaveformUpdate = false;
 }
 
+void AudioPanel::drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos) {
+    sf::Text tipText(text, font, 13);
+    sf::FloatRect bounds = tipText.getLocalBounds();
+
+    float padX = 10.f;
+    float padY = 6.f;
+    float w = bounds.width + padX * 2.f;
+    float h = bounds.height + padY * 2.f + 4.f;
+
+    float x = pos.x - w - 12.f;
+    float y = pos.y + 14.f;
+
+    if (x < 10.f) x = pos.x + 16.f;
+    if (y + h > 1070.f) y = pos.y - h - 6.f;
+
+    sf::RectangleShape bg(sf::Vector2f(w, h));
+    bg.setPosition(x, y);
+    bg.setFillColor(sf::Color(18, 12, 24, 250));
+    bg.setOutlineThickness(1.5f);
+    bg.setOutlineColor(WisdomUI::Theme::Gold);
+
+    tipText.setPosition(x + padX, y + padY - 2.f);
+    tipText.setFillColor(sf::Color::White);
+
+    window.draw(bg);
+    window.draw(tipText);
+}
+
 void AudioPanel::draw(sf::RenderWindow& window) {
     if (!isVisible) return;
+
+    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    std::string hoveredTooltip = "";
 
     sf::FloatRect panelBounds(position.x, position.y, size.x, size.y);
     WisdomUI::Theme::DrawSunsetPanel(window, panelBounds, 1.0f);
 
-    sf::FloatRect headerGrip(position.x + 8.f, position.y + 6.f, size.x - 16.f, 28.f);
+    sf::FloatRect headerGrip(position.x + 8.f, position.y + 6.f, size.x - 16.f, 32.f);
     sf::RectangleShape gripBg(sf::Vector2f(headerGrip.width, headerGrip.height));
     gripBg.setPosition(headerGrip.left, headerGrip.top);
     gripBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
@@ -62,19 +93,21 @@ void AudioPanel::draw(sf::RenderWindow& window) {
     gripBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(gripBg);
 
-    WisdomUI::Theme::DrawCrispText(window, font, ":: AUDIO TIMELINE ENGINE ::", 13, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, ":: AUDIO TIMELINE ENGINE ::", 16, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
-    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    scanBtnBounds = sf::FloatRect(position.x + 14.f, position.y + 44.f, 180.f, 30.f);
+    bool hovScan = scanBtnBounds.contains(mPos);
+    if (hovScan) hoveredTooltip = "Scan assets/audio directory for audio files";
+    WisdomUI::Theme::DrawSunsetButton(window, scanBtnBounds, "Scan assets/audio", font, 14, false, hovScan, true, 1.0f);
 
-    scanBtnBounds = sf::FloatRect(position.x + 12.f, position.y + 40.f, 160.f, 26.f);
-    WisdomUI::Theme::DrawSunsetButton(window, scanBtnBounds, "Scan assets/audio", font, 12, false, scanBtnBounds.contains(mPos), true, 1.0f);
+    closeBtnBounds = sf::FloatRect(position.x + size.x - 38.f, position.y + 7.f, 30.f, 30.f);
+    bool hovClose = closeBtnBounds.contains(mPos);
+    if (hovClose) hoveredTooltip = "Close Audio Panel";
+    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "X", font, 14, false, hovClose, false, 1.0f);
 
-    closeBtnBounds = sf::FloatRect(position.x + size.x - 36.f, position.y + 6.f, 28.f, 28.f);
-    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "X", font, 12, false, closeBtnBounds.contains(mPos), false, 1.0f);
-
-    float trackY = position.y + 74.f;
+    float trackY = position.y + 84.f;
     for (size_t i = 0; i < tracks.size(); ++i) {
-        sf::FloatRect trackBgRect(position.x + 12.f, trackY, size.x - 24.f, 62.f);
+        sf::FloatRect trackBgRect(position.x + 12.f, trackY, size.x - 24.f, 70.f);
         sf::RectangleShape trackBg(sf::Vector2f(trackBgRect.width, trackBgRect.height));
         trackBg.setPosition(trackBgRect.left, trackBgRect.top);
         trackBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
@@ -82,13 +115,15 @@ void AudioPanel::draw(sf::RenderWindow& window) {
         trackBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
         window.draw(trackBg);
 
-        WisdomUI::Theme::DrawCrispText(window, font, tracks[i].name, 12, trackBgRect.left + 10.f, trackBgRect.top + 22.f, WisdomUI::Theme::SunsetAmber);
+        WisdomUI::Theme::DrawCrispText(window, font, tracks[i].name, 14, trackBgRect.left + 12.f, trackBgRect.top + 26.f, WisdomUI::Theme::SunsetAmber);
 
-        sf::FloatRect timelineArea(trackBgRect.left + 92.f, trackBgRect.top + 6.f, trackBgRect.width - 100.f, 50.f);
+        sf::FloatRect timelineArea(trackBgRect.left + 98.f, trackBgRect.top + 6.f, trackBgRect.width - 108.f, 58.f);
         sf::RectangleShape tArea(sf::Vector2f(timelineArea.width, timelineArea.height));
         tArea.setPosition(timelineArea.left, timelineArea.top);
         tArea.setFillColor(WisdomUI::Theme::SunsetSkyTop);
         window.draw(tArea);
+
+        if (timelineArea.contains(mPos)) hoveredTooltip = "Audio timeline track channel";
 
         for (auto& clip : tracks[i].clips) {
             float pixelsPerFrame = 4.0f;
@@ -96,22 +131,29 @@ void AudioPanel::draw(sf::RenderWindow& window) {
             float clipW = (clip.endFrame - clip.startFrame) * pixelsPerFrame;
             float renderWidth = std::clamp(clipW, 10.f, timelineArea.width - 4.f);
 
-            sf::RectangleShape clipBg(sf::Vector2f(renderWidth, 42.f));
-            clipBg.setPosition(clipX, timelineArea.top + 4.f);
+            sf::FloatRect clipRect(clipX, timelineArea.top + 5.f, renderWidth, 48.f);
+            if (clipRect.contains(mPos)) hoveredTooltip = "Audio clip: " + clip.name;
+
+            sf::RectangleShape clipBg(sf::Vector2f(renderWidth, 48.f));
+            clipBg.setPosition(clipX, timelineArea.top + 5.f);
             clipBg.setFillColor(WisdomUI::Theme::SunsetPlum);
             clipBg.setOutlineThickness(1.f);
             clipBg.setOutlineColor(WisdomUI::Theme::SunsetCoral);
             window.draw(clipBg);
 
             if (clip.needsWaveformUpdate) {
-                generateWaveform(clip, renderWidth, 42.f);
+                generateWaveform(clip, renderWidth, 48.f);
             }
 
             sf::Transform t;
-            t.translate(clipX, timelineArea.top + 4.f);
+            t.translate(clipX, timelineArea.top + 5.f);
             window.draw(clip.waveformRender, t);
         }
-        trackY += 68.f;
+        trackY += 78.f;
+    }
+
+    if (!hoveredTooltip.empty()) {
+        drawTooltip(window, hoveredTooltip, mPos);
     }
 }
 

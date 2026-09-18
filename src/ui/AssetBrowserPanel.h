@@ -36,6 +36,7 @@ private:
 
     void triggerImport();
     void handleDragAndDrop(const sf::Vector2f& dropPos, const sf::RenderWindow& window, Canvas& canvas, int currentFrame);
+    void drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos);
 
 public:
     AssetBrowserPanel(AssetManager& am, const sf::Font& f);

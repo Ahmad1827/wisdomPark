@@ -75,6 +75,7 @@ private:
     void renderEyeIcon(sf::RenderWindow& window, sf::FloatRect bounds, bool visible);
     void renderLockIcon(sf::RenderWindow& window, sf::FloatRect bounds, bool locked);
     void renderPersistIcon(sf::RenderWindow& window, sf::FloatRect bounds, bool persistent);
+    void drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos);
 
 public:
     LayerPanel();
