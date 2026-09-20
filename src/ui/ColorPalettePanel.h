@@ -10,6 +10,9 @@ enum class PaletteResizeDir { None, Left, Right, Top, Bottom, TopLeft, TopRight,
 
 class ColorPalettePanel {
 private:
+    float m_palettesScroll = 0.f;
+    float m_palettesMaxScroll = 0.f;
+    sf::FloatRect m_palettesAreaBounds;
     sf::RectangleShape background;
     sf::RectangleShape headerBg;
     sf::Text headerText;

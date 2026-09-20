@@ -2017,13 +2017,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     if (action == "action:paste_palette") {
                         if (g_aiPanel.importFromClipboard()) {
                             const auto& colors = g_aiPanel.getSelectedPaletteColors();
-                            for (const auto& col : colors) {
-                                colorPalettePanel.getColorManager().addCustomSwatch(col);
-                            }
-                            auto ramp = g_aiPanel.generateAdvice(canvas.getPrimaryColor(), 0);
-                            colorPalettePanel.addAdvicePalette(ramp);
+                            colorPalettePanel.addAdvicePalette(colors);
                             m_activeRightTab = RightTabMode::Palette;
-                            showMessage("Imported & Loaded: " + g_aiPanel.getSelectedPaletteName(), sf::Color::Green);
+                            showMessage("Imported & Added: " + g_aiPanel.getSelectedPaletteName(), sf::Color::Green);
                         }
                         else {
                             showMessage("Clipboard must contain a Lospec link, slug, or hex codes!", sf::Color::Red);
@@ -2032,13 +2028,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     else if (action == "action:random_palette") {
                         g_aiPanel.pickRandomPalette();
                         const auto& colors = g_aiPanel.getSelectedPaletteColors();
-                        for (const auto& col : colors) {
-                            colorPalettePanel.getColorManager().addCustomSwatch(col);
-                        }
-                        auto ramp = g_aiPanel.generateAdvice(canvas.getPrimaryColor(), 0);
-                        colorPalettePanel.addAdvicePalette(ramp);
+                        colorPalettePanel.addAdvicePalette(colors);
                         m_activeRightTab = RightTabMode::Palette;
-                        showMessage("Random Palette: " + g_aiPanel.getSelectedPaletteName(), sf::Color::Green);
+                        showMessage("Added: " + g_aiPanel.getSelectedPaletteName(), sf::Color::Green);
                     }
                     else if (action == "action:send_all_swatches") {
                         const auto& colors = g_aiPanel.getSelectedPaletteColors();
@@ -2418,6 +2410,22 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         }
                     }
                     return;
+                }
+            }
+
+            if ((event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::MouseButtonReleased) &&
+                event.mouseButton.button == sf::Mouse::Left) {
+                if (!colorPalettePanel.getIsEyedropperActive() && canvas.getDrawArea().contains(logicalMousePos)) {
+                    ToolType t = canvas.getActiveTool();
+                    if (t == ToolType::Brush || t == ToolType::Pencil || t == ToolType::Fill ||
+                        t == ToolType::Shapes || t == ToolType::Curve || t == ToolType::FilledContour ||
+                        t == ToolType::Text) {
+                        sf::Color curCol = canvas.getPrimaryColor();
+                        const auto& swatches = colorPalettePanel.getColorManager().getCustomSwatches();
+                        if (std::find(swatches.begin(), swatches.end(), curCol) == swatches.end()) {
+                            colorPalettePanel.getColorManager().addCustomSwatch(curCol);
+                        }
+                    }
                 }
             }
 
