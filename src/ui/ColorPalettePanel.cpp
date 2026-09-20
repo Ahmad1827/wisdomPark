@@ -475,7 +475,16 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
         box.setOutlineColor(activeInputIndex == index ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
         window.draw(box);
 
-        sf::Text v(activeInputIndex == index ? inputBuffer + "_" : val, font, 13);
+        std::string displayVal = val;
+        if (activeInputIndex == index) {
+            if (index == 4 && (inputBuffer.empty() || inputBuffer[0] != '#')) {
+                displayVal = "#" + inputBuffer + "_";
+            }
+            else {
+                displayVal = inputBuffer + "_";
+            }
+        }
+        sf::Text v(displayVal, font, 13);
         sf::FloatRect vBounds = v.getLocalBounds();
         v.setPosition(std::floor(x + (w - vBounds.width) / 2.f), std::floor(inputY + 20.f));
         v.setFillColor(WisdomUI::Theme::Gold);
@@ -725,38 +734,92 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
 
 bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canvas& canvas) {
     if (activeInputIndex != -1) {
-        if (event.type == sf::Event::TextEntered) {
-            if (event.text.unicode == '\b' && !inputBuffer.empty()) inputBuffer.pop_back();
-            else if (event.text.unicode < 128 && event.text.unicode != '\r' && event.text.unicode != '\n' && event.text.unicode != '\b') {
-                inputBuffer += static_cast<char>(event.text.unicode);
+        if (event.type == sf::Event::KeyPressed && event.key.control && event.key.code == sf::Keyboard::V) {
+            std::string clip = sf::Clipboard::getString().toAnsiString();
+            if (activeInputIndex == 4) {
+                std::string clean;
+                for (char c : clip) {
+                    if (c == '#' || c == ' ' || c == '\r' || c == '\n') continue;
+                    if (std::isxdigit(static_cast<unsigned char>(c))) {
+                        clean += static_cast<char>(std::toupper(c));
+                    }
+                }
+                if (!clean.empty()) {
+                    inputBuffer = clean.substr(0, 6);
+                }
+            }
+            else {
+                std::string digits;
+                for (char c : clip) {
+                    if (std::isdigit(static_cast<unsigned char>(c))) {
+                        digits += c;
+                    }
+                }
+                if (!digits.empty()) {
+                    inputBuffer = digits.substr(0, 3);
+                }
             }
             return true;
         }
-        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Enter) {
-            sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
-            curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
 
-            try {
-                if (activeInputIndex == 0) curC.r = std::clamp(std::stoi(inputBuffer), 0, 255);
-                else if (activeInputIndex == 1) curC.g = std::clamp(std::stoi(inputBuffer), 0, 255);
-                else if (activeInputIndex == 2) curC.b = std::clamp(std::stoi(inputBuffer), 0, 255);
-                else if (activeInputIndex == 3) curC.a = std::clamp(std::stoi(inputBuffer), 0, 255);
-                else if (activeInputIndex == 4) {
-                    std::string hex = inputBuffer;
-                    if (!hex.empty() && hex[0] == '#') hex = hex.substr(1);
-                    if (hex.length() >= 6) {
-                        curC.r = std::stoi(hex.substr(0, 2), nullptr, 16);
-                        curC.g = std::stoi(hex.substr(2, 2), nullptr, 16);
-                        curC.b = std::stoi(hex.substr(4, 2), nullptr, 16);
-                    }
+        if (event.type == sf::Event::TextEntered) {
+            if (event.text.unicode == '\b') {
+                if (!inputBuffer.empty()) inputBuffer.pop_back();
+                return true;
+            }
+            if (event.text.unicode < 32 || event.text.unicode == 127) {
+                return true;
+            }
+
+            char c = static_cast<char>(event.text.unicode);
+            if (activeInputIndex == 4) {
+                if (c != '#' && std::isxdigit(static_cast<unsigned char>(c)) && inputBuffer.length() < 6) {
+                    inputBuffer += static_cast<char>(std::toupper(c));
                 }
             }
-            catch (...) {}
-
-            updateFromRGB(curC);
-            canvas.setPrimaryColor(curC);
-            activeInputIndex = -1;
+            else {
+                if (std::isdigit(static_cast<unsigned char>(c)) && inputBuffer.length() < 3) {
+                    inputBuffer += c;
+                }
+            }
             return true;
+        }
+
+        if (event.type == sf::Event::KeyPressed) {
+            if (event.key.code == sf::Keyboard::Escape) {
+                activeInputIndex = -1;
+                inputBuffer.clear();
+                return true;
+            }
+
+            if (event.key.code == sf::Keyboard::Enter) {
+                sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
+                curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
+
+                try {
+                    if (activeInputIndex == 0 && !inputBuffer.empty()) curC.r = std::clamp(std::stoi(inputBuffer), 0, 255);
+                    else if (activeInputIndex == 1 && !inputBuffer.empty()) curC.g = std::clamp(std::stoi(inputBuffer), 0, 255);
+                    else if (activeInputIndex == 2 && !inputBuffer.empty()) curC.b = std::clamp(std::stoi(inputBuffer), 0, 255);
+                    else if (activeInputIndex == 3 && !inputBuffer.empty()) curC.a = std::clamp(std::stoi(inputBuffer), 0, 255);
+                    else if (activeInputIndex == 4 && !inputBuffer.empty()) {
+                        std::string hex = inputBuffer;
+                        if (!hex.empty() && hex[0] == '#') hex = hex.substr(1);
+                        if (hex.length() == 6) {
+                            curC.r = std::stoi(hex.substr(0, 2), nullptr, 16);
+                            curC.g = std::stoi(hex.substr(2, 2), nullptr, 16);
+                            curC.b = std::stoi(hex.substr(4, 2), nullptr, 16);
+                        }
+                    }
+                }
+                catch (...) {}
+
+                updateFromRGB(curC);
+                canvas.setPrimaryColor(curC);
+                colorManager.addRecentColor(curC);
+                activeInputIndex = -1;
+                inputBuffer.clear();
+                return true;
+            }
         }
     }
 

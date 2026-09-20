@@ -8,6 +8,15 @@
 #include <cmath>
 #include <regex>
 #include <cstdlib>
+#include <array>
+
+#if defined(_WIN32)
+#define POPEN_CMD _popen
+#define PCLOSE_CMD _pclose
+#else
+#define POPEN_CMD popen
+#define PCLOSE_CMD pclose
+#endif
 
 AIPanel::AIPanel()
     : position(64.f, 78.f),
@@ -168,61 +177,161 @@ void AIPanel::loadPalettes() {
 }
 
 bool AIPanel::importFromClipboard() {
-    std::string clip = sf::Clipboard::getString().toAnsiString();
-    clip.erase(0, clip.find_first_not_of(" \r\n\t"));
-    clip.erase(clip.find_last_not_of(" \r\n\t") + 1);
-    if (clip.empty()) return false;
-
-    std::regex hexRegex("#?([0-9a-fA-F]{6})");
-    std::sregex_iterator next(clip.begin(), clip.end(), hexRegex);
-    std::sregex_iterator end;
-
-    std::vector<sf::Color> foundColors;
-    std::vector<std::string> foundHexes;
-    while (next != end) {
-        std::smatch match = *next;
-        std::string h = "#" + match.str(1);
-        foundColors.push_back(hexToColor(h));
-        foundHexes.push_back(h);
-        ++next;
+    std::string text = sf::Clipboard::getString().toAnsiString();
+    while (!text.empty() && (text.back() == '\r' || text.back() == '\n' || text.back() == ' ' || text.back() == '\t')) {
+        text.pop_back();
+    }
+    while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) {
+        text.erase(text.begin());
     }
 
-    if (foundColors.size() >= 4) {
-        std::string name = "Custom Palette (" + std::to_string(foundColors.size()) + "c)";
-        for (size_t i = 0; i < palettes.size(); ++i) {
-            if (palettes[i].name == name) {
-                selectedPaletteIdx = static_cast<int>(i);
-                return true;
-            }
+    if (text.empty()) return false;
+
+    bool isUrl = (text.find("http://") == 0 || text.find("https://") == 0 || text.find("lospec.com") != std::string::npos);
+
+    std::vector<sf::Color> extractedColors;
+
+    // 1. If not a link, parse raw hex color codes (#cc4622 or space-separated list)
+    if (!isUrl) {
+        std::regex hexRegex(R"(#?([0-9a-fA-F]{6}))");
+        auto words_begin = std::sregex_iterator(text.begin(), text.end(), hexRegex);
+        auto words_end = std::sregex_iterator();
+
+        for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
+            std::smatch match = *i;
+            std::string hexStr = match[1].str();
+            unsigned int val = std::stoul(hexStr, nullptr, 16);
+            extractedColors.push_back(sf::Color(
+                (val >> 16) & 0xFF,
+                (val >> 8) & 0xFF,
+                val & 0xFF
+            ));
         }
-        std::ofstream out("assets/palettes.txt", std::ios::app);
-        if (out.is_open()) {
-            out << name << "\n";
-            for (size_t i = 0; i < foundHexes.size(); ++i) {
-                out << foundHexes[i] << (i + 1 == foundHexes.size() ? "" : " ");
+
+        if (!extractedColors.empty()) {
+            std::string palName = (extractedColors.size() == 1) ? ("Hex_" + text) : ("Pasted_" + std::to_string(std::time(nullptr)));
+
+            std::ofstream f("assets/palettes.txt", std::ios::app);
+            if (f.is_open()) {
+                f << palName << "\n";
+                for (size_t i = 0; i < extractedColors.size(); ++i) {
+                    f << colorToHex(extractedColors[i]) << (i + 1 == extractedColors.size() ? "" : " ");
+                }
+                f << "\n";
             }
-            out << "\n";
+
+            palettes.push_back({ palName, extractedColors });
+            selectedPaletteIdx = static_cast<int>(palettes.size()) - 1;
+            return true;
         }
-        loadPalettes();
-        for (size_t i = 0; i < palettes.size(); ++i) {
-            if (palettes[i].name == name) {
-                selectedPaletteIdx = static_cast<int>(i);
-                break;
-            }
-        }
-        return true;
     }
 
-    if (clip.find("http") != std::string::npos || clip.find("lospec") != std::string::npos || clip.find("-") != std::string::npos) {
-        std::string cmd = "python scripts/fetch_palettes.py \"" + clip + "\"";
+    // 2. Extract clean slug for Lospec (handles full URLs, trailing slashes, and raw slugs)
+    std::string slug = text;
+    while (!slug.empty() && (slug.back() == '/' || slug.back() == ' ' || slug.back() == '\r' || slug.back() == '\n')) {
+        slug.pop_back();
+    }
+    size_t qMark = slug.find('?');
+    if (qMark != std::string::npos) {
+        slug = slug.substr(0, qMark);
+    }
+    if (slug.length() > 4 && slug.substr(slug.length() - 4) == ".hex") {
+        slug = slug.substr(0, slug.length() - 4);
+    }
+    size_t lastSlash = slug.find_last_of('/');
+    if (lastSlash != std::string::npos) {
+        slug = slug.substr(lastSlash + 1);
+    }
+
+    if (slug.empty()) return false;
+
+    // Check if palette is already loaded
+    for (size_t i = 0; i < palettes.size(); ++i) {
+        if (palettes[i].name == slug || palettes[i].name.find(slug) != std::string::npos) {
+            selectedPaletteIdx = static_cast<int>(i);
+            return true;
+        }
+    }
+
+    // 3. Fetch directly from Lospec using built-in Windows curl (bypasses Python environment issues)
+    std::string curlCmd = "curl -s -L -A \"Mozilla/5.0\" \"https://lospec.com/palette-list/" + slug + ".hex\"";
+    std::array<char, 256> buffer;
+    std::string curlOutput;
+    FILE* pipe = POPEN_CMD(curlCmd.c_str(), "r");
+    if (pipe) {
+        while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+            curlOutput += buffer.data();
+        }
+        PCLOSE_CMD(pipe);
+    }
+
+    if (!curlOutput.empty()) {
+        std::istringstream stream(curlOutput);
+        std::string line;
+        while (std::getline(stream, line)) {
+            while (!line.empty() && (line.back() == '\r' || line.back() == '\n' || line.back() == ' ')) {
+                line.pop_back();
+            }
+            if (!line.empty() && line.front() == '#') line = line.substr(1);
+            if (line.length() == 6) {
+                bool valid = true;
+                for (char c : line) {
+                    if (!std::isxdigit(static_cast<unsigned char>(c))) {
+                        valid = false;
+                        break;
+                    }
+                }
+                if (valid) {
+                    extractedColors.push_back(hexToColor(line));
+                }
+            }
+        }
+    }
+
+    // 4. Fallback to Python script if curl returned empty
+    if (extractedColors.empty()) {
+        std::string cmd = "python scripts/fetch_palettes.py \"" + slug + "\"";
         int res = std::system(cmd.c_str());
-        if (res == 0) {
-            loadPalettes();
-            if (!palettes.empty()) {
-                selectedPaletteIdx = static_cast<int>(palettes.size()) - 1;
-                return true;
+        if (res != 0) {
+            cmd = "py scripts/fetch_palettes.py \"" + slug + "\"";
+            std::system(cmd.c_str());
+        }
+
+        std::ifstream file("assets/palettes.txt");
+        if (file.is_open()) {
+            std::string lineName, lineColors;
+            while (std::getline(file, lineName) && std::getline(file, lineColors)) {
+                while (!lineName.empty() && (lineName.back() == '\r' || lineName.back() == ' ')) lineName.pop_back();
+                if (lineName.rfind(slug, 0) == 0 || lineName.find(slug) != std::string::npos) {
+                    std::istringstream ss(lineColors);
+                    std::string h;
+                    extractedColors.clear();
+                    while (ss >> h) {
+                        extractedColors.push_back(hexToColor(h));
+                    }
+                    if (!extractedColors.empty()) {
+                        slug = lineName;
+                        break;
+                    }
+                }
             }
         }
+    }
+
+    // 5. Store palette into assets/palettes.txt and select it in memory
+    if (!extractedColors.empty()) {
+        std::ofstream f("assets/palettes.txt", std::ios::app);
+        if (f.is_open()) {
+            f << slug << "\n";
+            for (size_t i = 0; i < extractedColors.size(); ++i) {
+                f << colorToHex(extractedColors[i]) << (i + 1 == extractedColors.size() ? "" : " ");
+            }
+            f << "\n";
+        }
+
+        palettes.push_back({ slug, extractedColors });
+        selectedPaletteIdx = static_cast<int>(palettes.size()) - 1;
+        return true;
     }
 
     return false;
