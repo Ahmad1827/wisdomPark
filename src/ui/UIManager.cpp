@@ -456,25 +456,25 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         [this]() { m_showTimeline = false; }
     );
 
-    m_toolDock.AddTool("brush", "Brush Tool (B)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Brush); m_toolDock.SetActiveTool("brush"); });
-    m_toolDock.AddTool("pencil", "Pencil Tool (P)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Pencil); m_toolDock.SetActiveTool("pencil"); });
-    m_toolDock.AddTool("eraser", "Eraser Tool (E)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Eraser); m_toolDock.SetActiveTool("eraser"); });
-    m_toolDock.AddTool("fill", "Fill Bucket (F)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Fill); m_toolDock.SetActiveTool("fill"); });
-    m_toolDock.AddTool("select", "Selection Box (M)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Select); m_toolDock.SetActiveTool("select"); });
-    m_toolDock.AddTool("magic_wand", "Magic Wand (W)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::MagicWand); m_toolDock.SetActiveTool("magic_wand"); });
-    m_toolDock.AddTool("curve", "Curve Tool", [this, baseCanvas]() {
+    m_toolDock.AddTool("brush", "Brush Tool [1 / B]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Brush); m_toolDock.SetActiveTool("brush"); });
+    m_toolDock.AddTool("pencil", "Pencil Tool [2 / P]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Pencil); m_toolDock.SetActiveTool("pencil"); });
+    m_toolDock.AddTool("eraser", "Eraser Tool [3 / E]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Eraser); m_toolDock.SetActiveTool("eraser"); });
+    m_toolDock.AddTool("fill", "Fill Bucket [4 / F]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Fill); m_toolDock.SetActiveTool("fill"); });
+    m_toolDock.AddTool("select", "Selection Box [5 / M]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Select); m_toolDock.SetActiveTool("select"); });
+    m_toolDock.AddTool("magic_wand", "Magic Wand [6 / W]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::MagicWand); m_toolDock.SetActiveTool("magic_wand"); });
+    m_toolDock.AddTool("curve", "Curve Tool [7]", [this, baseCanvas]() {
         baseCanvas->setActiveTool(ToolType::Curve);
         m_toolDock.SetActiveTool("curve");
         });
 
-    m_toolDock.AddTool("filled_contour", "Filled Contour", [this, baseCanvas]() {
+    m_toolDock.AddTool("filled_contour", "Filled Contour [8]", [this, baseCanvas]() {
         baseCanvas->setActiveTool(ToolType::FilledContour);
         m_toolDock.SetActiveTool("filled_contour");
         });
-    m_toolDock.AddTool("shapes", "Shapes Tool (U)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Shapes); m_toolDock.SetActiveTool("shapes"); });
-    m_toolDock.AddTool("text", "Text Tool (T)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Text); m_toolDock.SetActiveTool("text"); });
-    m_toolDock.AddTool("gradient", "Gradient Tool (G)", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Gradient); m_toolDock.SetActiveTool("gradient"); });
-    m_toolDock.AddTool("grid", "Grid Overlay (#)", [this, baseCanvas]() {
+    m_toolDock.AddTool("shapes", "Shapes Tool [9 / U]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Shapes); m_toolDock.SetActiveTool("shapes"); });
+    m_toolDock.AddTool("text", "Text Tool [0 / T]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Text); m_toolDock.SetActiveTool("text"); });
+    m_toolDock.AddTool("gradient", "Gradient Tool [- / G]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Gradient); m_toolDock.SetActiveTool("gradient"); });
+    m_toolDock.AddTool("grid", "Grid Overlay [= / #]", [this, baseCanvas]() {
         baseCanvas->setActiveTool(ToolType::Grid);
         m_toolDock.SetActiveTool("grid");
         baseCanvas->setCustomGridEnabled(true);
@@ -2100,6 +2100,81 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 if (isTypingPrompt) return;
+                if (!event.key.control && !event.key.alt) {
+                    int curFrame = timeline.getCurrentFrame();
+                    if (event.key.code == sf::Keyboard::Num1) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::Brush);
+                        m_toolDock.SetActiveTool("brush");
+                        showMessage("Brush Tool [1]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Num2) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::Pencil);
+                        m_toolDock.SetActiveTool("pencil");
+                        showMessage("Pencil Tool [2]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Num3) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::Eraser);
+                        m_toolDock.SetActiveTool("eraser");
+                        showMessage("Eraser Tool [3]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Num4) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::Fill);
+                        m_toolDock.SetActiveTool("fill");
+                        showMessage("Fill Bucket [4]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Num5) {
+                        canvas.setActiveTool(ToolType::Select);
+                        m_toolDock.SetActiveTool("select");
+                        showMessage("Select Tool [5]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Num6) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::MagicWand);
+                        m_toolDock.SetActiveTool("magic_wand");
+                        showMessage("Magic Wand [6]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Num7) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::Curve);
+                        m_toolDock.SetActiveTool("curve");
+                        showMessage("Curve Tool [7]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Num8) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::FilledContour);
+                        m_toolDock.SetActiveTool("filled_contour");
+                        showMessage("Filled Contour [8]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Num9) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::Shapes);
+                        m_toolDock.SetActiveTool("shapes");
+                        showMessage("Shapes Tool [9]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Num0) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::Text);
+                        m_toolDock.SetActiveTool("text");
+                        showMessage("Text Tool [0]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Hyphen) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::Gradient);
+                        m_toolDock.SetActiveTool("gradient");
+                        showMessage("Gradient Tool [-]", sf::Color::Cyan);
+                    }
+                    else if (event.key.code == sf::Keyboard::Equal) {
+                        canvas.commitSelection(curFrame);
+                        canvas.setActiveTool(ToolType::Grid);
+                        m_toolDock.SetActiveTool("grid");
+                        canvas.setCustomGridEnabled(true);
+                        showMessage("Grid Overlay [=]", sf::Color::Cyan);
+                    }
+                }
 
                 if (event.key.code == sf::Keyboard::G) {
                     canvas.commitSelection(timeline.getCurrentFrame());
