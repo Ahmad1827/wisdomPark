@@ -755,24 +755,16 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
                     std::string clean;
                     for (char c : clip) {
                         if (c == '#' || c == ' ' || c == '\r' || c == '\n') continue;
-                        if (std::isxdigit(static_cast<unsigned char>(c))) {
-                            clean += static_cast<char>(std::toupper(c));
-                        }
+                        if (std::isxdigit(static_cast<unsigned char>(c))) clean += static_cast<char>(std::toupper(c));
                     }
-                    if (!clean.empty()) {
-                        inputBuffer = clean.substr(0, 6);
-                    }
+                    if (!clean.empty()) inputBuffer = clean.substr(0, 6);
                 }
                 else {
                     std::string digits;
                     for (char c : clip) {
-                        if (std::isdigit(static_cast<unsigned char>(c))) {
-                            digits += c;
-                        }
+                        if (std::isdigit(static_cast<unsigned char>(c))) digits += c;
                     }
-                    if (!digits.empty()) {
-                        inputBuffer = digits.substr(0, 3);
-                    }
+                    if (!digits.empty()) inputBuffer = digits.substr(0, 3);
                 }
                 return true;
             }
@@ -786,7 +778,6 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
             if (event.key.code == sf::Keyboard::Enter) {
                 sf::Color curC = ColorManager::hsvToRgb(currentHue, currentSat, currentVal);
                 curC.a = static_cast<sf::Uint8>(currentAlpha * 255.f);
-
                 try {
                     if (activeInputIndex == 0 && !inputBuffer.empty()) curC.r = std::clamp(std::stoi(inputBuffer), 0, 255);
                     else if (activeInputIndex == 1 && !inputBuffer.empty()) curC.g = std::clamp(std::stoi(inputBuffer), 0, 255);
@@ -803,7 +794,6 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
                     }
                 }
                 catch (...) {}
-
                 updateFromRGB(curC);
                 canvas.setPrimaryColor(curC);
                 colorManager.addRecentColor(curC);
@@ -811,23 +801,17 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
                 inputBuffer.clear();
                 return true;
             }
-
             return true;
         }
 
-        if (event.type == sf::Event::KeyReleased) {
-            return true;
-        }
+        if (event.type == sf::Event::KeyReleased) return true;
 
         if (event.type == sf::Event::TextEntered) {
             if (event.text.unicode == '\b') {
                 if (!inputBuffer.empty()) inputBuffer.pop_back();
                 return true;
             }
-            if (event.text.unicode < 32 || event.text.unicode == 127) {
-                return true;
-            }
-
+            if (event.text.unicode < 32 || event.text.unicode == 127) return true;
             char c = static_cast<char>(event.text.unicode);
             if (activeInputIndex == 4) {
                 if (c != '#' && std::isxdigit(static_cast<unsigned char>(c)) && inputBuffer.length() < 6) {
@@ -841,6 +825,10 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
             }
             return true;
         }
+    }
+
+    if (event.type == sf::Event::KeyPressed || event.type == sf::Event::KeyReleased || event.type == sf::Event::TextEntered) {
+        return false;
     }
 
     if (m_showSwatchContextMenu) {
@@ -1121,7 +1109,14 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
         }
     }
 
-    return background.getGlobalBounds().contains(mousePos);
+    if (event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::MouseButtonReleased ||
+        event.type == sf::Event::MouseMoved || event.type == sf::Event::MouseWheelScrolled) {
+        float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
+        sf::FloatRect panelBounds(currentX, topBarsH, width, 1080.f - topBarsH - WisdomUI::Theme::StatusBarHeight);
+        return panelBounds.contains(mousePos);
+    }
+
+    return false;
 }
 
 std::string ColorPalettePanel::processClick(sf::Vector2f mousePos, Canvas& canvas) {

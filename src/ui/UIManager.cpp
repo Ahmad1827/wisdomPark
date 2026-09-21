@@ -466,12 +466,6 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     m_toolDock.AddTool("shapes", "Shapes Tool [9 / U]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Shapes); m_toolDock.SetActiveTool("shapes"); });
     m_toolDock.AddTool("text", "Text Tool [0 / T]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Text); m_toolDock.SetActiveTool("text"); });
     m_toolDock.AddTool("gradient", "Gradient Tool [- / G]", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Gradient); m_toolDock.SetActiveTool("gradient"); });
-    m_toolDock.AddTool("grid", "Grid Overlay [= / #]", [this, baseCanvas]() {
-        baseCanvas->setActiveTool(ToolType::Grid);
-        m_toolDock.SetActiveTool("grid");
-        baseCanvas->setCustomGridEnabled(true);
-        showMessage("Grid Enabled (Adjust in Top Bar)", sf::Color::Cyan);
-        });
     m_toolDock.AddTool("symmetry", "Symmetry Axis", [this, baseCanvas]() {
         if (baseCanvas->getActiveTool() == ToolType::Symmetry) {
             baseCanvas->clearSymmetry();
@@ -1437,16 +1431,21 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
         else if (m_activeRightTab == RightTabMode::Palette) {
-            if (colorPalettePanel.handleEvent(event, mousePos, canvas)) {
-                if (g_selectingOutlineColor) {
-                    g_outlineColor = canvas.getPrimaryColor();
-                    m_toolOptionsBar.SetOutlineColor(g_outlineColor);
+            bool isKeyEvent = (event.type == sf::Event::KeyPressed || event.type == sf::Event::KeyReleased || event.type == sf::Event::TextEntered);
+
+            if (!isKeyEvent || colorPalettePanel.isTypingInput()) {
+                if (colorPalettePanel.handleEvent(event, mousePos, canvas)) {
+                    if (g_selectingOutlineColor) {
+                        g_outlineColor = canvas.getPrimaryColor();
+                        m_toolOptionsBar.SetOutlineColor(g_outlineColor);
+                    }
+                    if (g_selectingGridColor) {
+                        canvas.setCustomGridColor(canvas.getPrimaryColor());
+                    }
+                    return;
                 }
-                if (g_selectingGridColor) {
-                    canvas.setCustomGridColor(canvas.getPrimaryColor());
-                }
-                return;
             }
+
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
                 std::string cpAction = colorPalettePanel.processClick(mousePos, canvas);
                 if (g_selectingOutlineColor) {
@@ -1746,10 +1745,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                     else if (event.key.code == sf::Keyboard::Equal) {
                         canvas.commitSelection(curFrame);
-                        canvas.setActiveTool(ToolType::Grid);
-                        m_toolDock.SetActiveTool("grid");
-                        canvas.setCustomGridEnabled(true);
-                        showMessage("Grid Overlay [=]", sf::Color::Cyan);
+                        canvas.setCustomGridEnabled(!canvas.isCustomGridEnabled());
+                        showMessage(canvas.isCustomGridEnabled() ? "Grid: ON" : "Grid: OFF", sf::Color::Cyan);
                     }
                 }
 
@@ -2286,7 +2283,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             }
         );
         m_topBar.SetGridControls(
-            canvas.getActiveTool() == ToolType::Grid,
+            true,
             canvas.isCustomGridEnabled(),
             canvas.getCustomGridSize(),
             canvas.getCustomGridColor(),
@@ -2305,10 +2302,13 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 showMessage("Pick Grid Color from Palette", sf::Color(100, 200, 255));
             }
         );
-
-        if (canvas.getActiveTool() != ToolType::Grid) {
+        if (m_activeRightTab != RightTabMode::Palette) {
             g_selectingGridColor = false;
         }
+        else if (g_selectingGridColor) {
+            canvas.setCustomGridColor(canvas.getPrimaryColor());
+        }
+        
 
         m_toolOptionsBar.SetBounds(regions.optionsBar);
         std::string toolName = "Brush";
