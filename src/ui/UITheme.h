@@ -57,12 +57,12 @@ namespace WisdomUI {
         static inline const sf::Color TextParchment = sf::Color(36, 14, 32);
         static inline const sf::Color TextParchmentMuted = sf::Color(110, 60, 80);
 
-        static inline const float TopBarHeight = 36.0f;
-        static inline const float OptionsBarHeight = 32.0f;
+        static inline const float TopBarHeight = 46.0f;
+        static inline const float OptionsBarHeight = 40.0f;
         static inline const float ToolDockWidth = 52.0f;
         static inline const float RightDockWidth = 300.0f;
         static inline const float TimelineHeight = 200.0f;
-        static inline const float StatusBarHeight = 24.0f;
+        static inline const float StatusBarHeight = 30.0f;
         static inline const float BorderThickness = 1.0f;
 
         static void DrawCrispText(sf::RenderWindow& window, const sf::Font& font, const std::string& str, unsigned int size, float x, float y, sf::Color color, sf::Color shadowColor = sf::Color::Transparent, bool centerH = false, bool centerV = false) {

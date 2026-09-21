@@ -13,7 +13,9 @@ namespace WisdomUI {
 
     void StatusBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        m_timelineToggleBtn = sf::FloatRect(bounds.left + bounds.width - 140.0f, bounds.top + 2.0f, 130.0f, bounds.height - 4.0f);
+        float btnH = 24.0f;
+        float btnY = bounds.top + (bounds.height - btnH) * 0.5f;
+        m_timelineToggleBtn = sf::FloatRect(bounds.left + bounds.width - 136.0f, btnY, 124.0f, btnH);
     }
 
     void StatusBar::UpdateData(sf::Vector2u canvasSize, sf::Vector2f cursorCoords, float zoom, int currentLayer, int currentFrame, bool isTimelineOpen) {
@@ -43,11 +45,14 @@ namespace WisdomUI {
     }
 
     void StatusBar::Render(sf::RenderWindow& window) {
-        Theme::DrawCarvedWoodPlank(window, m_bounds, false, 1.0f);
+        Theme::DrawSunsetPanel(window, m_bounds, 1.0f);
+
+        float centerY = std::floor(m_bounds.top + m_bounds.height * 0.5f);
 
         float jewelPulse = Animation::Pulse(m_globalTime, 3.0f, 0.5f, 1.0f);
-        sf::CircleShape jewel(3.5f);
-        jewel.setPosition(m_bounds.left + 14.0f, m_bounds.top + 8.5f);
+        sf::CircleShape jewel(4.0f);
+        jewel.setOrigin(4.0f, 4.0f);
+        jewel.setPosition(m_bounds.left + 16.0f, centerY);
         sf::Color jewelCol = sf::Color(80, 230, 110);
         jewelCol.a = static_cast<sf::Uint8>(255 * jewelPulse);
         jewel.setFillColor(jewelCol);
@@ -55,19 +60,16 @@ namespace WisdomUI {
         jewel.setOutlineColor(Theme::Gold);
         window.draw(jewel);
 
-        std::string text = "Park Canvas: " + std::to_string(m_canvasSize.x) + "x" + std::to_string(m_canvasSize.y) +
-            "  |  Position: " + std::to_string(static_cast<int>(m_cursorCoords.x)) + ", " + std::to_string(static_cast<int>(m_cursorCoords.y)) +
-            "  |  Zoom: " + std::to_string(static_cast<int>(m_zoom * 100.0f)) + "%" +
-            "  |  Layer: " + std::to_string(m_layer + 1) +
-            "  |  Frame: " + std::to_string(m_frame + 1);
+        std::string text = "Canvas: " + std::to_string(m_canvasSize.x) + "x" + std::to_string(m_canvasSize.y) +
+            "   |   Cursor: " + std::to_string(static_cast<int>(m_cursorCoords.x)) + ", " + std::to_string(static_cast<int>(m_cursorCoords.y)) +
+            "   |   Zoom: " + std::to_string(static_cast<int>(m_zoom * 100.0f)) + "%" +
+            "   |   Layer: " + std::to_string(m_layer + 1) +
+            "   |   Frame: " + std::to_string(m_frame + 1);
 
-        sf::Text status(text, m_font, 11);
-        status.setFillColor(Theme::TextSecondary);
-        status.setPosition(m_bounds.left + 28.0f, m_bounds.top + 4.0f);
-        window.draw(status);
+        Theme::DrawCrispText(window, m_font, text, 13, m_bounds.left + 30.0f, centerY, Theme::TextSecondary, sf::Color(14, 6, 20), false, true);
 
         std::string btnStr = m_isTimelineOpen ? "[ v ] TIMELINE" : "[ ^ ] TIMELINE";
-        Theme::DrawThemedButton(window, m_timelineToggleBtn, btnStr, m_font, 10, m_isTimelineOpen, m_toggleHoverAlpha > 0.5f, m_isTimelineOpen, 1.0f);
+        Theme::DrawSunsetButton(window, m_timelineToggleBtn, btnStr, m_font, 12, m_isTimelineOpen, m_toggleHoverAlpha > 0.5f, m_isTimelineOpen, 1.0f);
     }
 
 }

@@ -14,16 +14,16 @@ void ExportModal::init() {
     overlay.setSize(sf::Vector2f(1920.f, 1080.f));
     overlay.setFillColor(sf::Color(10, 4, 16, 225));
 
-    modalBounds = sf::FloatRect(1920.f / 2.f - 480.f, 1080.f / 2.f - 310.f, 960.f, 620.f);
+    modalBounds = sf::FloatRect(1920.f / 2.f - 520.f, 1080.f / 2.f - 340.f, 1040.f, 680.f);
 
-    closeBtnBounds = sf::FloatRect(modalBounds.left + modalBounds.width - 104.f, modalBounds.top + 20.f, 84.f, 32.f);
-    previewAreaBounds = sf::FloatRect(modalBounds.left + 28.f, modalBounds.top + 80.f, 540.f, 500.f);
+    closeBtnBounds = sf::FloatRect(modalBounds.left + modalBounds.width - 130.f, modalBounds.top + 22.f, 100.f, 42.f);
+    previewAreaBounds = sf::FloatRect(modalBounds.left + 36.f, modalBounds.top + 84.f, 560.f, 550.f);
 
-    transCheckboxBounds = sf::FloatRect(modalBounds.left + 600.f, modalBounds.top + 80.f, 330.f, 42.f);
-    cropCheckboxBounds = sf::FloatRect(modalBounds.left + 600.f, modalBounds.top + 132.f, 330.f, 42.f);
+    transCheckboxBounds = sf::FloatRect(modalBounds.left + 626.f, modalBounds.top + 84.f, 378.f, 50.f);
+    cropCheckboxBounds = sf::FloatRect(modalBounds.left + 626.f, modalBounds.top + 144.f, 378.f, 50.f);
 
-    exportPngBtnBounds = sf::FloatRect(modalBounds.left + 600.f, modalBounds.top + 456.f, 330.f, 54.f);
-    exportSheetBtnBounds = sf::FloatRect(modalBounds.left + 600.f, modalBounds.top + 522.f, 330.f, 54.f);
+    exportPngBtnBounds = sf::FloatRect(modalBounds.left + 626.f, modalBounds.top + 508.f, 378.f, 60.f);
+    exportSheetBtnBounds = sf::FloatRect(modalBounds.left + 626.f, modalBounds.top + 578.f, 378.f, 60.f);
 }
 
 void ExportModal::open(Canvas& canvas, int frameIndex) {
@@ -66,11 +66,11 @@ void ExportModal::updatePreview() {
     float mb = static_cast<float>(estimatedBytes) / (1024.f * 1024.f);
 
     std::stringstream ss;
-    ss << "EXPORT SPECIFICATIONS\n\n";
-    ss << "Output Dimensions : " << finalImg.getSize().x << " x " << finalImg.getSize().y << " px\n";
-    ss << "Est Single Frame  : ~" << std::fixed << std::setprecision(2) << mb << " MB\n";
-    ss << "Animation Frames  : " << linkedCanvas->getFrameCount() << " Frames\n";
-    ss << "Engine Mode       : " << (linkedCanvas->getPixelMode() ? "Pixel Art Grid" : "RGBA Dynamic");
+    ss << "EXPORT DETAILS\n\n";
+    ss << "Dimensions : " << finalImg.getSize().x << " x " << finalImg.getSize().y << " px\n";
+    ss << "Frame Size : ~" << std::fixed << std::setprecision(2) << mb << " MB\n";
+    ss << "Timeline   : " << linkedCanvas->getFrameCount() << " Frames\n";
+    ss << "Color Mode : " << (linkedCanvas->getPixelMode() ? "Pixel Art" : "RGBA");
     infoString = ss.str();
 }
 
@@ -127,12 +127,11 @@ void ExportModal::draw(sf::RenderWindow& window) {
 
     WisdomUI::Theme::DrawSunsetPanel(window, modalBounds, 1.0f);
 
-    WisdomUI::Theme::DrawCrispText(window, font, "RENDER & EXPORT STUDIO", 18, modalBounds.left + 28.f, modalBounds.top + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
-    WisdomUI::Theme::DrawCrispText(window, font, "OUTPUT PNG SEQUENCES OR PACKED SPRITE SHEETS", 11, modalBounds.left + 30.f, modalBounds.top + 50.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawCrispText(window, font, "EXPORT STUDIO", 32, modalBounds.left + 36.f, modalBounds.top + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
 
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
-    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Cancel", font, 11, false, closeBtnBounds.contains(mPos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Cancel", font, 18, false, closeBtnBounds.contains(mPos), false, 1.0f);
 
     sf::RectangleShape previewFrame(sf::Vector2f(previewAreaBounds.width, previewAreaBounds.height));
     previewFrame.setPosition(previewAreaBounds.left, previewAreaBounds.top);
@@ -159,24 +158,24 @@ void ExportModal::draw(sf::RenderWindow& window) {
 
     window.draw(previewSprite);
 
-    WisdomUI::Theme::DrawSunsetButton(window, transCheckboxBounds, transparentBg ? "[X] Alpha Transparency" : "[  ] Alpha Transparency", font, 12, transparentBg, transCheckboxBounds.contains(mPos), transparentBg, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, cropCheckboxBounds, autoCrop ? "[X] Trim Empty Boundaries" : "[  ] Trim Empty Boundaries", font, 12, autoCrop, cropCheckboxBounds.contains(mPos), autoCrop, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, transCheckboxBounds, transparentBg ? "[X] Transparent Background" : "[  ] Transparent Background", font, 18, transparentBg, transCheckboxBounds.contains(mPos), transparentBg, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, cropCheckboxBounds, autoCrop ? "[X] Trim Empty Edges" : "[  ] Trim Empty Edges", font, 18, autoCrop, cropCheckboxBounds.contains(mPos), autoCrop, 1.0f);
 
-    sf::FloatRect infoCard(modalBounds.left + 600.f, modalBounds.top + 190.f, 330.f, 244.f);
+    sf::FloatRect infoCard(modalBounds.left + 626.f, modalBounds.top + 208.f, 378.f, 280.f);
     sf::RectangleShape infoBg(sf::Vector2f(infoCard.width, infoCard.height));
     infoBg.setPosition(infoCard.left, infoCard.top);
     infoBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-    infoBg.setOutlineThickness(1.f);
+    infoBg.setOutlineThickness(1.5f);
     infoBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(infoBg);
 
-    sf::Text iText(infoString, font, 11);
-    iText.setPosition(infoCard.left + 18.f, infoCard.top + 18.f);
+    sf::Text iText(infoString, font, 18);
+    iText.setPosition(infoCard.left + 22.f, infoCard.top + 22.f);
     iText.setFillColor(WisdomUI::Theme::TextSecondary);
-    iText.setLineSpacing(1.4f);
+    iText.setLineSpacing(1.5f);
     window.draw(iText);
 
-    std::string pngLabel = (linkedCanvas && linkedCanvas->getFrameCount() > 1) ? "EXPORT SEQUENCE" : "EXPORT SINGLE PNG";
-    WisdomUI::Theme::DrawSunsetButton(window, exportPngBtnBounds, pngLabel, font, 13, false, exportPngBtnBounds.contains(mPos), true, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, exportSheetBtnBounds, "EXPORT SPRITE SHEET", font, 13, false, exportSheetBtnBounds.contains(mPos), true, 1.0f);
+    std::string pngLabel = (linkedCanvas && linkedCanvas->getFrameCount() > 1) ? "EXPORT SEQUENCE" : "EXPORT PNG";
+    WisdomUI::Theme::DrawSunsetButton(window, exportPngBtnBounds, pngLabel, font, 20, false, exportPngBtnBounds.contains(mPos), true, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, exportSheetBtnBounds, "EXPORT SPRITE SHEET", font, 20, false, exportSheetBtnBounds.contains(mPos), true, 1.0f);
 }

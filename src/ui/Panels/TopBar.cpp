@@ -6,6 +6,8 @@
 
 namespace WisdomUI {
 
+    static sf::FloatRect s_projBadgeBounds;
+
     TopBar::TopBar() = default;
 
     void TopBar::Initialize(const sf::Font& font,
@@ -47,12 +49,13 @@ namespace WisdomUI {
     void TopBar::SetProjectName(const std::string& name, bool isDirty) {
         m_projectName = name;
         m_isDirty = isDirty;
+        SetBounds(m_bounds);
     }
 
     sf::FloatRect TopBar::getDropdownPanelBounds(int menuIndex) const {
         if (menuIndex < 0 || menuIndex >= static_cast<int>(m_menus.size())) return {};
         const auto& menu = m_menus[menuIndex];
-        float itemH = 30.0f;
+        float itemH = 33.0f;
         float totalH = menu.actions.size() * itemH + 12.0f;
         float currentH = totalH * menu.openProgress;
         return sf::FloatRect(std::floor(menu.bounds.left), std::floor(m_bounds.top + m_bounds.height + 3.0f), menu.dropdownWidth, currentH);
@@ -65,7 +68,7 @@ namespace WisdomUI {
 
         float dropX = std::floor(menu.bounds.left);
         float dropY = std::floor(m_bounds.top + m_bounds.height + 3.0f);
-        float itemH = 30.0f;
+        float itemH = 33.0f;
         float itemY = dropY + 6.0f + actionIndex * itemH;
         float itemW = menu.dropdownWidth - 12.0f;
 
@@ -75,26 +78,83 @@ namespace WisdomUI {
     void TopBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
 
-        float logoRight = bounds.left + 140.0f;
+        float barH = bounds.height;
+        float btnH = 30.0f;
+        float btnY = std::floor(bounds.top + (barH - btnH) * 0.5f);
 
-        sf::Text projMeasure(m_projectName + (m_isDirty ? " *" : ""), m_font, 12);
-        float projBadgeW = std::clamp(projMeasure.getLocalBounds().width + 24.0f, 90.0f, 220.0f);
-        float menuStartX = logoRight + projBadgeW + 20.0f;
+        sf::Text logoMeasure("WISDOM PARK", m_font, 14);
+        float logoW = logoMeasure.getLocalBounds().width;
+        float badgeStartX = std::floor(bounds.left + 34.0f + logoW + 18.0f);
+
+        sf::Text projMeasure(m_projectName + (m_isDirty ? " *" : ""), m_font, 13);
+        float projW = projMeasure.getLocalBounds().width;
+        float projBadgeW = std::clamp(projW + 28.0f, 100.0f, 360.0f);
+
+        s_projBadgeBounds = sf::FloatRect(badgeStartX, btnY, projBadgeW, btnH);
+
+        float curX = s_projBadgeBounds.left + s_projBadgeBounds.width + 14.0f;
 
         for (auto& menu : m_menus) {
-            sf::Text t(menu.title, m_font, 12);
+            sf::Text t(menu.title, m_font, 13);
             float w = t.getLocalBounds().width + 24.0f;
-            menu.bounds = sf::FloatRect(std::floor(menuStartX), std::floor(bounds.top + 5.0f), std::floor(w), 26.0f);
-            menuStartX += w + 8.0f;
+            menu.bounds = sf::FloatRect(std::floor(curX), btnY, std::floor(w), btnH);
+            curX += w + 6.0f;
         }
 
-        float btnSize = 26.0f;
-        float totalQuickW = m_quickBtns.size() * (btnSize + 6.0f) - 6.0f;
+        curX += 6.0f;
+
+        m_pushGitImgBtnBounds = sf::FloatRect(std::floor(curX), btnY, 92.0f, btnH);
+        curX += 92.0f + 6.0f;
+
+        m_pushSheetBtnBounds = sf::FloatRect(std::floor(curX), btnY, 92.0f, btnH);
+        curX += 92.0f + 6.0f;
+
+        m_pullBtnBounds = sf::FloatRect(std::floor(curX), btnY, 70.0f, btnH);
+        curX += 70.0f + 8.0f;
+
+        m_opaqueCheckboxBounds = sf::FloatRect(std::floor(curX), btnY, 86.0f, btnH);
+        curX += 86.0f + 8.0f;
+
+        m_trackerBtnBounds = sf::FloatRect(std::floor(curX), btnY, 86.0f, btnH);
+        curX += 86.0f + 8.0f;
+
+        float btnSize = 30.0f;
+        float totalQuickW = m_quickBtns.size() * (btnSize + 5.0f) - 5.0f;
         float qX = bounds.left + bounds.width - totalQuickW - 14.0f;
 
         for (auto& qb : m_quickBtns) {
-            qb.bounds = sf::FloatRect(std::floor(qX), std::floor(bounds.top + 5.0f), btnSize, btnSize);
-            qX += btnSize + 6.0f;
+            qb.bounds = sf::FloatRect(std::floor(qX), btnY, btnSize, btnSize);
+            qX += btnSize + 5.0f;
+        }
+
+        float rightAnchor = m_quickBtns.empty() ? (bounds.left + bounds.width - 14.0f) : (m_quickBtns.front().bounds.left - 12.0f);
+
+        if (m_symmetryActive) {
+            float symW = 146.0f;
+            rightAnchor -= symW + 6.0f;
+            m_symmetryBtnBounds = sf::FloatRect(std::floor(rightAnchor), btnY, symW, btnH);
+        }
+        else {
+            m_symmetryBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+        }
+
+        if (m_gridControlsVisible) {
+            float totalGridW = 90.f + 5.f + 30.f + 5.f + 30.f + 5.f + 64.f + 5.f + 30.f;
+            rightAnchor -= totalGridW + 6.0f;
+            float startX = std::floor(rightAnchor);
+
+            m_gridToggleBtnBounds = sf::FloatRect(startX, btnY, 90.0f, btnH);
+            m_gridColorBtnBounds = sf::FloatRect(startX + 95.0f, btnY, 30.0f, btnH);
+            m_gridMinusBtnBounds = sf::FloatRect(startX + 130.0f, btnY, 30.0f, btnH);
+            m_gridSizeBox = sf::FloatRect(startX + 165.0f, btnY, 64.0f, btnH);
+            m_gridPlusBtnBounds = sf::FloatRect(startX + 234.0f, btnY, 30.0f, btnH);
+        }
+        else {
+            m_gridToggleBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+            m_gridColorBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+            m_gridMinusBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+            m_gridSizeBox = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+            m_gridPlusBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
         }
     }
 
@@ -135,8 +195,8 @@ namespace WisdomUI {
     void TopBar::renderPullDropdown(sf::RenderWindow& window, sf::Vector2f mousePos) {
         if (m_pullOpenProgress < 0.02f) return;
 
-        float dropW = 340.0f;
-        float totalH = 360.0f;
+        float dropW = 350.0f;
+        float totalH = 380.0f;
         float currentH = totalH * m_pullOpenProgress;
         float dropX = std::floor(m_pullBtnBounds.left);
         float dropY = std::floor(m_bounds.top + m_bounds.height + 3.0f);
@@ -147,19 +207,19 @@ namespace WisdomUI {
 
         if (m_pullOpenProgress < 0.4f) return;
 
-        float headerH = 26.0f;
+        float headerH = 28.0f;
         sf::RectangleShape header(sf::Vector2f(dropW - 12.0f, headerH));
         header.setPosition(dropX + 6.0f, dropY + 6.0f);
         header.setFillColor(Theme::SunsetDeepDark);
         window.draw(header);
 
-        Theme::DrawCrispText(window, m_font, "VERSION HISTORY (RESTORE)", 11, dropX + 14.0f, dropY + 11.0f, Theme::SunsetAmber);
+        Theme::DrawCrispText(window, m_font, "VERSION HISTORY", 12, dropX + 14.0f, dropY + 14.0f, Theme::SunsetAmber, sf::Color::Transparent, false, true);
 
-        float listY = dropY + headerH + 10.0f;
-        float listH = currentH - headerH - 18.0f;
+        float listY = dropY + headerH + 8.0f;
+        float listH = currentH - headerH - 16.0f;
         if (listH <= 20.0f) return;
 
-        float rowH = 46.0f;
+        float rowH = 48.0f;
         float totalContentH = static_cast<float>(m_commits.size()) * rowH;
         m_pullMaxScroll = std::max(0.0f, totalContentH - listH);
         m_pullScrollOffset = std::clamp(m_pullScrollOffset, 0.0f, m_pullMaxScroll);
@@ -167,7 +227,7 @@ namespace WisdomUI {
         m_commitRowBounds.clear();
 
         if (m_commits.empty()) {
-            Theme::DrawCrispText(window, m_font, "No commits found in repository.", 12, dropX + dropW / 2.0f, dropY + currentH / 2.0f, Theme::SunsetPlum, sf::Color::Transparent, true, true);
+            Theme::DrawCrispText(window, m_font, "No commits found in repository.", 13, dropX + dropW / 2.0f, dropY + currentH / 2.0f, Theme::SunsetPlum, sf::Color::Transparent, true, true);
             return;
         }
 
@@ -204,14 +264,14 @@ namespace WisdomUI {
                 rowBg.setOutlineColor(isHov ? Theme::SunsetAmber : sf::Color(50, 36, 64));
                 window.draw(rowBg);
 
-                Theme::DrawCrispText(window, m_font, m_commits[i].shortHash, 11, rowRect.left + 8.0f, rowRect.top + 5.0f, Theme::SunsetGold);
-                Theme::DrawCrispText(window, m_font, m_commits[i].dateFormatted, 11, rowRect.left + 72.0f, rowRect.top + 5.0f, Theme::SunsetPeach);
+                Theme::DrawCrispText(window, m_font, m_commits[i].shortHash, 12, rowRect.left + 8.0f, rowRect.top + 6.0f, Theme::SunsetGold);
+                Theme::DrawCrispText(window, m_font, m_commits[i].dateFormatted, 12, rowRect.left + 76.0f, rowRect.top + 6.0f, Theme::SunsetPeach);
 
                 std::string msg = m_commits[i].message;
                 if (msg.length() > 34) {
                     msg = msg.substr(0, 32) + "..";
                 }
-                Theme::DrawCrispText(window, m_font, msg, 12, rowRect.left + 8.0f, rowRect.top + 22.0f, sf::Color::White);
+                Theme::DrawCrispText(window, m_font, msg, 13, rowRect.left + 8.0f, rowRect.top + 24.0f, sf::Color::White);
 
                 m_commitRowBounds.push_back({ rowRect, m_commits[i].hash });
             }
@@ -423,31 +483,32 @@ namespace WisdomUI {
     }
 
     void TopBar::Render(sf::RenderWindow& window) {
+        SetBounds(m_bounds);
+
         Theme::DrawSunsetPanel(window, m_bounds, 1.0f);
 
-        sf::RectangleShape crest(sf::Vector2f(10.0f, 10.0f));
-        crest.setPosition(m_bounds.left + 14.0f, m_bounds.top + 13.0f);
+        float barH = m_bounds.height;
+        float centerY = std::floor(m_bounds.top + barH * 0.5f);
+
+        sf::RectangleShape crest(sf::Vector2f(11.0f, 11.0f));
+        crest.setOrigin(5.5f, 5.5f);
+        crest.setPosition(m_bounds.left + 18.0f, centerY);
         crest.setRotation(45.0f);
         crest.setFillColor(Theme::SunsetAmber);
         crest.setOutlineThickness(1.0f);
         crest.setOutlineColor(Theme::SunsetCoralDark);
         window.draw(crest);
 
-        Theme::DrawCrispText(window, m_font, "WISDOM PARK", 13, m_bounds.left + 32.0f, m_bounds.top + 10.0f, Theme::SunsetAmber, sf::Color(14, 6, 20));
+        Theme::DrawCrispText(window, m_font, "WISDOM PARK", 14, m_bounds.left + 32.0f, centerY, Theme::SunsetAmber, sf::Color(14, 6, 20), false, true);
 
-        float logoRight = m_bounds.left + 140.0f;
-        sf::Text projMeasure(m_projectName + (m_isDirty ? " *" : ""), m_font, 12);
-        float projBadgeW = std::clamp(projMeasure.getLocalBounds().width + 24.0f, 90.0f, 220.0f);
-        sf::FloatRect badgeBounds(logoRight, m_bounds.top + 5.0f, projBadgeW, 26.0f);
-
-        sf::RectangleShape badge(sf::Vector2f(badgeBounds.width, badgeBounds.height));
-        badge.setPosition(badgeBounds.left, badgeBounds.top);
+        sf::RectangleShape badge(sf::Vector2f(s_projBadgeBounds.width, s_projBadgeBounds.height));
+        badge.setPosition(s_projBadgeBounds.left, s_projBadgeBounds.top);
         badge.setFillColor(Theme::SunsetDeepDark);
         badge.setOutlineThickness(1.0f);
         badge.setOutlineColor(m_isDirty ? Theme::SunsetCoral : Theme::SunsetPlum);
         window.draw(badge);
 
-        Theme::DrawCrispText(window, m_font, m_projectName + (m_isDirty ? " *" : ""), 11, badgeBounds.left + badgeBounds.width / 2.0f, badgeBounds.top + badgeBounds.height / 2.0f, m_isDirty ? Theme::SunsetGold : Theme::TextSecondary, sf::Color::Transparent, true, true);
+        Theme::DrawCrispText(window, m_font, m_projectName + (m_isDirty ? " *" : ""), 13, s_projBadgeBounds.left + s_projBadgeBounds.width / 2.0f, s_projBadgeBounds.top + s_projBadgeBounds.height / 2.0f, m_isDirty ? Theme::SunsetGold : Theme::TextSecondary, sf::Color::Transparent, true, true);
 
         sf::Vector2i mPosI = sf::Mouse::getPosition(window);
         sf::Vector2f mPos = window.mapPixelToCoords(mPosI);
@@ -457,85 +518,47 @@ namespace WisdomUI {
             bool isOpen = (m_openMenuIndex == static_cast<int>(i));
             bool hovered = menu.bounds.contains(mPos);
 
-            Theme::DrawSunsetButton(window, menu.bounds, menu.title, m_font, 12, isOpen, hovered, false, 1.0f);
+            Theme::DrawSunsetButton(window, menu.bounds, menu.title, m_font, 13, isOpen, hovered, false, 1.0f);
         }
-
-        for (const auto& qb : m_quickBtns) {
-            Theme::DrawSunsetButton(window, qb.bounds, "", m_font, 11, false, qb.hoverAlpha > 0.5f, false, qb.scale);
-
-            sf::Vector2f iconPos(qb.bounds.left + 4.0f, qb.bounds.top + 4.0f);
-            Icons::Draw(window, qb.id, iconPos, 18.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
-        }
-
-        float pushBtnX = 450.0f;
-        float pushBtnY = m_bounds.top + 5.0f;
-        m_pushGitImgBtnBounds = sf::FloatRect(pushBtnX, pushBtnY, 85.0f, 26.0f);
 
         bool hovPush = m_pushGitImgBtnBounds.contains(mPos);
-        Theme::DrawSunsetButton(window, m_pushGitImgBtnBounds, "Push Frame", m_font, 11, false, hovPush, false, 1.0f);
-
-        float sheetBtnX = pushBtnX + 90.0f;
-        m_pushSheetBtnBounds = sf::FloatRect(sheetBtnX, pushBtnY, 85.0f, 26.0f);
+        Theme::DrawSunsetButton(window, m_pushGitImgBtnBounds, "Push Frame", m_font, 12, false, hovPush, false, 1.0f);
 
         bool hovSheet = m_pushSheetBtnBounds.contains(mPos);
-        Theme::DrawSunsetButton(window, m_pushSheetBtnBounds, "Push Anim", m_font, 11, false, hovSheet, false, 1.0f);
+        Theme::DrawSunsetButton(window, m_pushSheetBtnBounds, "Push Anim", m_font, 12, false, hovSheet, false, 1.0f);
 
-        float pullBtnX = sheetBtnX + 90.0f;
-        m_pullBtnBounds = sf::FloatRect(pullBtnX, pushBtnY, 65.0f, 26.0f);
         bool hovPull = m_pullBtnBounds.contains(mPos);
-        Theme::DrawSunsetButton(window, m_pullBtnBounds, "Pull", m_font, 11, m_isPullOpen, hovPull, m_isPullOpen, 1.0f);
+        Theme::DrawSunsetButton(window, m_pullBtnBounds, "Pull", m_font, 12, m_isPullOpen, hovPull, m_isPullOpen, 1.0f);
 
-        float chkX = pullBtnX + 72.0f;
-        float chkY = m_bounds.top + 8.0f;
-        m_opaqueCheckboxBounds = sf::FloatRect(chkX, chkY, 80.0f, 20.0f);
-
-        sf::RectangleShape box(sf::Vector2f(14.0f, 14.0f));
-        box.setPosition(chkX, chkY + 3.0f);
+        float chkBoxSize = 15.0f;
+        float chkBoxY = std::floor(m_opaqueCheckboxBounds.top + (m_opaqueCheckboxBounds.height - chkBoxSize) * 0.5f);
+        sf::RectangleShape box(sf::Vector2f(chkBoxSize, chkBoxSize));
+        box.setPosition(m_opaqueCheckboxBounds.left + 4.0f, chkBoxY);
         box.setFillColor(m_opaqueBg ? sf::Color(70, 130, 180) : sf::Color(30, 30, 35));
         box.setOutlineColor(sf::Color(120, 120, 130));
         box.setOutlineThickness(1.0f);
         window.draw(box);
 
         if (m_opaqueBg) {
-            sf::RectangleShape check(sf::Vector2f(8.0f, 8.0f));
-            check.setPosition(chkX + 3.0f, chkY + 6.0f);
+            sf::RectangleShape check(sf::Vector2f(7.0f, 7.0f));
+            check.setPosition(m_opaqueCheckboxBounds.left + 8.0f, chkBoxY + 4.0f);
             check.setFillColor(sf::Color::White);
             window.draw(check);
         }
 
-        sf::Text chkLabel("Opaque", m_font, 11);
-        chkLabel.setPosition(chkX + 20.0f, chkY + 2.0f);
-        chkLabel.setFillColor(sf::Color(200, 200, 200));
-        window.draw(chkLabel);
+        Theme::DrawCrispText(window, m_font, "Opaque", 12, m_opaqueCheckboxBounds.left + 24.0f, centerY, sf::Color(200, 200, 200), sf::Color::Transparent, false, true);
 
-        float trkX = chkX + 75.0f;
-        m_trackerBtnBounds = sf::FloatRect(trkX, pushBtnY, 75.0f, 26.0f);
         bool hovTrk = m_trackerBtnBounds.contains(mPos);
-        Theme::DrawSunsetButton(window, m_trackerBtnBounds, m_trackerActive ? "Hand ON" : "Hand OFF", m_font, 11, m_trackerActive, hovTrk, false, 1.0f);
+        Theme::DrawSunsetButton(window, m_trackerBtnBounds, m_trackerActive ? "Hand ON" : "Hand OFF", m_font, 12, m_trackerActive, hovTrk, false, 1.0f);
 
         if (m_gridControlsVisible) {
-            float rightAnchor = m_quickBtns.empty() ? (m_bounds.left + m_bounds.width - 14.f) : (m_quickBtns.front().bounds.left - 14.f);
-            if (m_symmetryActive) {
-                rightAnchor = m_symmetryBtnBounds.left - 14.f;
-            }
-
-            float totalW = 86.f + 4.f + 26.f + 4.f + 26.f + 4.f + 56.f + 4.f + 26.f;
-            float startX = rightAnchor - totalW;
-            float topY = m_bounds.top + 5.0f;
-
-            m_gridToggleBtnBounds = sf::FloatRect(startX, topY, 86.0f, 26.0f);
-            m_gridColorBtnBounds = sf::FloatRect(startX + 90.0f, topY, 26.0f, 26.0f);
-            m_gridMinusBtnBounds = sf::FloatRect(startX + 120.0f, topY, 26.0f, 26.0f);
-            m_gridSizeBox = sf::FloatRect(startX + 150.0f, topY, 56.0f, 26.0f);
-            m_gridPlusBtnBounds = sf::FloatRect(startX + 210.0f, topY, 26.0f, 26.0f);
-
             bool hovToggle = m_gridToggleBtnBounds.contains(mPos);
             bool hovColor = m_gridColorBtnBounds.contains(mPos);
             bool hovMinus = m_gridMinusBtnBounds.contains(mPos);
             bool hovBox = m_gridSizeBox.contains(mPos);
             bool hovPlus = m_gridPlusBtnBounds.contains(mPos);
 
-            Theme::DrawSunsetButton(window, m_gridToggleBtnBounds, m_gridActive ? "Grid: ON" : "Grid: OFF", m_font, 11, m_gridActive, hovToggle, m_gridActive, 1.0f);
+            Theme::DrawSunsetButton(window, m_gridToggleBtnBounds, m_gridActive ? "Grid: ON" : "Grid: OFF", m_font, 12, m_gridActive, hovToggle, m_gridActive, 1.0f);
 
             sf::RectangleShape colorBtn(sf::Vector2f(m_gridColorBtnBounds.width, m_gridColorBtnBounds.height));
             colorBtn.setPosition(m_gridColorBtnBounds.left, m_gridColorBtnBounds.top);
@@ -544,7 +567,7 @@ namespace WisdomUI {
             colorBtn.setOutlineColor(hovColor ? Theme::SunsetGold : Theme::SunsetPlum);
             window.draw(colorBtn);
 
-            Theme::DrawSunsetButton(window, m_gridMinusBtnBounds, "-", m_font, 13, false, hovMinus, false, 1.0f);
+            Theme::DrawSunsetButton(window, m_gridMinusBtnBounds, "-", m_font, 15, false, hovMinus, false, 1.0f);
 
             sf::RectangleShape valBg(sf::Vector2f(m_gridSizeBox.width, m_gridSizeBox.height));
             valBg.setPosition(m_gridSizeBox.left, m_gridSizeBox.top);
@@ -554,33 +577,24 @@ namespace WisdomUI {
             window.draw(valBg);
 
             std::string displayTxt = m_isEditingGridSize ? (m_gridSizeInput + "_") : (std::to_string(m_gridSize) + "px");
-            Theme::DrawCrispText(window, m_font, displayTxt, 11,
+            Theme::DrawCrispText(window, m_font, displayTxt, 12,
                 m_gridSizeBox.left + m_gridSizeBox.width * 0.5f,
                 m_gridSizeBox.top + m_gridSizeBox.height * 0.5f,
                 m_isEditingGridSize ? Theme::SunsetGold : Theme::SunsetPeach, sf::Color::Transparent, true, true);
 
-            Theme::DrawSunsetButton(window, m_gridPlusBtnBounds, "+", m_font, 13, false, hovPlus, false, 1.0f);
-
-        }
-        else {
-            m_gridToggleBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
-            m_gridColorBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
-            m_gridMinusBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
-            m_gridSizeBox = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
-            m_gridPlusBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+            Theme::DrawSunsetButton(window, m_gridPlusBtnBounds, "+", m_font, 15, false, hovPlus, false, 1.0f);
         }
 
         if (m_symmetryActive) {
-            float btnW = 150.0f;
-            float btnH = 26.0f;
-            float btnX = m_quickBtns.empty() ? (m_bounds.left + m_bounds.width - btnW - 14.f) : (m_quickBtns.front().bounds.left - btnW - 14.f);
-            m_symmetryBtnBounds = sf::FloatRect(btnX, m_bounds.top + 5.0f, btnW, btnH);
-
             bool isHov = m_symmetryBtnBounds.contains(mPos);
-            Theme::DrawSunsetButton(window, m_symmetryBtnBounds, "Symmetry ON [X]", m_font, 11, true, isHov, true, 1.0f);
+            Theme::DrawSunsetButton(window, m_symmetryBtnBounds, "Symmetry ON [X]", m_font, 12, true, isHov, true, 1.0f);
         }
-        else {
-            m_symmetryBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+
+        for (const auto& qb : m_quickBtns) {
+            Theme::DrawSunsetButton(window, qb.bounds, "", m_font, 12, false, qb.hoverAlpha > 0.5f, false, qb.scale);
+
+            sf::Vector2f iconPos(qb.bounds.left + 5.0f, qb.bounds.top + 5.0f);
+            Icons::Draw(window, qb.id, iconPos, 20.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
         }
 
         for (size_t i = 0; i < m_menus.size(); ++i) {
@@ -608,7 +622,7 @@ namespace WisdomUI {
                         }
 
                         sf::Color txtColor = (act.hoverAlpha > 0.5f) ? Theme::SunsetGold : Theme::TextPrimary;
-                        Theme::DrawCrispText(window, m_font, act.label, 12, itemRect.left + 10.0f, itemRect.top + 6.0f, txtColor, sf::Color(14, 6, 20));
+                        Theme::DrawCrispText(window, m_font, act.label, 13, itemRect.left + 10.0f, itemRect.top + 7.0f, txtColor, sf::Color(14, 6, 20));
                     }
                 }
             }

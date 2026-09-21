@@ -680,15 +680,15 @@ void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
     float floatAnim = std::sin(startupTime * 2.0f) * 4.0f;
-    float titleY = 70.f + floatAnim;
+    float titleY = 65.f + floatAnim;
 
-    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK", 56, 960.f, titleY, WisdomUI::Theme::SunsetGold, sf::Color(12, 4, 18), true, true);
-    WisdomUI::Theme::DrawCrispText(window, font, "CREATIVE ANIMATION STUDIO & PIXEL ART SUITE", 16, 960.f, titleY + 52.f, WisdomUI::Theme::SunsetPeach, sf::Color(12, 4, 18), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK", 62, 960.f, titleY, WisdomUI::Theme::SunsetGold, sf::Color(12, 4, 18), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "ANIMATION STUDIO & PIXEL ART SUITE", 18, 960.f, titleY + 56.f, WisdomUI::Theme::SunsetPeach, sf::Color(12, 4, 18), true, true);
 
     sf::FloatRect menuPod(440.f, 145.f, 1040.f, 790.f);
     WisdomUI::Theme::DrawSunsetPanel(window, menuPod, 1.0f);
 
-    sf::FloatRect bannerGrip(menuPod.left + 20.f, menuPod.top + 14.f, menuPod.width - 40.f, 38.f);
+    sf::FloatRect bannerGrip(menuPod.left + 20.f, menuPod.top + 14.f, menuPod.width - 40.f, 40.f);
     sf::RectangleShape bannerBg(sf::Vector2f(bannerGrip.width, bannerGrip.height));
     bannerBg.setPosition(bannerGrip.left, bannerGrip.top);
     bannerBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
@@ -696,16 +696,16 @@ void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
     bannerBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(bannerBg);
 
-    WisdomUI::Theme::DrawCrispText(window, font, ":: MAIN LAUNCHPAD ::", 15, bannerGrip.left + bannerGrip.width / 2.f, bannerGrip.top + bannerGrip.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, ":: MAIN LAUNCHPAD ::", 16, bannerGrip.left + bannerGrip.width / 2.f, bannerGrip.top + bannerGrip.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
-    std::vector<std::pair<std::string, std::pair<std::string, std::string>>> menuCards = {
-        {"NEW PROJECT", {"Initialize dynamic canvas or pixel grid", "CTRL+N"}},
-        {"PROJECT VAULT", {"Browse recent project files and disk archives", "CTRL+O"}},
-        {"STUDIO SETTINGS", {"Configure display resolution, vsync and drivers", "ESC"}},
-        {"KNOWLEDGE CODEX", {"Interactive guides, tutorials and technique manuals", "F1"}},
-        {"KEYBIND MATRIX", {"Customize keyboard shortcuts and tool bindings", "K"}},
-        {"STUDIO CREDITS", {"Engine architecture and contribution roll", "C"}},
-        {"EXIT SOFTWARE", {"Close application safely", "ALT+F4"}}
+    std::vector<std::pair<std::string, std::string>> menuCards = {
+        {"NEW PROJECT", "CTRL+N"},
+        {"OPEN PROJECT", "CTRL+O"},
+        {"SETTINGS", "ESC"},
+        {"TUTORIALS", "F1"},
+        {"KEYBINDS", "K"},
+        {"CREDITS", "C"},
+        {"EXIT", "ALT+F4"}
     };
 
     float startX = menuPod.left + 24.f;
@@ -736,18 +736,17 @@ void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
         window.draw(card);
 
         if (isHovered) {
-            sf::RectangleShape accentStrip(sf::Vector2f(6.f, cardRect.height - 16.f));
+            sf::RectangleShape accentStrip(sf::Vector2f(8.f, cardRect.height - 16.f));
             accentStrip.setPosition(cardRect.left + 8.f, cardRect.top + 8.f);
             accentStrip.setFillColor(isAccent ? WisdomUI::Theme::SunsetGold : (isExit ? sf::Color(255, 70, 90) : WisdomUI::Theme::SunsetAmber));
             window.draw(accentStrip);
         }
 
         sf::Color titleColor = isHovered ? WisdomUI::Theme::SunsetGold : (isAccent ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextPrimary);
-        WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].first, 22, cardRect.left + 30.f, cardRect.top + 14.f, titleColor, sf::Color(14, 6, 20));
-        WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].second.first, 14, cardRect.left + 30.f, cardRect.top + 46.f, isHovered ? sf::Color::White : WisdomUI::Theme::TextSecondary);
+        WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].first, 28, cardRect.left + 36.f, cardRect.top + cardRect.height / 2.f, titleColor, sf::Color(14, 6, 20), false, true);
 
-        if (!menuCards[i].second.second.empty()) {
-            sf::FloatRect badge(cardRect.left + cardRect.width - 130.f, cardRect.top + (cardRect.height - 40.f) / 2.f, 110.f, 40.f);
+        if (!menuCards[i].second.empty()) {
+            sf::FloatRect badge(cardRect.left + cardRect.width - 150.f, cardRect.top + (cardRect.height - 46.f) / 2.f, 126.f, 46.f);
             sf::RectangleShape badgeBg(sf::Vector2f(badge.width, badge.height));
             badgeBg.setPosition(badge.left, badge.top);
             badgeBg.setFillColor(sf::Color(10, 4, 18));
@@ -755,13 +754,13 @@ void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
             badgeBg.setOutlineColor(isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
             window.draw(badgeBg);
 
-            WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].second.second, 14, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+            WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].second, 18, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
         }
     }
 
     sf::FloatRect tickerBounds(340.f, 950.f, 1240.f, 48.f);
     WisdomUI::Theme::DrawSunsetPanel(window, tickerBounds, 1.0f);
-    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK STUDIO  |  v2.6.0 RETRO ENGINE  |  DIRECT HARDWARE ACCELERATION READY", 14, tickerBounds.left + tickerBounds.width / 2.f, tickerBounds.top + tickerBounds.height / 2.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK STUDIO  |  DIRECT HARDWARE ACCELERATION READY", 16, tickerBounds.left + tickerBounds.width / 2.f, tickerBounds.top + tickerBounds.height / 2.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
 }
 
 void UIManager::drawMainMenu(sf::RenderWindow& window) {
@@ -858,420 +857,7 @@ void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hove
     WisdomUI::Theme::DrawSunsetButton(window, bounds, "< BACK", font, 12, false, isHov, false, 1.0f);
 }
 
-void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
-    sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
-    sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
-    sf::FloatRect container(200.f, 60.f, 1520.f, 960.f);
-    WisdomUI::Theme::DrawSunsetPanel(window, container, 1.0f);
-
-    sf::FloatRect backBtn(container.left + 28.f, container.top + 22.f, 140.f, 44.f);
-    WisdomUI::Theme::DrawSunsetButton(window, backBtn, "< BACK", font, 16, false, backBtn.contains(mousePos), false, 1.0f);
-
-    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO CONFIGURATION & DRIVERS", 28, container.left + 190.f, container.top + 20.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
-    WisdomUI::Theme::DrawCrispText(window, font, "DISPLAY, ENGINE PERFORMANCE, BACKUPS & AI MATRIX", 14, container.left + 192.f, container.top + 54.f, WisdomUI::Theme::TextSecondary);
-
-    sf::RectangleShape div(sf::Vector2f(container.width - 56.f, 2.f));
-    div.setPosition(container.left + 28.f, container.top + 86.f);
-    div.setFillColor(WisdomUI::Theme::SunsetPlum);
-    window.draw(div);
-
-    auto drawCard = [&](sf::FloatRect b, const std::string& title) {
-        sf::RectangleShape box(sf::Vector2f(b.width, b.height));
-        box.setPosition(b.left, b.top);
-        box.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-        box.setOutlineThickness(1.5f);
-        box.setOutlineColor(WisdomUI::Theme::SunsetPlum);
-        window.draw(box);
-
-        sf::FloatRect headerGrip(b.left + 14.f, b.top + 12.f, b.width - 28.f, 34.f);
-        sf::RectangleShape hBg(sf::Vector2f(headerGrip.width, headerGrip.height));
-        hBg.setPosition(headerGrip.left, headerGrip.top);
-        hBg.setFillColor(WisdomUI::Theme::SunsetSkyTop);
-        hBg.setOutlineThickness(1.f);
-        hBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
-        window.draw(hBg);
-
-        WisdomUI::Theme::DrawCrispText(window, font, title, 14, headerGrip.left + 16.f, headerGrip.top + 8.f, WisdomUI::Theme::SunsetAmber);
-        };
-
-    auto drawToggle = [&](float x, float y, float w, const std::string& label, bool active) {
-        sf::FloatRect rowRect(x, y, w, 48.f);
-        bool isHov = rowRect.contains(mousePos);
-
-        sf::RectangleShape checkBg(sf::Vector2f(28.f, 28.f));
-        checkBg.setPosition(x + 16.f, y + 10.f);
-        checkBg.setFillColor(active ? WisdomUI::Theme::SunsetGold : sf::Color(14, 6, 20));
-        checkBg.setOutlineThickness(1.5f);
-        checkBg.setOutlineColor(active ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum);
-        window.draw(checkBg);
-
-        if (active) {
-            sf::RectangleShape checkMark(sf::Vector2f(14.f, 14.f));
-            checkMark.setPosition(x + 23.f, y + 17.f);
-            checkMark.setFillColor(sf::Color(14, 6, 20));
-            window.draw(checkMark);
-        }
-
-        WisdomUI::Theme::DrawCrispText(window, font, label, 17, x + 58.f, y + 14.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
-
-        sf::FloatRect badge(x + w - 120.f, y + 8.f, 104.f, 32.f);
-        sf::RectangleShape badgeBg(sf::Vector2f(badge.width, badge.height));
-        badgeBg.setPosition(badge.left, badge.top);
-        badgeBg.setFillColor(sf::Color(10, 4, 18));
-        badgeBg.setOutlineThickness(1.f);
-        badgeBg.setOutlineColor(active ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
-        window.draw(badgeBg);
-
-        std::string stateStr = active ? "ENABLED" : "DISABLED";
-        sf::Color badgeCol = active ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextSecondary;
-        WisdomUI::Theme::DrawCrispText(window, font, stateStr, 12, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, badgeCol, sf::Color::Transparent, true, true);
-        };
-
-    auto drawStepper = [&](float x, float y, float w, const std::string& label, const std::string& val) {
-        sf::FloatRect rowRect(x, y, w, 48.f);
-        WisdomUI::Theme::DrawCrispText(window, font, label, 17, x + 16.f, y + 14.f, WisdomUI::Theme::TextPrimary);
-
-        sf::FloatRect btnL(x + w - 240.f, y + 6.f, 40.f, 36.f);
-        sf::FloatRect btnR(x + w - 56.f, y + 6.f, 40.f, 36.f);
-
-        WisdomUI::Theme::DrawSunsetButton(window, btnL, "<", font, 14, false, btnL.contains(mousePos), false, 1.0f);
-
-        sf::FloatRect valBg(x + w - 192.f, y + 6.f, 128.f, 36.f);
-        sf::RectangleShape vBox(sf::Vector2f(valBg.width, valBg.height));
-        vBox.setPosition(valBg.left, valBg.top);
-        vBox.setFillColor(sf::Color(14, 6, 20));
-        vBox.setOutlineThickness(1.f);
-        vBox.setOutlineColor(WisdomUI::Theme::SunsetPlum);
-        window.draw(vBox);
-
-        WisdomUI::Theme::DrawCrispText(window, font, val, 15, valBg.left + valBg.width / 2.f, valBg.top + valBg.height / 2.f, WisdomUI::Theme::SunsetGold, sf::Color::Transparent, true, true);
-
-        WisdomUI::Theme::DrawSunsetButton(window, btnR, ">", font, 14, false, btnR.contains(mousePos), false, 1.0f);
-        };
-
-    auto drawDropdownButton = [&](float x, float y, float w, const std::string& label, const std::string& currentVal, bool isOpen) -> sf::FloatRect {
-        sf::FloatRect rowRect(x, y, w, 48.f);
-        WisdomUI::Theme::DrawCrispText(window, font, label, 17, x + 16.f, y + 14.f, WisdomUI::Theme::TextPrimary);
-
-        sf::FloatRect dropBtn(x + w - 240.f, y + 6.f, 224.f, 36.f);
-        WisdomUI::Theme::DrawSunsetButton(window, dropBtn, currentVal + "  " + (isOpen ? "^" : "v"), font, 14, false, dropBtn.contains(mousePos), isOpen, 1.0f);
-        return dropBtn;
-        };
-
-    float cardW = 710.f;
-    float cardH = 410.f;
-    float rowW = cardW - 32.f;
-    float c1X = container.left + 32.f;
-    float c2X = container.left + 778.f;
-    float r1Y = container.top + 104.f;
-    float r2Y = container.top + 530.f;
-
-    drawCard(sf::FloatRect(c1X, r1Y, cardW, cardH), ":: DISPLAY & GRAPHICS INTERFACE ::");
-    drawToggle(c1X + 16.f, r1Y + 60.f, rowW, "Fullscreen Mode", uiFullscreen);
-    drawToggle(c1X + 16.f, r1Y + 120.f, rowW, "Vertical Sync (VSync)", uiVsync);
-    drawStepper(c1X + 16.f, r1Y + 180.f, rowW, "FPS Target Limit", std::to_string(uiFpsLimit));
-
-    std::string resStr = std::to_string(g_resW) + " x " + std::to_string(g_resH);
-    std::vector<std::string> resOpts = { "1280 x 720", "1600 x 900", "1920 x 1080" };
-    sf::FloatRect resDropBtnRect = drawDropdownButton(c1X + 16.f, r1Y + 240.f, rowW, "Display Resolution", resStr, g_resDropdownOpen);
-    drawStepper(c1X + 16.f, r1Y + 300.f, rowW, "UI Palette Theme", "Sunset Arcade");
-
-    drawCard(sf::FloatRect(c2X, r1Y, cardW, cardH), ":: ARCHIVE PERSISTENCE & AUTO-SAVING ::");
-    drawToggle(c2X + 16.f, r1Y + 60.f, rowW, "Enable Auto-Backup Vault", uiAutoBackup);
-    drawStepper(c2X + 16.f, r1Y + 120.f, rowW, "Autosave Frequency", "5 Mins");
-    drawStepper(c2X + 16.f, r1Y + 180.f, rowW, "Default Vault Directory", "/Projects");
-    drawStepper(c2X + 16.f, r1Y + 240.f, rowW, "Export Output Format", "PNG / Sheet");
-
-    drawCard(sf::FloatRect(c1X, r2Y, cardW, cardH), ":: CANVASES & TIMELINE MEMORY ::");
-    drawToggle(c1X + 16.f, r2Y + 60.f, rowW, "Hardware GPU Acceleration", uiHwAccel);
-    drawStepper(c1X + 16.f, r2Y + 120.f, rowW, "Animation Preview Rate", std::to_string(uiAnimFps) + " FPS");
-    drawStepper(c1X + 16.f, r2Y + 180.f, rowW, "Undo Stack History Size", std::to_string(uiHistorySize) + " Steps");
-    drawStepper(c1X + 16.f, r2Y + 240.f, rowW, "Pixel Grid Contrast", "High");
-
-    drawCard(sf::FloatRect(c2X, r2Y, cardW, cardH), ":: AI GENERATION CORE MATRIX ::");
-    drawStepper(c2X + 16.f, r2Y + 60.f, rowW, "Active AI Provider", AIManager::getInstance().getActiveProvider());
-
-    std::string keyDisplay = AIManager::getInstance().getApiKey(AIManager::getInstance().getActiveProvider());
-    if (keyDisplay.empty()) keyDisplay = "Click to enter token key...";
-    else keyDisplay = std::string(std::min(static_cast<size_t>(16), keyDisplay.length()), '*');
-    if (g_typingApiKey) keyDisplay += "_";
-
-    sf::FloatRect keyRow(c2X + 16.f, r2Y + 120.f, rowW, 48.f);
-    WisdomUI::Theme::DrawCrispText(window, font, "API Access Token", 17, keyRow.left + 16.f, keyRow.top + 14.f, WisdomUI::Theme::TextPrimary);
-
-    sf::FloatRect keyBox(c2X + 16.f + rowW - 320.f, keyRow.top + 6.f, 304.f, 36.f);
-    sf::RectangleShape kBox(sf::Vector2f(keyBox.width, keyBox.height));
-    kBox.setPosition(keyBox.left, keyBox.top);
-    kBox.setFillColor(sf::Color(14, 6, 20));
-    kBox.setOutlineThickness(1.5f);
-    kBox.setOutlineColor(g_typingApiKey ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
-    window.draw(kBox);
-
-    WisdomUI::Theme::DrawCrispText(window, font, keyDisplay, 14, keyBox.left + 12.f, keyBox.top + 9.f, g_typingApiKey ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach);
-
-    if (g_resDropdownOpen) {
-        sf::FloatRect menu(resDropBtnRect.left, resDropBtnRect.top + resDropBtnRect.height + 4.f, resDropBtnRect.width, static_cast<float>(resOpts.size()) * 36.f);
-
-        sf::RectangleShape shadow(sf::Vector2f(menu.width + 6.f, menu.height + 6.f));
-        shadow.setPosition(menu.left - 3.f, menu.top - 3.f);
-        shadow.setFillColor(sf::Color(0, 0, 0, 160));
-        window.draw(shadow);
-
-        sf::RectangleShape mBg(sf::Vector2f(menu.width, menu.height));
-        mBg.setPosition(menu.left, menu.top);
-        mBg.setFillColor(sf::Color(14, 6, 20, 250));
-        mBg.setOutlineThickness(1.5f);
-        mBg.setOutlineColor(WisdomUI::Theme::SunsetGold);
-        window.draw(mBg);
-
-        for (size_t i = 0; i < resOpts.size(); ++i) {
-            sf::FloatRect optRect(menu.left, menu.top + static_cast<float>(i) * 36.f, menu.width, 36.f);
-            bool hovOpt = optRect.contains(mousePos);
-            if (hovOpt) {
-                sf::RectangleShape hBox(sf::Vector2f(optRect.width, optRect.height));
-                hBox.setPosition(optRect.left, optRect.top);
-                hBox.setFillColor(WisdomUI::Theme::SunsetSkyMid);
-                window.draw(hBox);
-            }
-            WisdomUI::Theme::DrawCrispText(window, font, resOpts[i], 14, optRect.left + 14.f, optRect.top + 9.f, hovOpt ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
-        }
-    }
-}
-
-void UIManager::drawTutorialsMenu(sf::RenderWindow& window) {
-    sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
-    sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
-
-    sf::FloatRect container(200.f, 60.f, 1520.f, 960.f);
-    WisdomUI::Theme::DrawSunsetPanel(window, container, 1.0f);
-
-    sf::FloatRect backBtn(container.left + 28.f, container.top + 22.f, 140.f, 44.f);
-    WisdomUI::Theme::DrawSunsetButton(window, backBtn, "< BACK", font, 16, false, backBtn.contains(mousePos), false, 1.0f);
-
-    WisdomUI::Theme::DrawCrispText(window, font, "KNOWLEDGE CODEX & STUDIO MANUAL", 28, container.left + 190.f, container.top + 20.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
-    WisdomUI::Theme::DrawCrispText(window, font, "INTERACTIVE ANIMATION TECHNIQUES, SHORTCUTS & TOOLS", 14, container.left + 192.f, container.top + 54.f, WisdomUI::Theme::TextSecondary);
-
-    sf::RectangleShape div(sf::Vector2f(container.width - 56.f, 2.f));
-    div.setPosition(container.left + 28.f, container.top + 86.f);
-    div.setFillColor(WisdomUI::Theme::SunsetPlum);
-    window.draw(div);
-
-    std::vector<std::pair<std::string, std::string>> topics = {
-        {"Getting Started", "Learn the basics of canvas initialization, tool pallets and navigation."},
-        {"Drawing & Inking", "Master the smooth brush, retro pixel pencil, eraser and symmetry."},
-        {"Timeline & Frames", "Understand frame duplication, timing onion skinning and loop playback."},
-        {"Layer Management", "Organize scenes with blend modes, opacity sliders and frame locking."},
-        {"Selection & Lasso", "Transform, isolate, rotate, scale, flip and duplicate selection art."},
-        {"Pixel Perfect Mode", "Strip jagged pixel doublets and draw smooth authentic retro lines."},
-        {"Keyboard Matrix", "Speed up your animation speed with custom hotkeys and tool bindings."},
-        {"Exporting Studio", "Render sequential PNG animation sequences and packed sprite sheets."},
-        {"AI Co-Pilot Suite", "Generate sprite variations, fill textures and inpaint via cloud AI."}
-    };
-
-    std::vector<std::string> fullText = {
-        "Wisdom Park is designed for high-speed professional 2D animation and pixel art.\n\n"
-        "Start by creating a new project from the main launchpad or press Ctrl+N.\n"
-        "Use the left toolbar for drawing tools, and open the bottom timeline (Space/Tab)\n"
-        "to manage and preview animation sequences seamlessly.",
-
-        "Select the Brush or Pencil tool (B or P).\n\n"
-        "- Brush: Smooth anti-aliased strokes with dynamic radius scaling.\n"
-        "- Pencil: Strict grid-locked pixels ideal for retro sprite craft.\n"
-        "- Right-Click / Middle-Click: Hold and drag to pan the viewport smoothly.",
-
-        "The Timeline bar manages individual drawing frames.\n\n"
-        "- Click '+' or press Shift+N to duplicate/add a new frame.\n"
-        "- Press Space to toggle real-time animation playback.\n"
-        "- Enable Onion Skinning (O) to render adjacent frames as reference silhouettes.",
-
-        "Layers isolate independent animation components.\n\n"
-        "- Use the Layer Panel on the right dock to add, reorder or merge layers.\n"
-        "- Toggle layer visibility or lock layers to prevent accidental strokes.\n"
-        "- Adjust individual opacity sliders for realistic shading and lighting.",
-
-        "Use the Select Tool (S) or Magic Wand (W) to isolate artwork.\n\n"
-        "- Once selected, drag pixels anywhere across the canvas.\n"
-        "- Press H or V to flip selections horizontally or vertically.\n"
-        "- Press Delete to wipe the selected pixels instantly.",
-
-        "Pixel Mode disables smoothing and enforces strict tile alignments.\n\n"
-        "- Enable 'Pixel Perfect' in the Tool Options bar to automatically clean\n"
-        "  up redundant double-corner pixels on fast strokes.\n"
-        "- Use Tile Mode to test seamlessly repeating environment textures.",
-
-        "Every major studio action has a dedicated shortcut.\n\n"
-        "- Press Tab or click 'Keybinds' on the main launchpad to rebind them.\n"
-        "- Defaults: B (Brush), P (Pencil), E (Eraser), G (Gradient), Ctrl+Z (Undo),\n"
-        "  Ctrl+S (Save), F8 (Sprite Sheet Studio).",
-
-        "When your timeline animation is complete, open Export Studio (Ctrl+E).\n\n"
-        "- Output transparent individual PNG sequences for video editors.\n"
-        "- Pack the entire timeline into compact sprite sheets ready for Unity,\n"
-        "  Godot, or Unreal Engine.",
-
-        "AI Co-Pilot features require an active API key in Settings.\n\n"
-        "- Isolate an area using the Selection tool.\n"
-        "- Type a contextual prompt in the AI Generator panel.\n"
-        "- The AI will populate textures or variations matched to your theme."
-    };
-
-    if (activeTutorialIndex == -1) {
-        float startX = container.left + 36.f;
-        float startY = container.top + 110.f;
-        float cardW = (container.width - 108.f) / 3.f;
-        float cardH = 260.f;
-
-        for (size_t i = 0; i < topics.size(); ++i) {
-            float col = static_cast<float>(i % 3);
-            float row = static_cast<float>(i / 3);
-            float cx = startX + col * (cardW + 18.f);
-            float cy = startY + row * (cardH + 18.f);
-
-            sf::FloatRect cardRect(cx, cy, cardW, cardH);
-            bool isHov = cardRect.contains(mousePos);
-
-            sf::RectangleShape card(sf::Vector2f(cardRect.width, cardRect.height));
-            card.setPosition(cardRect.left, cardRect.top);
-            card.setFillColor(isHov ? WisdomUI::Theme::SunsetSkyMid : WisdomUI::Theme::SunsetDeepDark);
-            card.setOutlineThickness(1.5f);
-            card.setOutlineColor(isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
-            window.draw(card);
-
-            sf::FloatRect badge(cx + 20.f, cy + 18.f, 96.f, 26.f);
-            sf::RectangleShape bBg(sf::Vector2f(badge.width, badge.height));
-            bBg.setPosition(badge.left, badge.top);
-            bBg.setFillColor(sf::Color(14, 6, 20));
-            bBg.setOutlineThickness(1.f);
-            bBg.setOutlineColor(WisdomUI::Theme::SunsetAmber);
-            window.draw(bBg);
-
-            WisdomUI::Theme::DrawCrispText(window, font, "PART 0" + std::to_string(i + 1), 12, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color::Transparent, true, true);
-
-            WisdomUI::Theme::DrawCrispText(window, font, topics[i].first, 19, cx + 20.f, cy + 56.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary, sf::Color(14, 6, 20));
-
-            sf::Text descTxt(topics[i].second, font, 14);
-            descTxt.setPosition(cx + 20.f, cy + 96.f);
-            descTxt.setFillColor(WisdomUI::Theme::TextSecondary);
-            descTxt.setLineSpacing(1.45f);
-            window.draw(descTxt);
-
-            WisdomUI::Theme::DrawCrispText(window, font, "READ GUIDE >>", 14, cx + 20.f, cy + cardH - 34.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach);
-        }
-    }
-    else {
-        sf::FloatRect contentCard(container.left + 36.f, container.top + 110.f, container.width - 72.f, container.height - 146.f);
-        sf::RectangleShape cBg(sf::Vector2f(contentCard.width, contentCard.height));
-        cBg.setPosition(contentCard.left, contentCard.top);
-        cBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-        cBg.setOutlineThickness(1.5f);
-        cBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
-        window.draw(cBg);
-
-        WisdomUI::Theme::DrawCrispText(window, font, "CHAPTER 0" + std::to_string(activeTutorialIndex + 1) + " : " + topics[activeTutorialIndex].first, 26, contentCard.left + 36.f, contentCard.top + 32.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
-
-        sf::RectangleShape cDiv(sf::Vector2f(contentCard.width - 72.f, 2.f));
-        cDiv.setPosition(contentCard.left + 36.f, contentCard.top + 78.f);
-        cDiv.setFillColor(WisdomUI::Theme::SunsetPlum);
-        window.draw(cDiv);
-
-        sf::Text mainTxt(fullText[activeTutorialIndex], font, 18);
-        mainTxt.setPosition(contentCard.left + 36.f, contentCard.top + 108.f);
-        mainTxt.setFillColor(WisdomUI::Theme::TextPrimary);
-        mainTxt.setLineSpacing(1.65f);
-        window.draw(mainTxt);
-
-        sf::FloatRect returnBtn(contentCard.left + contentCard.width - 260.f, contentCard.top + contentCard.height - 72.f, 224.f, 50.f);
-        bool retHov = returnBtn.contains(mousePos);
-        WisdomUI::Theme::DrawSunsetButton(window, returnBtn, "<< Topics Codex", font, 15, false, retHov, true, 1.0f);
-    }
-}
-
-void UIManager::drawCreditsMenu(sf::RenderWindow& window) {
-    sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
-    sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
-
-    sf::FloatRect container(320.f, 80.f, 1280.f, 920.f);
-    WisdomUI::Theme::DrawSunsetPanel(window, container, 1.0f);
-
-    sf::FloatRect backBtn(container.left + 28.f, container.top + 22.f, 140.f, 44.f);
-    WisdomUI::Theme::DrawSunsetButton(window, backBtn, "< BACK", font, 16, false, backBtn.contains(mousePos), false, 1.0f);
-
-    WisdomUI::Theme::DrawCrispText(window, font, "HALL OF FAME & STUDIO CREDITS", 28, container.left + 190.f, container.top + 20.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
-    WisdomUI::Theme::DrawCrispText(window, font, "CORE ARCHITECTURE, CONTRIBUTIONS & ACADEMIC ROLL", 14, container.left + 192.f, container.top + 54.f, WisdomUI::Theme::TextSecondary);
-
-    sf::RectangleShape div(sf::Vector2f(container.width - 56.f, 2.f));
-    div.setPosition(container.left + 28.f, container.top + 88.f);
-    div.setFillColor(WisdomUI::Theme::SunsetPlum);
-    window.draw(div);
-
-    auto drawCreditBlock = [&](float x, float y, float w, float h, const std::string& title, const std::string& content) {
-        sf::RectangleShape b(sf::Vector2f(w, h));
-        b.setPosition(x, y);
-        b.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-        b.setOutlineThickness(1.5f);
-        b.setOutlineColor(WisdomUI::Theme::SunsetPlum);
-        window.draw(b);
-
-        sf::FloatRect headerGrip(x + 14.f, y + 12.f, w - 28.f, 34.f);
-        sf::RectangleShape hBg(sf::Vector2f(headerGrip.width, headerGrip.height));
-        hBg.setPosition(headerGrip.left, headerGrip.top);
-        hBg.setFillColor(WisdomUI::Theme::SunsetSkyTop);
-        hBg.setOutlineThickness(1.f);
-        hBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
-        window.draw(hBg);
-
-        WisdomUI::Theme::DrawCrispText(window, font, title, 15, headerGrip.left + 14.f, headerGrip.top + 8.f, WisdomUI::Theme::SunsetAmber);
-
-        sf::Text cTxt(content, font, 17);
-        cTxt.setPosition(x + 22.f, y + 60.f);
-        cTxt.setFillColor(WisdomUI::Theme::TextPrimary);
-        cTxt.setLineSpacing(1.55f);
-        window.draw(cTxt);
-        };
-
-    float bx = container.left + 32.f;
-    float by = container.top + 106.f;
-    float colW = 590.f;
-
-    drawCreditBlock(bx, by, colW, 230.f, ":: LEAD DEVELOPER & ARCHITECT ::",
-        "Ahmad Arnaoute (AtodDev)\n"
-        "Role: Engine & UI Architecture, Tool Systems\n"
-        "Specialization: High-Performance Systems & Pixel Pipeline");
-
-    drawCreditBlock(bx + colW + 36.f, by, colW, 230.f, ":: ACADEMIC AFFILIATION ::",
-        "POLITEHNICA University of Bucharest\n"
-        "Faculty of Automatic Control and Computers\n"
-        "Group: 324CD\n"
-        "Bucharest, Romania");
-
-    drawCreditBlock(bx, by + 252.f, colW, 310.f, ":: PROJECTS & OPEN SOURCE CONTRIBUTIONS ::",
-        "- Oppia Foundation (Backend Testing Infrastructure)\n"
-        "- safe-comment-stripper (Open Source Utility)\n"
-        "- iMeditatii Education Platform\n"
-        "- AtodDev's Progress & Progress Aggregator\n"
-        "- Wisdom Park Retro Animation Suite");
-
-    drawCreditBlock(bx + colW + 36.f, by + 252.f, colW, 310.f, ":: CORE TECHNOLOGY STACK ::",
-        "- SFML 2.6.x (Graphics, Window, Systems)\n"
-        "- nlohmann::json (Structured Serialization)\n"
-        "- C++17 Standard Compliant Architecture\n"
-        "- Commercial & Open Studio License");
-
-    sf::FloatRect eggPod(bx, by + 584.f, container.width - 64.f, 90.f);
-    bool eggHov = eggPod.contains(mousePos);
-
-    sf::RectangleShape eggBg(sf::Vector2f(eggPod.width, eggPod.height));
-    eggBg.setPosition(eggPod.left, eggPod.top);
-    eggBg.setFillColor(eggHov ? WisdomUI::Theme::SunsetSkyMid : WisdomUI::Theme::SunsetDeepDark);
-    eggBg.setOutlineThickness(1.5f);
-    eggBg.setOutlineColor(easterEggClicks >= 5 ? WisdomUI::Theme::SunsetGold : (eggHov ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum));
-    window.draw(eggBg);
-
-    std::string coreStatus = (easterEggClicks >= 5) ? "ENGINE CORE MATRIX UNLOCKED (DEBUG MODE ACTIVE)" : "WISDOM PARK STUDIO SYSTEM CORE (CLICK TO CALIBRATE)";
-    WisdomUI::Theme::DrawCrispText(window, font, coreStatus, 16, eggPod.left + eggPod.width / 2.f, eggPod.top + 26.f, easterEggClicks >= 5 ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
-    WisdomUI::Theme::DrawCrispText(window, font, "Build: 2026.8  |  Direct Hardware Render Pipeline Online", 13, eggPod.left + eggPod.width / 2.f, eggPod.top + 56.f, WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
-}
 
 bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
     if (activeProjectPath.empty()) {
@@ -1688,13 +1274,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
             }
             else if (currentMenuState == MenuState::Credits) {
-                sf::FloatRect backBtn(348.f, 102.f, 140.f, 44.f);
+                sf::FloatRect backBtn(232.f, 74.f, 150.f, 48.f);
                 if (backBtn.contains(mousePos)) {
                     currentMenuState = MenuState::Main;
                     return;
                 }
 
-                sf::FloatRect eggPod(352.f, 770.f, 1216.f, 90.f);
+                sf::FloatRect eggPod(232.f, 759.f, 1520.f - 64.f, 96.f);
                 if (eggPod.contains(mousePos)) {
                     easterEggClicks++;
                 }
@@ -3134,23 +2720,23 @@ void UIManager::drawResizeModal(sf::RenderWindow& window) {
     overlay.setFillColor(sf::Color(10, 4, 16, 210));
     window.draw(overlay);
 
-    float modalW = 430.f;
-    float modalH = 260.f;
+    float modalW = 500.f;
+    float modalH = 290.f;
     float mx = (1920.f - modalW) * 0.5f;
     float my = (1080.f - modalH) * 0.5f;
     m_resizeModalBounds = sf::FloatRect(mx, my, modalW, modalH);
 
     WisdomUI::Theme::DrawSunsetPanel(window, m_resizeModalBounds, 1.0f);
-    WisdomUI::Theme::DrawCrispText(window, font, "RESIZE CANVAS", 20, mx + modalW / 2.f, my + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
-    WisdomUI::Theme::DrawCrispText(window, font, "ADJUST LOGICAL RESOLUTION", 12, mx + modalW / 2.f, my + 50.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "RESIZE CANVAS", 24, mx + modalW / 2.f, my + 26.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "CANVAS RESOLUTION", 14, mx + modalW / 2.f, my + 54.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 6, 20), true, true);
 
-    float inputW = 160.f;
-    float inputH = 40.f;
-    m_resizeWBox = sf::FloatRect(mx + 36.f, my + 94.f, inputW, inputH);
-    m_resizeHBox = sf::FloatRect(mx + modalW - 36.f - inputW, my + 94.f, inputW, inputH);
+    float inputW = 190.f;
+    float inputH = 46.f;
+    m_resizeWBox = sf::FloatRect(mx + 40.f, my + 104.f, inputW, inputH);
+    m_resizeHBox = sf::FloatRect(mx + modalW - 40.f - inputW, my + 104.f, inputW, inputH);
 
-    WisdomUI::Theme::DrawCrispText(window, font, "Width (px):", 13, m_resizeWBox.left, m_resizeWBox.top - 20.f, WisdomUI::Theme::TextSecondary);
-    WisdomUI::Theme::DrawCrispText(window, font, "Height (px):", 13, m_resizeHBox.left, m_resizeHBox.top - 20.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawCrispText(window, font, "Width (px)", 15, m_resizeWBox.left, m_resizeWBox.top - 22.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawCrispText(window, font, "Height (px)", 15, m_resizeHBox.left, m_resizeHBox.top - 22.f, WisdomUI::Theme::TextSecondary);
 
     sf::RectangleShape wBox(sf::Vector2f(m_resizeWBox.width, m_resizeWBox.height));
     wBox.setPosition(m_resizeWBox.left, m_resizeWBox.top);
@@ -3160,7 +2746,7 @@ void UIManager::drawResizeModal(sf::RenderWindow& window) {
     window.draw(wBox);
 
     std::string wDisp = m_resizeWBuf + (m_activeResizeField == 0 ? "_" : "");
-    WisdomUI::Theme::DrawCrispText(window, font, wDisp, 16, m_resizeWBox.left + 14.f, m_resizeWBox.top + 10.f, WisdomUI::Theme::SunsetGold);
+    WisdomUI::Theme::DrawCrispText(window, font, wDisp, 20, m_resizeWBox.left + 16.f, m_resizeWBox.top + 11.f, WisdomUI::Theme::SunsetGold);
 
     sf::RectangleShape hBox(sf::Vector2f(m_resizeHBox.width, m_resizeHBox.height));
     hBox.setPosition(m_resizeHBox.left, m_resizeHBox.top);
@@ -3170,16 +2756,16 @@ void UIManager::drawResizeModal(sf::RenderWindow& window) {
     window.draw(hBox);
 
     std::string hDisp = m_resizeHBuf + (m_activeResizeField == 1 ? "_" : "");
-    WisdomUI::Theme::DrawCrispText(window, font, hDisp, 16, m_resizeHBox.left + 14.f, m_resizeHBox.top + 10.f, WisdomUI::Theme::SunsetGold);
+    WisdomUI::Theme::DrawCrispText(window, font, hDisp, 20, m_resizeHBox.left + 16.f, m_resizeHBox.top + 11.f, WisdomUI::Theme::SunsetGold);
 
-    float btnW = 160.f;
-    float btnH = 44.f;
-    m_resizeApplyBtn = sf::FloatRect(mx + 36.f, my + 175.f, btnW, btnH);
-    m_resizeCancelBtn = sf::FloatRect(mx + modalW - 36.f - btnW, my + 175.f, btnW, btnH);
+    float btnW = 190.f;
+    float btnH = 50.f;
+    m_resizeApplyBtn = sf::FloatRect(mx + 40.f, my + 195.f, btnW, btnH);
+    m_resizeCancelBtn = sf::FloatRect(mx + modalW - 40.f - btnW, my + 195.f, btnW, btnH);
 
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-    WisdomUI::Theme::DrawSunsetButton(window, m_resizeApplyBtn, "Apply", font, 15, false, m_resizeApplyBtn.contains(mPos), true, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, m_resizeCancelBtn, "Cancel", font, 15, false, m_resizeCancelBtn.contains(mPos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_resizeApplyBtn, "Apply", font, 18, false, m_resizeApplyBtn.contains(mPos), true, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_resizeCancelBtn, "Cancel", font, 18, false, m_resizeCancelBtn.contains(mPos), false, 1.0f);
 }
 
 bool UIManager::handleResizeModalEvent(const sf::Event& event, sf::RenderWindow& window, Canvas& canvas, Timeline& timeline) {
@@ -3270,6 +2856,7 @@ bool UIManager::handleResizeModalEvent(const sf::Event& event, sf::RenderWindow&
 
     return true;
 }
+
 
 bool loadStudioFont(sf::Font& font) {
     if (font.loadFromFile("Resources/font.ttf")) return true;
@@ -4033,6 +3620,332 @@ void UIManager::handleKeybindModalEvent(const sf::Event& event, sf::RenderWindow
     }
 }
 
+void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
+    sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
+    sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
+
+    sf::FloatRect container(160.f, 50.f, 1600.f, 980.f);
+    WisdomUI::Theme::DrawSunsetPanel(window, container, 1.0f);
+
+    sf::FloatRect backBtn(container.left + 32.f, container.top + 24.f, 150.f, 48.f);
+    WisdomUI::Theme::DrawSunsetButton(window, backBtn, "< BACK", font, 18, false, backBtn.contains(mousePos), false, 1.0f);
+
+    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO SETTINGS", 38, container.left + 210.f, container.top + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
+
+    sf::RectangleShape div(sf::Vector2f(container.width - 64.f, 2.f));
+    div.setPosition(container.left + 32.f, container.top + 84.f);
+    div.setFillColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(div);
+
+    auto drawCard = [&](sf::FloatRect b, const std::string& title) {
+        sf::RectangleShape box(sf::Vector2f(b.width, b.height));
+        box.setPosition(b.left, b.top);
+        box.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+        box.setOutlineThickness(1.5f);
+        box.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+        window.draw(box);
+
+        sf::FloatRect headerGrip(b.left + 14.f, b.top + 12.f, b.width - 28.f, 40.f);
+        sf::RectangleShape hBg(sf::Vector2f(headerGrip.width, headerGrip.height));
+        hBg.setPosition(headerGrip.left, headerGrip.top);
+        hBg.setFillColor(WisdomUI::Theme::SunsetSkyTop);
+        hBg.setOutlineThickness(1.f);
+        hBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+        window.draw(hBg);
+
+        WisdomUI::Theme::DrawCrispText(window, font, title, 18, headerGrip.left + 18.f, headerGrip.top + 10.f, WisdomUI::Theme::SunsetAmber);
+        };
+
+    auto drawToggle = [&](float x, float y, float w, const std::string& label, bool active) {
+        sf::FloatRect rowRect(x, y, w, 52.f);
+        bool isHov = rowRect.contains(mousePos);
+
+        sf::RectangleShape checkBg(sf::Vector2f(32.f, 32.f));
+        checkBg.setPosition(x + 16.f, y + 10.f);
+        checkBg.setFillColor(active ? WisdomUI::Theme::SunsetGold : sf::Color(14, 6, 20));
+        checkBg.setOutlineThickness(1.5f);
+        checkBg.setOutlineColor(active ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum);
+        window.draw(checkBg);
+
+        if (active) {
+            sf::RectangleShape checkMark(sf::Vector2f(16.f, 16.f));
+            checkMark.setPosition(x + 24.f, y + 18.f);
+            checkMark.setFillColor(sf::Color(14, 6, 20));
+            window.draw(checkMark);
+        }
+
+        WisdomUI::Theme::DrawCrispText(window, font, label, 20, x + 60.f, y + 14.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
+
+        sf::FloatRect badge(x + w - 140.f, y + 8.f, 120.f, 36.f);
+        sf::RectangleShape badgeBg(sf::Vector2f(badge.width, badge.height));
+        badgeBg.setPosition(badge.left, badge.top);
+        badgeBg.setFillColor(sf::Color(10, 4, 18));
+        badgeBg.setOutlineThickness(1.f);
+        badgeBg.setOutlineColor(active ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
+        window.draw(badgeBg);
+
+        std::string stateStr = active ? "ENABLED" : "DISABLED";
+        sf::Color badgeCol = active ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextSecondary;
+        WisdomUI::Theme::DrawCrispText(window, font, stateStr, 15, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, badgeCol, sf::Color::Transparent, true, true);
+        };
+
+    auto drawStepper = [&](float x, float y, float w, const std::string& label, const std::string& val) {
+        sf::FloatRect rowRect(x, y, w, 52.f);
+        WisdomUI::Theme::DrawCrispText(window, font, label, 20, x + 16.f, y + 14.f, WisdomUI::Theme::TextPrimary);
+
+        sf::FloatRect btnL(x + w - 280.f, y + 6.f, 44.f, 40.f);
+        sf::FloatRect btnR(x + w - 56.f, y + 6.f, 44.f, 40.f);
+
+        WisdomUI::Theme::DrawSunsetButton(window, btnL, "<", font, 18, false, btnL.contains(mousePos), false, 1.0f);
+
+        sf::FloatRect valBg(x + w - 230.f, y + 6.f, 168.f, 40.f);
+        sf::RectangleShape vBox(sf::Vector2f(valBg.width, valBg.height));
+        vBox.setPosition(valBg.left, valBg.top);
+        vBox.setFillColor(sf::Color(14, 6, 20));
+        vBox.setOutlineThickness(1.f);
+        vBox.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+        window.draw(vBox);
+
+        WisdomUI::Theme::DrawCrispText(window, font, val, 18, valBg.left + valBg.width / 2.f, valBg.top + valBg.height / 2.f, WisdomUI::Theme::SunsetGold, sf::Color::Transparent, true, true);
+
+        WisdomUI::Theme::DrawSunsetButton(window, btnR, ">", font, 18, false, btnR.contains(mousePos), false, 1.0f);
+        };
+
+    auto drawDropdownButton = [&](float x, float y, float w, const std::string& label, const std::string& currentVal, bool isOpen) -> sf::FloatRect {
+        sf::FloatRect rowRect(x, y, w, 52.f);
+        WisdomUI::Theme::DrawCrispText(window, font, label, 20, x + 16.f, y + 14.f, WisdomUI::Theme::TextPrimary);
+
+        sf::FloatRect dropBtn(x + w - 280.f, y + 6.f, 268.f, 40.f);
+        WisdomUI::Theme::DrawSunsetButton(window, dropBtn, currentVal + "  " + (isOpen ? "^" : "v"), font, 18, false, dropBtn.contains(mousePos), isOpen, 1.0f);
+        return dropBtn;
+        };
+
+    float cardW = 750.f;
+    float cardH = 420.f;
+    float rowW = cardW - 32.f;
+    float c1X = container.left + 32.f;
+    float c2X = container.left + 818.f;
+    float r1Y = container.top + 100.f;
+    float r2Y = container.top + 535.f;
+
+    drawCard(sf::FloatRect(c1X, r1Y, cardW, cardH), ":: DISPLAY & GRAPHICS ::");
+    drawToggle(c1X + 16.f, r1Y + 65.f, rowW, "Fullscreen Mode", uiFullscreen);
+    drawToggle(c1X + 16.f, r1Y + 130.f, rowW, "Vertical Sync (VSync)", uiVsync);
+    drawStepper(c1X + 16.f, r1Y + 195.f, rowW, "FPS Target Limit", std::to_string(uiFpsLimit));
+
+    std::string resStr = std::to_string(g_resW) + " x " + std::to_string(g_resH);
+    std::vector<std::string> resOpts = { "1280 x 720", "1600 x 900", "1920 x 1080" };
+    sf::FloatRect resDropBtnRect = drawDropdownButton(c1X + 16.f, r1Y + 260.f, rowW, "Display Resolution", resStr, g_resDropdownOpen);
+    drawStepper(c1X + 16.f, r1Y + 325.f, rowW, "UI Palette Theme", "Sunset");
+
+    drawCard(sf::FloatRect(c2X, r1Y, cardW, cardH), ":: BACKUPS & STORAGE ::");
+    drawToggle(c2X + 16.f, r1Y + 65.f, rowW, "Auto-Backup Vault", uiAutoBackup);
+    drawStepper(c2X + 16.f, r1Y + 130.f, rowW, "Autosave Frequency", "5 Mins");
+    drawStepper(c2X + 16.f, r1Y + 195.f, rowW, "Vault Directory", "/Projects");
+    drawStepper(c2X + 16.f, r1Y + 260.f, rowW, "Export Format", "PNG / Sheet");
+
+    drawCard(sf::FloatRect(c1X, r2Y, cardW, cardH), ":: PERFORMANCE & TIMELINE ::");
+    drawToggle(c1X + 16.f, r2Y + 65.f, rowW, "Hardware GPU Acceleration", uiHwAccel);
+    drawStepper(c1X + 16.f, r2Y + 130.f, rowW, "Preview Rate", std::to_string(uiAnimFps) + " FPS");
+    drawStepper(c1X + 16.f, r2Y + 195.f, rowW, "Undo Stack History", std::to_string(uiHistorySize) + " Steps");
+    drawStepper(c1X + 16.f, r2Y + 260.f, rowW, "Pixel Grid Contrast", "High");
+
+    drawCard(sf::FloatRect(c2X, r2Y, cardW, cardH), ":: AI INTEGRATION ::");
+    drawStepper(c2X + 16.f, r2Y + 65.f, rowW, "Active AI Provider", AIManager::getInstance().getActiveProvider());
+
+    std::string keyDisplay = AIManager::getInstance().getApiKey(AIManager::getInstance().getActiveProvider());
+    if (keyDisplay.empty()) keyDisplay = "Click to enter key...";
+    else keyDisplay = std::string(std::min(static_cast<size_t>(16), keyDisplay.length()), '*');
+    if (g_typingApiKey) keyDisplay += "_";
+
+    sf::FloatRect keyRow(c2X + 16.f, r2Y + 130.f, rowW, 52.f);
+    WisdomUI::Theme::DrawCrispText(window, font, "API Access Token", 20, keyRow.left + 16.f, keyRow.top + 14.f, WisdomUI::Theme::TextPrimary);
+
+    sf::FloatRect keyBox(c2X + 16.f + rowW - 320.f, keyRow.top + 6.f, 304.f, 40.f);
+    sf::RectangleShape kBox(sf::Vector2f(keyBox.width, keyBox.height));
+    kBox.setPosition(keyBox.left, keyBox.top);
+    kBox.setFillColor(sf::Color(14, 6, 20));
+    kBox.setOutlineThickness(1.5f);
+    kBox.setOutlineColor(g_typingApiKey ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
+    window.draw(kBox);
+
+    WisdomUI::Theme::DrawCrispText(window, font, keyDisplay, 16, keyBox.left + 12.f, keyBox.top + 10.f, g_typingApiKey ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach);
+
+    if (g_resDropdownOpen) {
+        sf::FloatRect menu(resDropBtnRect.left, resDropBtnRect.top + resDropBtnRect.height + 4.f, resDropBtnRect.width, static_cast<float>(resOpts.size()) * 42.f);
+
+        sf::RectangleShape shadow(sf::Vector2f(menu.width + 6.f, menu.height + 6.f));
+        shadow.setPosition(menu.left - 3.f, menu.top - 3.f);
+        shadow.setFillColor(sf::Color(0, 0, 0, 180));
+        window.draw(shadow);
+
+        sf::RectangleShape mBg(sf::Vector2f(menu.width, menu.height));
+        mBg.setPosition(menu.left, menu.top);
+        mBg.setFillColor(sf::Color(14, 6, 20, 252));
+        mBg.setOutlineThickness(1.5f);
+        mBg.setOutlineColor(WisdomUI::Theme::SunsetGold);
+        window.draw(mBg);
+
+        for (size_t i = 0; i < resOpts.size(); ++i) {
+            sf::FloatRect optRect(menu.left, menu.top + static_cast<float>(i) * 42.f, menu.width, 42.f);
+            bool hovOpt = optRect.contains(mousePos);
+            if (hovOpt) {
+                sf::RectangleShape hBox(sf::Vector2f(optRect.width, optRect.height));
+                hBox.setPosition(optRect.left, optRect.top);
+                hBox.setFillColor(WisdomUI::Theme::SunsetSkyMid);
+                window.draw(hBox);
+            }
+            WisdomUI::Theme::DrawCrispText(window, font, resOpts[i], 18, optRect.left + 16.f, optRect.top + 10.f, hovOpt ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
+        }
+    }
+}
+
+void UIManager::drawTutorialsMenu(sf::RenderWindow& window) {
+    sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
+    sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
+
+    sf::FloatRect container(160.f, 50.f, 1600.f, 980.f);
+    WisdomUI::Theme::DrawSunsetPanel(window, container, 1.0f);
+
+    sf::FloatRect backBtn(container.left + 32.f, container.top + 24.f, 150.f, 48.f);
+    WisdomUI::Theme::DrawSunsetButton(window, backBtn, "< BACK", font, 18, false, backBtn.contains(mousePos), false, 1.0f);
+
+    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO MANUAL", 38, container.left + 210.f, container.top + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
+
+    sf::RectangleShape div(sf::Vector2f(container.width - 64.f, 2.f));
+    div.setPosition(container.left + 32.f, container.top + 84.f);
+    div.setFillColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(div);
+
+    std::vector<std::pair<std::string, std::string>> topics = {
+        {"Getting Started", "Canvas setup, drawing tools and basic workspace navigation."},
+        {"Drawing & Inking", "Smooth brush, retro pixel pencil, eraser and symmetry guides."},
+        {"Timeline & Frames", "Frame duplication, playback speed, timing and onion skinning."},
+        {"Layer Management", "Blend modes, opacity sliders, visibility and layer merging."},
+        {"Selection & Transform", "Isolate, drag, flip, duplicate and transform selections."},
+        {"Pixel Perfect Mode", "Strip jagged pixel doublets for authentic crisp retro lines."},
+        {"Keyboard Matrix", "Speed up animation workflows with custom keys and shortcuts."},
+        {"Exporting Studio", "Render sequential PNG sequences and packed sprite sheets."},
+        {"AI Co-Pilot Suite", "Generate palette suggestions, shading ramps and variations."}
+    };
+
+    std::vector<std::string> fullText = {
+        "Wisdom Park is built for high-speed 2D animation and pixel art.\n\n"
+        "- Create a new project from the launchpad or press Ctrl+N.\n"
+        "- Use the left toolbar for drawing tools, or hit 1-9 on your number row.\n"
+        "- Press Space or Tab to toggle the bottom timeline and preview sequences.",
+
+        "Select the Brush or Pencil tool (1 or 2, or B / P).\n\n"
+        "- Brush: Smooth anti-aliased strokes with dynamic radius scaling.\n"
+        "- Pencil: Strict grid-locked pixels ideal for retro sprite craft.\n"
+        "- Right-Click / Middle-Click: Pan around the canvas smoothly.",
+
+        "The Timeline bar manages animation frames.\n\n"
+        "- Press Shift+N or click '+' to duplicate/add a new frame.\n"
+        "- Press Space to toggle real-time playback.\n"
+        "- Press O to toggle Onion Skinning for reference silhouettes.",
+
+        "Layers isolate independent art components.\n\n"
+        "- Open the Layer Panel on the right dock to add or reorder layers.\n"
+        "- Toggle visibility or lock layers to protect your strokes.\n"
+        "- Adjust layer opacity sliders for shading and lighting.",
+
+        "Use the Selection Tool (5 or M) to isolate artwork.\n\n"
+        "- Once selected, drag pixels anywhere across the canvas.\n"
+        "- Press H or V to flip selections horizontally or vertically.\n"
+        "- Press Delete to wipe the selected pixels instantly.",
+
+        "Pixel Mode disables smoothing and enforces strict tile alignments.\n\n"
+        "- Enable 'Pixel Perfect' in the Tool Options bar to automatically clean\n"
+        "  up redundant double-corner pixels on fast strokes.\n"
+        "- Use Tile Mode to test seamlessly repeating environment textures.",
+
+        "Every major studio action has a dedicated shortcut.\n\n"
+        "- Use the number keys (1 to 0, -, =) for instant tool swapping.\n"
+        "- Press K or open Keybinds from the launchpad to customize them.\n"
+        "- Undo with Ctrl+Z, redo with Ctrl+Y, save with Ctrl+S.",
+
+        "When your timeline animation is complete, open Export Studio (Ctrl+E).\n\n"
+        "- Output transparent individual PNG sequences for video editors.\n"
+        "- Pack the entire timeline into compact sprite sheets ready for game engines.",
+
+        "AI Co-Pilot features require an active API key in Settings.\n\n"
+        "- Open the Color Assistant to generate 4-color shading ramps.\n"
+        "- Import palettes from Lospec links or paste hex codes directly.\n"
+        "- All active palettes can be pinned and saved to your studio presets."
+    };
+
+    if (activeTutorialIndex == -1) {
+        float startX = container.left + 36.f;
+        float startY = container.top + 106.f;
+        float cardW = (container.width - 108.f) / 3.f;
+        float cardH = 265.f;
+
+        for (size_t i = 0; i < topics.size(); ++i) {
+            float col = static_cast<float>(i % 3);
+            float row = static_cast<float>(i / 3);
+            float cx = startX + col * (cardW + 18.f);
+            float cy = startY + row * (cardH + 18.f);
+
+            sf::FloatRect cardRect(cx, cy, cardW, cardH);
+            bool isHov = cardRect.contains(mousePos);
+
+            sf::RectangleShape card(sf::Vector2f(cardRect.width, cardRect.height));
+            card.setPosition(cardRect.left, cardRect.top);
+            card.setFillColor(isHov ? WisdomUI::Theme::SunsetSkyMid : WisdomUI::Theme::SunsetDeepDark);
+            card.setOutlineThickness(1.5f);
+            card.setOutlineColor(isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
+            window.draw(card);
+
+            sf::FloatRect badge(cx + 20.f, cy + 18.f, 96.f, 30.f);
+            sf::RectangleShape bBg(sf::Vector2f(badge.width, badge.height));
+            bBg.setPosition(badge.left, badge.top);
+            bBg.setFillColor(sf::Color(14, 6, 20));
+            bBg.setOutlineThickness(1.f);
+            bBg.setOutlineColor(WisdomUI::Theme::SunsetAmber);
+            window.draw(bBg);
+
+            WisdomUI::Theme::DrawCrispText(window, font, "PART 0" + std::to_string(i + 1), 14, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color::Transparent, true, true);
+
+            WisdomUI::Theme::DrawCrispText(window, font, topics[i].first, 24, cx + 20.f, cy + 60.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary, sf::Color(14, 6, 20));
+
+            sf::Text descTxt(topics[i].second, font, 18);
+            descTxt.setPosition(cx + 20.f, cy + 104.f);
+            descTxt.setFillColor(WisdomUI::Theme::TextSecondary);
+            descTxt.setLineSpacing(1.4f);
+            window.draw(descTxt);
+
+            WisdomUI::Theme::DrawCrispText(window, font, "READ GUIDE >>", 16, cx + 20.f, cy + cardH - 34.f, isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach);
+        }
+    }
+    else {
+        sf::FloatRect contentCard(container.left + 36.f, container.top + 106.f, container.width - 72.f, container.height - 146.f);
+        sf::RectangleShape cBg(sf::Vector2f(contentCard.width, contentCard.height));
+        cBg.setPosition(contentCard.left, contentCard.top);
+        cBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+        cBg.setOutlineThickness(1.5f);
+        cBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+        window.draw(cBg);
+
+        WisdomUI::Theme::DrawCrispText(window, font, "CHAPTER 0" + std::to_string(activeTutorialIndex + 1) + " : " + topics[activeTutorialIndex].first, 32, contentCard.left + 36.f, contentCard.top + 32.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
+
+        sf::RectangleShape cDiv(sf::Vector2f(contentCard.width - 72.f, 2.f));
+        cDiv.setPosition(contentCard.left + 36.f, contentCard.top + 82.f);
+        cDiv.setFillColor(WisdomUI::Theme::SunsetPlum);
+        window.draw(cDiv);
+
+        sf::Text mainTxt(fullText[activeTutorialIndex], font, 22);
+        mainTxt.setPosition(contentCard.left + 36.f, contentCard.top + 112.f);
+        mainTxt.setFillColor(WisdomUI::Theme::TextPrimary);
+        mainTxt.setLineSpacing(1.6f);
+        window.draw(mainTxt);
+
+        sf::FloatRect returnBtn(contentCard.left + contentCard.width - 260.f, contentCard.top + contentCard.height - 76.f, 224.f, 54.f);
+        bool retHov = returnBtn.contains(mousePos);
+        WisdomUI::Theme::DrawSunsetButton(window, returnBtn, "<< All Guides", font, 18, false, retHov, true, 1.0f);
+    }
+}
+
 void UIManager::drawKeybindModal(sf::RenderWindow& window) {
     if (!m_showKeybinds) return;
 
@@ -4043,19 +3956,18 @@ void UIManager::drawKeybindModal(sf::RenderWindow& window) {
     overlay.setFillColor(sf::Color(10, 4, 16, 225));
     window.draw(overlay);
 
-    sf::FloatRect modalBounds(280.f, 70.f, 1360.f, 940.f);
+    sf::FloatRect modalBounds(240.f, 60.f, 1440.f, 960.f);
     WisdomUI::Theme::DrawSunsetPanel(window, modalBounds, 1.0f);
 
-    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO KEYBIND MATRIX", 28, modalBounds.left + 32.f, modalBounds.top + 20.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
-    WisdomUI::Theme::DrawCrispText(window, font, "CUSTOMIZE & REBIND WORKSPACE HOTKEYS", 14, modalBounds.left + 34.f, modalBounds.top + 54.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO KEYBINDS", 38, modalBounds.left + 36.f, modalBounds.top + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
 
-    sf::FloatRect closeBtn(modalBounds.left + modalBounds.width - 130.f, modalBounds.top + 20.f, 106.f, 44.f);
-    sf::FloatRect restoreBtn(modalBounds.left + modalBounds.width - 320.f, modalBounds.top + 20.f, 174.f, 44.f);
+    sf::FloatRect closeBtn(modalBounds.left + modalBounds.width - 140.f, modalBounds.top + 24.f, 110.f, 48.f);
+    sf::FloatRect restoreBtn(modalBounds.left + modalBounds.width - 340.f, modalBounds.top + 24.f, 180.f, 48.f);
 
-    WisdomUI::Theme::DrawSunsetButton(window, restoreBtn, "Reset Defaults", font, 15, false, restoreBtn.contains(mousePos), false, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, closeBtn, "Close", font, 15, false, closeBtn.contains(mousePos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, restoreBtn, "Reset Defaults", font, 18, false, restoreBtn.contains(mousePos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, closeBtn, "Close", font, 18, false, closeBtn.contains(mousePos), false, 1.0f);
 
-    sf::FloatRect searchBox(modalBounds.left + 32.f, modalBounds.top + 84.f, 320.f, 44.f);
+    sf::FloatRect searchBox(modalBounds.left + 36.f, modalBounds.top + 88.f, 320.f, 48.f);
     sf::RectangleShape sBox(sf::Vector2f(searchBox.width, searchBox.height));
     sBox.setPosition(searchBox.left, searchBox.top);
     sBox.setFillColor(WisdomUI::Theme::SunsetDeepDark);
@@ -4065,26 +3977,26 @@ void UIManager::drawKeybindModal(sf::RenderWindow& window) {
 
     std::string searchDisplay = m_keybindSearchQuery.empty() ? (m_isTypingKeybindSearch ? "_" : "Search shortcuts...") : (m_keybindSearchQuery + (m_isTypingKeybindSearch ? "_" : ""));
     sf::Color searchColor = m_keybindSearchQuery.empty() && !m_isTypingKeybindSearch ? WisdomUI::Theme::SunsetPlum : WisdomUI::Theme::TextPrimary;
-    WisdomUI::Theme::DrawCrispText(window, font, searchDisplay, 15, searchBox.left + 14.f, searchBox.top + 12.f, searchColor);
+    WisdomUI::Theme::DrawCrispText(window, font, searchDisplay, 18, searchBox.left + 16.f, searchBox.top + 14.f, searchColor);
 
     std::vector<std::string> cats = { "All", "Tools", "Project", "Edit", "Selection", "Timeline", "Layers", "View", "UI" };
-    float tabX = modalBounds.left + 372.f;
+    float tabX = modalBounds.left + 380.f;
     for (const auto& cat : cats) {
-        sf::FloatRect tRect(tabX, modalBounds.top + 84.f, 98.f, 44.f);
+        sf::FloatRect tRect(tabX, modalBounds.top + 88.f, 106.f, 48.f);
         bool isSel = (m_selectedKeybindCategory == cat);
-        WisdomUI::Theme::DrawSunsetButton(window, tRect, cat, font, 14, isSel, tRect.contains(mousePos), isSel, 1.0f);
-        tabX += 106.f;
+        WisdomUI::Theme::DrawSunsetButton(window, tRect, cat, font, 16, isSel, tRect.contains(mousePos), isSel, 1.0f);
+        tabX += 114.f;
     }
 
-    sf::RectangleShape div(sf::Vector2f(modalBounds.width - 64.f, 2.f));
-    div.setPosition(modalBounds.left + 32.f, modalBounds.top + 142.f);
+    sf::RectangleShape div(sf::Vector2f(modalBounds.width - 72.f, 2.f));
+    div.setPosition(modalBounds.left + 36.f, modalBounds.top + 148.f);
     div.setFillColor(WisdomUI::Theme::SunsetPlum);
     window.draw(div);
 
-    sf::FloatRect listArea(modalBounds.left + 32.f, modalBounds.top + 156.f, modalBounds.width - 64.f, modalBounds.height - 188.f);
+    sf::FloatRect listArea(modalBounds.left + 36.f, modalBounds.top + 162.f, modalBounds.width - 72.f, modalBounds.height - 188.f);
 
     float rowY = listArea.top - m_keybindScrollOffset;
-    float rowH = 56.f;
+    float rowH = 62.f;
     float totalH = 0.0f;
 
     for (const auto& id : keybindManager.getActionOrder()) {
@@ -4114,9 +4026,9 @@ void UIManager::drawKeybindModal(sf::RenderWindow& window) {
             rBg.setOutlineColor(isListening ? WisdomUI::Theme::SunsetGold : (isHov ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum));
             window.draw(rBg);
 
-            WisdomUI::Theme::DrawCrispText(window, font, act.name, 18, rowRect.left + 22.f, rowRect.top + 16.f, isListening ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
+            WisdomUI::Theme::DrawCrispText(window, font, act.name, 22, rowRect.left + 24.f, rowRect.top + 18.f, isListening ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
 
-            sf::FloatRect catTag(rowRect.left + 420.f, rowRect.top + 14.f, 110.f, 28.f);
+            sf::FloatRect catTag(rowRect.left + 460.f, rowRect.top + 15.f, 130.f, 32.f);
             sf::RectangleShape cBg(sf::Vector2f(catTag.width, catTag.height));
             cBg.setPosition(catTag.left, catTag.top);
             cBg.setFillColor(sf::Color(14, 6, 20));
@@ -4124,19 +4036,104 @@ void UIManager::drawKeybindModal(sf::RenderWindow& window) {
             cBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
             window.draw(cBg);
 
-            WisdomUI::Theme::DrawCrispText(window, font, act.category, 12, catTag.left + catTag.width / 2.f, catTag.top + catTag.height / 2.f, WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+            WisdomUI::Theme::DrawCrispText(window, font, act.category, 15, catTag.left + catTag.width / 2.f, catTag.top + catTag.height / 2.f, WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
 
-            sf::FloatRect bindBtn(rowRect.left + rowRect.width - 240.f, rowRect.top + 8.f, 220.f, 40.f);
+            sf::FloatRect bindBtn(rowRect.left + rowRect.width - 260.f, rowRect.top + 8.f, 240.f, 46.f);
             std::string keyStr = isListening ? "Press Key..." : keybindManager.getActionString(id);
             if (keyStr.empty()) keyStr = "[Unbound]";
 
-            WisdomUI::Theme::DrawSunsetButton(window, bindBtn, keyStr, font, 15, isListening, bindBtn.contains(mousePos), isListening, 1.0f);
+            WisdomUI::Theme::DrawSunsetButton(window, bindBtn, keyStr, font, 18, isListening, bindBtn.contains(mousePos), isListening, 1.0f);
         }
 
         rowY += rowH + 10.f;
     }
 
     m_keybindMaxScroll = std::max(0.0f, totalH - listArea.height);
+}
+
+void UIManager::drawCreditsMenu(sf::RenderWindow& window) {
+    sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
+    sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
+
+    sf::FloatRect container(200.f, 50.f, 1520.f, 980.f);
+    WisdomUI::Theme::DrawSunsetPanel(window, container, 1.0f);
+
+    sf::FloatRect backBtn(container.left + 32.f, container.top + 24.f, 150.f, 48.f);
+    WisdomUI::Theme::DrawSunsetButton(window, backBtn, "< BACK", font, 18, false, backBtn.contains(mousePos), false, 1.0f);
+
+    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO CREDITS", 38, container.left + 210.f, container.top + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
+
+    sf::RectangleShape div(sf::Vector2f(container.width - 64.f, 2.f));
+    div.setPosition(container.left + 32.f, container.top + 84.f);
+    div.setFillColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(div);
+
+    auto drawCreditBlock = [&](float x, float y, float w, float h, const std::string& title, const std::string& content) {
+        sf::RectangleShape b(sf::Vector2f(w, h));
+        b.setPosition(x, y);
+        b.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+        b.setOutlineThickness(1.5f);
+        b.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+        window.draw(b);
+
+        sf::FloatRect headerGrip(x + 14.f, y + 12.f, w - 28.f, 40.f);
+        sf::RectangleShape hBg(sf::Vector2f(headerGrip.width, headerGrip.height));
+        hBg.setPosition(headerGrip.left, headerGrip.top);
+        hBg.setFillColor(WisdomUI::Theme::SunsetSkyTop);
+        hBg.setOutlineThickness(1.f);
+        hBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
+        window.draw(hBg);
+
+        WisdomUI::Theme::DrawCrispText(window, font, title, 18, headerGrip.left + 16.f, headerGrip.top + 10.f, WisdomUI::Theme::SunsetAmber);
+
+        sf::Text cTxt(content, font, 20);
+        cTxt.setPosition(x + 24.f, y + 68.f);
+        cTxt.setFillColor(WisdomUI::Theme::TextPrimary);
+        cTxt.setLineSpacing(1.5f);
+        window.draw(cTxt);
+        };
+
+    float bx = container.left + 32.f;
+    float by = container.top + 104.f;
+    float colW = 710.f;
+
+    drawCreditBlock(bx, by, colW, 260.f, ":: LEAD DEVELOPER & ARCHITECT ::",
+        "Ahmad Arnaoute (AtodDev)\n"
+        "Role: Engine, Core Systems & UI Architecture\n"
+        "Specialization: High-Performance Pixel Pipeline");
+
+    drawCreditBlock(bx + colW + 36.f, by, colW, 260.f, ":: ACADEMIC AFFILIATION ::",
+        "POLITEHNICA University of Bucharest\n"
+        "Faculty of Automatic Control and Computers\n"
+        "Group: 324CD\n"
+        "Bucharest, Romania");
+
+    drawCreditBlock(bx, by + 285.f, colW, 350.f, ":: PROJECTS & CONTRIBUTIONS ::",
+        "- Oppia Foundation (Testing Architecture)\n"
+        "- safe-comment-stripper (CLI Utility)\n"
+        "- iMeditatii Education Platform\n"
+        "- Progress & Progress Aggregator\n"
+        "- Wisdom Park Retro Studio Suite");
+
+    drawCreditBlock(bx + colW + 36.f, by + 285.f, colW, 350.f, ":: TECHNOLOGY STACK ::",
+        "- SFML 2.6.x (Graphics, Window, Systems)\n"
+        "- nlohmann::json (Data Architecture)\n"
+        "- C++17 Standard Compliant Systems\n"
+        "- Commercial & Open Studio License");
+
+    sf::FloatRect eggPod(bx, by + 655.f, container.width - 64.f, 96.f);
+    bool eggHov = eggPod.contains(mousePos);
+
+    sf::RectangleShape eggBg(sf::Vector2f(eggPod.width, eggPod.height));
+    eggBg.setPosition(eggPod.left, eggPod.top);
+    eggBg.setFillColor(eggHov ? WisdomUI::Theme::SunsetSkyMid : WisdomUI::Theme::SunsetDeepDark);
+    eggBg.setOutlineThickness(1.5f);
+    eggBg.setOutlineColor(easterEggClicks >= 5 ? WisdomUI::Theme::SunsetGold : (eggHov ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum));
+    window.draw(eggBg);
+
+    std::string coreStatus = (easterEggClicks >= 5) ? "ENGINE CORE MATRIX UNLOCKED (DEBUG MODE ACTIVE)" : "WISDOM PARK STUDIO SYSTEM CORE (CLICK TO CALIBRATE)";
+    WisdomUI::Theme::DrawCrispText(window, font, coreStatus, 20, eggPod.left + eggPod.width / 2.f, eggPod.top + 28.f, easterEggClicks >= 5 ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "Build: 2026.8  |  Direct Hardware Render Pipeline Online", 16, eggPod.left + eggPod.width / 2.f, eggPod.top + 62.f, WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
 }
 
 void UIManager::toggleFullscreen(sf::RenderWindow& window, AppSettings& settings) {
@@ -4172,37 +4169,37 @@ void UIManager::drawEscapeMenu(sf::RenderWindow& window, Canvas& canvas, Timelin
 
     sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
-    float modalW = 480.f;
-    float modalH = 636.f;
+    float modalW = 540.f;
+    float modalH = 680.f;
     float modalX = (1920.f - modalW) / 2.f;
     float modalY = (1080.f - modalH) / 2.f;
 
     sf::FloatRect menuBounds(modalX, modalY, modalW, modalH);
     WisdomUI::Theme::DrawSunsetPanel(window, menuBounds, 1.0f);
 
-    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO PAUSED", 24, modalX + modalW / 2.f, modalY + 36.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
-    WisdomUI::Theme::DrawCrispText(window, font, activeProjectName + (canvas.getIsDirty() ? " *" : ""), 13, modalX + modalW / 2.f, modalY + 66.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO PAUSED", 28, modalX + modalW / 2.f, modalY + 36.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, activeProjectName + (canvas.getIsDirty() ? " *" : ""), 16, modalX + modalW / 2.f, modalY + 68.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 6, 20), true, true);
 
     sf::RectangleShape div(sf::Vector2f(modalW - 56.f, 2.f));
-    div.setPosition(modalX + 28.f, modalY + 90.f);
+    div.setPosition(modalX + 28.f, modalY + 96.f);
     div.setFillColor(WisdomUI::Theme::SunsetPlum);
     window.draw(div);
 
     std::vector<std::pair<std::string, std::string>> menuItems = {
-        { "resume", "Resume Studio" },
-        { "resize", "Resize Canvas (Ctrl+R)" },
-        { "save", "Save Project (Ctrl+S)" },
+        { "resume", "Resume" },
+        { "resize", "Resize Canvas" },
+        { "save", "Save Project" },
         { "save_as", "Save Project As..." },
-        { "export", "Export Sequence (Ctrl+E)" },
+        { "export", "Export" },
         { "fullscreen", std::string("Fullscreen: ") + (uiFullscreen ? "ON" : "OFF") },
-        { "main_menu", "Return to Main Menu" },
-        { "exit", "Exit Application" }
+        { "main_menu", "Main Menu" },
+        { "exit", "Exit" }
     };
 
     float btnX = modalX + 36.f;
-    float btnY = modalY + 112.f;
+    float btnY = modalY + 116.f;
     float btnW = modalW - 72.f;
-    float btnH = 46.f;
+    float btnH = 54.f;
     float spacing = 12.f;
 
     for (size_t i = 0; i < menuItems.size(); ++i) {
@@ -4211,7 +4208,7 @@ void UIManager::drawEscapeMenu(sf::RenderWindow& window, Canvas& canvas, Timelin
         bool isExit = (menuItems[i].first == "exit" || menuItems[i].first == "main_menu");
         bool isResume = (menuItems[i].first == "resume");
 
-        WisdomUI::Theme::DrawSunsetButton(window, bRect, menuItems[i].second, font, 14, isResume, isHov, isExit, 1.0f);
+        WisdomUI::Theme::DrawSunsetButton(window, bRect, menuItems[i].second, font, 20, isResume, isHov, isExit, 1.0f);
     }
 }
 
@@ -4227,15 +4224,15 @@ bool UIManager::handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& 
         sf::Vector2i pixelPos(event.mouseButton.x, event.mouseButton.y);
         sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
 
-        float modalW = 480.f;
-        float modalH = 636.f;
+        float modalW = 540.f;
+        float modalH = 680.f;
         float modalX = (1920.f - modalW) / 2.f;
         float modalY = (1080.f - modalH) / 2.f;
 
         float btnX = modalX + 36.f;
-        float btnY = modalY + 112.f;
+        float btnY = modalY + 116.f;
         float btnW = modalW - 72.f;
-        float btnH = 46.f;
+        float btnH = 54.f;
         float spacing = 12.f;
 
         std::vector<std::string> actions = {
@@ -4308,6 +4305,7 @@ bool UIManager::handleEscapeMenuEvent(const sf::Event& event, sf::RenderWindow& 
     }
     return true;
 }
+
 
 void UIManager::pushSpriteSheetToGitImg(Canvas& canvas, bool opaqueBg) {
     if (m_isPushingGitImg) return;

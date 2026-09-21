@@ -21,16 +21,16 @@ namespace WisdomUI {
     }
 
     void ToolOptionsBar::updateSelectionButtonLayout() {
-        float btnX = std::floor(m_bounds.left + 150.0f);
-        float btnY = std::floor(m_bounds.top + 5.0f);
-        float btnH = 26.0f;
+        float btnH = 28.0f;
+        float btnY = std::floor(m_bounds.top + (m_bounds.height - btnH) * 0.5f);
+        float btnX = std::floor(m_bounds.left + 155.0f);
         float spacing = 6.0f;
 
         for (auto& btn : m_selectionButtons) {
-            float btnW = 64.0f;
-            if (btn.id == "resize") btnW = 66.0f;
-            else if (btn.id == "duplicate") btnW = 86.0f;
-            else if (btn.id == "crop" || btn.id == "delete") btnW = 96.0f;
+            float btnW = 72.0f;
+            if (btn.id == "resize") btnW = 74.0f;
+            else if (btn.id == "duplicate") btnW = 94.0f;
+            else if (btn.id == "crop" || btn.id == "delete") btnW = 104.0f;
 
             btn.bounds = sf::FloatRect(btnX, btnY, btnW, btnH);
             btnX += btnW + spacing;
@@ -39,11 +39,16 @@ namespace WisdomUI {
 
     void ToolOptionsBar::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        m_sliderBounds = sf::FloatRect(std::floor(bounds.left + 215.0f), std::floor(bounds.top + 8.0f), 110.0f, 16.0f);
-        m_stabSliderBounds = sf::FloatRect(std::floor(bounds.left + 445.0f), std::floor(bounds.top + 8.0f), 110.0f, 16.0f);
-        m_perfBtnBounds = sf::FloatRect(std::floor(bounds.left + 395.0f), std::floor(bounds.top + 4.0f), 114.0f, 24.0f);
-        m_outlineBtnBounds = sf::FloatRect(std::floor(bounds.left + 630.0f), std::floor(bounds.top + 4.0f), 80.0f, 24.0f);
-        m_outlineColorBoxBounds = sf::FloatRect(std::floor(bounds.left + 716.0f), std::floor(bounds.top + 4.0f), 24.0f, 24.0f);
+
+        float btnH = 28.0f;
+        float btnY = std::floor(bounds.top + (bounds.height - btnH) * 0.5f);
+
+        m_sliderBounds = sf::FloatRect(std::floor(bounds.left + 225.0f), std::floor(bounds.top + (bounds.height - 14.0f) * 0.5f), 125.0f, 14.0f);
+        m_stabSliderBounds = sf::FloatRect(std::floor(bounds.left + 475.0f), std::floor(bounds.top + (bounds.height - 14.0f) * 0.5f), 125.0f, 14.0f);
+        m_perfBtnBounds = sf::FloatRect(std::floor(bounds.left + 420.0f), btnY, 125.0f, btnH);
+        m_outlineBtnBounds = sf::FloatRect(std::floor(bounds.left + 670.0f), btnY, 90.0f, btnH);
+        m_outlineColorBoxBounds = sf::FloatRect(std::floor(bounds.left + 768.0f), btnY, 28.0f, 28.0f);
+
         updateSelectionButtonLayout();
     }
 
@@ -154,18 +159,20 @@ namespace WisdomUI {
         Theme::DrawSunsetPanel(window, m_bounds, 1.0f);
 
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+        float barH = m_bounds.height;
+        float centerY = std::floor(m_bounds.top + barH * 0.5f);
 
-        Theme::DrawCrispText(window, m_font, "TOOL: " + m_activeToolName, 14, std::floor(m_bounds.left + 24.0f), std::floor(m_bounds.top + 7.0f), Theme::SunsetAmber);
+        Theme::DrawCrispText(window, m_font, "TOOL: " + m_activeToolName, 15, std::floor(m_bounds.left + 24.0f), centerY, Theme::SunsetAmber, sf::Color(14, 6, 20), false, true);
 
         if (m_activeToolName == "Select" || m_activeToolName == "Magic Wand") {
             for (const auto& btn : m_selectionButtons) {
                 bool isHov = btn.bounds.contains(mousePos);
                 bool isDel = (btn.id == "delete");
-                Theme::DrawSunsetButton(window, btn.bounds, btn.label, m_font, 11, false, isHov, isDel, 1.0f);
+                Theme::DrawSunsetButton(window, btn.bounds, btn.label, m_font, 12, false, isHov, isDel, 1.0f);
             }
         }
         else {
-            Theme::DrawCrispText(window, m_font, "SIZE:", 13, std::floor(m_bounds.left + 165.0f), std::floor(m_bounds.top + 8.0f), Theme::TextSecondary);
+            Theme::DrawCrispText(window, m_font, "SIZE:", 13, std::floor(m_bounds.left + 175.0f), centerY, Theme::TextSecondary, sf::Color(14, 6, 20), false, true);
 
             sf::RectangleShape sliderTrack(sf::Vector2f(m_sliderBounds.width, m_sliderBounds.height));
             sliderTrack.setPosition(m_sliderBounds.left, m_sliderBounds.top);
@@ -194,12 +201,12 @@ namespace WisdomUI {
             thumb.setOutlineColor(Theme::SunsetGold);
             window.draw(thumb);
 
-            Theme::DrawCrispText(window, m_font, std::to_string(static_cast<int>(m_size)) + "px", 13, std::floor(m_sliderBounds.left + m_sliderBounds.width + 10.0f), std::floor(m_bounds.top + 8.0f), Theme::TextPrimary);
+            Theme::DrawCrispText(window, m_font, std::to_string(static_cast<int>(m_size)) + "px", 13, std::floor(m_sliderBounds.left + m_sliderBounds.width + 10.0f), centerY, Theme::TextPrimary, sf::Color(14, 6, 20), false, true);
 
             bool showStab = !m_pixelMode && (m_activeToolName == "Brush" || m_activeToolName == "Pencil");
 
             if (showStab) {
-                Theme::DrawCrispText(window, m_font, "STAB:", 13, std::floor(m_stabSliderBounds.left - 48.0f), std::floor(m_bounds.top + 8.0f), Theme::TextSecondary);
+                Theme::DrawCrispText(window, m_font, "STAB:", 13, std::floor(m_stabSliderBounds.left - 50.0f), centerY, Theme::TextSecondary, sf::Color(14, 6, 20), false, true);
 
                 sf::RectangleShape stabTrack(sf::Vector2f(m_stabSliderBounds.width, m_stabSliderBounds.height));
                 stabTrack.setPosition(m_stabSliderBounds.left, m_stabSliderBounds.top);
@@ -228,7 +235,7 @@ namespace WisdomUI {
                 window.draw(stabThumb);
 
                 int stabPercent = static_cast<int>(std::round(m_stabilization * 100.0f));
-                Theme::DrawCrispText(window, m_font, std::to_string(stabPercent) + "%", 13, std::floor(m_stabSliderBounds.left + m_stabSliderBounds.width + 10.0f), std::floor(m_bounds.top + 8.0f), Theme::TextPrimary);
+                Theme::DrawCrispText(window, m_font, std::to_string(stabPercent) + "%", 13, std::floor(m_stabSliderBounds.left + m_stabSliderBounds.width + 10.0f), centerY, Theme::TextPrimary, sf::Color(14, 6, 20), false, true);
             }
 
             if (m_pixelMode) {

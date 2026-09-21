@@ -9,15 +9,15 @@ void ProjectBrowser::init(ProjectManager* projectManager) {
     pm = projectManager;
     font.loadFromFile("assets/font.otf");
 
-    containerBounds = sf::FloatRect(200.f, 60.f, 1520.f, 960.f);
-    backBtnBounds = sf::FloatRect(containerBounds.left + 28.f, containerBounds.top + 22.f, 140.f, 44.f);
+    containerBounds = sf::FloatRect(160.f, 50.f, 1600.f, 980.f);
+    backBtnBounds = sf::FloatRect(containerBounds.left + 32.f, containerBounds.top + 24.f, 150.f, 48.f);
 
-    openFileBtnBounds = sf::FloatRect(containerBounds.left + containerBounds.width - 380.f, containerBounds.top + 22.f, 170.f, 44.f);
-    newProjectBtnBounds = sf::FloatRect(containerBounds.left + containerBounds.width - 194.f, containerBounds.top + 22.f, 170.f, 44.f);
+    openFileBtnBounds = sf::FloatRect(containerBounds.left + containerBounds.width - 410.f, containerBounds.top + 24.f, 180.f, 48.f);
+    newProjectBtnBounds = sf::FloatRect(containerBounds.left + containerBounds.width - 210.f, containerBounds.top + 24.f, 180.f, 48.f);
 
-    deleteModalBounds = sf::FloatRect(1920.f / 2.f - 270.f, 1080.f / 2.f - 140.f, 540.f, 280.f);
-    confirmBtnBounds = sf::FloatRect(deleteModalBounds.left + 30.f, deleteModalBounds.top + 190.f, 225.f, 50.f);
-    cancelBtnBounds = sf::FloatRect(deleteModalBounds.left + 285.f, deleteModalBounds.top + 190.f, 225.f, 50.f);
+    deleteModalBounds = sf::FloatRect(1920.f / 2.f - 280.f, 1080.f / 2.f - 150.f, 560.f, 300.f);
+    confirmBtnBounds = sf::FloatRect(deleteModalBounds.left + 36.f, deleteModalBounds.top + 200.f, 230.f, 56.f);
+    cancelBtnBounds = sf::FloatRect(deleteModalBounds.left + 294.f, deleteModalBounds.top + 200.f, 230.f, 56.f);
 
     refreshList();
 }
@@ -29,7 +29,7 @@ void ProjectBrowser::refreshList() {
 void ProjectBrowser::updateHover(sf::Vector2f mousePos) {}
 
 void ProjectBrowser::handleScroll(float delta) {
-    scrollOffset = std::clamp(scrollOffset - delta * 55.0f, 0.0f, maxScroll);
+    scrollOffset = std::clamp(scrollOffset - delta * 60.0f, 0.0f, maxScroll);
 }
 
 std::string ProjectBrowser::handleClick(sf::Vector2f mousePos, ProjectMetadata& outMeta) {
@@ -76,26 +76,25 @@ void ProjectBrowser::draw(sf::RenderWindow& window) {
 
     WisdomUI::Theme::DrawSunsetPanel(window, containerBounds, 1.0f);
 
-    WisdomUI::Theme::DrawSunsetButton(window, backBtnBounds, "< BACK", font, 16, false, backBtnBounds.contains(mPos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, backBtnBounds, "< BACK", font, 18, false, backBtnBounds.contains(mPos), false, 1.0f);
 
-    WisdomUI::Theme::DrawCrispText(window, font, "ARCHIVE VAULT", 28, containerBounds.left + 190.f, containerBounds.top + 20.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
-    WisdomUI::Theme::DrawCrispText(window, font, "RECENT CREATIVE CANVASES & DISK PROJECTS", 14, containerBounds.left + 192.f, containerBounds.top + 54.f, WisdomUI::Theme::TextSecondary);
+    WisdomUI::Theme::DrawCrispText(window, font, "ARCHIVE VAULT", 38, containerBounds.left + 210.f, containerBounds.top + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
 
-    WisdomUI::Theme::DrawSunsetButton(window, openFileBtnBounds, "Browse Disk", font, 15, false, openFileBtnBounds.contains(mPos), false, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, newProjectBtnBounds, "+ New Canvas", font, 15, false, newProjectBtnBounds.contains(mPos), true, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, openFileBtnBounds, "Browse Disk", font, 18, false, openFileBtnBounds.contains(mPos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, newProjectBtnBounds, "+ New Canvas", font, 18, false, newProjectBtnBounds.contains(mPos), true, 1.0f);
 
-    sf::RectangleShape divider(sf::Vector2f(containerBounds.width - 56.f, 2.f));
-    divider.setPosition(containerBounds.left + 28.f, containerBounds.top + 86.f);
+    sf::RectangleShape divider(sf::Vector2f(containerBounds.width - 64.f, 2.f));
+    divider.setPosition(containerBounds.left + 32.f, containerBounds.top + 84.f);
     divider.setFillColor(WisdomUI::Theme::SunsetPlum);
     window.draw(divider);
 
     cardBoundsList.clear();
     deleteBtnsList.clear();
 
-    float startX = containerBounds.left + 32.f;
+    float startX = containerBounds.left + 36.f;
     float startY = containerBounds.top + 104.f - scrollOffset;
-    float cardWidth = (containerBounds.width - 84.f) / 2.f;
-    float cardHeight = 126.f;
+    float cardWidth = (containerBounds.width - 92.f) / 2.f;
+    float cardHeight = 136.f;
 
     for (size_t i = 0; i < projects.size(); ++i) {
         float col = static_cast<float>(i % 2);
@@ -120,7 +119,7 @@ void ProjectBrowser::draw(sf::RenderWindow& window) {
         cardBg.setOutlineColor(isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
         window.draw(cardBg);
 
-        sf::FloatRect thumbRect(cx + 12.f, cy + 12.f, 150.f, 102.f);
+        sf::FloatRect thumbRect(cx + 14.f, cy + 14.f, 156.f, 108.f);
         sf::RectangleShape thumbFrame(sf::Vector2f(thumbRect.width, thumbRect.height));
         thumbFrame.setPosition(thumbRect.left, thumbRect.top);
         thumbFrame.setFillColor(sf::Color(18, 8, 28));
@@ -163,25 +162,25 @@ void ProjectBrowser::draw(sf::RenderWindow& window) {
             window.draw(thumbSprite);
         }
         else {
-            WisdomUI::Theme::DrawCrispText(window, font, "NO PREVIEW", 11, thumbRect.left + thumbRect.width / 2.f, thumbRect.top + thumbRect.height / 2.f, WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+            WisdomUI::Theme::DrawCrispText(window, font, "NO PREVIEW", 14, thumbRect.left + thumbRect.width / 2.f, thumbRect.top + thumbRect.height / 2.f, WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
         }
 
         sf::Color titleColor = isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber;
-        WisdomUI::Theme::DrawCrispText(window, font, projects[i].name, 20, cx + 176.f, cy + 16.f, titleColor, sf::Color(14, 6, 20));
+        WisdomUI::Theme::DrawCrispText(window, font, projects[i].name, 22, cx + 186.f, cy + 18.f, titleColor, sf::Color(14, 6, 20));
 
         std::string modeBadge = projects[i].isPixelMode ? "PIXEL ART" : "RGBA CANV";
-        WisdomUI::Theme::DrawCrispText(window, font, modeBadge, 13, cx + 176.f, cy + 50.f, WisdomUI::Theme::SunsetPeach);
+        WisdomUI::Theme::DrawCrispText(window, font, modeBadge, 16, cx + 186.f, cy + 54.f, WisdomUI::Theme::SunsetPeach);
 
         std::string resStr = std::to_string(projects[i].width) + " x " + std::to_string(projects[i].height) + " px";
-        WisdomUI::Theme::DrawCrispText(window, font, resStr, 14, cx + 280.f, cy + 49.f, WisdomUI::Theme::TextPrimary);
+        WisdomUI::Theme::DrawCrispText(window, font, resStr, 16, cx + 306.f, cy + 54.f, WisdomUI::Theme::TextPrimary);
 
-        WisdomUI::Theme::DrawCrispText(window, font, "MODIFIED: " + projects[i].lastModified, 13, cx + 176.f, cy + 86.f, WisdomUI::Theme::TextSecondary);
+        WisdomUI::Theme::DrawCrispText(window, font, "MODIFIED: " + projects[i].lastModified, 15, cx + 186.f, cy + 92.f, WisdomUI::Theme::TextSecondary);
 
-        sf::FloatRect delRect(cx + cardWidth - 52.f, cy + 12.f, 40.f, 40.f);
+        sf::FloatRect delRect(cx + cardWidth - 58.f, cy + 14.f, 44.f, 44.f);
         deleteBtnsList.push_back(delRect);
         bool delHov = delRect.contains(mPos);
 
-        WisdomUI::Theme::DrawSunsetButton(window, delRect, "X", font, 14, false, delHov, true, 1.0f);
+        WisdomUI::Theme::DrawSunsetButton(window, delRect, "X", font, 18, false, delHov, true, 1.0f);
     }
 
     float totalContentH = (std::ceil(static_cast<float>(projects.size()) / 2.f) * (cardHeight + 18.f));
@@ -194,11 +193,11 @@ void ProjectBrowser::draw(sf::RenderWindow& window) {
 
         WisdomUI::Theme::DrawSunsetPanel(window, deleteModalBounds, 1.0f);
 
-        WisdomUI::Theme::DrawCrispText(window, font, "DELETE CONFIRMATION", 20, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 34.f, WisdomUI::Theme::SunsetCoral, sf::Color(14, 6, 20), true, true);
-        WisdomUI::Theme::DrawCrispText(window, font, "Delete '" + projectToDelete + "'?", 16, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 84.f, WisdomUI::Theme::TextPrimary, sf::Color(14, 6, 20), true, true);
-        WisdomUI::Theme::DrawCrispText(window, font, "This will permanently remove the file archive.", 13, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 118.f, WisdomUI::Theme::TextSecondary, sf::Color(14, 6, 20), true, true);
+        WisdomUI::Theme::DrawCrispText(window, font, "DELETE PROJECT", 24, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 34.f, WisdomUI::Theme::SunsetCoral, sf::Color(14, 6, 20), true, true);
+        WisdomUI::Theme::DrawCrispText(window, font, "Delete '" + projectToDelete + "'?", 18, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 88.f, WisdomUI::Theme::TextPrimary, sf::Color(14, 6, 20), true, true);
+        WisdomUI::Theme::DrawCrispText(window, font, "This will permanently remove the archive.", 15, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 124.f, WisdomUI::Theme::TextSecondary, sf::Color(14, 6, 20), true, true);
 
-        WisdomUI::Theme::DrawSunsetButton(window, confirmBtnBounds, "Delete Forever", font, 15, false, confirmBtnBounds.contains(mPos), true, 1.0f);
-        WisdomUI::Theme::DrawSunsetButton(window, cancelBtnBounds, "Keep Project", font, 15, false, cancelBtnBounds.contains(mPos), false, 1.0f);
+        WisdomUI::Theme::DrawSunsetButton(window, confirmBtnBounds, "Delete Forever", font, 18, false, confirmBtnBounds.contains(mPos), true, 1.0f);
+        WisdomUI::Theme::DrawSunsetButton(window, cancelBtnBounds, "Cancel", font, 18, false, cancelBtnBounds.contains(mPos), false, 1.0f);
     }
 }
