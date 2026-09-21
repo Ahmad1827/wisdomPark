@@ -26,13 +26,13 @@ namespace WisdomUI {
 
     void RightDockTabs::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        float startY = bounds.top + 10.0f;
+        float startY = bounds.top + 6.0f;
         float btnSize = 40.0f;
         float startX = bounds.left + (bounds.width - btnSize) / 2.0f;
 
         for (auto& tab : m_tabs) {
             tab.bounds = sf::FloatRect(std::floor(startX), std::floor(startY), btnSize, btnSize);
-            startY += btnSize + 8.0f;
+            startY += btnSize + 6.0f;
         }
     }
 

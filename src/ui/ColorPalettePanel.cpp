@@ -266,10 +266,11 @@ void ColorPalettePanel::update(float dt, bool focusMode, Canvas& canvas, bool is
         currentX += (targetX - currentX) * 16.0f * dt;
     }
 
+    float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
     float panelX = std::floor(isDetached ? detachedPos.x : currentX);
-    float panelY = std::floor(isDetached ? detachedPos.y : 68.f);
+    float panelY = std::floor(isDetached ? detachedPos.y : topBarsH);
     float panelW = std::floor(isDetached ? detachedSize.x : width);
-    float panelH = std::floor(isDetached ? detachedSize.y : (1080.f - 92.f));
+    float panelH = std::floor(isDetached ? detachedSize.y : (1080.f - topBarsH - WisdomUI::Theme::StatusBarHeight));
 
     background.setPosition(panelX, panelY);
     background.setSize(sf::Vector2f(panelW, panelH));
@@ -513,10 +514,11 @@ void ColorPalettePanel::draw(sf::RenderWindow& window) {
             window.draw(ct);
 
             sf::FloatRect addBtnRect(std::floor(pickerX + pickerSize - 22.f), std::floor(sy), 22.f, 22.f);
-            bool hovAdd = addBtnRect.contains(mousePos);
+            m_addSwatchBtnBounds = sf::FloatRect(std::floor(pickerX + pickerSize - 22.f), std::floor(sy), 22.f, 22.f);
+            bool hovAdd = m_addSwatchBtnBounds.contains(mousePos);
             if (hovAdd) hoveredTooltip = "+ Save current color to swatches";
-            sf::RectangleShape addSwatchBtn(sf::Vector2f(addBtnRect.width, addBtnRect.height));
-            addSwatchBtn.setPosition(addBtnRect.left, addBtnRect.top);
+            sf::RectangleShape addSwatchBtn(sf::Vector2f(m_addSwatchBtnBounds.width, m_addSwatchBtnBounds.height));
+            addSwatchBtn.setPosition(m_addSwatchBtnBounds.left, m_addSwatchBtnBounds.top);
             addSwatchBtn.setFillColor(hovAdd ? WisdomUI::Theme::PanelHover : WisdomUI::Theme::PanelInset);
             addSwatchBtn.setOutlineThickness(1.f);
             addSwatchBtn.setOutlineColor(hovAdd ? WisdomUI::Theme::BorderHighlight : WisdomUI::Theme::Border);
@@ -746,58 +748,35 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
     }
 
     if (activeInputIndex != -1) {
-        if (event.type == sf::Event::KeyPressed && event.key.control && event.key.code == sf::Keyboard::V) {
-            std::string clip = sf::Clipboard::getString().toAnsiString();
-            if (activeInputIndex == 4) {
-                std::string clean;
-                for (char c : clip) {
-                    if (c == '#' || c == ' ' || c == '\r' || c == '\n') continue;
-                    if (std::isxdigit(static_cast<unsigned char>(c))) {
-                        clean += static_cast<char>(std::toupper(c));
-                    }
-                }
-                if (!clean.empty()) {
-                    inputBuffer = clean.substr(0, 6);
-                }
-            }
-            else {
-                std::string digits;
-                for (char c : clip) {
-                    if (std::isdigit(static_cast<unsigned char>(c))) {
-                        digits += c;
-                    }
-                }
-                if (!digits.empty()) {
-                    inputBuffer = digits.substr(0, 3);
-                }
-            }
-            return true;
-        }
-
-        if (event.type == sf::Event::TextEntered) {
-            if (event.text.unicode == '\b') {
-                if (!inputBuffer.empty()) inputBuffer.pop_back();
-                return true;
-            }
-            if (event.text.unicode < 32 || event.text.unicode == 127) {
-                return true;
-            }
-
-            char c = static_cast<char>(event.text.unicode);
-            if (activeInputIndex == 4) {
-                if (c != '#' && std::isxdigit(static_cast<unsigned char>(c)) && inputBuffer.length() < 6) {
-                    inputBuffer += static_cast<char>(std::toupper(c));
-                }
-            }
-            else {
-                if (std::isdigit(static_cast<unsigned char>(c)) && inputBuffer.length() < 3) {
-                    inputBuffer += c;
-                }
-            }
-            return true;
-        }
-
         if (event.type == sf::Event::KeyPressed) {
+            if (event.key.control && event.key.code == sf::Keyboard::V) {
+                std::string clip = sf::Clipboard::getString().toAnsiString();
+                if (activeInputIndex == 4) {
+                    std::string clean;
+                    for (char c : clip) {
+                        if (c == '#' || c == ' ' || c == '\r' || c == '\n') continue;
+                        if (std::isxdigit(static_cast<unsigned char>(c))) {
+                            clean += static_cast<char>(std::toupper(c));
+                        }
+                    }
+                    if (!clean.empty()) {
+                        inputBuffer = clean.substr(0, 6);
+                    }
+                }
+                else {
+                    std::string digits;
+                    for (char c : clip) {
+                        if (std::isdigit(static_cast<unsigned char>(c))) {
+                            digits += c;
+                        }
+                    }
+                    if (!digits.empty()) {
+                        inputBuffer = digits.substr(0, 3);
+                    }
+                }
+                return true;
+            }
+
             if (event.key.code == sf::Keyboard::Escape) {
                 activeInputIndex = -1;
                 inputBuffer.clear();
@@ -832,6 +811,35 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
                 inputBuffer.clear();
                 return true;
             }
+
+            return true;
+        }
+
+        if (event.type == sf::Event::KeyReleased) {
+            return true;
+        }
+
+        if (event.type == sf::Event::TextEntered) {
+            if (event.text.unicode == '\b') {
+                if (!inputBuffer.empty()) inputBuffer.pop_back();
+                return true;
+            }
+            if (event.text.unicode < 32 || event.text.unicode == 127) {
+                return true;
+            }
+
+            char c = static_cast<char>(event.text.unicode);
+            if (activeInputIndex == 4) {
+                if (c != '#' && std::isxdigit(static_cast<unsigned char>(c)) && inputBuffer.length() < 6) {
+                    inputBuffer += static_cast<char>(std::toupper(c));
+                }
+            }
+            else {
+                if (std::isdigit(static_cast<unsigned char>(c)) && inputBuffer.length() < 3) {
+                    inputBuffer += c;
+                }
+            }
+            return true;
         }
     }
 
@@ -985,7 +993,7 @@ bool ColorPalettePanel::handleEvent(const sf::Event& event, sf::Vector2f mousePo
 
             sx = pickerX;
             sy += 30.f;
-            if (sf::FloatRect(pickerX + pickerSize - 22.f, sy, 22.f, 22.f).contains(mousePos)) {
+            if (m_addSwatchBtnBounds.contains(mousePos)) {
                 colorManager.addCustomSwatch(curC);
                 return true;
             }

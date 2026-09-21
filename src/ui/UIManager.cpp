@@ -1663,6 +1663,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (event.type == sf::Event::KeyPressed) {
+            if (colorPalettePanel.isTypingInput()) {
+                return;
+            }
             if (m_textManager.getEditingText() == nullptr) {
                 if (event.key.code == sf::Keyboard::Numpad6) {
                     isTypingPrompt = !isTypingPrompt;

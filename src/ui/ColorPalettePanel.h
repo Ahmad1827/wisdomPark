@@ -116,6 +116,7 @@ private:
     std::string colorToHex(sf::Color c) const;
     PaletteResizeDir getResizeDirection(sf::Vector2f mousePos) const;
     void drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos);
+    sf::FloatRect m_addSwatchBtnBounds;
 
 public:
     ColorPalettePanel();
@@ -123,6 +124,8 @@ public:
     void update(float dt, bool focusMode, Canvas& canvas, bool isOpen = true);
     void updateHover(sf::Vector2f mousePos, bool canOpen);
     void draw(sf::RenderWindow& window);
+
+    bool isTypingInput() const { return activeInputIndex != -1; }
 
     std::string processClick(sf::Vector2f mousePos, Canvas& canvas);
     bool handleClick(sf::Vector2f mousePos, Canvas& canvas);

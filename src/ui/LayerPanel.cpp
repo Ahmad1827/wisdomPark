@@ -68,28 +68,31 @@ void LayerPanel::init() {
 
 void LayerPanel::update(float dt, bool focusMode, bool isOpen) {
     width = 350.f;
+    float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
+    float statusBarH = WisdomUI::Theme::StatusBarHeight;
+    float tabDockW = 52.f;
 
     if (focusMode || !isOpen) targetX = 1920.f;
-    else targetX = 1920.f - 44.f - width;
+    else targetX = 1920.f - tabDockW - width;
 
     currentX += (targetX - currentX) * 18.f * dt;
 
     float drawX = std::floor(currentX);
 
-    background.setPosition(drawX, 68.f);
-    background.setSize(sf::Vector2f(width, 1080.f - 92.f));
+    background.setPosition(drawX, topBarsH);
+    background.setSize(sf::Vector2f(width, 1080.f - topBarsH - statusBarH));
 
-    headerBg.setPosition(drawX, 68.f);
+    headerBg.setPosition(drawX, topBarsH);
     headerBg.setSize(sf::Vector2f(width, 40.f));
-    headerText.setPosition(drawX + 16.f, 78.f);
+    headerText.setPosition(drawX + 16.f, topBarsH + 10.f);
 
-    closeBtn.setPosition(drawX + width - 36.f, 74.f);
+    closeBtn.setPosition(drawX + width - 36.f, topBarsH + 6.f);
     closeText.setPosition(std::floor(closeBtn.getPosition().x + 8.f), std::floor(closeBtn.getPosition().y + 5.f));
 
-    pinBtn.setPosition(drawX + width - 92.f, 74.f);
+    pinBtn.setPosition(drawX + width - 92.f, topBarsH + 6.f);
     pinText.setPosition(std::floor(pinBtn.getPosition().x + 14.f), std::floor(pinBtn.getPosition().y + 5.f));
 
-    float actionY = 114.f;
+    float actionY = topBarsH + 46.f;
     float btnX = drawX + 10.f;
     float gap = 6.f;
 
@@ -287,9 +290,10 @@ void LayerPanel::draw(sf::RenderWindow& window, Canvas& canvas, int currentFrame
     rowCache.clear();
     rowCache.resize(layerCount);
 
+    float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
     float rowHeight = 62.f;
-    float startY = 154.f;
-    float bottomLimit = 1080.f - 24.f;
+    float startY = topBarsH + 86.f;
+    float bottomLimit = 1080.f - WisdomUI::Theme::StatusBarHeight;
     float viewHeight = bottomLimit - startY;
 
     maxScroll = std::max(0.f, static_cast<float>(layerCount) * rowHeight - viewHeight);
@@ -478,8 +482,9 @@ std::string LayerPanel::processClick(sf::Vector2f mousePos, Canvas& canvas, int 
     if (mergeVisBtn.getGlobalBounds().contains(mousePos)) { canvas.mergeVisible(currentFrame); return "layer_merge_v"; }
     if (pushBtn.getGlobalBounds().contains(mousePos)) { canvas.extendLayerToNextFrame(currentFrame, canvas.getActiveLayer()); return "layer_push"; }
 
-    float startY = 154.f;
-    float bottomLimit = 1080.f - 24.f;
+    float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
+    float startY = topBarsH + 86.f;
+    float bottomLimit = 1080.f - WisdomUI::Theme::StatusBarHeight;
     float viewHeight = bottomLimit - startY;
 
     if (maxScroll > 0.f) {
@@ -599,8 +604,9 @@ bool LayerPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos, Canv
         }
 
         if (isDraggingScrollbar && maxScroll > 0.f) {
-            float startY = 154.f;
-            float bottomLimit = 1080.f - 24.f;
+            float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
+            float startY = topBarsH + 86.f;
+            float bottomLimit = 1080.f - WisdomUI::Theme::StatusBarHeight;
             float viewHeight = bottomLimit - startY;
             float deltaY = mousePos.y - scrollDragStartY;
             scrollOffset = std::clamp(scrollDragStartOffset + (deltaY / viewHeight) * maxScroll, 0.f, maxScroll);

@@ -81,24 +81,27 @@ void RightProperties::init() {
 
 void RightProperties::update(float dt, bool focusMode, bool isOpen) {
     width = 290.f;
+    float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
+    float statusBarH = WisdomUI::Theme::StatusBarHeight;
+    float tabDockW = 52.f;
 
     if (focusMode || !isOpen) targetX = 1920.f;
-    else targetX = 1920.f - 44.f - width;
+    else targetX = 1920.f - tabDockW - width;
 
     currentX += (targetX - currentX) * 16.0f * dt;
 
-    background.setPosition(currentX, 68.f);
-    background.setSize(sf::Vector2f(width, 1080.f - 92.f));
+    background.setPosition(currentX, topBarsH);
+    background.setSize(sf::Vector2f(width, 1080.f - topBarsH - statusBarH));
 
-    headerBg.setPosition(currentX, 68.f);
+    headerBg.setPosition(currentX, topBarsH);
     headerBg.setSize(sf::Vector2f(width, 38.f));
-    headerText.setPosition(currentX + 14.f, 76.f);
+    headerText.setPosition(currentX + 14.f, topBarsH + 8.f);
 
-    closeBtn.setPosition(currentX + width - 36.f, 73.f);
-    closeText.setPosition(currentX + width - 27.f, 76.f);
+    closeBtn.setPosition(currentX + width - 36.f, topBarsH + 5.f);
+    closeText.setPosition(currentX + width - 27.f, topBarsH + 8.f);
 
-    pinBtn.setPosition(currentX + 12.f, 114.f);
-    pinLabel.setPosition(currentX + 24.f, 118.f);
+    pinBtn.setPosition(currentX + 12.f, topBarsH + 46.f);
+    pinLabel.setPosition(currentX + 24.f, topBarsH + 50.f);
 
     if (state == RightPanelState::Pinned) {
         pinLabel.setString("Unpin Panel");
@@ -115,7 +118,9 @@ void RightProperties::update(float dt, bool focusMode, bool isOpen) {
 }
 
 void RightProperties::updateLayout() {
-    float startY = 152.f;
+    float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
+    float startY = topBarsH + 84.f;
+
     for (auto& sec : sections) {
         sec.headerRect.setPosition(currentX + 12.f, startY);
         sec.headerLabel.setPosition(currentX + 20.f, startY + 6.f);
