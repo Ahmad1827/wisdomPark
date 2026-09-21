@@ -2,9 +2,9 @@
 #include <cmath>
 #include <algorithm>
 
-SelectionManager::SelectionManager() : state(SelectionState::Inactive), dashOffset(0.f), hasClipboard(false), isDragging(false),
+SelectionManager::SelectionManager() : state(SelectionState::Inactive), isLassoSelection(true), dashOffset(0.f), hasClipboard(false), m_isDragging(false),
 showHandles(false), handleVisualSize(6.f), isResizingFlag(false), activeHandle(-1),
-resizeAnchorWorld(0.f, 0.f), resizeAnchorLocal(0.f, 0.f), resizeDraggedLocal(0.f, 0.f) {
+resizeAnchorWorld(0.f, 0.f), resizeAnchorLocal(0.f, 0.f), resizeDraggedLocal(0.f, 0.f), resizeStartBox(0.f, 0.f, 0.f, 0.f) {
     sf::Image dashImg;
     dashImg.create(12, 2, sf::Color::Transparent);
     for (int i = 0; i < 6; i++) {
@@ -26,7 +26,7 @@ void SelectionManager::update(float dt) {
 }
 
 void SelectionManager::drawPixels(sf::RenderWindow& window, const sf::RenderStates& baseStates) {
-    if (state == SelectionState::Floating) {
+    if (state == SelectionState::Floating && floatingTexture.getSize().x > 1) {
         window.draw(floatingSprite, baseStates);
     }
 }
@@ -34,47 +34,49 @@ void SelectionManager::drawPixels(sf::RenderWindow& window, const sf::RenderStat
 void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& baseStates) {
     if (state == SelectionState::Inactive) return;
 
-    const std::vector<sf::Vector2f>& pts = (state == SelectionState::Floating) ? localPoints : pathPoints;
-
     sf::RenderStates states = baseStates;
     if (state == SelectionState::Floating) {
         states.transform *= floatingSprite.getTransform();
     }
 
-    /*if (pts.size() > 2 && (state == SelectionState::Selected || state == SelectionState::Floating)) {
-        sf::VertexArray fillPoly(sf::TriangleFan);
-        for (const auto& p : pts) {
-            fillPoly.append(sf::Vertex(p, sf::Color(0, 160, 255, 35)));
-        }
-        window.draw(fillPoly, states);
-    }*/
-
-    if (pts.size() > 1) {
-        sf::VertexArray darkUnder(sf::LineStrip, pts.size());
-        for (size_t i = 0; i < pts.size(); ++i) {
-            darkUnder[i].position = pts[i];
-            darkUnder[i].color = sf::Color(15, 10, 25, 220);
-        }
-        window.draw(darkUnder, states);
-
-        sf::VertexArray ants(sf::LineStrip, pts.size());
-        float dist = 0.f;
-        for (size_t i = 0; i < pts.size(); ++i) {
-            if (i > 0) {
-                sf::Vector2f diff = pts[i] - pts[i - 1];
-                dist += std::sqrt(diff.x * diff.x + diff.y * diff.y);
+    if (isLassoSelection) {
+        const std::vector<sf::Vector2f>& pts = (state == SelectionState::Floating) ? localPoints : pathPoints;
+        if (pts.size() > 1) {
+            sf::VertexArray darkUnder(sf::LineStrip, pts.size());
+            for (size_t i = 0; i < pts.size(); ++i) {
+                darkUnder[i].position = pts[i];
+                darkUnder[i].color = sf::Color(15, 10, 25, 220);
             }
-            ants[i].position = pts[i];
-            ants[i].texCoords = sf::Vector2f(dist + dashOffset, 0.5f);
-            ants[i].color = sf::Color::White;
-        }
+            window.draw(darkUnder, states);
 
-        sf::RenderStates dashStates = states;
-        dashStates.texture = &dashTexture;
-        window.draw(ants, dashStates);
+            sf::VertexArray ants(sf::LineStrip, pts.size());
+            float dist = 0.f;
+            for (size_t i = 0; i < pts.size(); ++i) {
+                if (i > 0) {
+                    sf::Vector2f diff = pts[i] - pts[i - 1];
+                    dist += std::hypot(diff.x, diff.y);
+                }
+                ants[i].position = pts[i];
+                ants[i].texCoords = sf::Vector2f(dist + dashOffset, 0.5f);
+                ants[i].color = sf::Color::White;
+            }
+            sf::RenderStates dashStates = states;
+            dashStates.texture = &dashTexture;
+            window.draw(ants, dashStates);
+        }
+    }
+    else {
+        for (const auto& box : subItemBoxes) {
+            sf::RectangleShape r(sf::Vector2f(box.width, box.height));
+            r.setPosition(box.left, box.top);
+            r.setFillColor(sf::Color(0, 191, 255, 14));
+            r.setOutlineThickness(1.0f);
+            r.setOutlineColor(sf::Color(0, 191, 255, 90));
+            window.draw(r, states);
+        }
     }
 
-    if (state == SelectionState::Floating && showHandles) {
+    if (showHandles && (state == SelectionState::Selected || state == SelectionState::Floating)) {
         auto corners = getHandlePositions();
         for (const auto& c : corners) {
             sf::RectangleShape h(sf::Vector2f(handleVisualSize, handleVisualSize));
@@ -88,12 +90,49 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
     }
 }
 
+void SelectionManager::setSelectionBoxes(const sf::FloatRect& masterBox, const std::vector<sf::FloatRect>& itemBoxes) {
+    isLassoSelection = false;
+    boundingBox = masterBox;
+    subItemBoxes = itemBoxes;
+    pathPoints.clear();
+    state = SelectionState::Selected;
+    showHandles = false;
+}
+
+void SelectionManager::moveSelection(sf::Vector2f delta) {
+    boundingBox.left += delta.x;
+    boundingBox.top += delta.y;
+    for (auto& box : subItemBoxes) {
+        box.left += delta.x;
+        box.top += delta.y;
+    }
+    for (auto& p : pathPoints) {
+        p += delta;
+    }
+}
+
+void SelectionManager::flipPathHorizontal(float midX) {
+    for (auto& p : pathPoints) {
+        p.x = 2.0f * midX - p.x;
+    }
+}
+
+void SelectionManager::flipPathVertical(float midY) {
+    for (auto& p : pathPoints) {
+        p.y = 2.0f * midY - p.y;
+    }
+}
+
+
 void SelectionManager::startLasso(sf::Vector2f pos, sf::Vector2u canvasSize) {
     pos.x = std::clamp(pos.x, 0.f, static_cast<float>(canvasSize.x));
     pos.y = std::clamp(pos.y, 0.f, static_cast<float>(canvasSize.y));
+    isLassoSelection = true;
     state = SelectionState::Drawing;
+    subItemBoxes.clear();
     pathPoints.clear();
     pathPoints.push_back(pos);
+    showHandles = false;
 }
 
 void SelectionManager::addLassoPoint(sf::Vector2f pos, sf::Vector2u canvasSize) {
@@ -113,10 +152,13 @@ void SelectionManager::endLasso() {
                 pathPoints.push_back(pathPoints.front());
             }
             calculateBoundingBox();
+            subItemBoxes.clear();
             state = SelectionState::Selected;
+            showHandles = false;
         }
         else {
             state = SelectionState::Inactive;
+            showHandles = false;
         }
     }
 }
@@ -126,24 +168,23 @@ void SelectionManager::calculateBoundingBox() {
     float minX = pathPoints[0].x, maxX = pathPoints[0].x;
     float minY = pathPoints[0].y, maxY = pathPoints[0].y;
     for (const auto& p : pathPoints) {
-        if (p.x < minX) minX = p.x;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.y > maxY) maxY = p.y;
+        minX = std::min(minX, p.x);
+        maxX = std::max(maxX, p.x);
+        minY = std::min(minY, p.y);
+        maxY = std::max(maxY, p.y);
     }
     boundingBox = sf::FloatRect(minX, minY, maxX - minX, maxY - minY);
 }
 
 void SelectionManager::clampToCanvas(sf::Vector2u canvasSize, bool skip) {
-    if (skip) return;
-    if (state != SelectionState::Floating) return;
+    if (skip || state != SelectionState::Floating) return;
 
     sf::Vector2f pos = floatingSprite.getPosition();
     sf::Vector2f origin = floatingSprite.getOrigin();
     sf::Vector2f scale = floatingSprite.getScale();
 
-    float width = static_cast<float>(floatingTexture.getSize().x) * std::abs(scale.x);
-    float height = static_cast<float>(floatingTexture.getSize().y) * std::abs(scale.y);
+    float width = boundingBox.width * std::abs(scale.x);
+    float height = boundingBox.height * std::abs(scale.y);
 
     float left = pos.x - (origin.x * std::abs(scale.x));
     float top = pos.y - (origin.y * std::abs(scale.y));
@@ -174,11 +215,13 @@ bool SelectionManager::isInsidePolygon(sf::Vector2f point, const std::vector<sf:
 bool SelectionManager::isPointInsideSelection(sf::Vector2f pos) const {
     if (state == SelectionState::Selected) {
         if (!boundingBox.contains(pos)) return false;
-        return isInsidePolygon(pos, pathPoints);
+        if (isLassoSelection) return isInsidePolygon(pos, pathPoints);
+        return true;
     }
     else if (state == SelectionState::Floating) {
         sf::Vector2f localPos = floatingSprite.getInverseTransform().transformPoint(pos);
-        return isInsidePolygon(localPos, localPoints);
+        if (isLassoSelection) return isInsidePolygon(localPos, localPoints);
+        return sf::FloatRect(0.f, 0.f, boundingBox.width, boundingBox.height).contains(localPos);
     }
     return false;
 }
@@ -196,16 +239,14 @@ void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool re
 
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
-            sf::Vector2f globalPt(boundingBox.left + static_cast<float>(x) + 0.5f,
-                boundingBox.top + static_cast<float>(y) + 0.5f);
-            if (isInsidePolygon(globalPt, pathPoints)) {
+            sf::Vector2f globalPt(boundingBox.left + static_cast<float>(x) + 0.5f, boundingBox.top + static_cast<float>(y) + 0.5f);
+            bool inside = isLassoSelection ? isInsidePolygon(globalPt, pathPoints) : true;
+            if (inside) {
                 unsigned int sx = static_cast<unsigned int>(boundingBox.left + x);
                 unsigned int sy = static_cast<unsigned int>(boundingBox.top + y);
                 if (sx < sourceImg.getSize().x && sy < sourceImg.getSize().y) {
                     extractImg.setPixel(static_cast<unsigned int>(x), static_cast<unsigned int>(y), sourceImg.getPixel(sx, sy));
-                    if (removeOriginal) {
-                        sourceImg.setPixel(sx, sy, sf::Color::Transparent);
-                    }
+                    if (removeOriginal) sourceImg.setPixel(sx, sy, sf::Color::Transparent);
                 }
             }
         }
@@ -219,9 +260,7 @@ void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool re
     }
 
     floatingTexture.loadFromImage(extractImg);
-    if (layerTexture) {
-        floatingTexture.setSmooth(layerTexture->isSmooth());
-    }
+    floatingTexture.setSmooth(layerTexture->isSmooth());
     floatingSprite.setTexture(floatingTexture, true);
     floatingSprite.setOrigin(0.f, 0.f);
     floatingSprite.setPosition(boundingBox.left, boundingBox.top);
@@ -231,56 +270,70 @@ void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool re
     for (const auto& p : pathPoints) {
         localPoints.push_back(p - sf::Vector2f(boundingBox.left, boundingBox.top));
     }
+    for (auto& sb : subItemBoxes) {
+        sb.left -= boundingBox.left;
+        sb.top -= boundingBox.top;
+    }
 
     state = SelectionState::Floating;
+    showHandles = true;
 }
 
 void SelectionManager::commitToLayer(sf::RenderTexture* layerTexture) {
-    if (state == SelectionState::Floating && layerTexture) {
+    if (state == SelectionState::Floating && layerTexture && floatingTexture.getSize().x > 1) {
         layerTexture->draw(floatingSprite);
         layerTexture->display();
     }
     state = SelectionState::Inactive;
-    isDragging = false;
+    m_isDragging = false;
     showHandles = false;
     isResizingFlag = false;
     activeHandle = -1;
+    subItemBoxes.clear();
+    pathPoints.clear();
+    localPoints.clear();
 }
 
 void SelectionManager::discardFloating() {
     state = SelectionState::Inactive;
-    isDragging = false;
+    m_isDragging = false;
     showHandles = false;
     isResizingFlag = false;
     activeHandle = -1;
+    subItemBoxes.clear();
+    pathPoints.clear();
+    localPoints.clear();
 }
 
 void SelectionManager::clearSelection() {
     state = SelectionState::Inactive;
-    isDragging = false;
+    m_isDragging = false;
     showHandles = false;
     isResizingFlag = false;
     activeHandle = -1;
+    subItemBoxes.clear();
+    pathPoints.clear();
+    localPoints.clear();
+    boundingBox = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
 }
 
 void SelectionManager::startDrag(sf::Vector2f pos) {
     if (state == SelectionState::Floating || state == SelectionState::Selected) {
         dragStartPos = pos;
-        isDragging = true;
+        m_isDragging = true;
     }
 }
 
 void SelectionManager::drag(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas) {
-    if (state == SelectionState::Floating && isDragging) {
+    if ((state == SelectionState::Floating || state == SelectionState::Selected) && m_isDragging) {
         sf::Vector2f delta = pos - dragStartPos;
-        floatingSprite.move(delta);
-        clampToCanvas(canvasSize, allowOutsideCanvas);
+        moveSelection(delta);
         dragStartPos = pos;
     }
 }
 
 void SelectionManager::endDrag() {
-    isDragging = false;
+    m_isDragging = false;
 }
 
 void SelectionManager::copy(sf::RenderTexture* layerTexture) {
@@ -301,9 +354,8 @@ void SelectionManager::copy(sf::RenderTexture* layerTexture) {
 
         for (int y = 0; y < h; ++y) {
             for (int x = 0; x < w; ++x) {
-                sf::Vector2f globalPt(boundingBox.left + static_cast<float>(x) + 0.5f,
-                    boundingBox.top + static_cast<float>(y) + 0.5f);
-                if (isInsidePolygon(globalPt, pathPoints)) {
+                sf::Vector2f globalPt(boundingBox.left + static_cast<float>(x) + 0.5f, boundingBox.top + static_cast<float>(y) + 0.5f);
+                if (!isLassoSelection || isInsidePolygon(globalPt, pathPoints)) {
                     unsigned int sx = static_cast<unsigned int>(boundingBox.left + x);
                     unsigned int sy = static_cast<unsigned int>(boundingBox.top + y);
                     if (sx < sourceImg.getSize().x && sy < sourceImg.getSize().y) {
@@ -337,14 +389,13 @@ void SelectionManager::paste(sf::Vector2u canvasSize) {
 
     clampToCanvas(canvasSize, false);
 
-    localPoints.clear();
-    localPoints.push_back(sf::Vector2f(0.f, 0.f));
-    localPoints.push_back(sf::Vector2f(static_cast<float>(w), 0.f));
-    localPoints.push_back(sf::Vector2f(static_cast<float>(w), static_cast<float>(h)));
-    localPoints.push_back(sf::Vector2f(0.f, static_cast<float>(h)));
-    localPoints.push_back(sf::Vector2f(0.f, 0.f));
+    isLassoSelection = false;
+    boundingBox = sf::FloatRect(floatingSprite.getPosition().x, floatingSprite.getPosition().y, static_cast<float>(w), static_cast<float>(h));
+    subItemBoxes.clear();
+    subItemBoxes.push_back(boundingBox);
 
     state = SelectionState::Floating;
+    showHandles = true;
 }
 
 void SelectionManager::deleteSelection(sf::RenderTexture* layerTexture) {
@@ -354,39 +405,15 @@ void SelectionManager::deleteSelection(sf::RenderTexture* layerTexture) {
 
 void SelectionManager::flipHorizontal() {
     if (state == SelectionState::Floating) {
-        sf::Image img = floatingTexture.copyToImage();
-        int w = static_cast<int>(img.getSize().x);
-        int h = static_cast<int>(img.getSize().y);
-        sf::Image flipped;
-        flipped.create(static_cast<unsigned int>(w), static_cast<unsigned int>(h), sf::Color::Transparent);
-
-        for (int y = 0; y < h; ++y) {
-            for (int x = 0; x < w; ++x) {
-                flipped.setPixel(static_cast<unsigned int>(w - 1 - x), static_cast<unsigned int>(y), img.getPixel(static_cast<unsigned int>(x), static_cast<unsigned int>(y)));
-            }
-        }
-
-        floatingTexture.loadFromImage(flipped);
-        floatingSprite.setTexture(floatingTexture, true);
+        sf::Vector2f sc = floatingSprite.getScale();
+        floatingSprite.setScale(-sc.x, sc.y);
     }
 }
 
 void SelectionManager::flipVertical() {
     if (state == SelectionState::Floating) {
-        sf::Image img = floatingTexture.copyToImage();
-        int w = static_cast<int>(img.getSize().x);
-        int h = static_cast<int>(img.getSize().y);
-        sf::Image flipped;
-        flipped.create(static_cast<unsigned int>(w), static_cast<unsigned int>(h), sf::Color::Transparent);
-
-        for (int y = 0; y < h; ++y) {
-            for (int x = 0; x < w; ++x) {
-                flipped.setPixel(static_cast<unsigned int>(x), static_cast<unsigned int>(h - 1 - y), img.getPixel(static_cast<unsigned int>(x), static_cast<unsigned int>(y)));
-            }
-        }
-
-        floatingTexture.loadFromImage(flipped);
-        floatingSprite.setTexture(floatingTexture, true);
+        sf::Vector2f sc = floatingSprite.getScale();
+        floatingSprite.setScale(sc.x, -sc.y);
     }
 }
 
@@ -404,9 +431,6 @@ void SelectionManager::duplicate(sf::RenderTexture* layerTexture, sf::Vector2u c
     }
 }
 
-SelectionState SelectionManager::getState() const { return state; }
-bool SelectionManager::isActive() const { return state != SelectionState::Inactive; }
-
 void SelectionManager::setShowHandles(bool show) {
     showHandles = show;
     if (!show) {
@@ -415,55 +439,59 @@ void SelectionManager::setShowHandles(bool show) {
     }
 }
 
-bool SelectionManager::isShowingHandles() const { return showHandles; }
-
 void SelectionManager::setHandleVisualSize(float localSize) {
     handleVisualSize = std::max(0.05f, localSize);
 }
 
 std::array<sf::Vector2f, 4> SelectionManager::getHandlePositions() const {
-    float w = static_cast<float>(floatingTexture.getSize().x);
-    float h = static_cast<float>(floatingTexture.getSize().y);
+    float w = boundingBox.width;
+    float h = boundingBox.height;
     sf::Transform t = floatingSprite.getTransform();
+    if (state == SelectionState::Floating) {
+        return {
+            t.transformPoint(0.f, 0.f),
+            t.transformPoint(w, 0.f),
+            t.transformPoint(w, h),
+            t.transformPoint(0.f, h)
+        };
+    }
     return {
-        t.transformPoint(0.f, 0.f),
-        t.transformPoint(w, 0.f),
-        t.transformPoint(w, h),
-        t.transformPoint(0.f, h)
+        sf::Vector2f(boundingBox.left, boundingBox.top),
+        sf::Vector2f(boundingBox.left + w, boundingBox.top),
+        sf::Vector2f(boundingBox.left + w, boundingBox.top + h),
+        sf::Vector2f(boundingBox.left, boundingBox.top + h)
     };
 }
 
 int SelectionManager::hitTestHandle(sf::Vector2f pos, float handleRadius) const {
-    if (state != SelectionState::Floating) return -1;
+    if (state != SelectionState::Selected && state != SelectionState::Floating) return -1;
     auto corners = getHandlePositions();
     for (size_t i = 0; i < corners.size(); ++i) {
         sf::Vector2f d = pos - corners[i];
-        if (std::sqrt(d.x * d.x + d.y * d.y) <= handleRadius) return static_cast<int>(i);
+        if (std::hypot(d.x, d.y) <= handleRadius) return static_cast<int>(i);
     }
     return -1;
 }
 
 bool SelectionManager::startResize(sf::Vector2f pos, float handleRadius) {
-    if (state != SelectionState::Floating) return false;
     int idx = hitTestHandle(pos, handleRadius);
     if (idx == -1) return false;
 
     activeHandle = idx;
     int anchorIdx = (idx + 2) % 4;
 
-    auto worldCorners = getHandlePositions();
-    resizeAnchorWorld = worldCorners[anchorIdx];
+    auto corners = getHandlePositions();
+    resizeAnchorWorld = corners[anchorIdx];
 
-    float w = static_cast<float>(floatingTexture.getSize().x);
-    float h = static_cast<float>(floatingTexture.getSize().y);
-    sf::Vector2f origin = floatingSprite.getOrigin();
-
-    std::array<sf::Vector2f, 4> localFull = {
+    float w = boundingBox.width;
+    float h = boundingBox.height;
+    std::array<sf::Vector2f, 4> localCorners = {
         sf::Vector2f(0.f, 0.f), sf::Vector2f(w, 0.f), sf::Vector2f(w, h), sf::Vector2f(0.f, h)
     };
-    resizeAnchorLocal = localFull[anchorIdx] - origin;
-    resizeDraggedLocal = localFull[idx] - origin;
 
+    resizeAnchorLocal = localCorners[anchorIdx];
+    resizeDraggedLocal = localCorners[idx];
+    resizeStartBox = boundingBox;
     isResizingFlag = true;
     return true;
 }
@@ -472,19 +500,18 @@ void SelectionManager::resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool al
     if (!isResizingFlag || state != SelectionState::Floating) return;
 
     sf::Vector2f diffLocal = resizeDraggedLocal - resizeAnchorLocal;
-
     float newScaleX = floatingSprite.getScale().x;
     float newScaleY = floatingSprite.getScale().y;
+
     if (std::abs(diffLocal.x) > 0.0001f) newScaleX = (pos.x - resizeAnchorWorld.x) / diffLocal.x;
     if (std::abs(diffLocal.y) > 0.0001f) newScaleY = (pos.y - resizeAnchorWorld.y) / diffLocal.y;
 
-    float w = static_cast<float>(floatingTexture.getSize().x);
-    float h = static_cast<float>(floatingTexture.getSize().y);
-    const float minDim = 1.0f;
-    float minScaleX = minDim / std::max(1.f, w);
-    float minScaleY = minDim / std::max(1.f, h);
-    if (newScaleX < minScaleX) newScaleX = minScaleX;
-    if (newScaleY < minScaleY) newScaleY = minScaleY;
+    const float minDim = 2.0f;
+    float minScaleX = minDim / std::max(1.f, boundingBox.width);
+    float minScaleY = minDim / std::max(1.f, boundingBox.height);
+
+    if (std::abs(newScaleX) < minScaleX) newScaleX = (newScaleX >= 0.f ? minScaleX : -minScaleX);
+    if (std::abs(newScaleY) < minScaleY) newScaleY = (newScaleY >= 0.f ? minScaleY : -minScaleY);
 
     sf::Vector2f newPos;
     newPos.x = resizeAnchorWorld.x - newScaleX * resizeAnchorLocal.x;
@@ -492,7 +519,6 @@ void SelectionManager::resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool al
 
     floatingSprite.setScale(newScaleX, newScaleY);
     floatingSprite.setPosition(newPos);
-
     clampToCanvas(canvasSize, allowOutsideCanvas);
 }
 
@@ -500,8 +526,6 @@ void SelectionManager::endResize() {
     isResizingFlag = false;
     activeHandle = -1;
 }
-
-bool SelectionManager::isResizing() const { return isResizingFlag; }
 
 void SelectionManager::moveFloating(sf::Vector2f offset, sf::Vector2u canvasSize) {
     if (state == SelectionState::Floating) {

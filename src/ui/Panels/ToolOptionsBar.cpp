@@ -11,7 +11,6 @@ namespace WisdomUI {
             { "flip_h", "Flip H", sf::FloatRect(), 0.0f },
             { "flip_v", "Flip V", sf::FloatRect(), 0.0f },
             { "duplicate", "Duplicate", sf::FloatRect(), 0.0f },
-            { "crop", "Crop Canvas", sf::FloatRect(), 0.0f },
             { "delete", "Delete Area", sf::FloatRect(), 0.0f }
         };
     }

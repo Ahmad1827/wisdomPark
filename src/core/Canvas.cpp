@@ -76,6 +76,29 @@ static sf::VertexArray meshWithOpacity(const sf::VertexArray& src, float opacity
     return out;
 }
 
+static sf::FloatRect getStrokeBounds(const VectorStroke& vs) {
+    if (vs.mesh.getVertexCount() == 0) return sf::FloatRect();
+    float minX = vs.mesh[0].position.x, maxX = minX;
+    float minY = vs.mesh[0].position.y, maxY = minY;
+    for (size_t i = 1; i < vs.mesh.getVertexCount(); ++i) {
+        minX = std::min(minX, vs.mesh[i].position.x);
+        maxX = std::max(maxX, vs.mesh[i].position.x);
+        minY = std::min(minY, vs.mesh[i].position.y);
+        maxY = std::max(maxY, vs.mesh[i].position.y);
+    }
+    return sf::FloatRect(minX, minY, maxX - minX, maxY - minY);
+}
+
+static bool strokeHitTest(const VectorStroke& vs, sf::Vector2f pt, float hitDist) {
+    float rSq = hitDist * hitDist;
+    for (size_t i = 0; i < vs.mesh.getVertexCount(); ++i) {
+        float dx = vs.mesh[i].position.x - pt.x;
+        float dy = vs.mesh[i].position.y - pt.y;
+        if (dx * dx + dy * dy <= rSq) return true;
+    }
+    return false;
+}
+
 void Canvas::eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius, int currentFrame) {}
 
 const int DEFAULT_NORMAL_W = 1280;
@@ -284,12 +307,29 @@ void Canvas::drawLayerContent(sf::RenderTarget& target, int frameIndex, int laye
         m_layerCache.draw(vs.mesh, st);
     }
 
-    if (isActiveLayerForPreview && !m_floatingVectorStrokes.empty() && selection.getState() == SelectionState::Floating) {
-        sf::RenderStates st = layerStates;
-        st.transform *= selection.getFloatingTransform();
-        for (const auto& vs : m_floatingVectorStrokes) {
-            st.blendMode = vs.isErase ? eraseBlendMode() : sf::BlendAlpha;
-            m_layerCache.draw(vs.mesh, st);
+    for (const auto& cImg : m_canvasImages) {
+        if (cImg.frame == frameIndex && cImg.layer == layerIndex && cImg.texture) {
+            sf::Sprite spr(*cImg.texture);
+            spr.setPosition(cImg.bounds.left, cImg.bounds.top);
+            spr.setScale(cImg.bounds.width / static_cast<float>(cImg.texture->getSize().x),
+                cImg.bounds.height / static_cast<float>(cImg.texture->getSize().y));
+            spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.f * op)));
+            target.draw(spr, layerStates);
+        }
+    }
+
+    if (isActiveLayerForPreview && selection.getState() == SelectionState::Floating && !m_floatingImages.empty()) {
+        sf::RenderStates imgStates = layerStates;
+        imgStates.transform *= selection.getFloatingTransform();
+        for (const auto& cImg : m_floatingImages) {
+            if (cImg.texture) {
+                sf::Sprite spr(*cImg.texture);
+                spr.setPosition(cImg.bounds.left, cImg.bounds.top);
+                spr.setScale(cImg.bounds.width / static_cast<float>(cImg.texture->getSize().x),
+                    cImg.bounds.height / static_cast<float>(cImg.texture->getSize().y));
+                spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.f * op)));
+                target.draw(spr, imgStates);
+            }
         }
     }
 
@@ -1052,29 +1092,36 @@ int Canvas::getOnionSkinNextCount() const { return onionSkinNextCount; }
 
 void Canvas::commitSelection(int currentFrame) {
     if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
-    if (selection.isActive()) {
+
+    if (selection.getState() == SelectionState::Floating) {
         saveUndoState();
 
-        if (!isPixelMode) {
-            if (!m_floatingVectorStrokes.empty()) {
-                sf::Transform t = selection.getFloatingTransform();
-                for (auto& vs : m_floatingVectorStrokes) {
-                    for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
-                        vs.mesh[v].position = t.transformPoint(vs.mesh[v].position);
-                    }
-                    vs.layer = activeLayer;
-                    vs.frame = currentFrame;
-                    m_vectorStrokes.push_back(std::move(vs));
-                }
-                m_floatingVectorStrokes.clear();
-            }
+        sf::Transform t = selection.getFloatingTransform();
 
-            selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
+        for (auto& vs : m_floatingVectorStrokes) {
+            for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+                vs.mesh[v].position = t.transformPoint(vs.mesh[v].position);
+            }
+            vs.layer = activeLayer;
+            vs.frame = currentFrame;
+            m_vectorStrokes.push_back(std::move(vs));
         }
-        else {
-            selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
+        m_floatingVectorStrokes.clear();
+
+        for (auto& img : m_floatingImages) {
+            sf::Vector2f p1 = t.transformPoint(img.bounds.left, img.bounds.top);
+            sf::Vector2f p2 = t.transformPoint(img.bounds.left + img.bounds.width, img.bounds.top + img.bounds.height);
+            img.bounds = sf::FloatRect(std::min(p1.x, p2.x), std::min(p1.y, p2.y), std::abs(p2.x - p1.x), std::abs(p2.y - p1.y));
+            img.frame = currentFrame;
+            img.layer = activeLayer;
+            m_canvasImages.push_back(std::move(img));
         }
+        m_floatingImages.clear();
+
+        selection.commitToLayer(frames[currentFrame].layers[activeLayer].texture.get());
     }
+
+    clearObjectSelection();
     transformMode = TransformState::None;
     pendingTransform = false;
 }
@@ -1216,61 +1263,6 @@ void Canvas::pasteVectorStrokes(const std::vector<VectorStroke>& strokes, sf::Ve
     isDirty = true;
 }
 
-void Canvas::pasteImage(const sf::Image& img, int currentFrame) {
-    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
-
-    saveUndoState();
-
-    auto& targetLayer = frames[currentFrame].layers[activeLayer];
-    targetLayer.isImageResource = true;
-    auto tex = std::make_shared<sf::Texture>();
-    tex->setSmooth(!isPixelMode);
-    tex->loadFromImage(img);
-    targetLayer.staticTexture = tex;
-
-    sf::Vector2u texSize = img.getSize();
-    float tw = static_cast<float>(texSize.x);
-    float th = static_cast<float>(texSize.y);
-
-    // 1. Auto-fit to 85% of canvas if the image is larger than the canvas
-    float maxW = static_cast<float>(canvasLogicalSize.x) * 0.85f;
-    float maxH = static_cast<float>(canvasLogicalSize.y) * 0.85f;
-    float scale = 1.0f;
-    if (tw > maxW || th > maxH) {
-        scale = std::min(maxW / tw, maxH / th);
-    }
-
-    float scaledW = std::max(1.0f, std::floor(tw * scale));
-    float scaledH = std::max(1.0f, std::floor(th * scale));
-    float centerX = std::floor((static_cast<float>(canvasLogicalSize.x) - scaledW) * 0.5f);
-    float centerY = std::floor((static_cast<float>(canvasLogicalSize.y) - scaledH) * 0.5f);
-
-    sf::Sprite importSprite(*tex);
-    importSprite.setScale(scaledW / tw, scaledH / th);
-    importSprite.setPosition(centerX, centerY);
-
-    targetLayer.texture->setSmooth(!isPixelMode);
-    sf::View savedView = targetLayer.texture->getView();
-    targetLayer.texture->setView(sf::View(sf::FloatRect(0.f, 0.f, static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y))));
-    targetLayer.texture->draw(importSprite, sf::RenderStates(sf::BlendAlpha));
-    targetLayer.texture->display();
-    targetLayer.texture->setView(savedView);
-
-    // 2. Select the pasted image, float it, and activate resize handles
-    commitSelection(currentFrame);
-    selection.startLasso(sf::Vector2f(centerX, centerY), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY + scaledH), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(centerX, centerY + scaledH), canvasLogicalSize);
-    selection.endLasso();
-
-    selection.extractFromLayer(targetLayer.texture.get(), true);
-    enterTransformMode(currentFrame);
-    setActiveTool(ToolType::Select);
-
-    isDirty = true;
-}
-
 bool Canvas::pasteGlobalClipboard(int currentFrame) {
     if (!isPixelMode && s_hasGlobalVectorClipboard && !s_globalClipboardVectorStrokes.empty()) {
         float minX = 99999.f, maxX = -99999.f, minY = 99999.f, maxY = -99999.f;
@@ -1387,55 +1379,25 @@ void Canvas::pasteSelection(int currentFrame) {
 }
 
 void Canvas::deleteSelection(int currentFrame) {
-    if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
     if (!selection.isActive()) return;
 
     saveUndoState();
 
-    m_floatingVectorStrokes.clear();
-
-    if (!isPixelMode) {
-        for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
-            if (it->frame != currentFrame || it->layer != activeLayer) {
-                ++it;
-                continue;
-            }
-
-            sf::VertexArray kept(sf::Triangles);
-
-            for (size_t v = 0; v + 2 < it->mesh.getVertexCount(); v += 3) {
-                sf::Vector2f centroid =
-                    (it->mesh[v].position + it->mesh[v + 1].position + it->mesh[v + 2].position) / 3.0f;
-
-                bool inside = selection.isPointInsideSelection(centroid) ||
-                    selection.isPointInsideSelection(it->mesh[v].position) ||
-                    selection.isPointInsideSelection(it->mesh[v + 1].position) ||
-                    selection.isPointInsideSelection(it->mesh[v + 2].position);
-
-                if (!inside) {
-                    kept.append(it->mesh[v]);
-                    kept.append(it->mesh[v + 1]);
-                    kept.append(it->mesh[v + 2]);
-                }
-            }
-
-            if (kept.getVertexCount() == 0) {
-                it = m_vectorStrokes.erase(it);
-            }
-            else {
-                it->mesh = kept;
-                ++it;
-            }
+    std::sort(m_selectedStrokes.rbegin(), m_selectedStrokes.rend());
+    for (int idx : m_selectedStrokes) {
+        if (idx >= 0 && idx < static_cast<int>(m_vectorStrokes.size())) {
+            m_vectorStrokes.erase(m_vectorStrokes.begin() + idx);
         }
     }
 
-    if (frames[currentFrame].layers[activeLayer].texture) {
-        selection.deleteSelection(frames[currentFrame].layers[activeLayer].texture.get());
+    std::sort(m_selectedImages.rbegin(), m_selectedImages.rend());
+    for (int idx : m_selectedImages) {
+        if (idx >= 0 && idx < static_cast<int>(m_canvasImages.size())) {
+            m_canvasImages.erase(m_canvasImages.begin() + idx);
+        }
     }
 
-    selection.clearSelection();
-    transformMode = TransformState::None;
-    pendingTransform = false;
+    clearObjectSelection();
     isDirty = true;
 }
 
@@ -1552,42 +1514,138 @@ void Canvas::fillSelection(sf::Color color, int currentFrame) {
 }
 
 void Canvas::flipSelectionHorizontal(int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
-        if (selection.getState() == SelectionState::Selected) {
-            saveUndoState();
-            extractFloatingStrokes(currentFrame);
-            selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
+    if (!selection.isActive()) return;
+    saveUndoState();
+
+    sf::FloatRect box = selection.getBoundingBox();
+    float midX = box.left + box.width * 0.5f;
+
+    for (int sIdx : m_selectedStrokes) {
+        if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
+            auto& mesh = m_vectorStrokes[sIdx].mesh;
+            for (size_t v = 0; v < mesh.getVertexCount(); ++v) {
+                mesh[v].position.x = 2.0f * midX - mesh[v].position.x;
+            }
         }
-        selection.flipHorizontal();
-        flipFloatingStrokes(true);
     }
+
+    for (int iIdx : m_selectedImages) {
+        if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
+            auto& b = m_canvasImages[iIdx].bounds;
+            b.left = 2.0f * midX - (b.left + b.width);
+        }
+    }
+
+    std::vector<sf::FloatRect> updatedSub;
+    for (int sIdx : m_selectedStrokes) updatedSub.push_back(getStrokeBounds(m_vectorStrokes[sIdx]));
+    for (int iIdx : m_selectedImages) updatedSub.push_back(m_canvasImages[iIdx].bounds);
+
+    selection.flipPathHorizontal(midX);
+    selection.setSubItemBoxes(updatedSub);
+    isDirty = true;
 }
 
 void Canvas::flipSelectionVertical(int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
-        if (selection.getState() == SelectionState::Selected) {
-            saveUndoState();
-            extractFloatingStrokes(currentFrame);
-            selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
+    if (!selection.isActive()) return;
+    saveUndoState();
+
+    sf::FloatRect box = selection.getBoundingBox();
+    float midY = box.top + box.height * 0.5f;
+
+    for (int sIdx : m_selectedStrokes) {
+        if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
+            auto& mesh = m_vectorStrokes[sIdx].mesh;
+            for (size_t v = 0; v < mesh.getVertexCount(); ++v) {
+                mesh[v].position.y = 2.0f * midY - mesh[v].position.y;
+            }
         }
-        selection.flipVertical();
-        flipFloatingStrokes(false);
     }
+
+    for (int iIdx : m_selectedImages) {
+        if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
+            auto& b = m_canvasImages[iIdx].bounds;
+            b.top = 2.0f * midY - (b.top + b.height);
+        }
+    }
+
+    std::vector<sf::FloatRect> updatedSub;
+    for (int sIdx : m_selectedStrokes) updatedSub.push_back(getStrokeBounds(m_vectorStrokes[sIdx]));
+    for (int iIdx : m_selectedImages) updatedSub.push_back(m_canvasImages[iIdx].bounds);
+
+    selection.flipPathVertical(midY);
+    selection.setSubItemBoxes(updatedSub);
+    isDirty = true;
 }
 
 void Canvas::duplicateSelection(int currentFrame) {
-    if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
-        saveUndoState();
-        copySelection(currentFrame);
-        commitSelection(currentFrame);
+    if (!selection.isActive()) return;
+    if (m_selectedStrokes.empty() && m_selectedImages.empty()) return;
 
-        addLayer(currentFrame, frames[currentFrame].layers[activeLayer].name + " Duplicate");
-        selection.paste(canvasLogicalSize);
+    saveUndoState();
 
-        setActiveTool(ToolType::Select);
+    sf::Vector2f offset(20.f, 20.f);
+    std::vector<int> newStrokeIndices;
+    std::vector<int> newImageIndices;
+
+    for (int sIdx : m_selectedStrokes) {
+        if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
+            VectorStroke clone = m_vectorStrokes[sIdx];
+            for (size_t v = 0; v < clone.mesh.getVertexCount(); ++v) {
+                clone.mesh[v].position += offset;
+            }
+            newStrokeIndices.push_back(static_cast<int>(m_vectorStrokes.size()));
+            m_vectorStrokes.push_back(clone);
+        }
     }
-}
 
+    for (int iIdx : m_selectedImages) {
+        if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
+            CanvasImage clone = m_canvasImages[iIdx];
+            clone.id = ++m_nextImageId;
+            clone.bounds.left += offset.x;
+            clone.bounds.top += offset.y;
+            newImageIndices.push_back(static_cast<int>(m_canvasImages.size()));
+            m_canvasImages.push_back(clone);
+        }
+    }
+
+    m_selectedStrokes = newStrokeIndices;
+    m_selectedImages = newImageIndices;
+
+    std::vector<sf::FloatRect> newSub;
+    sf::FloatRect masterBox;
+    bool first = true;
+    for (int sIdx : m_selectedStrokes) {
+        sf::FloatRect b = getStrokeBounds(m_vectorStrokes[sIdx]);
+        newSub.push_back(b);
+        if (first) { masterBox = b; first = false; }
+        else {
+            float minX = std::min(masterBox.left, b.left);
+            float minY = std::min(masterBox.top, b.top);
+            float maxX = std::max(masterBox.left + masterBox.width, b.left + b.width);
+            float maxY = std::max(masterBox.top + masterBox.height, b.top + b.height);
+            masterBox = sf::FloatRect(minX, minY, maxX - minX, maxY - minY);
+        }
+    }
+    for (int iIdx : m_selectedImages) {
+        sf::FloatRect b = m_canvasImages[iIdx].bounds;
+        newSub.push_back(b);
+        if (first) { masterBox = b; first = false; }
+        else {
+            float minX = std::min(masterBox.left, b.left);
+            float minY = std::min(masterBox.top, b.top);
+            float maxX = std::max(masterBox.left + masterBox.width, b.left + b.width);
+            float maxY = std::max(masterBox.top + masterBox.height, b.top + b.height);
+            masterBox = sf::FloatRect(minX, minY, maxX - minX, maxY - minY);
+        }
+    }
+
+    selection.moveSelection(offset);
+    selection.setSubItemBoxes(newSub);
+    selection.setBoundingBox(masterBox);
+    selection.setShowHandles(pendingTransform);
+    isDirty = true;
+}
 void Canvas::cropSelection(int currentFrame) {
     if (!frames.empty() && currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         saveUndoState();
@@ -2194,7 +2252,7 @@ void Canvas::fillPolygonContour(const std::vector<sf::Vector2f>& points, sf::Col
 float Canvas::computeHandleHitRadius() const {
     float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
     float denom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
-    return 14.0f / denom;
+    return 24.0f / denom;
 }
 
 bool Canvas::isImageResourceActive(int currentFrame) const {
@@ -2512,24 +2570,95 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             }
 
             if (activeTool == ToolType::Select) {
-                if (pendingTransform && selection.getState() == SelectionState::Floating) {
-                    if (selection.startResize(localPos, computeHandleHitRadius())) {
+                float handleRad = computeHandleHitRadius();
+                if (selection.isActive() && pendingTransform) {
+                    int handleIdx = selection.hitTestHandle(localPos, handleRad);
+                    if (handleIdx != -1) {
+                        saveUndoState();
+                        selection.startResize(localPos, handleRad);
                         return;
                     }
                 }
 
-                if (selection.isPointInsideSelection(localPos)) {
-                    if (selection.getState() == SelectionState::Selected) {
-                        saveUndoState();
-                        extractFloatingStrokes(currentFrame);
-                        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
+                bool isDoubleClick = (m_selectClickClock.getElapsedTime().asMilliseconds() < 350 &&
+                    std::hypot(localPos.x - m_lastClickPos.x, localPos.y - m_lastClickPos.y) < 10.0f);
+                m_selectClickClock.restart();
+                m_lastClickPos = localPos;
+
+                // Double-click isolates a single object from the continuous group
+                if (isDoubleClick && selection.isActive() && m_isMultiSelectionGroup) {
+                    int hitStroke = -1;
+                    for (int sIdx : m_selectedStrokes) {
+                        if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size()) && strokeHitTest(m_vectorStrokes[sIdx], localPos, 12.0f)) {
+                            hitStroke = sIdx; break;
+                        }
                     }
+                    int hitImg = -1;
+                    if (hitStroke == -1) {
+                        for (int iIdx : m_selectedImages) {
+                            if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size()) && m_canvasImages[iIdx].bounds.contains(localPos)) {
+                                hitImg = iIdx; break;
+                            }
+                        }
+                    }
+                    if (hitStroke != -1) {
+                        m_selectedStrokes = { hitStroke };
+                        m_selectedImages.clear();
+                        m_isMultiSelectionGroup = false;
+                        sf::FloatRect sb = getStrokeBounds(m_vectorStrokes[hitStroke]);
+                        selection.setSelectionBoxes(sb, { sb });
+                        selection.setShowHandles(pendingTransform);
+                        m_lastDragPos = localPos;
+                        selection.startDrag(localPos);
+                        return;
+                    }
+                    else if (hitImg != -1) {
+                        m_selectedImages = { hitImg };
+                        m_selectedStrokes.clear();
+                        m_isMultiSelectionGroup = false;
+                        sf::FloatRect ib = m_canvasImages[hitImg].bounds;
+                        selection.setSelectionBoxes(ib, { ib });
+                        selection.setShowHandles(pendingTransform);
+                        m_lastDragPos = localPos;
+                        selection.startDrag(localPos);
+                        return;
+                    }
+                }
+
+                // Single click inside active selection drags the whole group together
+                if (selection.isActive() && selection.isPointInsideSelection(localPos)) {
+                    m_lastDragPos = localPos;
                     selection.startDrag(localPos);
                     return;
                 }
 
-                commitSelection(currentFrame);
-                selection.startLasso(localPos, canvasLogicalSize);
+                // Click outside commits and clears previous selection
+                if (selection.isActive()) {
+                    commitSelection(currentFrame);
+                }
+
+                bool hitAny = false;
+                for (const auto& vs : m_vectorStrokes) {
+                    if (vs.frame == currentFrame && vs.layer == activeLayer && strokeHitTest(vs, localPos, 12.0f)) {
+                        hitAny = true; break;
+                    }
+                }
+                if (!hitAny) {
+                    for (const auto& ci : m_canvasImages) {
+                        if (ci.frame == currentFrame && ci.layer == activeLayer && ci.bounds.contains(localPos)) {
+                            hitAny = true; break;
+                        }
+                    }
+                }
+
+                if (hitAny) {
+                    autoSelectObject(localPos, currentFrame);
+                    m_lastDragPos = localPos;
+                    selection.startDrag(localPos);
+                }
+                else {
+                    selection.startLasso(localPos, canvasLogicalSize);
+                }
                 return;
             }
 
@@ -2917,17 +3046,75 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     }
 
     if (activeTool == ToolType::Select) {
+        if (selection.isResizing()) {
+            selection.endResize();
+            return;
+        }
+
+        if (selection.isDragging()) {
+            selection.endDrag();
+            return;
+        }
+
         if (selection.getState() == SelectionState::Drawing) {
             selection.endLasso();
-
             if (selection.getState() == SelectionState::Inactive) {
                 autoSelectObject(localPos, currentFrame);
             }
+            else if (selection.getState() == SelectionState::Selected) {
+                m_selectedStrokes.clear();
+                m_selectedImages.clear();
+                std::vector<sf::FloatRect> subBoxes;
+                sf::FloatRect masterBox;
+                bool first = true;
+
+                for (size_t s = 0; s < m_vectorStrokes.size(); ++s) {
+                    if (m_vectorStrokes[s].frame == currentFrame && m_vectorStrokes[s].layer == activeLayer && !m_vectorStrokes[s].isErase) {
+                        sf::FloatRect sb = getStrokeBounds(m_vectorStrokes[s]);
+                        if (selection.isPointInsideSelection(sf::Vector2f(sb.left + sb.width * 0.5f, sb.top + sb.height * 0.5f))) {
+                            m_selectedStrokes.push_back(static_cast<int>(s));
+                            subBoxes.push_back(sb);
+                            if (first) { masterBox = sb; first = false; }
+                            else {
+                                float minX = std::min(masterBox.left, sb.left);
+                                float minY = std::min(masterBox.top, sb.top);
+                                float maxX = std::max(masterBox.left + masterBox.width, sb.left + sb.width);
+                                float maxY = std::max(masterBox.top + masterBox.height, sb.top + sb.height);
+                                masterBox = sf::FloatRect(minX, minY, maxX - minX, maxY - minY);
+                            }
+                        }
+                    }
+                }
+                for (size_t i = 0; i < m_canvasImages.size(); ++i) {
+                    if (m_canvasImages[i].frame == currentFrame && m_canvasImages[i].layer == activeLayer) {
+                        const auto& b = m_canvasImages[i].bounds;
+                        if (selection.isPointInsideSelection(sf::Vector2f(b.left + b.width * 0.5f, b.top + b.height * 0.5f))) {
+                            m_selectedImages.push_back(static_cast<int>(i));
+                            subBoxes.push_back(b);
+                            if (first) { masterBox = b; first = false; }
+                            else {
+                                float minX = std::min(masterBox.left, b.left);
+                                float minY = std::min(masterBox.top, b.top);
+                                float maxX = std::max(masterBox.left + masterBox.width, b.left + b.width);
+                                float maxY = std::max(masterBox.top + masterBox.height, b.top + b.height);
+                                masterBox = sf::FloatRect(minX, minY, maxX - minX, maxY - minY);
+                            }
+                        }
+                    }
+                }
+
+                if (!subBoxes.empty()) {
+                    m_isMultiSelectionGroup = (subBoxes.size() > 1);
+                    selection.setBoundingBox(masterBox);
+                    selection.setSubItemBoxes(subBoxes);
+                    selection.setShowHandles(pendingTransform);
+                }
+                else {
+                    clearObjectSelection();
+                }
+            }
         }
-        else if (selection.getState() == SelectionState::Floating) {
-            if (selection.isResizing()) selection.endResize();
-            else selection.endDrag();
-        }
+        return;
     }
 
     if (!isPixelMode && m_isVectorStrokeActive) {
@@ -3104,17 +3291,73 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     }
 
     if (activeTool == ToolType::Select) {
-        bool allowOutside = isImageResourceActive(currentFrame);
-
         if (selection.isResizing()) {
-            selection.resize(localPos, canvasLogicalSize, allowOutside);
+            sf::FloatRect oldBox = selection.getBoundingBox();
+            selection.resize(localPos, canvasLogicalSize);
+
+            if (oldBox.width > 0.001f && oldBox.height > 0.001f) {
+                sf::FloatRect newBox = selection.getBoundingBox();
+                float sx = newBox.width / oldBox.width;
+                float sy = newBox.height / oldBox.height;
+
+                for (int sIdx : m_selectedStrokes) {
+                    if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
+                        auto& mesh = m_vectorStrokes[sIdx].mesh;
+                        for (size_t v = 0; v < mesh.getVertexCount(); ++v) {
+                            mesh[v].position.x = newBox.left + (mesh[v].position.x - oldBox.left) * sx;
+                            mesh[v].position.y = newBox.top + (mesh[v].position.y - oldBox.top) * sy;
+                        }
+                    }
+                }
+
+                for (int iIdx : m_selectedImages) {
+                    if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
+                        auto& b = m_canvasImages[iIdx].bounds;
+                        b.left = newBox.left + (b.left - oldBox.left) * sx;
+                        b.top = newBox.top + (b.top - oldBox.top) * sy;
+                        b.width *= sx;
+                        b.height *= sy;
+                    }
+                }
+
+                std::vector<sf::FloatRect> updatedSub;
+                for (int sIdx : m_selectedStrokes) updatedSub.push_back(getStrokeBounds(m_vectorStrokes[sIdx]));
+                for (int iIdx : m_selectedImages) updatedSub.push_back(m_canvasImages[iIdx].bounds);
+                selection.setSubItemBoxes(updatedSub);
+            }
+            isDirty = true;
             return;
         }
+
+        if (selection.isDragging()) {
+            sf::Vector2f delta = localPos - m_lastDragPos;
+            m_lastDragPos = localPos;
+
+            selection.drag(localPos, canvasLogicalSize);
+
+            for (int sIdx : m_selectedStrokes) {
+                if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
+                    auto& mesh = m_vectorStrokes[sIdx].mesh;
+                    for (size_t v = 0; v < mesh.getVertexCount(); ++v) {
+                        mesh[v].position += delta;
+                    }
+                }
+            }
+
+            for (int iIdx : m_selectedImages) {
+                if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
+                    m_canvasImages[iIdx].bounds.left += delta.x;
+                    m_canvasImages[iIdx].bounds.top += delta.y;
+                }
+            }
+
+            isDirty = true;
+            return;
+        }
+
         if (selection.getState() == SelectionState::Drawing) {
             selection.addLassoPoint(localPos, canvasLogicalSize);
-        }
-        else if (selection.getState() == SelectionState::Floating) {
-            selection.drag(localPos, canvasLogicalSize, allowOutside);
+            return;
         }
         return;
     }
@@ -3573,7 +3816,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     float worldPerLogicalPixel = drawArea.width / static_cast<float>(canvasLogicalSize.x);
     float handleDenom = std::max(0.0001f, worldPerLogicalPixel * viewScale);
-    selection.setHandleVisualSize(8.0f / handleDenom);
+    selection.setHandleVisualSize(12.0f / handleDenom);
     selection.setShowHandles(pendingTransform);
 
     const float frameThickness = 16.f;
@@ -3856,66 +4099,12 @@ void Canvas::toggleTileMode() {
 void Canvas::togglePixelPerfect() { pixelPerfectEnabled = !pixelPerfectEnabled; }
 bool Canvas::isPixelPerfectEnabled() const { return pixelPerfectEnabled; }
 
-void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFrame) {
-    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
-
-    auto tex = std::make_shared<sf::Texture>();
-    if (tex->loadFromFile(filepath)) {
-        saveUndoState();
-
-        addLayer(currentFrame, "Imported Image");
-
-        auto& targetLayer = frames[currentFrame].layers[activeLayer];
-        targetLayer.isImageResource = true;
-        targetLayer.staticTexture = tex;
-
-        sf::Vector2u texSize = tex->getSize();
-
-        float maxW = static_cast<float>(canvasLogicalSize.x) * 0.9f;
-        float maxH = static_cast<float>(canvasLogicalSize.y) * 0.9f;
-        float scale = std::min(maxW / static_cast<float>(texSize.x), maxH / static_cast<float>(texSize.y));
-        scale = std::min(scale, 1.0f);
-
-        sf::Sprite importSprite(*tex);
-        importSprite.setScale(scale, scale);
-
-        float scaledW = static_cast<float>(texSize.x) * scale;
-        float scaledH = static_cast<float>(texSize.y) * scale;
-        float centerX = (canvasLogicalSize.x / 2.0f) - (scaledW / 2.0f);
-        float centerY = (canvasLogicalSize.y / 2.0f) - (scaledH / 2.0f);
-        importSprite.setPosition(centerX, centerY);
-
-        targetLayer.texture->clear(sf::Color::Transparent);
-        targetLayer.texture->draw(importSprite, sf::RenderStates(sf::BlendAlpha));
-        targetLayer.texture->display();
-
-        isDirty = true;
-
-        commitSelection(currentFrame);
-        selection.startLasso(sf::Vector2f(centerX, centerY), canvasLogicalSize);
-        selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY), canvasLogicalSize);
-        selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY + scaledH), canvasLogicalSize);
-        selection.addLassoPoint(sf::Vector2f(centerX, centerY + scaledH), canvasLogicalSize);
-        selection.endLasso();
-        selection.extractFromLayer(targetLayer.texture.get(), true);
-        enterTransformMode(currentFrame);
-        setActiveTool(ToolType::Select);
-    }
-}
 
 void Canvas::enterTransformMode(int currentFrame) {
-    if (!selection.isActive() || frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
-
-    if (selection.getState() == SelectionState::Selected) {
-        saveUndoState();
-        extractFloatingStrokes(currentFrame);
-        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
-    }
-
-    if (selection.getState() == SelectionState::Floating) {
-        transformMode = TransformState::Scaling;
-        pendingTransform = true;
-    }
+    if (!selection.isActive()) return;
+    pendingTransform = true;
+    selection.setShowHandles(true);
+    transformMode = TransformState::Scaling;
 }
 
 void Canvas::applyTransform(int currentFrame) {
@@ -3941,123 +4130,89 @@ bool Canvas::isTransforming() const {
 void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
-    if (!isPixelMode) {
-        int foundStrokeIdx = -1;
-        int foundLayerIdx = -1;
-        const float hitRadiusSq = 12.0f * 12.0f;
+    struct SelectableEntity {
+        enum Type { Stroke, Image };
+        Type type;
+        int originalIndex;
+        sf::FloatRect bounds;
+    };
 
-        for (int l = static_cast<int>(frames[currentFrame].layers.size()) - 1; l >= 0; --l) {
-            if (!frames[currentFrame].layers[l].visible || frames[currentFrame].layers[l].locked) continue;
-
-            for (int s = static_cast<int>(m_vectorStrokes.size()) - 1; s >= 0; --s) {
-                const auto& vs = m_vectorStrokes[s];
-                if (vs.frame == currentFrame && vs.layer == l && !vs.isErase) {
-                    for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
-                        float dx = vs.mesh[v].position.x - pos.x;
-                        float dy = vs.mesh[v].position.y - pos.y;
-                        if (dx * dx + dy * dy <= hitRadiusSq) {
-                            foundStrokeIdx = s;
-                            foundLayerIdx = l;
-                            break;
-                        }
-                    }
-                }
-                if (foundStrokeIdx != -1) break;
-            }
-            if (foundStrokeIdx != -1) break;
+    std::vector<SelectableEntity> entities;
+    for (size_t s = 0; s < m_vectorStrokes.size(); ++s) {
+        if (m_vectorStrokes[s].frame == currentFrame && m_vectorStrokes[s].layer == activeLayer && !m_vectorStrokes[s].isErase) {
+            entities.push_back({ SelectableEntity::Stroke, static_cast<int>(s), getStrokeBounds(m_vectorStrokes[s]) });
         }
-
-        if (foundStrokeIdx != -1) {
-            activeLayer = foundLayerIdx;
-            const auto& vs = m_vectorStrokes[foundStrokeIdx];
-
-            float minX = vs.mesh[0].position.x, maxX = minX;
-            float minY = vs.mesh[0].position.y, maxY = minY;
-            for (size_t v = 1; v < vs.mesh.getVertexCount(); ++v) {
-                minX = std::min(minX, vs.mesh[v].position.x);
-                maxX = std::max(maxX, vs.mesh[v].position.x);
-                minY = std::min(minY, vs.mesh[v].position.y);
-                maxY = std::max(maxY, vs.mesh[v].position.y);
-            }
-
-            const float pad = 4.0f;
-            selection.startLasso(sf::Vector2f(minX - pad, minY - pad), canvasLogicalSize);
-            selection.addLassoPoint(sf::Vector2f(maxX + pad, minY - pad), canvasLogicalSize);
-            selection.addLassoPoint(sf::Vector2f(maxX + pad, maxY + pad), canvasLogicalSize);
-            selection.addLassoPoint(sf::Vector2f(minX - pad, maxY + pad), canvasLogicalSize);
-            selection.endLasso();
-            return;
+    }
+    for (size_t i = 0; i < m_canvasImages.size(); ++i) {
+        if (m_canvasImages[i].frame == currentFrame && m_canvasImages[i].layer == activeLayer) {
+            entities.push_back({ SelectableEntity::Image, static_cast<int>(i), m_canvasImages[i].bounds });
         }
     }
 
-    int sx = static_cast<int>(pos.x);
-    int sy = static_cast<int>(pos.y);
-
-    int targetLayerIndex = -1;
-    sf::Image targetImg;
-
-    for (int i = static_cast<int>(frames[currentFrame].layers.size()) - 1; i >= 0; --i) {
-        if (!frames[currentFrame].layers[i].visible || frames[currentFrame].layers[i].locked) continue;
-
-        sf::Image tempImg = frames[currentFrame].layers[i].texture->getTexture().copyToImage();
-        if (sx >= 0 && sy >= 0 && sx < static_cast<int>(tempImg.getSize().x) && sy < static_cast<int>(tempImg.getSize().y)) {
-            if (tempImg.getPixel(sx, sy).a > 0) {
-                targetLayerIndex = i;
-                targetImg = tempImg;
+    int clickedEntityIdx = -1;
+    for (int i = static_cast<int>(entities.size()) - 1; i >= 0; --i) {
+        if (entities[i].type == SelectableEntity::Image) {
+            if (entities[i].bounds.contains(pos)) {
+                clickedEntityIdx = i;
+                break;
+            }
+        }
+        else {
+            if (strokeHitTest(m_vectorStrokes[entities[i].originalIndex], pos, 12.0f)) {
+                clickedEntityIdx = i;
                 break;
             }
         }
     }
 
-    if (targetLayerIndex == -1) {
-        selection.clearSelection();
+    if (clickedEntityIdx == -1) {
+        commitSelection(currentFrame);
         return;
     }
 
-    activeLayer = targetLayerIndex;
+    const auto& clickedEnt = entities[clickedEntityIdx];
 
-    int minX = sx, maxX = sx, minY = sy, maxY = sy;
-    std::vector<sf::Vector2i> stack;
-    stack.push_back(sf::Vector2i(sx, sy));
+    std::vector<bool> inChain(entities.size(), false);
+    std::vector<int> q;
+    q.push_back(clickedEntityIdx);
+    inChain[clickedEntityIdx] = true;
 
-    int w = targetImg.getSize().x;
-    int h = targetImg.getSize().y;
+    size_t head = 0;
+    while (head < q.size()) {
+        int curr = q[head++];
+        sf::FloatRect exp(entities[curr].bounds.left - 6.f, entities[curr].bounds.top - 6.f,
+            entities[curr].bounds.width + 12.f, entities[curr].bounds.height + 12.f);
 
-    std::vector<bool> visited(w * h, false);
-    visited[sy * w + sx] = true;
-
-    while (!stack.empty()) {
-        sf::Vector2i p = stack.back();
-        stack.pop_back();
-
-        minX = std::min(minX, p.x);
-        maxX = std::max(maxX, p.x);
-        minY = std::min(minY, p.y);
-        maxY = std::max(maxY, p.y);
-
-        const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
-        const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
-
-        for (int i = 0; i < 8; ++i) {
-            int nx = p.x + dx8[i];
-            int ny = p.y + dy8[i];
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                int idx = ny * w + nx;
-                if (!visited[idx]) {
-                    visited[idx] = true;
-                    if (targetImg.getPixel(nx, ny).a > 0) {
-                        stack.push_back(sf::Vector2i(nx, ny));
-                    }
-                }
+        for (size_t next = 0; next < entities.size(); ++next) {
+            if (!inChain[next] && exp.intersects(entities[next].bounds)) {
+                inChain[next] = true;
+                q.push_back(static_cast<int>(next));
             }
         }
     }
 
-    selection.startLasso(sf::Vector2f(static_cast<float>(minX), static_cast<float>(minY)), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(static_cast<float>(maxX + 1), static_cast<float>(minY)), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(static_cast<float>(maxX + 1), static_cast<float>(maxY + 1)), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(static_cast<float>(minX), static_cast<float>(maxY + 1)), canvasLogicalSize);
-    selection.endLasso();
+    m_selectedStrokes.clear();
+    m_selectedImages.clear();
+    std::vector<sf::FloatRect> subBoxes;
+    sf::FloatRect masterBox = entities[q[0]].bounds;
+
+    for (int idx : q) {
+        const auto& ent = entities[idx];
+        if (ent.type == SelectableEntity::Stroke) m_selectedStrokes.push_back(ent.originalIndex);
+        else m_selectedImages.push_back(ent.originalIndex);
+
+        subBoxes.push_back(ent.bounds);
+
+        float minX = std::min(masterBox.left, ent.bounds.left);
+        float minY = std::min(masterBox.top, ent.bounds.top);
+        float maxX = std::max(masterBox.left + masterBox.width, ent.bounds.left + ent.bounds.width);
+        float maxY = std::max(masterBox.top + masterBox.height, ent.bounds.top + ent.bounds.height);
+        masterBox = sf::FloatRect(minX, minY, maxX - minX, maxY - minY);
+    }
+
+    m_isMultiSelectionGroup = (q.size() > 1);
+    selection.setSelectionBoxes(masterBox, subBoxes);
+    selection.setShowHandles(pendingTransform);
 }
 
 void Canvas::cleanVectorLayers() {
@@ -4070,4 +4225,64 @@ void Canvas::cleanVectorLayers() {
             }
         }
     }
+}
+
+
+void Canvas::pasteImage(const sf::Image& img, int currentFrame) {
+    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+
+    saveUndoState();
+
+    auto tex = std::make_shared<sf::Texture>();
+    tex->setSmooth(!isPixelMode);
+    tex->loadFromImage(img);
+
+    sf::Vector2u texSize = img.getSize();
+    float tw = static_cast<float>(texSize.x);
+    float th = static_cast<float>(texSize.y);
+
+    float maxW = static_cast<float>(canvasLogicalSize.x) * 0.85f;
+    float maxH = static_cast<float>(canvasLogicalSize.y) * 0.85f;
+    float scale = 1.0f;
+    if (tw > maxW || th > maxH) {
+        scale = std::min(maxW / tw, maxH / th);
+    }
+
+    float scaledW = std::max(1.0f, std::floor(tw * scale));
+    float scaledH = std::max(1.0f, std::floor(th * scale));
+    float centerX = std::floor((static_cast<float>(canvasLogicalSize.x) - scaledW) * 0.5f);
+    float centerY = std::floor((static_cast<float>(canvasLogicalSize.y) - scaledH) * 0.5f);
+
+    CanvasImage ci;
+    ci.id = ++m_nextImageId;
+    ci.frame = currentFrame;
+    ci.layer = activeLayer;
+    ci.texture = tex;
+    ci.bounds = sf::FloatRect(centerX, centerY, scaledW, scaledH);
+    m_canvasImages.push_back(ci);
+
+    clearObjectSelection();
+    m_selectedImages.push_back(static_cast<int>(m_canvasImages.size()) - 1);
+    m_isMultiSelectionGroup = false;
+
+    selection.setSelectionBoxes(ci.bounds, { ci.bounds });
+    selection.setShowHandles(true);
+    setActiveTool(ToolType::Select);
+    isDirty = true;
+}
+
+void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFrame) {
+    if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    sf::Image img;
+    if (img.loadFromFile(filepath)) {
+        pasteImage(img, currentFrame);
+    }
+}
+
+void Canvas::clearObjectSelection() {
+    m_selectedStrokes.clear();
+    m_selectedImages.clear();
+    m_isMultiSelectionGroup = false;
+    pendingTransform = false;
+    selection.clearSelection();
 }

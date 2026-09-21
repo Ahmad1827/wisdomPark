@@ -13,9 +13,12 @@ enum class SelectionState {
 class SelectionManager {
 private:
     SelectionState state;
+    bool isLassoSelection{ true };
     std::vector<sf::Vector2f> pathPoints;
     std::vector<sf::Vector2f> localPoints;
     sf::FloatRect boundingBox;
+    std::vector<sf::FloatRect> subItemBoxes;
+
     sf::Texture floatingTexture;
     sf::Sprite floatingSprite;
     sf::Texture clipboardTexture;
@@ -23,7 +26,7 @@ private:
     sf::Texture dashTexture;
     float dashOffset;
     sf::Vector2f dragStartPos;
-    bool isDragging;
+    bool m_isDragging;
 
     bool showHandles;
     float handleVisualSize;
@@ -32,6 +35,7 @@ private:
     sf::Vector2f resizeAnchorWorld;
     sf::Vector2f resizeAnchorLocal;
     sf::Vector2f resizeDraggedLocal;
+    sf::FloatRect resizeStartBox;
 
     bool isInsidePolygon(sf::Vector2f point, const std::vector<sf::Vector2f>& polygon) const;
     void calculateBoundingBox();
@@ -52,9 +56,12 @@ public:
     void commitToLayer(sf::RenderTexture* layerTexture);
     void discardFloating();
     void clearSelection();
+
     void startDrag(sf::Vector2f pos);
     void drag(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas = false);
     void endDrag();
+    bool isDragging() const { return m_isDragging; }
+
     void copy(sf::RenderTexture* layerTexture);
     void moveFloating(sf::Vector2f offset, sf::Vector2u canvasSize);
     void paste(sf::Vector2u canvasSize);
@@ -62,18 +69,31 @@ public:
     void flipHorizontal();
     void flipVertical();
     void duplicate(sf::RenderTexture* layerTexture, sf::Vector2u canvasSize);
-    SelectionState getState() const;
-    bool isActive() const;
+
+    SelectionState getState() const { return state; }
+    bool isActive() const { return state != SelectionState::Inactive; }
     sf::FloatRect getBoundingBox() const { return boundingBox; }
+    void setBoundingBox(const sf::FloatRect& box) { boundingBox = box; }
     sf::Transform getFloatingTransform() const { return floatingSprite.getTransform(); }
 
+    void setLassoMode(bool isLasso) { isLassoSelection = isLasso; }
+    bool getIsLassoMode() const { return isLassoSelection; }
+
+    void setSelectionBoxes(const sf::FloatRect& masterBox, const std::vector<sf::FloatRect>& itemBoxes);
+    const std::vector<sf::FloatRect>& getSubItemBoxes() const { return subItemBoxes; }
+    void setSubItemBoxes(const std::vector<sf::FloatRect>& boxes) { subItemBoxes = boxes; }
+
+    void moveSelection(sf::Vector2f delta);
+    void flipPathHorizontal(float midX);
+    void flipPathVertical(float midY);
+
     void setShowHandles(bool show);
-    bool isShowingHandles() const;
+    bool isShowingHandles() const { return showHandles; }
     void setHandleVisualSize(float localSize);
     std::array<sf::Vector2f, 4> getHandlePositions() const;
     int hitTestHandle(sf::Vector2f pos, float handleRadius) const;
     bool startResize(sf::Vector2f pos, float handleRadius);
-    void resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas);
+    void resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas = true);
     void endResize();
-    bool isResizing() const;
+    bool isResizing() const { return isResizingFlag; }
 };

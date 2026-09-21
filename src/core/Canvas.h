@@ -56,8 +56,31 @@ struct VectorStroke {
     bool isErase = false;
 };
 
+struct CanvasImage {
+    int id;
+    int frame;
+    int layer;
+    std::shared_ptr<sf::Texture> texture;
+    sf::FloatRect bounds;
+};
+
 class Canvas {
 private:
+    std::vector<CanvasImage> m_canvasImages;
+    std::vector<CanvasImage> m_floatingImages;
+    std::vector<int> m_selectedStrokes;
+    std::vector<int> m_selectedImages;
+    bool m_isMultiSelectionGroup{ false };
+    sf::Vector2f m_lastDragPos{ 0.f, 0.f };
+    sf::Clock m_selectClickClock;
+    sf::Vector2f m_lastClickPos{ 0.f, 0.f };
+    int m_nextImageId{ 0 };
+
+    struct UndoState {
+        std::vector<Frame> frames;
+        std::vector<VectorStroke> vectorStrokes;
+        std::vector<CanvasImage> canvasImages;
+    };
     PerspectiveManager* m_perspectiveManager = nullptr;
     SymmetryManager symmetryManager;
     DitherManager ditherManager;
@@ -127,11 +150,6 @@ private:
     sf::Vector2f m_symmetryDragOffsetStart{ 0.f, 0.f };
     sf::Vector2f m_symmetryDragOffsetEnd{ 0.f, 0.f };
 
-
-    struct UndoState {
-        std::vector<Frame> frames;
-        std::vector<VectorStroke> vectorStrokes;
-    };
 
     std::vector<UndoState> undoHistory;
     std::vector<UndoState> redoHistory;
@@ -214,6 +232,10 @@ public:
     void init();
     void initCustom(int width, int height);
 
+    const std::vector<CanvasImage>& getCanvasImages() const { return m_canvasImages; }
+    void setCanvasImages(const std::vector<CanvasImage>& images) { m_canvasImages = images; }
+    void clearCanvasImages() { m_canvasImages.clear(); }
+    void clearObjectSelection();
     const std::vector<VectorStroke>& getVectorStrokes() const { return m_vectorStrokes; }
     void clearVectorStrokes() { m_vectorStrokes.clear(); }
     void setVectorStrokes(const std::vector<VectorStroke>& strokes) { m_vectorStrokes = strokes; }
