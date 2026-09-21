@@ -214,6 +214,12 @@ public:
     void init();
     void initCustom(int width, int height);
 
+    const std::vector<VectorStroke>& getVectorStrokes() const { return m_vectorStrokes; }
+    void clearVectorStrokes() { m_vectorStrokes.clear(); }
+    void setVectorStrokes(const std::vector<VectorStroke>& strokes) { m_vectorStrokes = strokes; }
+
+    void cleanVectorLayers();
+    void bakeAllStrokes() {}
     void updateTransform(float dt, sf::FloatRect space);
     sf::Transform getTransform() const;
     sf::Transform getInverseTransform() const;
@@ -226,6 +232,7 @@ public:
     void zoom(float delta);
     void pan(sf::Vector2f delta);
     void resetView();
+
 
     void addFrame(int index = -1);
     void duplicateFrame(int index);

@@ -105,22 +105,62 @@ bool ProjectManager::saveProjectAs(const std::string& path, const std::string& n
         << (isPixelMode ? "1" : "0") << "\n";
     metaFile.close();
 
+    // 1. Vault Thumbnail (Composite vectors + static textures)
     if (canvas.getFrameCount() > 0) {
         sf::RenderTexture composite;
-        composite.create(size.x, size.y);
+        sf::ContextSettings ctx;
+        ctx.antialiasingLevel = isPixelMode ? 0 : 8;
+        if (!composite.create(size.x, size.y, ctx)) {
+            composite.create(size.x, size.y);
+        }
+        composite.setSmooth(!isPixelMode);
         composite.clear(sf::Color::White);
+
         const Frame* f0 = canvas.getFrameReadOnly(0);
-        for (const auto& l : f0->layers) {
-            if (l.visible) {
-                sf::Sprite s(l.texture->getTexture());
-                s.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(l.opacity * 255.0f)));
-                composite.draw(s);
+        if (f0) {
+            for (size_t l = 0; l < f0->layers.size(); ++l) {
+                const auto& layer = f0->layers[l];
+                if (layer.visible && layer.texture) {
+                    layer.texture->display();
+                    sf::Sprite s(layer.texture->getTexture());
+                    s.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(layer.opacity * 255.0f)));
+                    composite.draw(s);
+                }
+                if (!isPixelMode) {
+                    for (const auto& vs : canvas.getVectorStrokes()) {
+                        if (vs.frame == 0 && vs.layer == static_cast<int>(l) && !vs.isErase) {
+                            composite.draw(vs.mesh);
+                        }
+                    }
+                }
             }
         }
         composite.display();
         composite.getTexture().copyToImage().saveToFile(path + "/thumb.png");
     }
 
+    // 2. Save vector geometry in normal mode
+    if (!isPixelMode) {
+        std::ofstream vFile(path + "/vector_strokes.dat");
+        if (vFile.is_open()) {
+            const auto& strokes = canvas.getVectorStrokes();
+            vFile << strokes.size() << "\n";
+            for (const auto& vs : strokes) {
+                vFile << vs.frame << " " << vs.layer << " " << (vs.isErase ? 1 : 0) << " " << vs.mesh.getVertexCount() << "\n";
+                for (size_t i = 0; i < vs.mesh.getVertexCount(); ++i) {
+                    const auto& v = vs.mesh[i];
+                    vFile << v.position.x << " " << v.position.y << " "
+                        << static_cast<int>(v.color.r) << " "
+                        << static_cast<int>(v.color.g) << " "
+                        << static_cast<int>(v.color.b) << " "
+                        << static_cast<int>(v.color.a) << "\n";
+                }
+            }
+            vFile.close();
+        }
+    }
+
+    // 3. Save layers (write clean transparent PNGs for vector layers to clear old raster ghosts)
     for (size_t f = 0; f < canvas.getFrameCount(); ++f) {
         const Frame* frame = canvas.getFrameReadOnly(static_cast<int>(f));
         if (!frame) continue;
@@ -128,8 +168,18 @@ bool ProjectManager::saveProjectAs(const std::string& path, const std::string& n
         for (size_t l = 0; l < frame->layers.size(); ++l) {
             if (!frame->layers[l].persistent || f == 0) {
                 std::string imgPath = path + "/layers/f" + std::to_string(f) + "_l" + std::to_string(l) + ".png";
-                sf::Image img = frame->layers[l].texture->getTexture().copyToImage();
-                img.saveToFile(imgPath);
+                if (frame->layers[l].texture) {
+                    if (!isPixelMode && !frame->layers[l].isImageResource) {
+                        sf::Image cleanImg;
+                        cleanImg.create(size.x, size.y, sf::Color::Transparent);
+                        cleanImg.saveToFile(imgPath);
+                    }
+                    else {
+                        frame->layers[l].texture->display();
+                        sf::Image img = frame->layers[l].texture->getTexture().copyToImage();
+                        img.saveToFile(imgPath);
+                    }
+                }
             }
         }
 
@@ -145,6 +195,8 @@ bool ProjectManager::saveProjectAs(const std::string& path, const std::string& n
         }
         layerMeta.close();
     }
+
+    canvas.cleanVectorLayers();
     return true;
 }
 
@@ -154,18 +206,18 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
 
     std::ifstream file(metaPath);
     std::string projName, line, lastMod;
-    int width, height, frames;
+    int width = 1280, height = 720, frames = 1;
     bool onionOn = false;
     float onionP = 89.25f, onionN = 89.25f;
     int opc = 1, onc = 1;
     outIsPixelMode = false;
 
-    std::getline(file, projName);
-    std::getline(file, line); width = std::stoi(line);
-    std::getline(file, line); height = std::stoi(line);
-    std::getline(file, line); outFps = std::stoi(line);
-    std::getline(file, line); frames = std::stoi(line);
-    std::getline(file, lastMod);
+    if (!std::getline(file, projName)) return false;
+    if (std::getline(file, line)) width = std::stoi(line);
+    if (std::getline(file, line)) height = std::stoi(line);
+    if (std::getline(file, line)) outFps = std::stoi(line);
+    if (std::getline(file, line)) frames = std::stoi(line);
+    if (std::getline(file, lastMod)) {}
     if (std::getline(file, line)) onionOn = (line == "1");
     if (std::getline(file, line)) onionP = std::stof(line);
     if (std::getline(file, line)) onionN = std::stof(line);
@@ -184,11 +236,16 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
         if (f > 0) canvas.addFrame(f - 1);
 
         std::ifstream layerMeta(path + "/f" + std::to_string(f) + "_layers.txt");
+        if (!layerMeta.is_open()) continue;
+
         std::string lLine;
         int l = 0;
 
         while (std::getline(layerMeta, lLine)) {
-            if (l > 1) canvas.addLayer(f, "Layer");
+            while (!lLine.empty() && (lLine.back() == '\r' || lLine.back() == '\n' || lLine.back() == ' ')) {
+                lLine.pop_back();
+            }
+            if (lLine.empty()) continue;
 
             size_t p1 = lLine.find('|');
             size_t p2 = lLine.find('|', p1 + 1);
@@ -197,41 +254,88 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
             size_t p5 = lLine.find('|', p4 + 1);
             size_t p6 = lLine.find('|', p5 + 1);
 
-            if (p1 != std::string::npos && p4 != std::string::npos) {
-                std::string lName = lLine.substr(0, p1);
-                bool lVis = (lLine.substr(p1 + 1, p2 - p1 - 1) == "1");
-                bool lLock = (lLine.substr(p2 + 1, p3 - p2 - 1) == "1");
-                float lOpac = std::stof(lLine.substr(p3 + 1, p4 - p3 - 1));
-                int lBlend = std::stoi(lLine.substr(p4 + 1, p5 - p4 - 1));
-                bool lPers = false;
-                int lTag = 0;
+            if (p1 == std::string::npos || p4 == std::string::npos) continue;
 
-                if (p5 != std::string::npos && p6 != std::string::npos) {
-                    lPers = (lLine.substr(p5 + 1, p6 - p5 - 1) == "1");
-                    lTag = std::stoi(lLine.substr(p6 + 1));
-                }
-
-                canvas.setLayerProperties(f, l, lName, lVis, lLock, lOpac, static_cast<BlendMode>(lBlend));
-                if (lPers && f > 0) canvas.toggleLayerPersistence(f, l);
-                for (int t = 0; t < lTag; ++t) canvas.cycleLayerColorTag(f, l);
-                canvas.getFrame(f)->layers[l].texture->setSmooth(false);
+            while (l >= static_cast<int>(canvas.getFrame(f)->layers.size())) {
+                canvas.addLayer(f, "Layer");
             }
 
-            if (!canvas.getFrameReadOnly(f)->layers[l].persistent || f == 0) {
+            std::string lName = lLine.substr(0, p1);
+            bool lVis = (lLine.substr(p1 + 1, p2 - p1 - 1) == "1");
+            bool lLock = (lLine.substr(p2 + 1, p3 - p2 - 1) == "1");
+            float lOpac = std::stof(lLine.substr(p3 + 1, p4 - p3 - 1));
+            int lBlend = std::stoi(lLine.substr(p4 + 1, p5 - p4 - 1));
+            bool lPers = false;
+            int lTag = 0;
+
+            if (p5 != std::string::npos && p6 != std::string::npos) {
+                lPers = (lLine.substr(p5 + 1, p6 - p5 - 1) == "1");
+                lTag = std::stoi(lLine.substr(p6 + 1));
+            }
+
+            canvas.setLayerProperties(f, l, lName, lVis, lLock, lOpac, static_cast<BlendMode>(lBlend));
+            canvas.getFrame(f)->layers[l].persistent = lPers;
+            canvas.getFrame(f)->layers[l].colorTag = lTag;
+            canvas.getFrame(f)->layers[l].texture->setSmooth(!outIsPixelMode);
+
+            if (lPers && f > 0) {
+                canvas.getFrame(f)->layers[l].texture = canvas.getFrame(0)->layers[l].texture;
+            }
+            else {
                 std::string imgPath = path + "/layers/f" + std::to_string(f) + "_l" + std::to_string(l) + ".png";
                 if (fs::exists(imgPath)) {
-                    sf::Texture tex;
-                    if (tex.loadFromFile(imgPath)) {
-                        sf::Sprite spr(tex);
-                        canvas.getFrame(f)->layers[l].texture->clear(sf::Color::Transparent);
-                        canvas.getFrame(f)->layers[l].texture->draw(spr);
-                        canvas.getFrame(f)->layers[l].texture->display();
+                    sf::Image img;
+                    if (img.loadFromFile(imgPath)) {
+                        sf::Texture tex;
+                        tex.setSmooth(!outIsPixelMode);
+                        if (tex.loadFromImage(img)) {
+                            auto target = canvas.getFrame(f)->layers[l].texture;
+                            target->setSmooth(!outIsPixelMode);
+                            target->clear(sf::Color::Transparent);
+                            sf::Sprite spr(tex);
+                            target->draw(spr, sf::RenderStates(sf::BlendNone));
+                            target->display();
+                        }
                     }
                 }
             }
             l++;
         }
     }
+
+    // Load vector geometry and wipe any contaminated raster stroke data
+    canvas.clearVectorStrokes();
+    if (!outIsPixelMode) {
+        std::string vPath = path + "/vector_strokes.dat";
+        if (fs::exists(vPath)) {
+            std::ifstream vFile(vPath);
+            size_t strokeCount = 0;
+            if (vFile >> strokeCount) {
+                std::vector<VectorStroke> loadedStrokes;
+                for (size_t s = 0; s < strokeCount; ++s) {
+                    VectorStroke vs;
+                    int isEraseInt = 0;
+                    size_t vertCount = 0;
+                    vFile >> vs.frame >> vs.layer >> isEraseInt >> vertCount;
+                    vs.isErase = (isEraseInt != 0);
+                    vs.mesh.setPrimitiveType(sf::Triangles);
+
+                    for (size_t i = 0; i < vertCount; ++i) {
+                        float vx, vy;
+                        int r, g, b, a;
+                        vFile >> vx >> vy >> r >> g >> b >> a;
+                        sf::Vertex v(sf::Vector2f(vx, vy), sf::Color(r, g, b, a));
+                        vs.mesh.append(v);
+                    }
+                    loadedStrokes.push_back(std::move(vs));
+                }
+                canvas.setVectorStrokes(loadedStrokes);
+                canvas.cleanVectorLayers();
+            }
+            vFile.close();
+        }
+    }
+
     return true;
 }
 

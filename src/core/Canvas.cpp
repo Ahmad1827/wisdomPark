@@ -341,24 +341,30 @@ void Canvas::bakeLayerStrokes(int frameIndex, int layerIndex) {
     if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return;
     if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[frameIndex].layers.size())) return;
 
-    bool any = false;
-    for (const auto& vs : m_vectorStrokes) {
-        if (vs.frame == frameIndex && vs.layer == layerIndex) { any = true; break; }
-    }
-    if (!any) return;
-
     sf::RenderTexture* targetTex = frames[frameIndex].layers[layerIndex].texture.get();
     if (!targetTex) return;
 
-    renderLayerToTexture(frameIndex, layerIndex, *targetTex);
-
-    for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
-        if (it->frame == frameIndex && it->layer == layerIndex) it = m_vectorStrokes.erase(it);
-        else ++it;
+    bool hasStrokes = false;
+    for (const auto& vs : m_vectorStrokes) {
+        if (vs.frame == frameIndex && vs.layer == layerIndex) {
+            hasStrokes = true;
+            sf::RenderStates st = sf::RenderStates::Default;
+            st.blendMode = vs.isErase ? eraseBlendMode() : sf::BlendAlpha;
+            targetTex->draw(vs.mesh, st);
+        }
     }
 
-    isDirty = true;
+    if (hasStrokes) {
+        targetTex->display();
+        for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
+            if (it->frame == frameIndex && it->layer == layerIndex) it = m_vectorStrokes.erase(it);
+            else ++it;
+        }
+        isDirty = true;
+    }
 }
+
+
 
 void Canvas::extractFloatingStrokes(int currentFrame) {
     m_floatingVectorStrokes.clear();
@@ -4035,4 +4041,16 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     selection.addLassoPoint(sf::Vector2f(static_cast<float>(maxX + 1), static_cast<float>(maxY + 1)), canvasLogicalSize);
     selection.addLassoPoint(sf::Vector2f(static_cast<float>(minX), static_cast<float>(maxY + 1)), canvasLogicalSize);
     selection.endLasso();
+}
+
+void Canvas::cleanVectorLayers() {
+    if (isPixelMode) return;
+    for (auto& frame : frames) {
+        for (auto& layer : frame.layers) {
+            if (!layer.isImageResource && layer.texture) {
+                layer.texture->clear(sf::Color::Transparent);
+                layer.texture->display();
+            }
+        }
+    }
 }

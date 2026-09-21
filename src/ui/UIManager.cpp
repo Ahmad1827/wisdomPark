@@ -32,6 +32,7 @@
 static int g_resW = 1920;
 static int g_resH = 1080;
 static bool g_resDropdownOpen = false;
+static bool s_exitToMenuRequested = false;
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -357,32 +358,23 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         },
         [this, baseCanvas]() {
             if (activeProjectPath.empty()) {
-                std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
-                if (!file.empty() && projManager) {
-                    activeProjectPath = file;
-                    projManager->saveProjectAs(activeProjectPath, activeProjectName, *baseCanvas, 12, baseCanvas->getPixelMode());
-                    baseCanvas->clearIsDirty();
-                    showMessage("Saved Project", sf::Color::Green);
-                }
+                activeProjectPath = "projects/" + activeProjectName + ".wpk";
             }
-            else if (projManager) {
-                projManager->saveProjectAs(activeProjectPath, activeProjectName, *baseCanvas, 12, baseCanvas->getPixelMode());
-                baseCanvas->clearIsDirty();
-                showMessage("Saved Project", sf::Color::Green);
+            if (projManager) {
+                if (projManager->saveProjectAs(activeProjectPath, activeProjectName, *baseCanvas, 12, baseCanvas->getPixelMode())) {
+                    baseCanvas->clearIsDirty();
+                    showMessage("Saved Project: " + activeProjectName, sf::Color::Green);
+                }
+                else {
+                    showMessage("Error Saving Project!", sf::Color::Red);
+                }
             }
         },
         [this, baseCanvas]() { exportModal.open(*baseCanvas, 0); },
         [this, baseCanvas]() { baseCanvas->undo(); },
         [this, baseCanvas]() { baseCanvas->redo(); },
         [this]() { m_fullscreenToggleRequested = true; },
-        [this, baseCanvas]() {
-            if (baseCanvas->getIsDirty()) {
-                showUnsavedWarning = true;
-            }
-            else {
-                currentMenuState = MenuState::Main;
-            }
-        }
+        [this]() { s_exitToMenuRequested = true; }
     );
     m_gitImgClient.setBaseUrl("http://100.102.109.119:8080");
 
@@ -861,23 +853,15 @@ void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hove
 
 bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
     if (activeProjectPath.empty()) {
-        std::string file = NativeDialogs::saveFileDialog("Wisdom Park Projects\0*.wpk\0", "wpk", activeProjectName);
-        if (!file.empty()) {
-            activeProjectPath = file;
-            if (projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
-                canvas.clearIsDirty();
-                return true;
-            }
-        }
-        return false;
+        activeProjectPath = "projects/" + activeProjectName + ".wpk";
     }
-    else {
+    if (projManager) {
         if (projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
             canvas.clearIsDirty();
             return true;
         }
-        return false;
     }
+    return false;
 }
 
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
@@ -987,7 +971,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (activeProjectName.empty()) {
                 activeProjectName = (newProjectModal.getIsPixelMode() ? "Pixel_Art_" : "New_Project_") + std::to_string(static_cast<long long>(std::time(nullptr)));
             }
-            activeProjectPath = "";
+            activeProjectPath = "projects/" + activeProjectName + ".wpk";
             canvas.setPixelMode(newProjectModal.getIsPixelMode());
             pm.createNewProject(activeProjectName, newProjectModal.getWidth(), newProjectModal.getHeight(), 12, newProjectModal.getIsPixelMode(), canvas);
             canvas.clearIsDirty();
@@ -1361,6 +1345,18 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (m_topBar.HandleEvent(event, window)) {
+            if (s_exitToMenuRequested) {
+                s_exitToMenuRequested = false;
+                if (canvas.getIsDirty()) {
+                    showUnsavedWarning = true;
+                }
+                else {
+                    currentState = AppState::Welcome;
+                    currentMenuState = MenuState::Main;
+                }
+                return;
+            }
+
             if (m_fullscreenToggleRequested) {
                 m_fullscreenToggleRequested = false;
                 toggleFullscreen(window, settings);
@@ -2647,11 +2643,11 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         }
 
-        m_topBar.Render(window);
         m_toolOptionsBar.Render(window);
         m_toolDock.Render(window);
         m_rightDockTabs.Render(window);
         m_statusBar.Render(window);
+        m_topBar.Render(window);
 
         g_aiPanel.draw(window);
         g_aiReviewModal.draw(window);
