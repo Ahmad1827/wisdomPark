@@ -1894,22 +1894,27 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     sf::Image clipImg;
                     if (GetClipboardImage(clipImg)) {
                         canvas.pasteImage(clipImg, timeline.getCurrentFrame());
-                        showMessage("Pasted from Clipboard", sf::Color::Green);
+                        m_toolDock.SetActiveTool("select");
+                        showMessage("Pasted from Clipboard (Resize Handles Active)", sf::Color::Green);
                     }
                     else if (canvas.hasGlobalClipboard()) {
                         canvas.pasteGlobalClipboard(timeline.getCurrentFrame());
+                        m_toolDock.SetActiveTool("select");
                         showMessage("Pasted Selection from Clipboard", sf::Color::Green);
                     }
                     else {
                         canvas.pasteSelection(timeline.getCurrentFrame());
+                        m_toolDock.SetActiveTool("select");
                     }
 #else
                     if (canvas.hasGlobalClipboard()) {
                         canvas.pasteGlobalClipboard(timeline.getCurrentFrame());
+                        m_toolDock.SetActiveTool("select");
                         showMessage("Pasted Selection from Clipboard", sf::Color::Green);
                     }
                     else {
                         canvas.pasteSelection(timeline.getCurrentFrame());
+                        m_toolDock.SetActiveTool("select");
                     }
 #endif
                 }
@@ -2069,6 +2074,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 else if (isImage) {
                     int curFrame = static_cast<int>(timeline.getCurrentFrame());
                     canvas.importImageToActiveLayer(filePath, curFrame);
+                    m_toolDock.SetActiveTool("select");
                     showMessage("Placed on Canvas: " + std::filesystem::path(filePath).filename().string(), sf::Color::Green);
                 }
                 else if (isAudio) {

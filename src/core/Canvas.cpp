@@ -1222,9 +1222,9 @@ void Canvas::pasteImage(const sf::Image& img, int currentFrame) {
     saveUndoState();
 
     auto& targetLayer = frames[currentFrame].layers[activeLayer];
-    targetLayer.isImageResource = false;
+    targetLayer.isImageResource = true;
     auto tex = std::make_shared<sf::Texture>();
-    tex->setSmooth(false);
+    tex->setSmooth(!isPixelMode);
     tex->loadFromImage(img);
     targetLayer.staticTexture = tex;
 
@@ -1232,10 +1232,21 @@ void Canvas::pasteImage(const sf::Image& img, int currentFrame) {
     float tw = static_cast<float>(texSize.x);
     float th = static_cast<float>(texSize.y);
 
-    float centerX = std::floor((static_cast<float>(canvasLogicalSize.x) - tw) * 0.5f);
-    float centerY = std::floor((static_cast<float>(canvasLogicalSize.y) - th) * 0.5f);
+    // 1. Auto-fit to 85% of canvas if the image is larger than the canvas
+    float maxW = static_cast<float>(canvasLogicalSize.x) * 0.85f;
+    float maxH = static_cast<float>(canvasLogicalSize.y) * 0.85f;
+    float scale = 1.0f;
+    if (tw > maxW || th > maxH) {
+        scale = std::min(maxW / tw, maxH / th);
+    }
+
+    float scaledW = std::max(1.0f, std::floor(tw * scale));
+    float scaledH = std::max(1.0f, std::floor(th * scale));
+    float centerX = std::floor((static_cast<float>(canvasLogicalSize.x) - scaledW) * 0.5f);
+    float centerY = std::floor((static_cast<float>(canvasLogicalSize.y) - scaledH) * 0.5f);
 
     sf::Sprite importSprite(*tex);
+    importSprite.setScale(scaledW / tw, scaledH / th);
     importSprite.setPosition(centerX, centerY);
 
     targetLayer.texture->setSmooth(!isPixelMode);
@@ -1245,12 +1256,17 @@ void Canvas::pasteImage(const sf::Image& img, int currentFrame) {
     targetLayer.texture->display();
     targetLayer.texture->setView(savedView);
 
+    // 2. Select the pasted image, float it, and activate resize handles
     commitSelection(currentFrame);
     selection.startLasso(sf::Vector2f(centerX, centerY), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(centerX + tw, centerY), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(centerX + tw, centerY + th), canvasLogicalSize);
-    selection.addLassoPoint(sf::Vector2f(centerX, centerY + th), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(centerX + scaledW, centerY + scaledH), canvasLogicalSize);
+    selection.addLassoPoint(sf::Vector2f(centerX, centerY + scaledH), canvasLogicalSize);
     selection.endLasso();
+
+    selection.extractFromLayer(targetLayer.texture.get(), true);
+    enterTransformMode(currentFrame);
+    setActiveTool(ToolType::Select);
 
     isDirty = true;
 }
@@ -3882,6 +3898,7 @@ void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFr
         selection.addLassoPoint(sf::Vector2f(centerX, centerY + scaledH), canvasLogicalSize);
         selection.endLasso();
         selection.extractFromLayer(targetLayer.texture.get(), true);
+        enterTransformMode(currentFrame);
         setActiveTool(ToolType::Select);
     }
 }
