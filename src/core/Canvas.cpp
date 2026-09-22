@@ -99,6 +99,102 @@ static bool strokeHitTest(const VectorStroke& vs, sf::Vector2f pt, float hitDist
     return false;
 }
 
+static bool strokesCollide(const VectorStroke& s1, const VectorStroke& s2, float unused = 0.f) {
+    sf::FloatRect b1 = getStrokeBounds(s1);
+    sf::FloatRect b2 = getStrokeBounds(s2);
+    if (!b1.intersects(b2)) return false;
+
+    float ox1 = std::max(b1.left, b2.left);
+    float oy1 = std::max(b1.top, b2.top);
+    float ox2 = std::min(b1.left + b1.width, b2.left + b2.width);
+    float oy2 = std::min(b1.top + b1.height, b2.top + b2.height);
+    sf::FloatRect overlap(ox1, oy1, ox2 - ox1, oy2 - oy1);
+
+    struct Tri {
+        sf::Vector2f a, b, c;
+        sf::FloatRect box;
+    };
+
+    std::vector<Tri> t1;
+    for (size_t i = 0; i + 2 < s1.mesh.getVertexCount(); i += 3) {
+        sf::Vector2f pa = s1.mesh[i].position;
+        sf::Vector2f pb = s1.mesh[i + 1].position;
+        sf::Vector2f pc = s1.mesh[i + 2].position;
+        float minX = std::min({ pa.x, pb.x, pc.x });
+        float maxX = std::max({ pa.x, pb.x, pc.x });
+        float minY = std::min({ pa.y, pb.y, pc.y });
+        float maxY = std::max({ pa.y, pb.y, pc.y });
+        sf::FloatRect tb(minX, minY, std::max(0.5f, maxX - minX), std::max(0.5f, maxY - minY));
+        if (tb.intersects(overlap)) {
+            t1.push_back({ pa, pb, pc, tb });
+        }
+    }
+    if (t1.empty()) return false;
+
+    std::vector<Tri> t2;
+    for (size_t i = 0; i + 2 < s2.mesh.getVertexCount(); i += 3) {
+        sf::Vector2f pa = s2.mesh[i].position;
+        sf::Vector2f pb = s2.mesh[i + 1].position;
+        sf::Vector2f pc = s2.mesh[i + 2].position;
+        float minX = std::min({ pa.x, pb.x, pc.x });
+        float maxX = std::max({ pa.x, pb.x, pc.x });
+        float minY = std::min({ pa.y, pb.y, pc.y });
+        float maxY = std::max({ pa.y, pb.y, pc.y });
+        sf::FloatRect tb(minX, minY, std::max(0.5f, maxX - minX), std::max(0.5f, maxY - minY));
+        if (tb.intersects(overlap)) {
+            t2.push_back({ pa, pb, pc, tb });
+        }
+    }
+    if (t2.empty()) return false;
+
+    auto segIntersect = [](sf::Vector2f p1, sf::Vector2f p2, sf::Vector2f p3, sf::Vector2f p4) -> bool {
+        auto ccw = [](sf::Vector2f a, sf::Vector2f b, sf::Vector2f c) {
+            return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
+            };
+        return (ccw(p1, p2, p3) != ccw(p1, p2, p4)) && (ccw(p3, p4, p1) != ccw(p3, p4, p2));
+        };
+
+    auto ptInTri = [](sf::Vector2f p, sf::Vector2f a, sf::Vector2f b, sf::Vector2f c) -> bool {
+        float d1 = (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y);
+        float d2 = (p.x - c.x) * (b.y - c.y) - (b.x - c.x) * (p.y - c.y);
+        float d3 = (p.x - a.x) * (c.y - a.y) - (c.x - a.x) * (p.y - a.y);
+        bool has_neg = (d1 < 0.f) || (d2 < 0.f) || (d3 < 0.f);
+        bool has_pos = (d1 > 0.f) || (d2 > 0.f) || (d3 > 0.f);
+        return !(has_neg && has_pos);
+        };
+
+    for (const auto& tri1 : t1) {
+        for (const auto& tri2 : t2) {
+            if (!tri1.box.intersects(tri2.box)) continue;
+
+            if (segIntersect(tri1.a, tri1.b, tri2.a, tri2.b)) return true;
+            if (segIntersect(tri1.a, tri1.b, tri2.b, tri2.c)) return true;
+            if (segIntersect(tri1.a, tri1.b, tri2.c, tri2.a)) return true;
+
+            if (segIntersect(tri1.b, tri1.c, tri2.a, tri2.b)) return true;
+            if (segIntersect(tri1.b, tri1.c, tri2.b, tri2.c)) return true;
+            if (segIntersect(tri1.b, tri1.c, tri2.c, tri2.a)) return true;
+
+            if (segIntersect(tri1.c, tri1.a, tri2.a, tri2.b)) return true;
+            if (segIntersect(tri1.c, tri1.a, tri2.b, tri2.c)) return true;
+            if (segIntersect(tri1.c, tri1.a, tri2.c, tri2.a)) return true;
+
+            if (ptInTri(tri1.a, tri2.a, tri2.b, tri2.c)) return true;
+            if (ptInTri(tri2.a, tri1.a, tri1.b, tri1.c)) return true;
+        }
+    }
+
+    return false;
+}
+
+static bool strokeImageCollide(const VectorStroke& vs, const sf::FloatRect& imgBounds, float unused = 0.f) {
+    if (!getStrokeBounds(vs).intersects(imgBounds)) return false;
+    for (size_t i = 0; i < vs.mesh.getVertexCount(); ++i) {
+        if (imgBounds.contains(vs.mesh[i].position)) return true;
+    }
+    return false;
+}
+
 void Canvas::eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius, int currentFrame) {}
 
 const int DEFAULT_NORMAL_W = 1280;
@@ -2571,13 +2667,10 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
             if (activeTool == ToolType::Select) {
                 float handleRad = computeHandleHitRadius();
-                if (selection.isActive() && pendingTransform) {
-                    int handleIdx = selection.hitTestHandle(localPos, handleRad);
-                    if (handleIdx != -1) {
-                        saveUndoState();
-                        selection.startResize(localPos, handleRad);
-                        return;
-                    }
+                if (selection.isActive() && pendingTransform && selection.hitTestHandle(localPos, handleRad) != -1) {
+                    saveUndoState();
+                    selection.startResize(localPos, handleRad);
+                    return;
                 }
 
                 bool isDoubleClick = (m_selectClickClock.getElapsedTime().asMilliseconds() < 350 &&
@@ -2585,7 +2678,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 m_selectClickClock.restart();
                 m_lastClickPos = localPos;
 
-                // Double-click isolates a single object from the continuous group
+                // Double-click isolates a single drawing from the group
                 if (isDoubleClick && selection.isActive() && m_isMultiSelectionGroup) {
                     int hitStroke = -1;
                     for (int sIdx : m_selectedStrokes) {
@@ -2625,40 +2718,20 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     }
                 }
 
-                // Single click inside active selection drags the whole group together
+                // Drag an active selection if clicking inside it
                 if (selection.isActive() && selection.isPointInsideSelection(localPos)) {
                     m_lastDragPos = localPos;
                     selection.startDrag(localPos);
                     return;
                 }
 
-                // Click outside commits and clears previous selection
+                // If clicking outside, commit current selection and start drawing a lasso
                 if (selection.isActive()) {
                     commitSelection(currentFrame);
                 }
 
-                bool hitAny = false;
-                for (const auto& vs : m_vectorStrokes) {
-                    if (vs.frame == currentFrame && vs.layer == activeLayer && strokeHitTest(vs, localPos, 12.0f)) {
-                        hitAny = true; break;
-                    }
-                }
-                if (!hitAny) {
-                    for (const auto& ci : m_canvasImages) {
-                        if (ci.frame == currentFrame && ci.layer == activeLayer && ci.bounds.contains(localPos)) {
-                            hitAny = true; break;
-                        }
-                    }
-                }
-
-                if (hitAny) {
-                    autoSelectObject(localPos, currentFrame);
-                    m_lastDragPos = localPos;
-                    selection.startDrag(localPos);
-                }
-                else {
-                    selection.startLasso(localPos, canvasLogicalSize);
-                }
+                m_dragStartMousePos = localPos;
+                selection.startLasso(localPos, canvasLogicalSize);
                 return;
             }
 
@@ -3057,57 +3130,95 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
         }
 
         if (selection.getState() == SelectionState::Drawing) {
+            float dragDist = std::hypot(localPos.x - m_dragStartMousePos.x, localPos.y - m_dragStartMousePos.y);
             selection.endLasso();
-            if (selection.getState() == SelectionState::Inactive) {
+
+            if (dragDist < 5.0f || selection.getState() == SelectionState::Inactive) {
                 autoSelectObject(localPos, currentFrame);
             }
             else if (selection.getState() == SelectionState::Selected) {
+                saveUndoState();
+
                 m_selectedStrokes.clear();
                 m_selectedImages.clear();
-                std::vector<sf::FloatRect> subBoxes;
-                sf::FloatRect masterBox;
-                bool first = true;
+
+                std::vector<VectorStroke> newlyCutStrokes;
+                std::vector<int> selectedStrokeIndices;
 
                 for (size_t s = 0; s < m_vectorStrokes.size(); ++s) {
-                    if (m_vectorStrokes[s].frame == currentFrame && m_vectorStrokes[s].layer == activeLayer && !m_vectorStrokes[s].isErase) {
-                        sf::FloatRect sb = getStrokeBounds(m_vectorStrokes[s]);
-                        if (selection.isPointInsideSelection(sf::Vector2f(sb.left + sb.width * 0.5f, sb.top + sb.height * 0.5f))) {
-                            m_selectedStrokes.push_back(static_cast<int>(s));
-                            subBoxes.push_back(sb);
-                            if (first) { masterBox = sb; first = false; }
-                            else {
-                                float minX = std::min(masterBox.left, sb.left);
-                                float minY = std::min(masterBox.top, sb.top);
-                                float maxX = std::max(masterBox.left + masterBox.width, sb.left + sb.width);
-                                float maxY = std::max(masterBox.top + masterBox.height, sb.top + sb.height);
-                                masterBox = sf::FloatRect(minX, minY, maxX - minX, maxY - minY);
+                    auto& vs = m_vectorStrokes[s];
+                    if (vs.frame != currentFrame || vs.layer != activeLayer || vs.isErase) continue;
+
+                    sf::FloatRect sb = getStrokeBounds(vs);
+                    if (!selection.getBoundingBox().intersects(sb)) continue;
+
+                    sf::VertexArray kept(sf::Triangles);
+                    sf::VertexArray cut(sf::Triangles);
+
+                    for (size_t v = 0; v + 2 < vs.mesh.getVertexCount(); v += 3) {
+                        sf::Vector2f centroid = (vs.mesh[v].position + vs.mesh[v + 1].position + vs.mesh[v + 2].position) / 3.0f;
+                        if (selection.isPointInsideSelection(centroid)) {
+                            cut.append(vs.mesh[v]);
+                            cut.append(vs.mesh[v + 1]);
+                            cut.append(vs.mesh[v + 2]);
+                        }
+                        else {
+                            kept.append(vs.mesh[v]);
+                            kept.append(vs.mesh[v + 1]);
+                            kept.append(vs.mesh[v + 2]);
+                        }
+                    }
+
+                    if (cut.getVertexCount() > 0 && kept.getVertexCount() > 0) {
+                        vs.mesh = kept;
+                        VectorStroke newVs;
+                        newVs.mesh = cut;
+                        newVs.layer = activeLayer;
+                        newVs.frame = currentFrame;
+                        newVs.isErase = vs.isErase;
+                        newlyCutStrokes.push_back(std::move(newVs));
+                    }
+                    else if (cut.getVertexCount() > 0 && kept.getVertexCount() == 0) {
+                        selectedStrokeIndices.push_back(static_cast<int>(s));
+                    }
+                }
+
+                for (auto& nvs : newlyCutStrokes) {
+                    selectedStrokeIndices.push_back(static_cast<int>(m_vectorStrokes.size()));
+                    m_vectorStrokes.push_back(std::move(nvs));
+                }
+
+                m_selectedStrokes = selectedStrokeIndices;
+
+                for (size_t i = 0; i < m_canvasImages.size(); ++i) {
+                    if (m_canvasImages[i].frame == currentFrame && m_canvasImages[i].layer == activeLayer) {
+                        const auto& b = m_canvasImages[i].bounds;
+                        if (selection.getBoundingBox().intersects(b)) {
+                            bool imgCut = selection.isPointInsideSelection(sf::Vector2f(b.left, b.top)) ||
+                                selection.isPointInsideSelection(sf::Vector2f(b.left + b.width, b.top)) ||
+                                selection.isPointInsideSelection(sf::Vector2f(b.left + b.width, b.top + b.height)) ||
+                                selection.isPointInsideSelection(sf::Vector2f(b.left, b.top + b.height)) ||
+                                selection.isPointInsideSelection(sf::Vector2f(b.left + b.width * 0.5f, b.top + b.height * 0.5f));
+                            if (imgCut) {
+                                m_selectedImages.push_back(static_cast<int>(i));
                             }
                         }
                     }
                 }
-                for (size_t i = 0; i < m_canvasImages.size(); ++i) {
-                    if (m_canvasImages[i].frame == currentFrame && m_canvasImages[i].layer == activeLayer) {
-                        const auto& b = m_canvasImages[i].bounds;
-                        if (selection.isPointInsideSelection(sf::Vector2f(b.left + b.width * 0.5f, b.top + b.height * 0.5f))) {
-                            m_selectedImages.push_back(static_cast<int>(i));
-                            subBoxes.push_back(b);
-                            if (first) { masterBox = b; first = false; }
-                            else {
-                                float minX = std::min(masterBox.left, b.left);
-                                float minY = std::min(masterBox.top, b.top);
-                                float maxX = std::max(masterBox.left + masterBox.width, b.left + b.width);
-                                float maxY = std::max(masterBox.top + masterBox.height, b.top + b.height);
-                                masterBox = sf::FloatRect(minX, minY, maxX - minX, maxY - minY);
-                            }
-                        }
-                    }
+
+                std::vector<sf::FloatRect> subBoxes;
+                for (int sIdx : m_selectedStrokes) {
+                    subBoxes.push_back(getStrokeBounds(m_vectorStrokes[sIdx]));
+                }
+                for (int iIdx : m_selectedImages) {
+                    subBoxes.push_back(m_canvasImages[iIdx].bounds);
                 }
 
                 if (!subBoxes.empty()) {
                     m_isMultiSelectionGroup = (subBoxes.size() > 1);
-                    selection.setBoundingBox(masterBox);
                     selection.setSubItemBoxes(subBoxes);
                     selection.setShowHandles(pendingTransform);
+                    isDirty = true;
                 }
                 else {
                     clearObjectSelection();
@@ -3333,7 +3444,7 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
             sf::Vector2f delta = localPos - m_lastDragPos;
             m_lastDragPos = localPos;
 
-            selection.drag(localPos, canvasLogicalSize);
+            selection.drag(localPos, canvasLogicalSize, true);
 
             for (int sIdx : m_selectedStrokes) {
                 if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
@@ -4180,11 +4291,28 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     size_t head = 0;
     while (head < q.size()) {
         int curr = q[head++];
-        sf::FloatRect exp(entities[curr].bounds.left - 6.f, entities[curr].bounds.top - 6.f,
-            entities[curr].bounds.width + 12.f, entities[curr].bounds.height + 12.f);
 
         for (size_t next = 0; next < entities.size(); ++next) {
-            if (!inChain[next] && exp.intersects(entities[next].bounds)) {
+            if (inChain[next]) continue;
+
+            bool touches = false;
+            const auto& e1 = entities[curr];
+            const auto& e2 = entities[next];
+
+            if (e1.type == SelectableEntity::Stroke && e2.type == SelectableEntity::Stroke) {
+                touches = strokesCollide(m_vectorStrokes[e1.originalIndex], m_vectorStrokes[e2.originalIndex], 6.0f);
+            }
+            else if (e1.type == SelectableEntity::Stroke && e2.type == SelectableEntity::Image) {
+                touches = strokeImageCollide(m_vectorStrokes[e1.originalIndex], m_canvasImages[e2.originalIndex].bounds, 6.0f);
+            }
+            else if (e1.type == SelectableEntity::Image && e2.type == SelectableEntity::Stroke) {
+                touches = strokeImageCollide(m_vectorStrokes[e2.originalIndex], m_canvasImages[e1.originalIndex].bounds, 6.0f);
+            }
+            else if (e1.type == SelectableEntity::Image && e2.type == SelectableEntity::Image) {
+                touches = e1.bounds.intersects(e2.bounds);
+            }
+
+            if (touches) {
                 inChain[next] = true;
                 q.push_back(static_cast<int>(next));
             }

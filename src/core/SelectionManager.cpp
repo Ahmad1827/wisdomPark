@@ -77,6 +77,13 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
     }
 
     if (showHandles && (state == SelectionState::Selected || state == SelectionState::Floating)) {
+        sf::RectangleShape frameBox(sf::Vector2f(boundingBox.width, boundingBox.height));
+        frameBox.setPosition(boundingBox.left, boundingBox.top);
+        frameBox.setFillColor(sf::Color::Transparent);
+        frameBox.setOutlineThickness(1.0f);
+        frameBox.setOutlineColor(sf::Color(0, 191, 255, 180));
+        window.draw(frameBox, baseStates);
+
         auto corners = getHandlePositions();
         for (const auto& c : corners) {
             sf::RectangleShape h(sf::Vector2f(handleVisualSize, handleVisualSize));
@@ -482,44 +489,31 @@ bool SelectionManager::startResize(sf::Vector2f pos, float handleRadius) {
 
     auto corners = getHandlePositions();
     resizeAnchorWorld = corners[anchorIdx];
-
-    float w = boundingBox.width;
-    float h = boundingBox.height;
-    std::array<sf::Vector2f, 4> localCorners = {
-        sf::Vector2f(0.f, 0.f), sf::Vector2f(w, 0.f), sf::Vector2f(w, h), sf::Vector2f(0.f, h)
-    };
-
-    resizeAnchorLocal = localCorners[anchorIdx];
-    resizeDraggedLocal = localCorners[idx];
     resizeStartBox = boundingBox;
     isResizingFlag = true;
     return true;
 }
 
 void SelectionManager::resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas) {
-    if (!isResizingFlag || state != SelectionState::Floating) return;
+    if (!isResizingFlag) return;
 
-    sf::Vector2f diffLocal = resizeDraggedLocal - resizeAnchorLocal;
-    float newScaleX = floatingSprite.getScale().x;
-    float newScaleY = floatingSprite.getScale().y;
+    float newW = std::max(2.0f, std::abs(pos.x - resizeAnchorWorld.x));
+    float newH = std::max(2.0f, std::abs(pos.y - resizeAnchorWorld.y));
 
-    if (std::abs(diffLocal.x) > 0.0001f) newScaleX = (pos.x - resizeAnchorWorld.x) / diffLocal.x;
-    if (std::abs(diffLocal.y) > 0.0001f) newScaleY = (pos.y - resizeAnchorWorld.y) / diffLocal.y;
+    float newLeft = std::min(resizeAnchorWorld.x, pos.x);
+    float newTop = std::min(resizeAnchorWorld.y, pos.y);
 
-    const float minDim = 2.0f;
-    float minScaleX = minDim / std::max(1.f, boundingBox.width);
-    float minScaleY = minDim / std::max(1.f, boundingBox.height);
+    if (boundingBox.width > 0.001f && boundingBox.height > 0.001f) {
+        float sx = newW / boundingBox.width;
+        float sy = newH / boundingBox.height;
 
-    if (std::abs(newScaleX) < minScaleX) newScaleX = (newScaleX >= 0.f ? minScaleX : -minScaleX);
-    if (std::abs(newScaleY) < minScaleY) newScaleY = (newScaleY >= 0.f ? minScaleY : -minScaleY);
+        for (auto& p : pathPoints) {
+            p.x = newLeft + (p.x - boundingBox.left) * sx;
+            p.y = newTop + (p.y - boundingBox.top) * sy;
+        }
+    }
 
-    sf::Vector2f newPos;
-    newPos.x = resizeAnchorWorld.x - newScaleX * resizeAnchorLocal.x;
-    newPos.y = resizeAnchorWorld.y - newScaleY * resizeAnchorLocal.y;
-
-    floatingSprite.setScale(newScaleX, newScaleY);
-    floatingSprite.setPosition(newPos);
-    clampToCanvas(canvasSize, allowOutsideCanvas);
+    boundingBox = sf::FloatRect(newLeft, newTop, newW, newH);
 }
 
 void SelectionManager::endResize() {

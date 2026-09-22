@@ -51,15 +51,15 @@ struct DeformPixel {
 
 struct VectorStroke {
     sf::VertexArray mesh;
-    int layer;
-    int frame;
+    int layer{ 0 };
+    int frame{ 0 };
     bool isErase = false;
 };
 
 struct CanvasImage {
-    int id;
-    int frame;
-    int layer;
+    int id{ 0 };
+    int frame{ 0 };
+    int layer{ 0 };
     std::shared_ptr<sf::Texture> texture;
     sf::FloatRect bounds;
 };
@@ -71,6 +71,7 @@ private:
     std::vector<int> m_selectedStrokes;
     std::vector<int> m_selectedImages;
     bool m_isMultiSelectionGroup{ false };
+    sf::Vector2f m_dragStartMousePos{ 0.f, 0.f };
     sf::Vector2f m_lastDragPos{ 0.f, 0.f };
     sf::Clock m_selectClickClock;
     sf::Vector2f m_lastClickPos{ 0.f, 0.f };
