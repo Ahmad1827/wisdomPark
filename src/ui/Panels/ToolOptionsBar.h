@@ -19,7 +19,7 @@ namespace WisdomUI {
         ToolOptionsBar();
         void Initialize(const sf::Font& font);
         void SetBounds(const sf::FloatRect& bounds);
-        void SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization = 0.0f);
+        void SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization = 0.0f, int zOrder = 0, int maxZ = 0);
 
         void SetOutlineColor(sf::Color color) { m_outlineColor = color; }
         sf::Color GetOutlineColor() const { return m_outlineColor; }
@@ -30,7 +30,8 @@ namespace WisdomUI {
             std::function<void(const std::string&)> onSelectAction = nullptr,
             std::function<void()> onMakeOutline = nullptr,
             std::function<void()> onPickOutlineColor = nullptr,
-            std::function<void(float)> onStabilizationChange = nullptr);
+            std::function<void(float)> onStabilizationChange = nullptr,
+            std::function<void(int)> onSetZOrder = nullptr);
 
         void Update(float deltaTime, const sf::Vector2f& mousePos);
         void Render(sf::RenderWindow& window);
@@ -55,6 +56,15 @@ namespace WisdomUI {
         sf::Color m_outlineColor{ sf::Color::Black };
 
         std::vector<SelectionToolButton> m_selectionButtons;
+
+        sf::FloatRect m_zLabelBounds;
+        sf::FloatRect m_zDecBtnBounds;
+        sf::FloatRect m_zBoxBounds;
+        sf::FloatRect m_zIncBtnBounds;
+        int m_currentZOrder{ 0 };
+        int m_maxZOrder{ 0 };
+        bool m_isTypingZ{ false };
+        std::string m_zInputBuffer{ "" };
 
         float m_perfHoverAlpha{ 0.0f };
         float m_perfToggleProgress{ 0.0f };

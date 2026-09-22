@@ -1868,6 +1868,199 @@ void Canvas::cropSelection(int currentFrame) {
     }
 }
 
+void Canvas::moveSelectionZOrder(int delta, int currentFrame) {
+    setSelectionZOrder(getSelectionZOrder(currentFrame) + delta, currentFrame);
+}
+
+void Canvas::bringSelectionToFront(int currentFrame) {
+    setSelectionZOrder(getMaxZOrder(currentFrame), currentFrame);
+}
+
+void Canvas::sendSelectionToBack(int currentFrame) {
+    setSelectionZOrder(0, currentFrame);
+}
+
+int Canvas::getSelectionZOrder(int currentFrame) const {
+    if (!selection.isActive()) return 0;
+    if (isPixelMode) {
+        if (m_selectedImages.empty()) return 0;
+        int targetIdx = m_selectedImages[0];
+        int rank = 0;
+        for (size_t i = 0; i < m_canvasImages.size(); ++i) {
+            if (m_canvasImages[i].frame == currentFrame && m_canvasImages[i].layer == activeLayer) {
+                if (static_cast<int>(i) == targetIdx) return rank;
+                rank++;
+            }
+        }
+        return 0;
+    }
+    else {
+        if (m_selectedStrokes.empty()) return 0;
+        int targetIdx = m_selectedStrokes[0];
+        int rank = 0;
+        for (size_t i = 0; i < m_vectorStrokes.size(); ++i) {
+            if (m_vectorStrokes[i].frame == currentFrame && m_vectorStrokes[i].layer == activeLayer) {
+                if (static_cast<int>(i) == targetIdx) return rank;
+                rank++;
+            }
+        }
+        return 0;
+    }
+}
+
+int Canvas::getMaxZOrder(int currentFrame) const {
+    int count = 0;
+    if (isPixelMode) {
+        for (const auto& ci : m_canvasImages) {
+            if (ci.frame == currentFrame && ci.layer == activeLayer) count++;
+        }
+    }
+    else {
+        for (const auto& vs : m_vectorStrokes) {
+            if (vs.frame == currentFrame && vs.layer == activeLayer) count++;
+        }
+    }
+    return std::max(0, count - 1);
+}
+
+void Canvas::setSelectionZOrder(int newZ, int currentFrame) {
+    if (!selection.isActive()) return;
+    saveUndoState();
+
+    if (isPixelMode) {
+        if (m_selectedImages.empty()) return;
+        std::vector<bool> isSel(m_canvasImages.size(), false);
+        for (int idx : m_selectedImages) {
+            if (idx >= 0 && idx < static_cast<int>(m_canvasImages.size())) isSel[idx] = true;
+        }
+
+        std::vector<CanvasImage> selectedImgs;
+        std::vector<CanvasImage> otherImgsOnLayer;
+        std::vector<CanvasImage> remainingAll;
+
+        for (size_t i = 0; i < m_canvasImages.size(); ++i) {
+            if (m_canvasImages[i].frame == currentFrame && m_canvasImages[i].layer == activeLayer) {
+                if (isSel[i]) selectedImgs.push_back(std::move(m_canvasImages[i]));
+                else otherImgsOnLayer.push_back(std::move(m_canvasImages[i]));
+            }
+            else {
+                remainingAll.push_back(std::move(m_canvasImages[i]));
+            }
+        }
+
+        int targetZ = std::clamp(newZ, 0, static_cast<int>(otherImgsOnLayer.size()));
+        otherImgsOnLayer.insert(otherImgsOnLayer.begin() + targetZ,
+            std::make_move_iterator(selectedImgs.begin()),
+            std::make_move_iterator(selectedImgs.end()));
+
+        m_canvasImages = std::move(remainingAll);
+        std::vector<int> newSelectedIndices;
+        for (size_t i = 0; i < otherImgsOnLayer.size(); ++i) {
+            int newIdx = static_cast<int>(m_canvasImages.size());
+            if (static_cast<int>(i) >= targetZ && static_cast<int>(i) < targetZ + static_cast<int>(selectedImgs.size())) {
+                newSelectedIndices.push_back(newIdx);
+            }
+            m_canvasImages.push_back(std::move(otherImgsOnLayer[i]));
+        }
+        m_selectedImages = newSelectedIndices;
+    }
+    else {
+        if (m_selectedStrokes.empty()) return;
+        std::vector<bool> isSel(m_vectorStrokes.size(), false);
+        for (int idx : m_selectedStrokes) {
+            if (idx >= 0 && idx < static_cast<int>(m_vectorStrokes.size())) isSel[idx] = true;
+        }
+
+        std::vector<VectorStroke> selectedStr;
+        std::vector<VectorStroke> otherStrOnLayer;
+        std::vector<VectorStroke> remainingAll;
+
+        for (size_t i = 0; i < m_vectorStrokes.size(); ++i) {
+            if (m_vectorStrokes[i].frame == currentFrame && m_vectorStrokes[i].layer == activeLayer) {
+                if (isSel[i]) selectedStr.push_back(std::move(m_vectorStrokes[i]));
+                else otherStrOnLayer.push_back(std::move(m_vectorStrokes[i]));
+            }
+            else {
+                remainingAll.push_back(std::move(m_vectorStrokes[i]));
+            }
+        }
+
+        int targetZ = std::clamp(newZ, 0, static_cast<int>(otherStrOnLayer.size()));
+        otherStrOnLayer.insert(otherStrOnLayer.begin() + targetZ,
+            std::make_move_iterator(selectedStr.begin()),
+            std::make_move_iterator(selectedStr.end()));
+
+        m_vectorStrokes = std::move(remainingAll);
+        std::vector<int> newSelectedIndices;
+        for (size_t i = 0; i < otherStrOnLayer.size(); ++i) {
+            int newIdx = static_cast<int>(m_vectorStrokes.size());
+            if (static_cast<int>(i) >= targetZ && static_cast<int>(i) < targetZ + static_cast<int>(selectedStr.size())) {
+                newSelectedIndices.push_back(newIdx);
+            }
+            m_vectorStrokes.push_back(std::move(otherStrOnLayer[i]));
+        }
+        m_selectedStrokes = newSelectedIndices;
+    }
+
+    isDirty = true;
+}
+
+void Canvas::recolorActiveSelection(sf::Color newColor) {
+    if (!selection.isActive()) return;
+
+    if (isPixelMode) {
+        for (int iIdx : m_selectedImages) {
+            if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
+                auto& ci = m_canvasImages[iIdx];
+                if (ci.texture && ci.texture->getSize().x > 0 && ci.texture->getSize().y > 0) {
+                    sf::Image img = ci.texture->copyToImage();
+                    unsigned int iw = img.getSize().x;
+                    unsigned int ih = img.getSize().y;
+
+                    for (unsigned int y = 0; y < ih; ++y) {
+                        for (unsigned int x = 0; x < iw; ++x) {
+                            sf::Color c = img.getPixel(x, y);
+                            if (c.a > 0) {
+                                sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
+                                img.setPixel(x, y, sf::Color(newColor.r, newColor.g, newColor.b, a));
+                            }
+                        }
+                    }
+
+                    auto newTex = std::make_shared<sf::Texture>();
+                    newTex->setSmooth(!isPixelMode);
+                    newTex->loadFromImage(img);
+                    ci.texture = newTex;
+                }
+            }
+        }
+    }
+    else {
+        for (int sIdx : m_selectedStrokes) {
+            if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
+                auto& vs = m_vectorStrokes[sIdx];
+                if (!vs.isErase) {
+                    for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+                        vs.mesh[v].color = newColor;
+                    }
+                }
+            }
+        }
+    }
+
+    if (selection.getState() == SelectionState::Floating) {
+        for (auto& fvs : m_floatingVectorStrokes) {
+            if (!fvs.isErase) {
+                for (size_t v = 0; v < fvs.mesh.getVertexCount(); ++v) {
+                    fvs.mesh[v].color = newColor;
+                }
+            }
+        }
+    }
+
+    isDirty = true;
+}
+
 void Canvas::setActiveTool(ToolType tool, int currentFrame) {
     if (tool != ToolType::Text && m_textManager) {
         TextObject* t = m_textManager->getEditingText();
@@ -1916,7 +2109,12 @@ BrushManager& Canvas::getBrushEngine() { return brushEngine; }
 void Canvas::setBrushSize(float size) { brushEngine.setBrushSize(size); }
 float Canvas::getBrushSize() const { return brushEngine.getActivePreset().size; }
 
-void Canvas::setPrimaryColor(sf::Color color) { primaryColor = color; }
+void Canvas::setPrimaryColor(sf::Color color) {
+    primaryColor = color;
+    if (selection.isActive()) {
+        recolorActiveSelection(color);
+    }
+}
 void Canvas::setSecondaryColor(sf::Color color) { secondaryColor = color; }
 sf::Color Canvas::getPrimaryColor() const { return primaryColor; }
 sf::Color Canvas::getSecondaryColor() const { return secondaryColor; }

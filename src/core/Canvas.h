@@ -324,6 +324,13 @@ public:
     void flipSelectionVertical(int currentFrame);
     void duplicateSelection(int currentFrame);
     void cropSelection(int currentFrame);
+    void moveSelectionZOrder(int delta, int currentFrame);
+    void bringSelectionToFront(int currentFrame);
+    void sendSelectionToBack(int currentFrame);
+    int getSelectionZOrder(int currentFrame) const;
+    int getMaxZOrder(int currentFrame) const;
+    void setSelectionZOrder(int newZ, int currentFrame);
+    void recolorActiveSelection(sf::Color newColor);
 
     void setActiveTool(ToolType tool, int currentFrame = 0);
     ToolType getActiveTool() const;

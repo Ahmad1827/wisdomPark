@@ -1501,6 +1501,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             },
             [&](float stab) {
                 canvas.setStabilizer(stab);
+            },
+            [&](int newZ) {
+                canvas.setSelectionZOrder(newZ, timeline.getCurrentFrame());
+                showMessage("Z-Order: " + std::to_string(canvas.getSelectionZOrder(timeline.getCurrentFrame())), sf::Color::Cyan);
             }
         )) return;
 
@@ -2466,7 +2470,9 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         else if (canvas.getActiveTool() == ToolType::Grid) toolName = "Grid";
 
         float curSize = canvas.getPixelMode() ? static_cast<float>(canvas.getPixelBrushSize()) : canvas.getBrushSize();
-        m_toolOptionsBar.SyncState(toolName, curSize, canvas.getPixelMode(), canvas.isPixelPerfectEnabled(), canvas.getStabilizer());
+        int curZ = canvas.getSelectionZOrder(timeline.getCurrentFrame());
+        int maxZ = canvas.getMaxZOrder(timeline.getCurrentFrame());
+        m_toolOptionsBar.SyncState(toolName, curSize, canvas.getPixelMode(), canvas.isPixelPerfectEnabled(), canvas.getStabilizer(), curZ, maxZ);
         m_toolOptionsBar.Update(dt, mousePos);
 
         m_toolDock.SetBounds(regions.toolDock);
