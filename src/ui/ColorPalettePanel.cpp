@@ -114,7 +114,7 @@ void ColorPalettePanel::init() {
 }
 
 void ColorPalettePanel::saveAdvicePalettes() const {
-    std::ofstream out("color_advice.dat");
+    std::ofstream out("projects/color_advice.dat");
     if (!out.is_open()) return;
     out << m_advicePalettes.size() << "\n";
     for (const auto& pal : m_advicePalettes) {
@@ -127,8 +127,11 @@ void ColorPalettePanel::saveAdvicePalettes() const {
 }
 
 void ColorPalettePanel::loadAdvicePalettes() {
-    std::ifstream in("color_advice.dat");
-    if (!in.is_open()) return;
+    std::ifstream in("projects/color_advice.dat");
+    if (!in.is_open()) {
+        in.open("color_advice.dat");
+        if (!in.is_open()) return;
+    }
 
     size_t total = 0;
     if (!(in >> total)) return;

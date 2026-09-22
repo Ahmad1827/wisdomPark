@@ -9,9 +9,12 @@ private:
     std::vector<sf::Color> recentColors;
     std::vector<sf::Color> customSwatches;
     std::string paletteFilePath;
+    std::string recentColorsFilePath;
 
     void savePalette();
     void loadPalette();
+    void saveRecentColors();
+    void loadRecentColors();
 
 public:
     ColorManager();

@@ -511,6 +511,46 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         });
 
     baseCanvas->setMaxUndoHistory(uiHistorySize);
+
+    std::ifstream sessionFile("projects/last_session.txt");
+    if (sessionFile.is_open()) {
+        std::string sPath, sName, sMode;
+        if (std::getline(sessionFile, sPath) && std::getline(sessionFile, sName) && std::getline(sessionFile, sMode)) {
+            if (std::filesystem::exists(sPath) && projManager) {
+                activeProjectPath = sPath;
+                activeProjectName = sName;
+                int fps = 12;
+                bool pix = (sMode == "1");
+                baseCanvas->clearCanvasImages();
+                baseCanvas->clearObjectSelection();
+                if (projManager->loadProject(activeProjectPath, *baseCanvas, fps, pix)) {
+                    baseCanvas->setPixelMode(pix);
+                    baseCanvas->clearIsDirty();
+                    if (baseCanvas->getFrameCount() > 0) {
+                        int targetLayer = (baseCanvas->getFrameReadOnly(0)->layers.size() > 1) ? 1 : 0;
+                        baseCanvas->setActiveLayer(targetLayer, 0);
+                    }
+                    baseCanvas->setActiveTool(ToolType::Brush);
+                    m_toolDock.SetActiveTool("brush");
+                }
+            }
+        }
+        sessionFile.close();
+    }
+
+    std::ifstream colorsFile("projects/active_colors.txt");
+    if (colorsFile.is_open()) {
+        int r1, g1, b1, a1, r2, g2, b2, a2;
+        if (colorsFile >> r1 >> g1 >> b1 >> a1 >> r2 >> g2 >> b2 >> a2) {
+            sf::Color p(r1, g1, b1, a1);
+            sf::Color s(r2, g2, b2, a2);
+            baseCanvas->setPrimaryColor(p);
+            baseCanvas->setSecondaryColor(s);
+            colorPalettePanel.setColors(p, s);
+        }
+        colorsFile.close();
+    }
+
     initStartMenu();
 }
 
@@ -858,15 +898,28 @@ void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hove
 
 
 bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
-    canvas.commitSelection(timeline.getCurrentFrame());
-    canvas.bakeAllStrokes();
-
     if (activeProjectPath.empty()) {
         activeProjectPath = "projects/" + activeProjectName + ".wpk";
     }
     if (projManager) {
         if (projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode())) {
             canvas.clearIsDirty();
+
+            std::ofstream sessionFile("projects/last_session.txt");
+            if (sessionFile.is_open()) {
+                sessionFile << activeProjectPath << "\n" << activeProjectName << "\n" << (canvas.getPixelMode() ? "1" : "0") << "\n";
+                sessionFile.close();
+            }
+
+            std::ofstream colorsFile("projects/active_colors.txt");
+            if (colorsFile.is_open()) {
+                sf::Color p = canvas.getPrimaryColor();
+                sf::Color s = canvas.getSecondaryColor();
+                colorsFile << static_cast<int>(p.r) << " " << static_cast<int>(p.g) << " " << static_cast<int>(p.b) << " " << static_cast<int>(p.a) << "\n";
+                colorsFile << static_cast<int>(s.r) << " " << static_cast<int>(s.g) << " " << static_cast<int>(s.b) << " " << static_cast<int>(s.a) << "\n";
+                colorsFile.close();
+            }
+
             return true;
         }
     }
@@ -874,6 +927,12 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
 }
 
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
+    if (event.type == sf::Event::Closed) {
+        if (currentState == AppState::Painting) {
+            triggerSave(canvas, timeline);
+        }
+    }
+
     if (handleHandCamWidgetEvents(event)) return;
 
     if (m_showResizeModal) {

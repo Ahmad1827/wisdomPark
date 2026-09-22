@@ -94,6 +94,17 @@ private:
         std::vector<Frame> frames;
         std::vector<VectorStroke> vectorStrokes;
         std::vector<CanvasImage> canvasImages;
+        SelectionState selectionState{ SelectionState::Inactive };
+        sf::FloatRect selectionBoundingBox{ 0.f, 0.f, 0.f, 0.f };
+        std::vector<sf::FloatRect> selectionSubItemBoxes;
+        std::vector<sf::Vector2f> selectionPathPoints;
+        bool isLassoSelection{ false };
+        bool showHandles{ false };
+        std::vector<int> selectedStrokes;
+        std::vector<int> selectedImages;
+        bool isMultiSelectionGroup{ false };
+        bool pendingTransform{ false };
+        TransformState transformMode{ TransformState::None };
     };
     PerspectiveManager* m_perspectiveManager = nullptr;
     SymmetryManager symmetryManager;

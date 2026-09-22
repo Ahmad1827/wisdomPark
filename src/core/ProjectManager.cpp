@@ -71,6 +71,7 @@ bool ProjectManager::createNewProject(const std::string& name, int width, int he
 
     fs::create_directory(projPath);
     fs::create_directory(projPath + "/layers");
+    fs::create_directory(projPath + "/images");
 
     canvas.initCustom(width, height);
     return saveProject(name, canvas, fps, isPixelMode);
@@ -84,7 +85,12 @@ bool ProjectManager::saveProject(const std::string& name, Canvas& canvas, int fp
 bool ProjectManager::saveProjectAs(const std::string& path, const std::string& name, Canvas& canvas, int fps, bool isPixelMode) {
     if (!fs::exists(path)) {
         fs::create_directory(path);
+    }
+    if (!fs::exists(path + "/layers")) {
         fs::create_directory(path + "/layers");
+    }
+    if (!fs::exists(path + "/images")) {
+        fs::create_directory(path + "/images");
     }
 
     std::ofstream metaFile(path + "/meta.json");
@@ -105,7 +111,7 @@ bool ProjectManager::saveProjectAs(const std::string& path, const std::string& n
         << (isPixelMode ? "1" : "0") << "\n";
     metaFile.close();
 
-    // 1. Vault Thumbnail (Composite vectors + static textures)
+    // 1. Vault Thumbnail (Composite vectors + static textures + canvas images)
     if (canvas.getFrameCount() > 0) {
         sf::RenderTexture composite;
         sf::ContextSettings ctx;
@@ -126,6 +132,17 @@ bool ProjectManager::saveProjectAs(const std::string& path, const std::string& n
                     s.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(layer.opacity * 255.0f)));
                     composite.draw(s);
                 }
+
+                for (const auto& cImg : canvas.getCanvasImages()) {
+                    if (cImg.frame == 0 && cImg.layer == static_cast<int>(l) && cImg.texture) {
+                        sf::Sprite spr(*cImg.texture);
+                        spr.setPosition(cImg.bounds.left, cImg.bounds.top);
+                        spr.setScale(cImg.bounds.width / static_cast<float>(cImg.texture->getSize().x),
+                            cImg.bounds.height / static_cast<float>(cImg.texture->getSize().y));
+                        composite.draw(spr);
+                    }
+                }
+
                 if (!isPixelMode) {
                     for (const auto& vs : canvas.getVectorStrokes()) {
                         if (vs.frame == 0 && vs.layer == static_cast<int>(l) && !vs.isErase) {
@@ -160,7 +177,28 @@ bool ProjectManager::saveProjectAs(const std::string& path, const std::string& n
         }
     }
 
-    // 3. Save layers (write clean transparent PNGs for vector layers to clear old raster ghosts)
+    // 3. Save all independent CanvasImage objects (persists across restarts)
+    {
+        std::ofstream imgMeta(path + "/canvas_images.dat");
+        if (imgMeta.is_open()) {
+            const auto& cImages = canvas.getCanvasImages();
+            imgMeta << cImages.size() << "\n";
+            for (size_t i = 0; i < cImages.size(); ++i) {
+                const auto& ci = cImages[i];
+                imgMeta << ci.id << " " << ci.frame << " " << ci.layer << " "
+                    << ci.bounds.left << " " << ci.bounds.top << " "
+                    << ci.bounds.width << " " << ci.bounds.height << "\n";
+
+                if (ci.texture && ci.texture->getSize().x > 0 && ci.texture->getSize().y > 0) {
+                    std::string imgFile = path + "/images/img_" + std::to_string(ci.id) + ".png";
+                    ci.texture->copyToImage().saveToFile(imgFile);
+                }
+            }
+            imgMeta.close();
+        }
+    }
+
+    // 4. Save layers
     for (size_t f = 0; f < canvas.getFrameCount(); ++f) {
         const Frame* frame = canvas.getFrameReadOnly(static_cast<int>(f));
         if (!frame) continue;
@@ -229,6 +267,8 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
     canvas.setPixelMode(outIsPixelMode);
     canvas.initCustom(width, height);
     canvas.clearAllFrames();
+    canvas.clearCanvasImages();
+    canvas.clearObjectSelection();
     canvas.setOnionSkin(onionOn, onionP, onionN);
     canvas.setOnionSkinCounts(opc, onc);
 
@@ -303,7 +343,7 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
         }
     }
 
-    // Load vector geometry and wipe any contaminated raster stroke data
+    // 5. Restore vector geometry
     canvas.clearVectorStrokes();
     if (!outIsPixelMode) {
         std::string vPath = path + "/vector_strokes.dat";
@@ -334,6 +374,36 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
             }
             vFile.close();
         }
+    }
+
+    // 6. Restore all independent CanvasImage objects
+    std::string imgMetaPath = path + "/canvas_images.dat";
+    if (fs::exists(imgMetaPath)) {
+        std::ifstream imgMeta(imgMetaPath);
+        size_t count = 0;
+        if (imgMeta >> count) {
+            std::vector<CanvasImage> loadedImages;
+            for (size_t i = 0; i < count; ++i) {
+                CanvasImage ci;
+                imgMeta >> ci.id >> ci.frame >> ci.layer
+                    >> ci.bounds.left >> ci.bounds.top
+                    >> ci.bounds.width >> ci.bounds.height;
+
+                std::string imgFile = path + "/images/img_" + std::to_string(ci.id) + ".png";
+                if (fs::exists(imgFile)) {
+                    sf::Image sImg;
+                    if (sImg.loadFromFile(imgFile)) {
+                        auto tex = std::make_shared<sf::Texture>();
+                        tex->setSmooth(!outIsPixelMode);
+                        tex->loadFromImage(sImg);
+                        ci.texture = tex;
+                    }
+                }
+                loadedImages.push_back(std::move(ci));
+            }
+            canvas.setCanvasImages(loadedImages);
+        }
+        imgMeta.close();
     }
 
     return true;

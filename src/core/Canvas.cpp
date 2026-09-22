@@ -1928,6 +1928,17 @@ void Canvas::saveUndoState() {
     state.frames = frames;
     state.vectorStrokes = m_vectorStrokes;
     state.canvasImages = m_canvasImages;
+    state.selectionState = selection.getState();
+    state.selectionBoundingBox = selection.getBoundingBox();
+    state.selectionSubItemBoxes = selection.getSubItemBoxes();
+    state.selectionPathPoints = selection.getPathPoints();
+    state.isLassoSelection = selection.getIsLassoMode();
+    state.showHandles = selection.isShowingHandles();
+    state.selectedStrokes = m_selectedStrokes;
+    state.selectedImages = m_selectedImages;
+    state.isMultiSelectionGroup = m_isMultiSelectionGroup;
+    state.pendingTransform = pendingTransform;
+    state.transformMode = transformMode;
     undoHistory.push_back(state);
     if (undoHistory.size() > maxUndoHistory) {
         undoHistory.erase(undoHistory.begin());
@@ -1971,6 +1982,17 @@ void Canvas::undo() {
         currentState.frames = frames;
         currentState.vectorStrokes = m_vectorStrokes;
         currentState.canvasImages = m_canvasImages;
+        currentState.selectionState = selection.getState();
+        currentState.selectionBoundingBox = selection.getBoundingBox();
+        currentState.selectionSubItemBoxes = selection.getSubItemBoxes();
+        currentState.selectionPathPoints = selection.getPathPoints();
+        currentState.isLassoSelection = selection.getIsLassoMode();
+        currentState.showHandles = selection.isShowingHandles();
+        currentState.selectedStrokes = m_selectedStrokes;
+        currentState.selectedImages = m_selectedImages;
+        currentState.isMultiSelectionGroup = m_isMultiSelectionGroup;
+        currentState.pendingTransform = pendingTransform;
+        currentState.transformMode = transformMode;
         redoHistory.push_back(currentState);
 
         UndoState prevState = undoHistory.back();
@@ -1981,9 +2003,18 @@ void Canvas::undo() {
         m_canvasImages = prevState.canvasImages;
         m_floatingVectorStrokes.clear();
 
-        selection.clearSelection();
-        transformMode = TransformState::None;
-        pendingTransform = false;
+        selection.setState(prevState.selectionState);
+        selection.setBoundingBox(prevState.selectionBoundingBox);
+        selection.setSubItemBoxes(prevState.selectionSubItemBoxes);
+        selection.setPathPoints(prevState.selectionPathPoints);
+        selection.setLassoMode(prevState.isLassoSelection);
+        selection.setShowHandles(prevState.showHandles);
+        m_selectedStrokes = prevState.selectedStrokes;
+        m_selectedImages = prevState.selectedImages;
+        m_isMultiSelectionGroup = prevState.isMultiSelectionGroup;
+        pendingTransform = prevState.pendingTransform;
+        transformMode = prevState.transformMode;
+
         isDeforming = false;
         deformPixels.clear();
         currentDeformedPixels.clear();
@@ -2003,6 +2034,17 @@ void Canvas::redo() {
         currentState.frames = frames;
         currentState.vectorStrokes = m_vectorStrokes;
         currentState.canvasImages = m_canvasImages;
+        currentState.selectionState = selection.getState();
+        currentState.selectionBoundingBox = selection.getBoundingBox();
+        currentState.selectionSubItemBoxes = selection.getSubItemBoxes();
+        currentState.selectionPathPoints = selection.getPathPoints();
+        currentState.isLassoSelection = selection.getIsLassoMode();
+        currentState.showHandles = selection.isShowingHandles();
+        currentState.selectedStrokes = m_selectedStrokes;
+        currentState.selectedImages = m_selectedImages;
+        currentState.isMultiSelectionGroup = m_isMultiSelectionGroup;
+        currentState.pendingTransform = pendingTransform;
+        currentState.transformMode = transformMode;
         undoHistory.push_back(currentState);
 
         UndoState nextState = redoHistory.back();
@@ -2013,9 +2055,18 @@ void Canvas::redo() {
         m_canvasImages = nextState.canvasImages;
         m_floatingVectorStrokes.clear();
 
-        selection.clearSelection();
-        transformMode = TransformState::None;
-        pendingTransform = false;
+        selection.setState(nextState.selectionState);
+        selection.setBoundingBox(nextState.selectionBoundingBox);
+        selection.setSubItemBoxes(nextState.selectionSubItemBoxes);
+        selection.setPathPoints(nextState.selectionPathPoints);
+        selection.setLassoMode(nextState.isLassoSelection);
+        selection.setShowHandles(nextState.showHandles);
+        m_selectedStrokes = nextState.selectedStrokes;
+        m_selectedImages = nextState.selectedImages;
+        m_isMultiSelectionGroup = nextState.isMultiSelectionGroup;
+        pendingTransform = nextState.pendingTransform;
+        transformMode = nextState.transformMode;
+
         isDeforming = false;
         deformPixels.clear();
         currentDeformedPixels.clear();
@@ -2881,15 +2932,15 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     }
                 }
 
-                // Single click inside active selection drags the whole group together
                 if (selection.isActive() && selection.isPointInsideSelection(localPos)) {
+                    saveUndoState();
                     m_lastDragPos = localPos;
                     selection.startDrag(localPos);
                     return;
                 }
 
-                // Click outside commits and clears previous selection
                 if (selection.isActive()) {
+                    saveUndoState();
                     commitSelection(currentFrame);
                 }
 

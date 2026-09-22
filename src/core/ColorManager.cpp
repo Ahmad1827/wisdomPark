@@ -5,13 +5,17 @@
 #include <iostream>
 #include <filesystem>
 
-ColorManager::ColorManager() : paletteFilePath("projects/custom_palette.txt") {}
+ColorManager::ColorManager()
+    : paletteFilePath("projects/custom_palette.txt"),
+    recentColorsFilePath("projects/recent_colors.txt") {}
 
 void ColorManager::init() {
     if (!std::filesystem::exists("projects")) {
         std::filesystem::create_directory("projects");
     }
     loadPalette();
+    loadRecentColors();
+
     if (customSwatches.empty()) {
         customSwatches = {
             sf::Color(0, 0, 0), sf::Color(255, 255, 255), sf::Color(157, 157, 157),
@@ -27,7 +31,8 @@ void ColorManager::savePalette() {
     std::ofstream out(paletteFilePath);
     if (out.is_open()) {
         for (const auto& c : customSwatches) {
-            out << static_cast<int>(c.r) << " " << static_cast<int>(c.g) << " " << static_cast<int>(c.b) << " " << static_cast<int>(c.a) << "\n";
+            out << static_cast<int>(c.r) << " " << static_cast<int>(c.g) << " "
+                << static_cast<int>(c.b) << " " << static_cast<int>(c.a) << "\n";
         }
     }
 }
@@ -43,6 +48,27 @@ void ColorManager::loadPalette() {
     }
 }
 
+void ColorManager::saveRecentColors() {
+    std::ofstream out(recentColorsFilePath);
+    if (out.is_open()) {
+        for (const auto& c : recentColors) {
+            out << static_cast<int>(c.r) << " " << static_cast<int>(c.g) << " "
+                << static_cast<int>(c.b) << " " << static_cast<int>(c.a) << "\n";
+        }
+    }
+}
+
+void ColorManager::loadRecentColors() {
+    std::ifstream in(recentColorsFilePath);
+    if (in.is_open()) {
+        int r, g, b, a;
+        recentColors.clear();
+        while (in >> r >> g >> b >> a) {
+            recentColors.push_back(sf::Color(r, g, b, a));
+        }
+    }
+}
+
 void ColorManager::addRecentColor(sf::Color color) {
     auto it = std::find(recentColors.begin(), recentColors.end(), color);
     if (it != recentColors.end()) {
@@ -52,6 +78,7 @@ void ColorManager::addRecentColor(sf::Color color) {
     if (recentColors.size() > 24) {
         recentColors.pop_back();
     }
+    saveRecentColors();
 }
 
 const std::vector<sf::Color>& ColorManager::getRecentColors() const {

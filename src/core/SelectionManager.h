@@ -71,6 +71,7 @@ public:
     void duplicate(sf::RenderTexture* layerTexture, sf::Vector2u canvasSize);
 
     SelectionState getState() const { return state; }
+    void setState(SelectionState s) { state = s; }
     bool isActive() const { return state != SelectionState::Inactive; }
     sf::FloatRect getBoundingBox() const { return boundingBox; }
     void setBoundingBox(const sf::FloatRect& box) { boundingBox = box; }
@@ -78,6 +79,9 @@ public:
 
     void setLassoMode(bool isLasso) { isLassoSelection = isLasso; }
     bool getIsLassoMode() const { return isLassoSelection; }
+
+    const std::vector<sf::Vector2f>& getPathPoints() const { return pathPoints; }
+    void setPathPoints(const std::vector<sf::Vector2f>& pts) { pathPoints = pts; }
 
     void setSelectionBoxes(const sf::FloatRect& masterBox, const std::vector<sf::FloatRect>& itemBoxes);
     const std::vector<sf::FloatRect>& getSubItemBoxes() const { return subItemBoxes; }
