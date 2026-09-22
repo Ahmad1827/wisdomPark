@@ -1652,7 +1652,15 @@ void Canvas::flipSelectionHorizontal(int currentFrame) {
     for (int iIdx : m_selectedImages) {
         if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
             auto& b = m_canvasImages[iIdx].bounds;
-            b.left = 2.0f * midX - (b.left + b.width);
+            b.left = isPixelMode ? std::round(2.0f * midX - (b.left + b.width)) : (2.0f * midX - (b.left + b.width));
+            if (m_canvasImages[iIdx].texture) {
+                sf::Image img = m_canvasImages[iIdx].texture->copyToImage();
+                img.flipHorizontally();
+                auto newTex = std::make_shared<sf::Texture>();
+                newTex->setSmooth(!isPixelMode);
+                newTex->loadFromImage(img);
+                m_canvasImages[iIdx].texture = newTex;
+            }
         }
     }
 
@@ -1684,7 +1692,15 @@ void Canvas::flipSelectionVertical(int currentFrame) {
     for (int iIdx : m_selectedImages) {
         if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
             auto& b = m_canvasImages[iIdx].bounds;
-            b.top = 2.0f * midY - (b.top + b.height);
+            b.top = isPixelMode ? std::round(2.0f * midY - (b.top + b.height)) : (2.0f * midY - (b.top + b.height));
+            if (m_canvasImages[iIdx].texture) {
+                sf::Image img = m_canvasImages[iIdx].texture->copyToImage();
+                img.flipVertically();
+                auto newTex = std::make_shared<sf::Texture>();
+                newTex->setSmooth(!isPixelMode);
+                newTex->loadFromImage(img);
+                m_canvasImages[iIdx].texture = newTex;
+            }
         }
     }
 
@@ -1696,14 +1712,13 @@ void Canvas::flipSelectionVertical(int currentFrame) {
     selection.setSubItemBoxes(updatedSub);
     isDirty = true;
 }
-
 void Canvas::duplicateSelection(int currentFrame) {
     if (!selection.isActive()) return;
     if (m_selectedStrokes.empty() && m_selectedImages.empty()) return;
 
     saveUndoState();
 
-    sf::Vector2f offset(20.f, 20.f);
+    sf::Vector2f offset = isPixelMode ? sf::Vector2f(2.f, 2.f) : sf::Vector2f(20.f, 20.f);
     std::vector<int> newStrokeIndices;
     std::vector<int> newImageIndices;
 
@@ -2396,7 +2411,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
     localPos.x = std::clamp(localPos.x, 0.0f, static_cast<float>(canvasLogicalSize.x));
     localPos.y = std::clamp(localPos.y, 0.0f, static_cast<float>(canvasLogicalSize.y));
 
-    if (isPixelMode && pixelSnapEnabled && activeTool != ToolType::Select) {
+    if (isPixelMode) {
         localPos.x = std::floor(localPos.x);
         localPos.y = std::floor(localPos.y);
     }
@@ -2698,6 +2713,19 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 float handleRad = computeHandleHitRadius();
                 if (selection.isActive() && pendingTransform && selection.hitTestHandle(localPos, handleRad) != -1) {
                     saveUndoState();
+                    m_resizeStartBox = selection.getBoundingBox();
+                    m_resizeImageSnapshots.clear();
+                    for (int iIdx : m_selectedImages) {
+                        if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
+                            m_resizeImageSnapshots.push_back({ iIdx, m_canvasImages[iIdx].bounds, m_canvasImages[iIdx].texture });
+                        }
+                    }
+                    m_resizeStrokeSnapshots.clear();
+                    for (int sIdx : m_selectedStrokes) {
+                        if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
+                            m_resizeStrokeSnapshots.push_back({ sIdx, m_vectorStrokes[sIdx].mesh });
+                        }
+                    }
                     selection.startResize(localPos, handleRad);
                     return;
                 }
@@ -3119,7 +3147,7 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
 
-    if (isPixelMode && pixelSnapEnabled && activeTool != ToolType::Select) {
+    if (isPixelMode) {
         localPos.x = std::floor(localPos.x);
         localPos.y = std::floor(localPos.y);
     }
@@ -3206,6 +3234,39 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     if (activeTool == ToolType::Select) {
         if (selection.isResizing()) {
             selection.endResize();
+            if (isPixelMode) {
+                for (const auto& snap : m_resizeImageSnapshots) {
+                    if (snap.index >= 0 && snap.index < static_cast<int>(m_canvasImages.size())) {
+                        auto& ci = m_canvasImages[snap.index];
+                        if (snap.texture) {
+                            int newW = static_cast<int>(std::max(1.f, std::round(ci.bounds.width)));
+                            int newH = static_cast<int>(std::max(1.f, std::round(ci.bounds.height)));
+                            sf::Image src = snap.texture->copyToImage();
+                            int srcW = static_cast<int>(src.getSize().x);
+                            int srcH = static_cast<int>(src.getSize().y);
+                            if (newW != srcW || newH != srcH) {
+                                sf::Image dst;
+                                dst.create(newW, newH, sf::Color::Transparent);
+                                for (int y = 0; y < newH; ++y) {
+                                    int sy = std::min(srcH - 1, (y * srcH) / newH);
+                                    for (int x = 0; x < newW; ++x) {
+                                        int sx = std::min(srcW - 1, (x * srcW) / newW);
+                                        dst.setPixel(x, y, src.getPixel(sx, sy));
+                                    }
+                                }
+                                auto nTex = std::make_shared<sf::Texture>();
+                                nTex->setSmooth(false);
+                                nTex->loadFromImage(dst);
+                                ci.texture = nTex;
+                                ci.bounds.width = static_cast<float>(newW);
+                                ci.bounds.height = static_cast<float>(newH);
+                            }
+                        }
+                    }
+                }
+            }
+            m_resizeImageSnapshots.clear();
+            m_resizeStrokeSnapshots.clear();
             return;
         }
 
@@ -3215,37 +3276,111 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
         }
 
         if (selection.getState() == SelectionState::Drawing) {
-            float dragDist = std::hypot(localPos.x - m_dragStartMousePos.x, localPos.y - m_dragStartMousePos.y);
             selection.endLasso();
 
-            if (dragDist < 5.0f || selection.getState() == SelectionState::Inactive) {
+            bool isClick = (selection.getState() == SelectionState::Inactive) ||
+                (selection.getBoundingBox().width <= 1.5f && selection.getBoundingBox().height <= 1.5f);
+
+            if (isClick) {
                 autoSelectObject(localPos, currentFrame);
             }
             else if (selection.getState() == SelectionState::Selected) {
                 // In Pixel Mode: extract each drawing inside the selection into an independent object
+                // In Pixel Mode: cut through drawings along discrete pixel boundaries
                 if (isPixelMode) {
                     saveUndoState();
                     m_selectedStrokes.clear();
                     m_selectedImages.clear();
 
-                    // 1. Identify existing objects inside selection
-                    for (size_t i = 0; i < m_canvasImages.size(); ++i) {
-                        if (m_canvasImages[i].frame == currentFrame && m_canvasImages[i].layer == activeLayer) {
-                            const auto& b = m_canvasImages[i].bounds;
-                            if (selection.getBoundingBox().intersects(b)) {
-                                if (selection.isPointInsideSelection(sf::Vector2f(b.left + b.width * 0.5f, b.top + b.height * 0.5f)) ||
-                                    selection.isPointInsideSelection(sf::Vector2f(b.left, b.top)) ||
-                                    selection.isPointInsideSelection(sf::Vector2f(b.left + b.width, b.top + b.height))) {
-                                    m_selectedImages.push_back(static_cast<int>(i));
+                    std::vector<int> newlySelectedIndices;
+                    std::vector<CanvasImage> newSplitImages;
+
+                    // 1. Cut through any existing CanvasImage objects that intersect lasso
+                    for (int iIdx = 0; iIdx < static_cast<int>(m_canvasImages.size()); ++iIdx) {
+                        auto& ci = m_canvasImages[iIdx];
+                        if (ci.frame != currentFrame || ci.layer != activeLayer || !ci.texture) continue;
+                        if (!selection.getBoundingBox().intersects(ci.bounds)) continue;
+
+                        sf::Image img = ci.texture->copyToImage();
+                        int iw = static_cast<int>(img.getSize().x);
+                        int ih = static_cast<int>(img.getSize().y);
+                        int bx = static_cast<int>(std::round(ci.bounds.left));
+                        int by = static_cast<int>(std::round(ci.bounds.top));
+
+                        std::vector<sf::Vector2i> cutPts;
+                        std::vector<sf::Vector2i> keptPts;
+
+                        for (int y = 0; y < ih; ++y) {
+                            for (int x = 0; x < iw; ++x) {
+                                if (img.getPixel(x, y).a == 0) continue;
+                                int gx = bx + x;
+                                int gy = by + y;
+                                if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(gx) + 0.5f, static_cast<float>(gy) + 0.5f))) {
+                                    cutPts.push_back({ gx, gy });
+                                }
+                                else {
+                                    keptPts.push_back({ gx, gy });
                                 }
                             }
                         }
+
+                        if (cutPts.empty()) continue;
+
+                        if (keptPts.empty()) {
+                            newlySelectedIndices.push_back(iIdx);
+                            continue;
+                        }
+
+                        int kMinX = keptPts[0].x, kMaxX = keptPts[0].x, kMinY = keptPts[0].y, kMaxY = keptPts[0].y;
+                        for (const auto& p : keptPts) {
+                            kMinX = std::min(kMinX, p.x); kMaxX = std::max(kMaxX, p.x);
+                            kMinY = std::min(kMinY, p.y); kMaxY = std::max(kMaxY, p.y);
+                        }
+                        int kW = kMaxX - kMinX + 1;
+                        int kH = kMaxY - kMinY + 1;
+                        sf::Image keptImg;
+                        keptImg.create(kW, kH, sf::Color::Transparent);
+                        for (const auto& p : keptPts) {
+                            keptImg.setPixel(p.x - kMinX, p.y - kMinY, img.getPixel(p.x - bx, p.y - by));
+                        }
+                        auto keptTex = std::make_shared<sf::Texture>();
+                        keptTex->setSmooth(false);
+                        keptTex->loadFromImage(keptImg);
+                        ci.texture = keptTex;
+                        ci.bounds = sf::FloatRect(static_cast<float>(kMinX), static_cast<float>(kMinY),
+                            static_cast<float>(kW), static_cast<float>(kH));
+
+                        int cMinX = cutPts[0].x, cMaxX = cutPts[0].x, cMinY = cutPts[0].y, cMaxY = cutPts[0].y;
+                        for (const auto& p : cutPts) {
+                            cMinX = std::min(cMinX, p.x); cMaxX = std::max(cMaxX, p.x);
+                            cMinY = std::min(cMinY, p.y); cMaxY = std::max(cMaxY, p.y);
+                        }
+                        int cW = cMaxX - cMinX + 1;
+                        int cH = cMaxY - cMinY + 1;
+                        sf::Image cutImg;
+                        cutImg.create(cW, cH, sf::Color::Transparent);
+                        for (const auto& p : cutPts) {
+                            cutImg.setPixel(p.x - cMinX, p.y - cMinY, img.getPixel(p.x - bx, p.y - by));
+                        }
+                        auto cutTex = std::make_shared<sf::Texture>();
+                        cutTex->setSmooth(false);
+                        cutTex->loadFromImage(cutImg);
+
+                        CanvasImage newCi;
+                        newCi.id = ++m_nextImageId;
+                        newCi.frame = currentFrame;
+                        newCi.layer = activeLayer;
+                        newCi.texture = cutTex;
+                        newCi.bounds = sf::FloatRect(static_cast<float>(cMinX), static_cast<float>(cMinY),
+                            static_cast<float>(cW), static_cast<float>(cH));
+                        newSplitImages.push_back(std::move(newCi));
                     }
 
-                    // 2. Extract any pixel drawings on the base canvas into their own independent objects
+                    // 2. Cut through drawings on the base layer texture
                     sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
                     if (targetTex) {
-                        sf::Image layerImg = targetTex->getTexture().copyToImage();
+                        sf::Image origLayerImg = targetTex->getTexture().copyToImage();
+                        sf::Image layerImg = origLayerImg;
                         int w = static_cast<int>(layerImg.getSize().x);
                         int h = static_cast<int>(layerImg.getSize().y);
                         sf::FloatRect bb = selection.getBoundingBox();
@@ -3254,53 +3389,71 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                         int x1 = std::min(w, static_cast<int>(std::ceil(bb.left + bb.width)));
                         int y1 = std::min(h, static_cast<int>(std::ceil(bb.top + bb.height)));
 
-                        std::vector<bool> visited(w * h, false);
-                        bool modifiedLayer = false;
-                        const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
-                        const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
-
+                        std::vector<sf::Vector2i> cutLayerPts;
                         for (int y = y0; y < y1; ++y) {
                             for (int x = x0; x < x1; ++x) {
-                                int idx = y * w + x;
-                                if (visited[idx] || layerImg.getPixel(x, y).a == 0) continue;
-                                if (!selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) continue;
+                                if (layerImg.getPixel(x, y).a > 0 &&
+                                    selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f))) {
+                                    cutLayerPts.push_back({ x, y });
+                                }
+                            }
+                        }
 
-                                visited[idx] = true;
+                        if (!cutLayerPts.empty()) {
+                            for (const auto& p : cutLayerPts) {
+                                layerImg.setPixel(p.x, p.y, sf::Color::Transparent);
+                            }
+                            sf::Texture updatedLayerTex;
+                            updatedLayerTex.loadFromImage(layerImg);
+                            targetTex->clear(sf::Color::Transparent);
+                            targetTex->draw(sf::Sprite(updatedLayerTex), sf::RenderStates(sf::BlendNone));
+                            targetTex->display();
+
+                            std::map<int, bool> inCut;
+                            for (const auto& p : cutLayerPts) inCut[p.y * w + p.x] = true;
+
+                            const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+                            const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+
+                            for (const auto& startP : cutLayerPts) {
+                                int startIdx = startP.y * w + startP.x;
+                                if (!inCut[startIdx]) continue;
+
+                                std::vector<sf::Vector2i> comp;
                                 std::vector<sf::Vector2i> q;
-                                q.push_back({ x, y });
+                                q.push_back(startP);
+                                inCut[startIdx] = false;
 
-                                int ixMin = x, ixMax = x, iyMin = y, iyMax = y;
                                 size_t head = 0;
                                 while (head < q.size()) {
-                                    sf::Vector2i p = q[head++];
-                                    ixMin = std::min(ixMin, p.x);
-                                    ixMax = std::max(ixMax, p.x);
-                                    iyMin = std::min(iyMin, p.y);
-                                    iyMax = std::max(iyMax, p.y);
-
+                                    sf::Vector2i cur = q[head++];
+                                    comp.push_back(cur);
                                     for (int d = 0; d < 8; ++d) {
-                                        int nx = p.x + dx8[d];
-                                        int ny = p.y + dy8[d];
-                                        if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                                        int nx = cur.x + dx8[d];
+                                        int ny = cur.y + dy8[d];
+                                        if (nx >= x0 && nx < x1 && ny >= y0 && ny < y1) {
                                             int nidx = ny * w + nx;
-                                            if (!visited[nidx] && layerImg.getPixel(nx, ny).a > 0) {
-                                                visited[nidx] = true;
+                                            if (inCut[nidx]) {
+                                                inCut[nidx] = false;
                                                 q.push_back({ nx, ny });
                                             }
                                         }
                                     }
                                 }
 
-                                int compW = ixMax - ixMin + 1;
-                                int compH = iyMax - iyMin + 1;
+                                int minX = comp[0].x, maxX = comp[0].x, minY = comp[0].y, maxY = comp[0].y;
+                                for (const auto& p : comp) {
+                                    minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
+                                    minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
+                                }
+                                int compW = maxX - minX + 1;
+                                int compH = maxY - minY + 1;
                                 sf::Image compImg;
                                 compImg.create(compW, compH, sf::Color::Transparent);
 
-                                for (const auto& pt : q) {
-                                    compImg.setPixel(pt.x - ixMin, pt.y - iyMin, layerImg.getPixel(pt.x, pt.y));
-                                    layerImg.setPixel(pt.x, pt.y, sf::Color::Transparent);
+                                for (const auto& p : comp) {
+                                    compImg.setPixel(p.x - minX, p.y - minY, origLayerImg.getPixel(p.x, p.y));
                                 }
-                                modifiedLayer = true;
 
                                 auto tex = std::make_shared<sf::Texture>();
                                 tex->setSmooth(false);
@@ -3311,21 +3464,18 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                                 ci.frame = currentFrame;
                                 ci.layer = activeLayer;
                                 ci.texture = tex;
-                                ci.bounds = sf::FloatRect(static_cast<float>(ixMin), static_cast<float>(iyMin),
+                                ci.bounds = sf::FloatRect(static_cast<float>(minX), static_cast<float>(minY),
                                     static_cast<float>(compW), static_cast<float>(compH));
-                                m_canvasImages.push_back(ci);
-                                m_selectedImages.push_back(static_cast<int>(m_canvasImages.size()) - 1);
+                                newSplitImages.push_back(std::move(ci));
                             }
                         }
-
-                        if (modifiedLayer) {
-                            sf::Texture updatedLayerTex;
-                            updatedLayerTex.loadFromImage(layerImg);
-                            targetTex->clear(sf::Color::Transparent);
-                            targetTex->draw(sf::Sprite(updatedLayerTex), sf::RenderStates(sf::BlendNone));
-                            targetTex->display();
-                        }
                     }
+
+                    for (auto& nci : newSplitImages) {
+                        newlySelectedIndices.push_back(static_cast<int>(m_canvasImages.size()));
+                        m_canvasImages.push_back(std::move(nci));
+                    }
+                    m_selectedImages = newlySelectedIndices;
 
                     std::vector<sf::FloatRect> subBoxes;
                     sf::FloatRect masterBox;
@@ -3345,8 +3495,7 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
 
                     if (!subBoxes.empty()) {
                         m_isMultiSelectionGroup = (subBoxes.size() > 1);
-                        selection.setBoundingBox(masterBox);
-                        selection.setSubItemBoxes(subBoxes);
+                        selection.setSelectionBoxes(masterBox, subBoxes);
                         selection.setShowHandles(pendingTransform);
                         isDirty = true;
                     }
@@ -3522,7 +3671,7 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
     localPos.x = std::clamp(localPos.x, 0.0f, static_cast<float>(canvasLogicalSize.x));
     localPos.y = std::clamp(localPos.y, 0.0f, static_cast<float>(canvasLogicalSize.y));
 
-    if (isPixelMode && pixelSnapEnabled && activeTool != ToolType::Select) {
+    if (isPixelMode) {
         localPos.x = std::floor(localPos.x);
         localPos.y = std::floor(localPos.y);
     }
@@ -3622,31 +3771,39 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
 
     if (activeTool == ToolType::Select) {
         if (selection.isResizing()) {
-            sf::FloatRect oldBox = selection.getBoundingBox();
             selection.resize(localPos, canvasLogicalSize);
+            sf::FloatRect newBox = selection.getBoundingBox();
 
-            if (oldBox.width > 0.001f && oldBox.height > 0.001f) {
-                sf::FloatRect newBox = selection.getBoundingBox();
-                float sx = newBox.width / oldBox.width;
-                float sy = newBox.height / oldBox.height;
+            if (m_resizeStartBox.width > 0.001f && m_resizeStartBox.height > 0.001f) {
+                float totalSx = newBox.width / m_resizeStartBox.width;
+                float totalSy = newBox.height / m_resizeStartBox.height;
 
-                for (int sIdx : m_selectedStrokes) {
-                    if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
-                        auto& mesh = m_vectorStrokes[sIdx].mesh;
-                        for (size_t v = 0; v < mesh.getVertexCount(); ++v) {
-                            mesh[v].position.x = newBox.left + (mesh[v].position.x - oldBox.left) * sx;
-                            mesh[v].position.y = newBox.top + (mesh[v].position.y - oldBox.top) * sy;
+                for (const auto& snap : m_resizeStrokeSnapshots) {
+                    if (snap.index >= 0 && snap.index < static_cast<int>(m_vectorStrokes.size())) {
+                        auto& mesh = m_vectorStrokes[snap.index].mesh;
+                        const auto& origMesh = snap.mesh;
+                        for (size_t v = 0; v < origMesh.getVertexCount(); ++v) {
+                            mesh[v].position.x = newBox.left + (origMesh[v].position.x - m_resizeStartBox.left) * totalSx;
+                            mesh[v].position.y = newBox.top + (origMesh[v].position.y - m_resizeStartBox.top) * totalSy;
                         }
                     }
                 }
 
-                for (int iIdx : m_selectedImages) {
-                    if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
-                        auto& b = m_canvasImages[iIdx].bounds;
-                        b.left = newBox.left + (b.left - oldBox.left) * sx;
-                        b.top = newBox.top + (b.top - oldBox.top) * sy;
-                        b.width *= sx;
-                        b.height *= sy;
+                for (const auto& snap : m_resizeImageSnapshots) {
+                    if (snap.index >= 0 && snap.index < static_cast<int>(m_canvasImages.size())) {
+                        auto& b = m_canvasImages[snap.index].bounds;
+                        if (isPixelMode) {
+                            b.left = std::round(newBox.left + (snap.bounds.left - m_resizeStartBox.left) * totalSx);
+                            b.top = std::round(newBox.top + (snap.bounds.top - m_resizeStartBox.top) * totalSy);
+                            b.width = std::max(1.f, std::round(snap.bounds.width * totalSx));
+                            b.height = std::max(1.f, std::round(snap.bounds.height * totalSy));
+                        }
+                        else {
+                            b.left = newBox.left + (snap.bounds.left - m_resizeStartBox.left) * totalSx;
+                            b.top = newBox.top + (snap.bounds.top - m_resizeStartBox.top) * totalSy;
+                            b.width = snap.bounds.width * totalSx;
+                            b.height = snap.bounds.height * totalSy;
+                        }
                     }
                 }
 

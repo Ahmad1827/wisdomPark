@@ -77,6 +77,19 @@ private:
     sf::Vector2f m_lastClickPos{ 0.f, 0.f };
     int m_nextImageId{ 0 };
 
+    struct ImageResizeSnapshot {
+        int index;
+        sf::FloatRect bounds;
+        std::shared_ptr<sf::Texture> texture;
+    };
+    struct StrokeResizeSnapshot {
+        int index;
+        sf::VertexArray mesh;
+    };
+    std::vector<ImageResizeSnapshot> m_resizeImageSnapshots;
+    std::vector<StrokeResizeSnapshot> m_resizeStrokeSnapshots;
+    sf::FloatRect m_resizeStartBox{ 0.f, 0.f, 0.f, 0.f };
+
     struct UndoState {
         std::vector<Frame> frames;
         std::vector<VectorStroke> vectorStrokes;

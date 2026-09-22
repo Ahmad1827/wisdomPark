@@ -493,21 +493,27 @@ bool SelectionManager::startResize(sf::Vector2f pos, float handleRadius) {
 void SelectionManager::resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas) {
     if (!isResizingFlag) return;
 
-    float newW = std::max(2.0f, std::abs(pos.x - resizeAnchorWorld.x));
-    float newH = std::max(2.0f, std::abs(pos.y - resizeAnchorWorld.y));
+    float rawW = std::abs(pos.x - resizeAnchorWorld.x);
+    float rawH = std::abs(pos.y - resizeAnchorWorld.y);
 
-    float newLeft = std::min(resizeAnchorWorld.x, pos.x);
-    float newTop = std::min(resizeAnchorWorld.y, pos.y);
+    float newW = rawW;
+    float newH = rawH;
 
-    if (boundingBox.width > 0.001f && boundingBox.height > 0.001f) {
-        float sx = newW / boundingBox.width;
-        float sy = newH / boundingBox.height;
-
-        for (auto& p : pathPoints) {
-            p.x = newLeft + (p.x - boundingBox.left) * sx;
-            p.y = newTop + (p.y - boundingBox.top) * sy;
-        }
+    bool keepAspect = !sf::Keyboard::isKeyPressed(sf::Keyboard::LShift);
+    if (keepAspect && resizeStartBox.width > 0.001f && resizeStartBox.height > 0.001f) {
+        float dLenSq = (resizeStartBox.width * resizeStartBox.width) + (resizeStartBox.height * resizeStartBox.height);
+        float proj = std::abs((pos.x - resizeAnchorWorld.x) * resizeStartBox.width +
+            (pos.y - resizeAnchorWorld.y) * resizeStartBox.height) / dLenSq;
+        float scale = std::max(1.0f / std::max(resizeStartBox.width, resizeStartBox.height), proj);
+        newW = resizeStartBox.width * scale;
+        newH = resizeStartBox.height * scale;
     }
+
+    newW = std::max(1.0f, std::round(newW));
+    newH = std::max(1.0f, std::round(newH));
+
+    float newLeft = (pos.x < resizeAnchorWorld.x) ? (resizeAnchorWorld.x - newW) : resizeAnchorWorld.x;
+    float newTop = (pos.y < resizeAnchorWorld.y) ? (resizeAnchorWorld.y - newH) : resizeAnchorWorld.y;
 
     boundingBox = sf::FloatRect(newLeft, newTop, newW, newH);
 }
