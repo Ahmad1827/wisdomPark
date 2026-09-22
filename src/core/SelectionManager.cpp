@@ -26,7 +26,7 @@ void SelectionManager::update(float dt) {
 }
 
 void SelectionManager::drawPixels(sf::RenderWindow& window, const sf::RenderStates& baseStates) {
-    if (state == SelectionState::Floating && floatingTexture.getSize().x > 1) {
+    if (state == SelectionState::Floating && floatingTexture.getSize().x > 0 && floatingTexture.getSize().y > 0) {
         window.draw(floatingSprite, baseStates);
     }
 }
@@ -35,6 +35,7 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
     if (state == SelectionState::Inactive) return;
 
     sf::RenderStates states = baseStates;
+    float borderThickness = std::max(0.02f, handleVisualSize / 8.0f);
 
     if (isLassoSelection) {
         if (pathPoints.size() > 1) {
@@ -62,12 +63,13 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
         }
     }
     else {
+        float borderThickness = std::max(0.02f, handleVisualSize / 8.0f);
         for (const auto& box : subItemBoxes) {
             sf::RectangleShape r(sf::Vector2f(box.width, box.height));
             r.setPosition(box.left, box.top);
             r.setFillColor(sf::Color(0, 191, 255, 14));
-            r.setOutlineThickness(1.0f);
-            r.setOutlineColor(sf::Color(0, 191, 255, 90));
+            r.setOutlineThickness(borderThickness);
+            r.setOutlineColor(sf::Color(0, 191, 255, 100));
             window.draw(r, states);
         }
     }
@@ -273,17 +275,12 @@ void SelectionManager::extractFromLayer(sf::RenderTexture* layerTexture, bool re
     for (const auto& p : pathPoints) {
         localPoints.push_back(p - sf::Vector2f(boundingBox.left, boundingBox.top));
     }
-    for (auto& sb : subItemBoxes) {
-        sb.left -= boundingBox.left;
-        sb.top -= boundingBox.top;
-    }
 
     state = SelectionState::Floating;
-    showHandles = true;
 }
 
 void SelectionManager::commitToLayer(sf::RenderTexture* layerTexture) {
-    if (state == SelectionState::Floating && layerTexture && floatingTexture.getSize().x > 1) {
+    if (state == SelectionState::Floating && layerTexture && floatingTexture.getSize().x > 0 && floatingTexture.getSize().y > 0) {
         layerTexture->draw(floatingSprite);
         layerTexture->display();
     }
