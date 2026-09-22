@@ -35,28 +35,24 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
     if (state == SelectionState::Inactive) return;
 
     sf::RenderStates states = baseStates;
-    if (state == SelectionState::Floating) {
-        states.transform *= floatingSprite.getTransform();
-    }
 
     if (isLassoSelection) {
-        const std::vector<sf::Vector2f>& pts = (state == SelectionState::Floating) ? localPoints : pathPoints;
-        if (pts.size() > 1) {
-            sf::VertexArray darkUnder(sf::LineStrip, pts.size());
-            for (size_t i = 0; i < pts.size(); ++i) {
-                darkUnder[i].position = pts[i];
+        if (pathPoints.size() > 1) {
+            sf::VertexArray darkUnder(sf::LineStrip, pathPoints.size());
+            for (size_t i = 0; i < pathPoints.size(); ++i) {
+                darkUnder[i].position = pathPoints[i];
                 darkUnder[i].color = sf::Color(15, 10, 25, 220);
             }
             window.draw(darkUnder, states);
 
-            sf::VertexArray ants(sf::LineStrip, pts.size());
+            sf::VertexArray ants(sf::LineStrip, pathPoints.size());
             float dist = 0.f;
-            for (size_t i = 0; i < pts.size(); ++i) {
+            for (size_t i = 0; i < pathPoints.size(); ++i) {
                 if (i > 0) {
-                    sf::Vector2f diff = pts[i] - pts[i - 1];
+                    sf::Vector2f diff = pathPoints[i] - pathPoints[i - 1];
                     dist += std::hypot(diff.x, diff.y);
                 }
-                ants[i].position = pts[i];
+                ants[i].position = pathPoints[i];
                 ants[i].texCoords = sf::Vector2f(dist + dashOffset, 0.5f);
                 ants[i].color = sf::Color::White;
             }
@@ -220,15 +216,15 @@ bool SelectionManager::isInsidePolygon(sf::Vector2f point, const std::vector<sf:
 }
 
 bool SelectionManager::isPointInsideSelection(sf::Vector2f pos) const {
-    if (state == SelectionState::Selected) {
+    if (state == SelectionState::Selected || state == SelectionState::Floating) {
         if (!boundingBox.contains(pos)) return false;
-        if (isLassoSelection) return isInsidePolygon(pos, pathPoints);
+        if (isLassoSelection && pathPoints.size() > 2) {
+            return isInsidePolygon(pos, pathPoints);
+        }
+        for (const auto& b : subItemBoxes) {
+            if (b.contains(pos)) return true;
+        }
         return true;
-    }
-    else if (state == SelectionState::Floating) {
-        sf::Vector2f localPos = floatingSprite.getInverseTransform().transformPoint(pos);
-        if (isLassoSelection) return isInsidePolygon(localPos, localPoints);
-        return sf::FloatRect(0.f, 0.f, boundingBox.width, boundingBox.height).contains(localPos);
     }
     return false;
 }
@@ -335,6 +331,9 @@ void SelectionManager::drag(sf::Vector2f pos, sf::Vector2u canvasSize, bool allo
     if ((state == SelectionState::Floating || state == SelectionState::Selected) && m_isDragging) {
         sf::Vector2f delta = pos - dragStartPos;
         moveSelection(delta);
+        if (state == SelectionState::Floating) {
+            floatingSprite.move(delta);
+        }
         dragStartPos = pos;
     }
 }

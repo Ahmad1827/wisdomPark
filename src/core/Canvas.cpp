@@ -99,6 +99,17 @@ static bool strokeHitTest(const VectorStroke& vs, sf::Vector2f pt, float hitDist
     return false;
 }
 
+static float getStrokeMinDistanceSq(const VectorStroke& vs, sf::Vector2f pt) {
+    float bestSq = 1e9f;
+    for (size_t i = 0; i < vs.mesh.getVertexCount(); ++i) {
+        float dx = vs.mesh[i].position.x - pt.x;
+        float dy = vs.mesh[i].position.y - pt.y;
+        float dSq = dx * dx + dy * dy;
+        if (dSq < bestSq) bestSq = dSq;
+    }
+    return bestSq;
+}
+
 static bool strokesCollide(const VectorStroke& s1, const VectorStroke& s2, float unused = 0.f) {
     sf::FloatRect b1 = getStrokeBounds(s1);
     sf::FloatRect b2 = getStrokeBounds(s2);
@@ -2718,16 +2729,52 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     }
                 }
 
-                // Drag an active selection if clicking inside it
+                // Single click inside active selection drags the whole group together
                 if (selection.isActive() && selection.isPointInsideSelection(localPos)) {
+                    if (isPixelMode && selection.getState() == SelectionState::Selected) {
+                        saveUndoState();
+                        selection.extractFromLayer(frames[currentFrame].layers[activeLayer].texture.get(), true);
+                    }
                     m_lastDragPos = localPos;
                     selection.startDrag(localPos);
                     return;
                 }
 
-                // If clicking outside, commit current selection and start drawing a lasso
+                // Click outside commits and clears previous selection
                 if (selection.isActive()) {
                     commitSelection(currentFrame);
+                }
+
+                bool hitAny = false;
+                if (isPixelMode) {
+                    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                    if (targetTex) {
+                        sf::Image img = targetTex->getTexture().copyToImage();
+                        int px = static_cast<int>(localPos.x);
+                        int py = static_cast<int>(localPos.y);
+                        for (int dy = -2; dy <= 2 && !hitAny; ++dy) {
+                            for (int dx = -2; dx <= 2 && !hitAny; ++dx) {
+                                int nx = px + dx, ny = py + dy;
+                                if (nx >= 0 && ny >= 0 && nx < static_cast<int>(img.getSize().x) && ny < static_cast<int>(img.getSize().y)) {
+                                    if (img.getPixel(nx, ny).a > 0) hitAny = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                else {
+                    for (const auto& vs : m_vectorStrokes) {
+                        if (vs.frame == currentFrame && vs.layer == activeLayer && strokeHitTest(vs, localPos, 12.0f)) {
+                            hitAny = true; break;
+                        }
+                    }
+                    if (!hitAny) {
+                        for (const auto& ci : m_canvasImages) {
+                            if (ci.frame == currentFrame && ci.layer == activeLayer && ci.bounds.contains(localPos)) {
+                                hitAny = true; break;
+                            }
+                        }
+                    }
                 }
 
                 m_dragStartMousePos = localPos;
@@ -3137,6 +3184,77 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                 autoSelectObject(localPos, currentFrame);
             }
             else if (selection.getState() == SelectionState::Selected) {
+                // In Pixel Mode: find every disconnected pixel island and give each its own soft box
+                if (isPixelMode) {
+                    sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                    if (!targetTex) { clearObjectSelection(); return; }
+
+                    sf::Image img = targetTex->getTexture().copyToImage();
+                    int w = static_cast<int>(img.getSize().x);
+                    int h = static_cast<int>(img.getSize().y);
+                    sf::FloatRect bb = selection.getBoundingBox();
+
+                    int x0 = std::max(0, static_cast<int>(std::floor(bb.left)));
+                    int y0 = std::max(0, static_cast<int>(std::floor(bb.top)));
+                    int x1 = std::min(w, static_cast<int>(std::ceil(bb.left + bb.width)));
+                    int y1 = std::min(h, static_cast<int>(std::ceil(bb.top + bb.height)));
+
+                    std::vector<bool> visited(w * h, false);
+                    std::vector<sf::FloatRect> subBoxes;
+                    const int dx4[4] = { 1, -1, 0, 0 };
+                    const int dy4[4] = { 0, 0, 1, -1 };
+
+                    for (int y = y0; y < y1; ++y) {
+                        for (int x = x0; x < x1; ++x) {
+                            int idx = y * w + x;
+                            if (visited[idx]) continue;
+                            if (img.getPixel(x, y).a == 0) continue;
+                            if (!selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) continue;
+
+                            visited[idx] = true;
+                            std::vector<sf::Vector2i> q;
+                            q.push_back({ x, y });
+
+                            int ixMin = x, ixMax = x, iyMin = y, iyMax = y;
+                            size_t head = 0;
+                            while (head < q.size()) {
+                                sf::Vector2i p = q[head++];
+                                ixMin = std::min(ixMin, p.x);
+                                ixMax = std::max(ixMax, p.x);
+                                iyMin = std::min(iyMin, p.y);
+                                iyMax = std::max(iyMax, p.y);
+
+                                for (int d = 0; d < 4; ++d) {
+                                    int nx = p.x + dx4[d];
+                                    int ny = p.y + dy4[d];
+                                    if (nx >= x0 && nx < x1 && ny >= y0 && ny < y1) {
+                                        int nidx = ny * w + nx;
+                                        if (!visited[nidx] && img.getPixel(nx, ny).a > 0 &&
+                                            selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(nx), static_cast<float>(ny)))) {
+                                            visited[nidx] = true;
+                                            q.push_back({ nx, ny });
+                                        }
+                                    }
+                                }
+                            }
+
+                            subBoxes.push_back(sf::FloatRect(static_cast<float>(ixMin), static_cast<float>(iyMin),
+                                static_cast<float>(ixMax - ixMin + 1), static_cast<float>(iyMax - iyMin + 1)));
+                        }
+                    }
+
+                    if (!subBoxes.empty()) {
+                        m_isMultiSelectionGroup = (subBoxes.size() > 1);
+                        selection.setSubItemBoxes(subBoxes);
+                        selection.setShowHandles(pendingTransform);
+                        isDirty = true;
+                    }
+                    else {
+                        clearObjectSelection();
+                    }
+                    return;
+                }
+
                 saveUndoState();
 
                 m_selectedStrokes.clear();
@@ -4241,6 +4359,77 @@ bool Canvas::isTransforming() const {
 void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
 
+    // --- PIXEL ART MODE: 4-way orthogonal flood-fill (prevents diagonal bridging) ---
+    if (isPixelMode) {
+        sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+        if (!targetTex) return;
+
+        sf::Image img = targetTex->getTexture().copyToImage();
+        int w = static_cast<int>(img.getSize().x);
+        int h = static_cast<int>(img.getSize().y);
+        int sx = static_cast<int>(pos.x);
+        int sy = static_cast<int>(pos.y);
+
+        if (sx < 0 || sy < 0 || sx >= w || sy >= h) {
+            clearObjectSelection();
+            return;
+        }
+
+        if (img.getPixel(sx, sy).a == 0) {
+            int foundX = -1, foundY = -1;
+            float bestD = 999.f;
+            for (int dy = -2; dy <= 2; ++dy) {
+                for (int dx = -2; dx <= 2; ++dx) {
+                    int nx = sx + dx, ny = sy + dy;
+                    if (nx >= 0 && ny >= 0 && nx < w && ny < h && img.getPixel(nx, ny).a > 0) {
+                        float d = static_cast<float>(dx * dx + dy * dy);
+                        if (d < bestD) { bestD = d; foundX = nx; foundY = ny; }
+                    }
+                }
+            }
+            if (foundX != -1) { sx = foundX; sy = foundY; }
+            else { clearObjectSelection(); return; }
+        }
+
+        std::vector<bool> visited(w * h, false);
+        std::vector<sf::Vector2i> q;
+        q.push_back({ sx, sy });
+        visited[sy * w + sx] = true;
+
+        int minX = sx, maxX = sx, minY = sy, maxY = sy;
+        const int dx4[4] = { 1, -1, 0, 0 };
+        const int dy4[4] = { 0, 0, 1, -1 };
+
+        size_t head = 0;
+        while (head < q.size()) {
+            sf::Vector2i p = q[head++];
+            minX = std::min(minX, p.x);
+            maxX = std::max(maxX, p.x);
+            minY = std::min(minY, p.y);
+            maxY = std::max(maxY, p.y);
+
+            for (int d = 0; d < 4; ++d) {
+                int nx = p.x + dx4[d];
+                int ny = p.y + dy4[d];
+                if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                    int idx = ny * w + nx;
+                    if (!visited[idx] && img.getPixel(nx, ny).a > 0) {
+                        visited[idx] = true;
+                        q.push_back({ nx, ny });
+                    }
+                }
+            }
+        }
+
+        sf::FloatRect box(static_cast<float>(minX), static_cast<float>(minY),
+            static_cast<float>(maxX - minX + 1), static_cast<float>(maxY - minY + 1));
+        selection.setSelectionBoxes(box, { box });
+        selection.setShowHandles(pendingTransform);
+        m_isMultiSelectionGroup = false;
+        isDirty = true;
+        return;
+    }
+
     struct SelectableEntity {
         enum Type { Stroke, Image };
         Type type;
@@ -4261,17 +4450,20 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
     }
 
     int clickedEntityIdx = -1;
-    for (int i = static_cast<int>(entities.size()) - 1; i >= 0; --i) {
+    float bestDistSq = 14.0f * 14.0f;
+
+    for (int i = 0; i < static_cast<int>(entities.size()); ++i) {
         if (entities[i].type == SelectableEntity::Image) {
             if (entities[i].bounds.contains(pos)) {
                 clickedEntityIdx = i;
-                break;
+                bestDistSq = 0.f;
             }
         }
         else {
-            if (strokeHitTest(m_vectorStrokes[entities[i].originalIndex], pos, 12.0f)) {
+            float dSq = getStrokeMinDistanceSq(m_vectorStrokes[entities[i].originalIndex], pos);
+            if (dSq < bestDistSq) {
+                bestDistSq = dSq;
                 clickedEntityIdx = i;
-                break;
             }
         }
     }
