@@ -204,6 +204,15 @@ private:
     void drawResizeModal(sf::RenderWindow& window);
     bool handleResizeModalEvent(const sf::Event& event, sf::RenderWindow& window, Canvas& canvas, Timeline& timeline);
 
+    bool m_showPasteResolutionModal = false;
+    sf::Image m_pendingPasteImage;
+    sf::FloatRect m_btnPasteDownscaleBounds;
+    sf::FloatRect m_btnPasteOriginalBounds;
+    sf::FloatRect m_btnPasteCancelBounds;
+
+    void drawPasteResolutionModal(sf::RenderWindow& window);
+    bool handlePasteResolutionModalEvent(const sf::Event& event, sf::RenderWindow& window, Canvas& canvas, Timeline& timeline);
+
     void initMinigame();
     void updateMinigame(float dt, sf::Vector2f mousePos, sf::RenderWindow& window);
     void triggerArcadeStation(const std::string& id, sf::RenderWindow& window);

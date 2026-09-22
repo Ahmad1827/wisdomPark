@@ -349,9 +349,21 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
                 activeProjectName = std::filesystem::path(file).stem().string();
                 int loadedFps = 12;
                 bool isPix = false;
+                baseCanvas->clearCanvasImages();
+                baseCanvas->clearObjectSelection();
                 if (projManager->loadProject(activeProjectPath, *baseCanvas, loadedFps, isPix)) {
                     baseCanvas->setPixelMode(isPix);
                     baseCanvas->clearIsDirty();
+
+                    if (baseCanvas->getFrameCount() > 0) {
+                        int targetLayer = (baseCanvas->getFrameReadOnly(0)->layers.size() > 1) ? 1 : 0;
+                        baseCanvas->setActiveLayer(targetLayer, 0);
+                    }
+
+                    baseCanvas->setActiveTool(ToolType::Brush);
+                    m_toolDock.SetActiveTool("brush");
+                    m_activeTool.reset(); // Force workspace tool to rebuild fresh view transforms
+
                     showMessage("Loaded Project: " + activeProjectName, sf::Color::Green);
                 }
             }
@@ -846,6 +858,9 @@ void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hove
 
 
 bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
+    canvas.commitSelection(timeline.getCurrentFrame());
+    canvas.bakeAllStrokes();
+
     if (activeProjectPath.empty()) {
         activeProjectPath = "projects/" + activeProjectName + ".wpk";
     }
@@ -863,6 +878,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
     if (m_showResizeModal) {
         if (handleResizeModalEvent(event, window, canvas, timeline)) return;
+    }
+
+    if (m_showPasteResolutionModal) {
+        if (handlePasteResolutionModalEvent(event, window, canvas, timeline)) return;
     }
     if (event.type == sf::Event::Resized) {
         window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(sf::Vector2u(event.size.width, event.size.height)));
@@ -1078,9 +1097,23 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     activeProjectPath = meta.path;
                     int loadedFps = 12;
                     bool isPix = false;
+                    canvas.clearCanvasImages();
+                    canvas.clearObjectSelection();
                     if (pm.loadProject(meta.path, canvas, loadedFps, isPix)) {
                         timeline.setFrame(0);
+                        canvas.setPixelMode(isPix);
                         canvas.clearIsDirty();
+
+                        // Ensure a writable artwork layer is selected
+                        if (canvas.getFrameCount() > 0) {
+                            int targetLayer = (canvas.getFrameReadOnly(0)->layers.size() > 1) ? 1 : 0;
+                            canvas.setActiveLayer(targetLayer, 0);
+                        }
+
+                        canvas.setActiveTool(ToolType::Brush);
+                        m_toolDock.SetActiveTool("brush");
+                        m_activeTool.reset(); // Force workspace tool to rebuild fresh view transforms
+
                         currentState = AppState::Painting;
                         showMessage("Loaded Project: " + meta.name, sf::Color::Green);
                     }
@@ -1784,10 +1817,24 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         activeProjectName = std::filesystem::path(file).stem().string();
                         int loadedFps = 12;
                         bool isPix = false;
+                        canvas.clearCanvasImages();
+                        canvas.clearObjectSelection();
                         if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
                             timeline.setFrame(0);
                             canvas.setPixelMode(isPix);
                             canvas.clearIsDirty();
+
+                            // Ensure a writable artwork layer is selected
+                            if (canvas.getFrameCount() > 0) {
+                                int targetLayer = (canvas.getFrameReadOnly(0)->layers.size() > 1) ? 1 : 0;
+                                canvas.setActiveLayer(targetLayer, 0);
+                            }
+
+                            canvas.setActiveTool(ToolType::Brush);
+                            m_toolDock.SetActiveTool("brush");
+                            m_activeTool.reset(); // Force workspace tool to rebuild fresh view transforms
+
+                            currentState = AppState::Painting;
                             showMessage("Loaded Native Project", sf::Color::Green);
                         }
                         else {
@@ -1890,6 +1937,26 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 }
 
                 if (keybindManager.isActionTriggered("edit_paste", event)) {
+                    if (canvas.getPixelMode()) {
+                        sf::Image clipImg;
+                        bool hasImg = false;
+#if defined(_WIN32)
+                        if (GetClipboardImage(clipImg)) {
+                            hasImg = true;
+                        }
+#endif
+                        if (!hasImg && canvas.hasGlobalClipboard() && !canvas.isClipboardVector()) {
+                            clipImg = canvas.getGlobalClipboardImage();
+                            hasImg = true;
+                        }
+
+                        if (hasImg) {
+                            m_pendingPasteImage = clipImg;
+                            m_showPasteResolutionModal = true;
+                            return;
+                        }
+                    }
+
 #if defined(_WIN32)
                     sf::Image clipImg;
                     if (GetClipboardImage(clipImg)) {
@@ -1917,7 +1984,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         m_toolDock.SetActiveTool("select");
                     }
 #endif
-                }
+                    }
                 if (keybindManager.isActionTriggered("edit_dup_sel", event)) canvas.duplicateSelection(timeline.getCurrentFrame());
 
                 if (canvas.getActiveTool() == ToolType::Select) {
@@ -2073,9 +2140,18 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 }
                 else if (isImage) {
                     int curFrame = static_cast<int>(timeline.getCurrentFrame());
-                    canvas.importImageToActiveLayer(filePath, curFrame);
-                    m_toolDock.SetActiveTool("select");
-                    showMessage("Placed on Canvas: " + std::filesystem::path(filePath).filename().string(), sf::Color::Green);
+                    if (canvas.getPixelMode()) {
+                        sf::Image img;
+                        if (img.loadFromFile(filePath)) {
+                            m_pendingPasteImage = img;
+                            m_showPasteResolutionModal = true;
+                        }
+                    }
+                    else {
+                        canvas.importImageToActiveLayer(filePath, curFrame);
+                        m_toolDock.SetActiveTool("select");
+                        showMessage("Placed on Canvas: " + std::filesystem::path(filePath).filename().string(), sf::Color::Green);
+                    }
                 }
                 else if (isAudio) {
                     std::vector<std::string> audioFile = { filePath };
@@ -2713,6 +2789,10 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
         if (m_showResizeModal) {
             drawResizeModal(window);
+        }
+
+        if (m_showPasteResolutionModal) {
+            drawPasteResolutionModal(window);
         }
 
         m_toolDock.RenderTooltip(window);
@@ -4577,4 +4657,69 @@ void UIManager::drawHandCamWidget(sf::RenderWindow& window) {
         grip[i].color = sf::Color(255, 160, 100);
     }
     window.draw(grip);
+}
+
+void UIManager::drawPasteResolutionModal(sf::RenderWindow& window) {
+    sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
+    overlay.setFillColor(sf::Color(10, 4, 16, 215));
+    window.draw(overlay);
+
+    float modalW = 540.f;
+    float modalH = 265.f;
+    float mx = (1920.f - modalW) * 0.5f;
+    float my = (1080.f - modalH) * 0.5f;
+    sf::FloatRect bounds(mx, my, modalW, modalH);
+
+    WisdomUI::Theme::DrawSunsetPanel(window, bounds, 1.0f);
+    WisdomUI::Theme::DrawCrispText(window, font, "PASTE IMAGE RESOLUTION", 24, mx + modalW / 2.f, my + 26.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, "Choose import sizing for this pixel canvas:", 14, mx + modalW / 2.f, my + 56.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 6, 20), true, true);
+
+    float btnW = 460.f;
+    float btnH = 46.f;
+    m_btnPasteDownscaleBounds = sf::FloatRect(mx + 40.f, my + 92.f, btnW, btnH);
+    m_btnPasteOriginalBounds = sf::FloatRect(mx + 40.f, my + 148.f, btnW, btnH);
+    m_btnPasteCancelBounds = sf::FloatRect(mx + modalW - 40.f - 120.f, my + 208.f, 120.f, 38.f);
+
+    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    WisdomUI::Theme::DrawSunsetButton(window, m_btnPasteDownscaleBounds, "Downscale to Fit Canvas", font, 16, false, m_btnPasteDownscaleBounds.contains(mPos), true, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_btnPasteOriginalBounds, "Keep 1:1 Original Resolution", font, 16, false, m_btnPasteOriginalBounds.contains(mPos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_btnPasteCancelBounds, "Cancel", font, 14, false, m_btnPasteCancelBounds.contains(mPos), false, 1.0f);
+}
+
+bool UIManager::handlePasteResolutionModalEvent(const sf::Event& event, sf::RenderWindow& window, Canvas& canvas, Timeline& timeline) {
+    if (!m_showPasteResolutionModal) return false;
+
+    if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+        m_showPasteResolutionModal = false;
+        return true;
+    }
+
+    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+        if (m_btnPasteDownscaleBounds.contains(mousePos)) {
+            canvas.pasteImage(m_pendingPasteImage, timeline.getCurrentFrame(), false);
+            m_toolDock.SetActiveTool("select");
+            showMessage("Pasted Image (Downscaled)", sf::Color::Green);
+            m_showPasteResolutionModal = false;
+            return true;
+        }
+
+        if (m_btnPasteOriginalBounds.contains(mousePos)) {
+            canvas.pasteImage(m_pendingPasteImage, timeline.getCurrentFrame(), true);
+            m_toolDock.SetActiveTool("select");
+            showMessage("Pasted Image (Original 1:1)", sf::Color::Green);
+            m_showPasteResolutionModal = false;
+            return true;
+        }
+
+        if (m_btnPasteCancelBounds.contains(mousePos)) {
+            m_showPasteResolutionModal = false;
+            return true;
+        }
+
+        return true;
+    }
+
+    return true;
 }

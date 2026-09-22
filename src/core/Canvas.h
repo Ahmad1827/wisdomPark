@@ -255,7 +255,7 @@ public:
     void setVectorStrokes(const std::vector<VectorStroke>& strokes) { m_vectorStrokes = strokes; }
 
     void cleanVectorLayers();
-    void bakeAllStrokes() {}
+    void bakeAllStrokes();
     void updateTransform(float dt, sf::FloatRect space);
     sf::Transform getTransform() const;
     sf::Transform getInverseTransform() const;
@@ -399,7 +399,9 @@ public:
     void setMaxUndoHistory(size_t limit) { maxUndoHistory = limit; }
     size_t getMaxUndoHistory() const { return maxUndoHistory; }
 
-    void pasteImage(const sf::Image& img, int currentFrame);
+    void pasteImage(const sf::Image& img, int currentFrame, bool originalResolution = false);
+    const sf::Image& getGlobalClipboardImage() const;
+    bool isClipboardVector() const;
 
     void setStabilizer(float val) { brushEngine.setStabilization(val); }
     float getStabilizer() const { return brushEngine.getActivePreset().stabilization; }

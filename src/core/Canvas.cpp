@@ -1,5 +1,6 @@
 #include "Canvas.h"
 #include <cmath>
+#include <cmath>
 #include <algorithm>
 #include <iostream>
 #include <stack>
@@ -371,23 +372,6 @@ void Canvas::drawLayerContent(sf::RenderTarget& target, int frameIndex, int laye
 
     if (!needsComposite) {
         if (isPixelMode) {
-            bool hasCanvasImages = false;
-            for (const auto& cImg : m_canvasImages) {
-                if (cImg.frame == frameIndex && cImg.layer == layerIndex && cImg.texture) {
-                    hasCanvasImages = true;
-                    break;
-                }
-            }
-
-            if (!hasCanvasImages) {
-                if (layer.texture) {
-                    sf::Sprite spr(layer.texture->getTexture());
-                    spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * op)));
-                    target.draw(spr, layerStates);
-                }
-                return;
-            }
-
             static sf::RenderTexture s_pixelComposite;
             if (s_pixelComposite.getSize() != canvasLogicalSize) {
                 s_pixelComposite.create(canvasLogicalSize.x, canvasLogicalSize.y);
@@ -402,7 +386,8 @@ void Canvas::drawLayerContent(sf::RenderTarget& target, int frameIndex, int laye
             }
 
             for (const auto& cImg : m_canvasImages) {
-                if (cImg.frame == frameIndex && cImg.layer == layerIndex && cImg.texture) {
+                if (cImg.frame == frameIndex && cImg.layer == layerIndex && cImg.texture &&
+                    cImg.texture->getSize().x > 0 && cImg.texture->getSize().y > 0) {
                     sf::Sprite spr(*cImg.texture);
                     spr.setPosition(std::round(cImg.bounds.left), std::round(cImg.bounds.top));
                     float sx = std::round(cImg.bounds.width) / static_cast<float>(cImg.texture->getSize().x);
@@ -427,7 +412,8 @@ void Canvas::drawLayerContent(sf::RenderTarget& target, int frameIndex, int laye
         }
 
         for (const auto& cImg : m_canvasImages) {
-            if (cImg.frame == frameIndex && cImg.layer == layerIndex && cImg.texture) {
+            if (cImg.frame == frameIndex && cImg.layer == layerIndex && cImg.texture &&
+                cImg.texture->getSize().x > 0 && cImg.texture->getSize().y > 0) {
                 sf::Sprite spr(*cImg.texture);
                 spr.setPosition(cImg.bounds.left, cImg.bounds.top);
                 spr.setScale(cImg.bounds.width / static_cast<float>(cImg.texture->getSize().x),
@@ -693,9 +679,21 @@ void Canvas::initCustom(int width, int height) {
     m_isVectorStrokeActive = false;
     m_activeStrokeIsErase = false;
 
+    m_canvasImages.clear();
+    m_floatingImages.clear();
+    m_selectedStrokes.clear();
+    m_selectedImages.clear();
+    m_isMultiSelectionGroup = false;
+
     undoHistory.clear();
     redoHistory.clear();
     selection.clearSelection();
+    transformMode = TransformState::None;
+    pendingTransform = false;
+    isDrawing = false;
+    isDeforming = false;
+    activeTool = ToolType::Brush;
+
     resetView();
     isDirty = false;
 
@@ -889,6 +887,15 @@ void Canvas::clearAllFrames() {
     m_activeVectorMesh.clear();
     m_isVectorStrokeActive = false;
     m_activeStrokeIsErase = false;
+    m_canvasImages.clear();
+    m_floatingImages.clear();
+    m_selectedStrokes.clear();
+    m_selectedImages.clear();
+    m_isMultiSelectionGroup = false;
+    selection.clearSelection();
+    transformMode = TransformState::None;
+    pendingTransform = false;
+    isDrawing = false;
 }
 
 void Canvas::addLayer(int frameIndex, const std::string& name) {
@@ -1389,6 +1396,14 @@ bool Canvas::hasGlobalClipboard() const {
     return false;
 }
 
+const sf::Image& Canvas::getGlobalClipboardImage() const {
+    return s_globalClipboardImage;
+}
+
+bool Canvas::isClipboardVector() const {
+    return !isPixelMode && s_hasGlobalVectorClipboard && !s_globalClipboardVectorStrokes.empty();
+}
+
 void Canvas::pasteVectorStrokes(const std::vector<VectorStroke>& strokes, sf::Vector2f offset, int currentFrame) {
     if (strokes.empty()) return;
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
@@ -1455,7 +1470,7 @@ bool Canvas::pasteGlobalClipboard(int currentFrame) {
     }
 
     if (!hasGlobalClipboard()) return false;
-    pasteImage(s_globalClipboardImage, currentFrame);
+    pasteImage(s_globalClipboardImage, currentFrame, false);
     return true;
 }
 
@@ -1918,6 +1933,36 @@ void Canvas::saveUndoState() {
         undoHistory.erase(undoHistory.begin());
     }
     redoHistory.clear();
+}
+
+void Canvas::bakeAllStrokes() {
+    if (isPixelMode) {
+        for (const auto& ci : m_canvasImages) {
+            if (ci.frame >= 0 && ci.frame < static_cast<int>(frames.size())) {
+                if (ci.layer >= 0 && ci.layer < static_cast<int>(frames[ci.frame].layers.size())) {
+                    auto targetTex = frames[ci.frame].layers[ci.layer].texture.get();
+                    if (targetTex && ci.texture) {
+                        sf::Sprite spr(*ci.texture);
+                        spr.setPosition(std::round(ci.bounds.left), std::round(ci.bounds.top));
+                        float sx = std::round(ci.bounds.width) / static_cast<float>(ci.texture->getSize().x);
+                        float sy = std::round(ci.bounds.height) / static_cast<float>(ci.texture->getSize().y);
+                        spr.setScale(sx, sy);
+                        targetTex->draw(spr);
+                        targetTex->display();
+                    }
+                }
+            }
+        }
+        m_canvasImages.clear();
+        clearObjectSelection();
+    }
+    else {
+        for (size_t f = 0; f < frames.size(); ++f) {
+            for (size_t l = 0; l < frames[f].layers.size(); ++l) {
+                bakeLayerStrokes(static_cast<int>(f), static_cast<int>(l));
+            }
+        }
+    }
 }
 
 void Canvas::undo() {
@@ -3926,6 +3971,37 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                 }
             }
 
+            if (isPixelMode && !m_selectedImages.empty()) {
+                float maxCW = static_cast<float>(canvasLogicalSize.x);
+                float maxCH = static_cast<float>(canvasLogicalSize.y);
+                std::vector<sf::FloatRect> subBoxes;
+                sf::FloatRect masterBox;
+                bool first = true;
+                for (int iIdx : m_selectedImages) {
+                    if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
+                        const auto& b = m_canvasImages[iIdx].bounds;
+                        float x0 = std::clamp(b.left, 0.f, maxCW);
+                        float y0 = std::clamp(b.top, 0.f, maxCH);
+                        float x1 = std::clamp(b.left + b.width, 0.f, maxCW);
+                        float y1 = std::clamp(b.top + b.height, 0.f, maxCH);
+                        sf::FloatRect visB(x0, y0, std::max(0.f, x1 - x0), std::max(0.f, y1 - y0));
+                        subBoxes.push_back(visB);
+                        if (first) { masterBox = visB; first = false; }
+                        else {
+                            float mx0 = std::min(masterBox.left, visB.left);
+                            float my0 = std::min(masterBox.top, visB.top);
+                            float mx1 = std::max(masterBox.left + masterBox.width, visB.left + visB.width);
+                            float my1 = std::max(masterBox.top + masterBox.height, visB.top + visB.height);
+                            masterBox = sf::FloatRect(mx0, my0, mx1 - mx0, my1 - my0);
+                        }
+                    }
+                }
+                if (!subBoxes.empty() && masterBox.width > 0.f && masterBox.height > 0.f) {
+                    selection.setBoundingBox(masterBox);
+                    selection.setSubItemBoxes(subBoxes);
+                }
+            }
+
             isDirty = true;
             return;
         }
@@ -4637,6 +4713,9 @@ void Canvas::setPixelMode(bool enabled) {
     }
 
     isPixelMode = enabled;
+    clearObjectSelection();
+    isDrawing = false;
+    isDeforming = false;
 
     for (auto& frame : frames) {
         for (auto& layer : frame.layers) {
@@ -4707,141 +4786,153 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
 
     // --- PIXEL ART MODE: Pixel-exact click and multi-object continuous grouping ---
     if (isPixelMode) {
+        sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+        int maxCW = static_cast<int>(canvasLogicalSize.x);
+        int maxCH = static_cast<int>(canvasLogicalSize.y);
+
+        struct CachedImg {
+            sf::Image img;
+            int w = 0, h = 0;
+        };
+        std::vector<CachedImg> cachedImgs(m_canvasImages.size());
+        for (size_t i = 0; i < m_canvasImages.size(); ++i) {
+            if (m_canvasImages[i].texture && m_canvasImages[i].texture->getSize().x > 0 && m_canvasImages[i].texture->getSize().y > 0) {
+                cachedImgs[i].img = m_canvasImages[i].texture->copyToImage();
+                cachedImgs[i].w = static_cast<int>(cachedImgs[i].img.getSize().x);
+                cachedImgs[i].h = static_cast<int>(cachedImgs[i].img.getSize().y);
+            }
+        }
+
+        auto hasPixel = [&](int imgIdx, int cx, int cy) -> bool {
+            if (imgIdx < 0 || imgIdx >= static_cast<int>(m_canvasImages.size())) return false;
+            const auto& ci = m_canvasImages[imgIdx];
+            const auto& c = cachedImgs[imgIdx];
+            if (c.w == 0 || c.h == 0) return false;
+            if (cx < ci.bounds.left || cy < ci.bounds.top ||
+                cx >= ci.bounds.left + ci.bounds.width || cy >= ci.bounds.top + ci.bounds.height) return false;
+            float u = (static_cast<float>(cx) - ci.bounds.left + 0.5f) / ci.bounds.width;
+            float v = (static_cast<float>(cy) - ci.bounds.top + 0.5f) / ci.bounds.height;
+            int tx = std::clamp(static_cast<int>(u * static_cast<float>(c.w)), 0, c.w - 1);
+            int ty = std::clamp(static_cast<int>(v * static_cast<float>(c.h)), 0, c.h - 1);
+            return c.img.getPixel(tx, ty).a > 0;
+            };
+
         int clickedImageIdx = -1;
+        int clickX = static_cast<int>(std::floor(pos.x));
+        int clickY = static_cast<int>(std::floor(pos.y));
 
-        // 1. Check if clicked directly on a colored pixel of an existing object
+        // 1. Check existing CanvasImage objects (topmost first)
         for (int i = static_cast<int>(m_canvasImages.size()) - 1; i >= 0; --i) {
-            const auto& ci = m_canvasImages[i];
-            if (ci.frame == currentFrame && ci.layer == activeLayer && ci.bounds.contains(pos)) {
-                if (ci.texture) {
-                    sf::Image cImg = ci.texture->copyToImage();
-                    int lx = static_cast<int>(pos.x - ci.bounds.left);
-                    int ly = static_cast<int>(pos.y - ci.bounds.top);
-                    if (lx >= 0 && ly >= 0 && lx < static_cast<int>(cImg.getSize().x) && ly < static_cast<int>(cImg.getSize().y)) {
-                        if (cImg.getPixel(lx, ly).a > 0) {
-                            clickedImageIdx = i;
-                            break;
-                        }
-                    }
+            if (m_canvasImages[i].frame == currentFrame && m_canvasImages[i].layer == activeLayer) {
+                if (hasPixel(i, clickX, clickY)) {
+                    clickedImageIdx = i;
+                    break;
                 }
             }
         }
 
-        // 2. If not on an existing object, check base layer texture (strictly on the pixel itself)
+        // 2. Check base layer texture
+        sf::Image layerImg;
+        bool layerImgLoaded = false;
+        if (targetTex) {
+            layerImg = targetTex->getTexture().copyToImage();
+            layerImgLoaded = true;
+        }
+
+        const int dx8[9] = { 0, 1, -1, 0, 0, 1, 1, -1, -1 };
+        const int dy8[9] = { 0, 0, 0, 1, -1, 1, -1, 1, -1 };
+
+        // If clicked on base layer pixel (and not on an existing object), extract it
+        if (clickedImageIdx == -1 && layerImgLoaded) {
+            if (clickX >= 0 && clickY >= 0 && clickX < maxCW && clickY < maxCH && layerImg.getPixel(clickX, clickY).a > 0) {
+                std::vector<bool> visited(maxCW * maxCH, false);
+                std::vector<sf::Vector2i> q;
+                q.push_back({ clickX, clickY });
+                visited[clickY * maxCW + clickX] = true;
+
+                int minX = clickX, maxX = clickX, minY = clickY, maxY = clickY;
+                size_t head = 0;
+                while (head < q.size()) {
+                    sf::Vector2i p = q[head++];
+                    minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
+                    minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
+                    for (int d = 1; d <= 8; ++d) {
+                        int nx = p.x + dx8[d];
+                        int ny = p.y + dy8[d];
+                        if (nx >= 0 && nx < maxCW && ny >= 0 && ny < maxCH) {
+                            int idx = ny * maxCW + nx;
+                            if (!visited[idx] && layerImg.getPixel(nx, ny).a > 0) {
+                                visited[idx] = true;
+                                q.push_back({ nx, ny });
+                            }
+                        }
+                    }
+                }
+
+                int compW = maxX - minX + 1;
+                int compH = maxY - minY + 1;
+                sf::Image compImg;
+                compImg.create(compW, compH, sf::Color::Transparent);
+
+                for (const auto& pt : q) {
+                    compImg.setPixel(pt.x - minX, pt.y - minY, layerImg.getPixel(pt.x, pt.y));
+                    layerImg.setPixel(pt.x, pt.y, sf::Color::Transparent);
+                }
+
+                sf::Texture updatedLayerTex;
+                updatedLayerTex.loadFromImage(layerImg);
+                targetTex->clear(sf::Color::Transparent);
+                targetTex->draw(sf::Sprite(updatedLayerTex), sf::RenderStates(sf::BlendNone));
+                targetTex->display();
+
+                auto tex = std::make_shared<sf::Texture>();
+                tex->setSmooth(false);
+                tex->loadFromImage(compImg);
+
+                CanvasImage ci;
+                ci.id = ++m_nextImageId;
+                ci.frame = currentFrame;
+                ci.layer = activeLayer;
+                ci.texture = tex;
+                ci.bounds = sf::FloatRect(static_cast<float>(minX), static_cast<float>(minY),
+                    static_cast<float>(compW), static_cast<float>(compH));
+                m_canvasImages.push_back(ci);
+
+                CachedImg nci;
+                nci.img = compImg;
+                nci.w = compW;
+                nci.h = compH;
+                cachedImgs.push_back(nci);
+
+                clickedImageIdx = static_cast<int>(m_canvasImages.size()) - 1;
+            }
+        }
+
         if (clickedImageIdx == -1) {
-            sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
-            if (!targetTex) { clearObjectSelection(); return; }
-
-            int sx = static_cast<int>(pos.x);
-            int sy = static_cast<int>(pos.y);
-            sf::Image layerImg = targetTex->getTexture().copyToImage();
-            int w = static_cast<int>(layerImg.getSize().x);
-            int h = static_cast<int>(layerImg.getSize().y);
-
-            if (sx < 0 || sy < 0 || sx >= w || sy >= h || layerImg.getPixel(sx, sy).a == 0) {
-                clearObjectSelection();
-                return;
-            }
-
-            // Trace 8-connected pixels of this drawing on the base canvas
-            std::vector<bool> visited(w * h, false);
-            std::vector<sf::Vector2i> q;
-            q.push_back({ sx, sy });
-            visited[sy * w + sx] = true;
-
-            int minX = sx, maxX = sx, minY = sy, maxY = sy;
-            const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
-            const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
-
-            size_t head = 0;
-            while (head < q.size()) {
-                sf::Vector2i p = q[head++];
-                minX = std::min(minX, p.x);
-                maxX = std::max(maxX, p.x);
-                minY = std::min(minY, p.y);
-                maxY = std::max(maxY, p.y);
-
-                for (int d = 0; d < 8; ++d) {
-                    int nx = p.x + dx8[d];
-                    int ny = p.y + dy8[d];
-                    if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                        int idx = ny * w + nx;
-                        if (!visited[idx] && layerImg.getPixel(nx, ny).a > 0) {
-                            visited[idx] = true;
-                            q.push_back({ nx, ny });
-                        }
-                    }
-                }
-            }
-
-            int compW = maxX - minX + 1;
-            int compH = maxY - minY + 1;
-            sf::Image compImg;
-            compImg.create(compW, compH, sf::Color::Transparent);
-
-            for (const auto& pt : q) {
-                compImg.setPixel(pt.x - minX, pt.y - minY, layerImg.getPixel(pt.x, pt.y));
-                layerImg.setPixel(pt.x, pt.y, sf::Color::Transparent);
-            }
-
-            sf::Texture updatedLayerTex;
-            updatedLayerTex.loadFromImage(layerImg);
-            targetTex->clear(sf::Color::Transparent);
-            targetTex->draw(sf::Sprite(updatedLayerTex), sf::RenderStates(sf::BlendNone));
-            targetTex->display();
-
-            auto tex = std::make_shared<sf::Texture>();
-            tex->setSmooth(false);
-            tex->loadFromImage(compImg);
-
-            CanvasImage ci;
-            ci.id = ++m_nextImageId;
-            ci.frame = currentFrame;
-            ci.layer = activeLayer;
-            ci.texture = tex;
-            ci.bounds = sf::FloatRect(static_cast<float>(minX), static_cast<float>(minY),
-                static_cast<float>(compW), static_cast<float>(compH));
-            m_canvasImages.push_back(ci);
-            clickedImageIdx = static_cast<int>(m_canvasImages.size()) - 1;
+            clearObjectSelection();
+            return;
         }
 
-        // 3. Chain all distinct objects that touch each other so each has its own independent box
-        // 3. Check if non-transparent pixels actually touch or overlap
-        auto objectsTouch = [](const CanvasImage& a, const CanvasImage& b) {
-            sf::FloatRect expA(a.bounds.left - 1.f, a.bounds.top - 1.f,
-                a.bounds.width + 2.f, a.bounds.height + 2.f);
-            if (!expA.intersects(b.bounds)) return false;
-            if (!a.texture || !b.texture) return true;
+        // Fast canvas-space object touching test
+        auto objectsTouch = [&](int idxA, int idxB) -> bool {
+            const auto& a = m_canvasImages[idxA];
+            const auto& b = m_canvasImages[idxB];
+            float ix0 = std::max(a.bounds.left - 1.5f, b.bounds.left - 1.5f);
+            float iy0 = std::max(a.bounds.top - 1.5f, b.bounds.top - 1.5f);
+            float ix1 = std::min(a.bounds.left + a.bounds.width + 1.5f, b.bounds.left + b.bounds.width + 1.5f);
+            float iy1 = std::min(a.bounds.top + a.bounds.height + 1.5f, b.bounds.top + b.bounds.height + 1.5f);
+            if (ix0 >= ix1 || iy0 >= iy1) return false;
 
-            sf::Image imgA = a.texture->copyToImage();
-            sf::Image imgB = b.texture->copyToImage();
-            int ax = static_cast<int>(a.bounds.left);
-            int ay = static_cast<int>(a.bounds.top);
-            int bx = static_cast<int>(b.bounds.left);
-            int by = static_cast<int>(b.bounds.top);
+            int sx = static_cast<int>(std::floor(ix0));
+            int ex = static_cast<int>(std::ceil(ix1));
+            int sy = static_cast<int>(std::floor(iy0));
+            int ey = static_cast<int>(std::ceil(iy1));
 
-            const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
-            const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
-
-            for (int y = 0; y < static_cast<int>(imgA.getSize().y); ++y) {
-                for (int x = 0; x < static_cast<int>(imgA.getSize().x); ++x) {
-                    if (imgA.getPixel(x, y).a == 0) continue;
-                    int gx = ax + x;
-                    int gy = ay + y;
-
-                    // Overlap check
-                    int relBx = gx - bx;
-                    int relBy = gy - by;
-                    if (relBx >= 0 && relBy >= 0 && relBx < static_cast<int>(imgB.getSize().x) && relBy < static_cast<int>(imgB.getSize().y)) {
-                        if (imgB.getPixel(relBx, relBy).a > 0) return true;
-                    }
-
-                    // 8-neighbor touching check
-                    for (int d = 0; d < 8; ++d) {
-                        int nbx = (gx + dx8[d]) - bx;
-                        int nby = (gy + dy8[d]) - by;
-                        if (nbx >= 0 && nby >= 0 && nbx < static_cast<int>(imgB.getSize().x) && nby < static_cast<int>(imgB.getSize().y)) {
-                            if (imgB.getPixel(nbx, nby).a > 0) return true;
+            for (int cy = sy; cy <= ey; ++cy) {
+                for (int cx = sx; cx <= ex; ++cx) {
+                    if (hasPixel(idxA, cx, cy)) {
+                        for (int d = 0; d < 9; ++d) {
+                            if (hasPixel(idxB, cx + dx8[d], cy + dy8[d])) return true;
                         }
                     }
                 }
@@ -4849,17 +4940,105 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
             return false;
             };
 
+        // 3. Chain touching CanvasImage objects AND extract any touching pixels from targetTex
         std::vector<int> chain;
         std::vector<bool> inChain(m_canvasImages.size(), false);
         chain.push_back(clickedImageIdx);
         inChain[clickedImageIdx] = true;
 
         size_t cHead = 0;
+        bool modifiedTargetTex = false;
+
         while (cHead < chain.size()) {
             int curr = chain[cHead++];
+
+            // A. Check for any touching drawings on the base layer texture and extract them
+            if (layerImgLoaded) {
+                const auto& ci = m_canvasImages[curr];
+                int bx0 = std::max(0, static_cast<int>(std::floor(ci.bounds.left)) - 1);
+                int by0 = std::max(0, static_cast<int>(std::floor(ci.bounds.top)) - 1);
+                int bx1 = std::min(maxCW - 1, static_cast<int>(std::ceil(ci.bounds.left + ci.bounds.width)) + 1);
+                int by1 = std::min(maxCH - 1, static_cast<int>(std::ceil(ci.bounds.top + ci.bounds.height)) + 1);
+
+                for (int ty = by0; ty <= by1; ++ty) {
+                    for (int tx = bx0; tx <= bx1; ++tx) {
+                        if (layerImg.getPixel(tx, ty).a > 0) {
+                            bool touchesCurr = false;
+                            for (int d = 0; d < 9; ++d) {
+                                if (hasPixel(curr, tx + dx8[d], ty + dy8[d])) {
+                                    touchesCurr = true;
+                                    break;
+                                }
+                            }
+
+                            if (touchesCurr) {
+                                std::vector<bool> visited(maxCW * maxCH, false);
+                                std::vector<sf::Vector2i> q;
+                                q.push_back({ tx, ty });
+                                visited[ty * maxCW + tx] = true;
+
+                                int minX = tx, maxX = tx, minY = ty, maxY = ty;
+                                size_t head = 0;
+                                while (head < q.size()) {
+                                    sf::Vector2i p = q[head++];
+                                    minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
+                                    minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
+                                    for (int d = 1; d <= 8; ++d) {
+                                        int nx = p.x + dx8[d];
+                                        int ny = p.y + dy8[d];
+                                        if (nx >= 0 && nx < maxCW && ny >= 0 && ny < maxCH) {
+                                            int idx = ny * maxCW + nx;
+                                            if (!visited[idx] && layerImg.getPixel(nx, ny).a > 0) {
+                                                visited[idx] = true;
+                                                q.push_back({ nx, ny });
+                                            }
+                                        }
+                                    }
+                                }
+
+                                int compW = maxX - minX + 1;
+                                int compH = maxY - minY + 1;
+                                sf::Image compImg;
+                                compImg.create(compW, compH, sf::Color::Transparent);
+
+                                for (const auto& pt : q) {
+                                    compImg.setPixel(pt.x - minX, pt.y - minY, layerImg.getPixel(pt.x, pt.y));
+                                    layerImg.setPixel(pt.x, pt.y, sf::Color::Transparent);
+                                }
+                                modifiedTargetTex = true;
+
+                                auto tex = std::make_shared<sf::Texture>();
+                                tex->setSmooth(false);
+                                tex->loadFromImage(compImg);
+
+                                CanvasImage newCi;
+                                newCi.id = ++m_nextImageId;
+                                newCi.frame = currentFrame;
+                                newCi.layer = activeLayer;
+                                newCi.texture = tex;
+                                newCi.bounds = sf::FloatRect(static_cast<float>(minX), static_cast<float>(minY),
+                                    static_cast<float>(compW), static_cast<float>(compH));
+                                m_canvasImages.push_back(newCi);
+
+                                CachedImg nci;
+                                nci.img = compImg;
+                                nci.w = compW;
+                                nci.h = compH;
+                                cachedImgs.push_back(nci);
+
+                                inChain.push_back(true);
+                                chain.push_back(static_cast<int>(m_canvasImages.size()) - 1);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // B. Chain touching CanvasImage objects
             for (size_t next = 0; next < m_canvasImages.size(); ++next) {
+                if (next >= inChain.size()) inChain.resize(m_canvasImages.size(), false);
                 if (!inChain[next] && m_canvasImages[next].frame == currentFrame && m_canvasImages[next].layer == activeLayer) {
-                    if (objectsTouch(m_canvasImages[curr], m_canvasImages[next])) {
+                    if (objectsTouch(curr, static_cast<int>(next))) {
                         inChain[next] = true;
                         chain.push_back(static_cast<int>(next));
                     }
@@ -4867,19 +5046,36 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
             }
         }
 
+        if (modifiedTargetTex && targetTex) {
+            sf::Texture updatedLayerTex;
+            updatedLayerTex.loadFromImage(layerImg);
+            targetTex->clear(sf::Color::Transparent);
+            targetTex->draw(sf::Sprite(updatedLayerTex), sf::RenderStates(sf::BlendNone));
+            targetTex->display();
+        }
+
         m_selectedImages = chain;
         m_selectedStrokes.clear();
         std::vector<sf::FloatRect> subBoxes;
-        sf::FloatRect masterBox = m_canvasImages[chain[0]].bounds;
+        sf::FloatRect masterBox;
+        bool first = true;
 
         for (int idx : chain) {
             const auto& b = m_canvasImages[idx].bounds;
-            subBoxes.push_back(b);
-            float x0 = std::min(masterBox.left, b.left);
-            float y0 = std::min(masterBox.top, b.top);
-            float x1 = std::max(masterBox.left + masterBox.width, b.left + b.width);
-            float y1 = std::max(masterBox.top + masterBox.height, b.top + b.height);
-            masterBox = sf::FloatRect(x0, y0, x1 - x0, y1 - y0);
+            float x0 = std::clamp(b.left, 0.f, static_cast<float>(maxCW));
+            float y0 = std::clamp(b.top, 0.f, static_cast<float>(maxCH));
+            float x1 = std::clamp(b.left + b.width, 0.f, static_cast<float>(maxCW));
+            float y1 = std::clamp(b.top + b.height, 0.f, static_cast<float>(maxCH));
+            sf::FloatRect visB(x0, y0, std::max(0.f, x1 - x0), std::max(0.f, y1 - y0));
+            subBoxes.push_back(visB);
+            if (first) { masterBox = visB; first = false; }
+            else {
+                float mx0 = std::min(masterBox.left, visB.left);
+                float my0 = std::min(masterBox.top, visB.top);
+                float mx1 = std::max(masterBox.left + masterBox.width, visB.left + visB.width);
+                float my1 = std::max(masterBox.top + masterBox.height, visB.top + visB.height);
+                masterBox = sf::FloatRect(mx0, my0, mx1 - mx0, my1 - my0);
+            }
         }
 
         m_isMultiSelectionGroup = (chain.size() > 1);
@@ -5007,44 +5203,97 @@ void Canvas::cleanVectorLayers() {
 }
 
 
-void Canvas::pasteImage(const sf::Image& img, int currentFrame) {
+void Canvas::pasteImage(const sf::Image& img, int currentFrame, bool originalResolution) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    if (img.getSize().x == 0 || img.getSize().y == 0) return;
 
     saveUndoState();
-
-    auto tex = std::make_shared<sf::Texture>();
-    tex->setSmooth(!isPixelMode);
-    tex->loadFromImage(img);
 
     sf::Vector2u texSize = img.getSize();
     float tw = static_cast<float>(texSize.x);
     float th = static_cast<float>(texSize.y);
 
-    float maxW = static_cast<float>(canvasLogicalSize.x) * 0.85f;
-    float maxH = static_cast<float>(canvasLogicalSize.y) * 0.85f;
-    float scale = 1.0f;
-    if (tw > maxW || th > maxH) {
-        scale = std::min(maxW / tw, maxH / th);
-    }
+    float maxCanvasW = static_cast<float>(canvasLogicalSize.x);
+    float maxCanvasH = static_cast<float>(canvasLogicalSize.y);
 
-    float scaledW = std::max(1.0f, std::floor(tw * scale));
-    float scaledH = std::max(1.0f, std::floor(th * scale));
-    float centerX = std::floor((static_cast<float>(canvasLogicalSize.x) - scaledW) * 0.5f);
-    float centerY = std::floor((static_cast<float>(canvasLogicalSize.y) - scaledH) * 0.5f);
+    float targetW = tw;
+    float targetH = th;
+    float posX = 0.f;
+    float posY = 0.f;
+
+    auto tex = std::make_shared<sf::Texture>();
+
+    if (originalResolution) {
+        targetW = tw;
+        targetH = th;
+        posX = std::floor((maxCanvasW - targetW) * 0.5f);
+        posY = std::floor((maxCanvasH - targetH) * 0.5f);
+
+        tex->setSmooth(!isPixelMode);
+        tex->loadFromImage(img);
+    }
+    else {
+        float maxW = maxCanvasW * 0.85f;
+        float maxH = maxCanvasH * 0.85f;
+        float scale = 1.0f;
+        if (tw > maxW || th > maxH) {
+            scale = std::min(maxW / tw, maxH / th);
+        }
+
+        targetW = std::max(1.0f, std::floor(tw * scale));
+        targetH = std::max(1.0f, std::floor(th * scale));
+        posX = std::floor((maxCanvasW - targetW) * 0.5f);
+        posY = std::floor((maxCanvasH - targetH) * 0.5f);
+
+        if (isPixelMode) {
+            int dstW = static_cast<int>(targetW);
+            int dstH = static_cast<int>(targetH);
+            sf::Image pixelScaled;
+            pixelScaled.create(dstW, dstH, sf::Color::Transparent);
+
+            int srcW = static_cast<int>(tw);
+            int srcH = static_cast<int>(th);
+
+            for (int y = 0; y < dstH; ++y) {
+                int sy = std::clamp(static_cast<int>((static_cast<float>(y) + 0.5f) * static_cast<float>(srcH) / static_cast<float>(dstH)), 0, srcH - 1);
+                for (int x = 0; x < dstW; ++x) {
+                    int sx = std::clamp(static_cast<int>((static_cast<float>(x) + 0.5f) * static_cast<float>(srcW) / static_cast<float>(dstW)), 0, srcW - 1);
+                    pixelScaled.setPixel(x, y, img.getPixel(sx, sy));
+                }
+            }
+            tex->setSmooth(false);
+            tex->loadFromImage(pixelScaled);
+        }
+        else {
+            tex->setSmooth(true);
+            tex->loadFromImage(img);
+        }
+    }
 
     CanvasImage ci;
     ci.id = ++m_nextImageId;
     ci.frame = currentFrame;
     ci.layer = activeLayer;
     ci.texture = tex;
-    ci.bounds = sf::FloatRect(centerX, centerY, scaledW, scaledH);
+    ci.bounds = sf::FloatRect(posX, posY, targetW, targetH);
     m_canvasImages.push_back(ci);
 
     clearObjectSelection();
     m_selectedImages.push_back(static_cast<int>(m_canvasImages.size()) - 1);
     m_isMultiSelectionGroup = false;
 
-    selection.setSelectionBoxes(ci.bounds, { ci.bounds });
+    if (isPixelMode) {
+        float x0 = std::clamp(ci.bounds.left, 0.f, maxCanvasW);
+        float y0 = std::clamp(ci.bounds.top, 0.f, maxCanvasH);
+        float x1 = std::clamp(ci.bounds.left + ci.bounds.width, 0.f, maxCanvasW);
+        float y1 = std::clamp(ci.bounds.top + ci.bounds.height, 0.f, maxCanvasH);
+        sf::FloatRect visBox(x0, y0, std::max(0.f, x1 - x0), std::max(0.f, y1 - y0));
+        selection.setSelectionBoxes(visBox, { visBox });
+    }
+    else {
+        selection.setSelectionBoxes(ci.bounds, { ci.bounds });
+    }
+
     selection.setShowHandles(true);
     setActiveTool(ToolType::Select);
     isDirty = true;
@@ -5054,7 +5303,7 @@ void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFr
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
     sf::Image img;
     if (img.loadFromFile(filepath)) {
-        pasteImage(img, currentFrame);
+        pasteImage(img, currentFrame, false);
     }
 }
 

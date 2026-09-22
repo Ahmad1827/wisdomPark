@@ -223,8 +223,11 @@ bool SelectionManager::isPointInsideSelection(sf::Vector2f pos) const {
         if (isLassoSelection && pathPoints.size() > 2) {
             return isInsidePolygon(pos, pathPoints);
         }
-        for (const auto& b : subItemBoxes) {
-            if (b.contains(pos)) return true;
+        if (!subItemBoxes.empty()) {
+            for (const auto& b : subItemBoxes) {
+                if (b.contains(pos)) return true;
+            }
+            return false;
         }
         return true;
     }
