@@ -493,27 +493,33 @@ bool SelectionManager::startResize(sf::Vector2f pos, float handleRadius) {
 void SelectionManager::resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas) {
     if (!isResizingFlag) return;
 
-    float rawW = std::abs(pos.x - resizeAnchorWorld.x);
-    float rawH = std::abs(pos.y - resizeAnchorWorld.y);
+    float dirX = (activeHandle == 1 || activeHandle == 2) ? 1.0f : -1.0f;
+    float dirY = (activeHandle == 2 || activeHandle == 3) ? 1.0f : -1.0f;
 
-    float newW = rawW;
-    float newH = rawH;
+    float distX = (pos.x - resizeAnchorWorld.x) * dirX;
+    float distY = (pos.y - resizeAnchorWorld.y) * dirY;
+
+    float w0 = std::max(1.0f, resizeStartBox.width);
+    float h0 = std::max(1.0f, resizeStartBox.height);
+
+    float newW = std::max(1.0f, distX);
+    float newH = std::max(1.0f, distY);
 
     bool keepAspect = !sf::Keyboard::isKeyPressed(sf::Keyboard::LShift);
-    if (keepAspect && resizeStartBox.width > 0.001f && resizeStartBox.height > 0.001f) {
-        float dLenSq = (resizeStartBox.width * resizeStartBox.width) + (resizeStartBox.height * resizeStartBox.height);
-        float proj = std::abs((pos.x - resizeAnchorWorld.x) * resizeStartBox.width +
-            (pos.y - resizeAnchorWorld.y) * resizeStartBox.height) / dLenSq;
-        float scale = std::max(1.0f / std::max(resizeStartBox.width, resizeStartBox.height), proj);
-        newW = resizeStartBox.width * scale;
-        newH = resizeStartBox.height * scale;
+    if (keepAspect) {
+        float dLenSq = w0 * w0 + h0 * h0;
+        float proj = (distX * w0 + distY * h0) / dLenSq;
+        float scale = std::max(1.0f / std::max(w0, h0), proj);
+        newW = std::max(1.0f, std::round(w0 * scale));
+        newH = std::max(1.0f, std::round(h0 * scale));
+    }
+    else {
+        newW = std::max(1.0f, std::round(newW));
+        newH = std::max(1.0f, std::round(newH));
     }
 
-    newW = std::max(1.0f, std::round(newW));
-    newH = std::max(1.0f, std::round(newH));
-
-    float newLeft = (pos.x < resizeAnchorWorld.x) ? (resizeAnchorWorld.x - newW) : resizeAnchorWorld.x;
-    float newTop = (pos.y < resizeAnchorWorld.y) ? (resizeAnchorWorld.y - newH) : resizeAnchorWorld.y;
+    float newLeft = (dirX > 0.0f) ? resizeAnchorWorld.x : (resizeAnchorWorld.x - newW);
+    float newTop = (dirY > 0.0f) ? resizeAnchorWorld.y : (resizeAnchorWorld.y - newH);
 
     boundingBox = sf::FloatRect(newLeft, newTop, newW, newH);
 }

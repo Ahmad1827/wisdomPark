@@ -370,6 +370,56 @@ void Canvas::drawLayerContent(sf::RenderTarget& target, int frameIndex, int laye
     bool needsComposite = !isPixelMode && (layerHasErase(frameIndex, layerIndex) || activeErase || floatingHasErase);
 
     if (!needsComposite) {
+        if (isPixelMode) {
+            bool hasCanvasImages = false;
+            for (const auto& cImg : m_canvasImages) {
+                if (cImg.frame == frameIndex && cImg.layer == layerIndex && cImg.texture) {
+                    hasCanvasImages = true;
+                    break;
+                }
+            }
+
+            if (!hasCanvasImages) {
+                if (layer.texture) {
+                    sf::Sprite spr(layer.texture->getTexture());
+                    spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * op)));
+                    target.draw(spr, layerStates);
+                }
+                return;
+            }
+
+            static sf::RenderTexture s_pixelComposite;
+            if (s_pixelComposite.getSize() != canvasLogicalSize) {
+                s_pixelComposite.create(canvasLogicalSize.x, canvasLogicalSize.y);
+                s_pixelComposite.setSmooth(false);
+            }
+
+            s_pixelComposite.clear(sf::Color::Transparent);
+
+            if (layer.texture) {
+                sf::Sprite base(layer.texture->getTexture());
+                s_pixelComposite.draw(base);
+            }
+
+            for (const auto& cImg : m_canvasImages) {
+                if (cImg.frame == frameIndex && cImg.layer == layerIndex && cImg.texture) {
+                    sf::Sprite spr(*cImg.texture);
+                    spr.setPosition(std::round(cImg.bounds.left), std::round(cImg.bounds.top));
+                    float sx = std::round(cImg.bounds.width) / static_cast<float>(cImg.texture->getSize().x);
+                    float sy = std::round(cImg.bounds.height) / static_cast<float>(cImg.texture->getSize().y);
+                    spr.setScale(sx, sy);
+                    s_pixelComposite.draw(spr);
+                }
+            }
+
+            s_pixelComposite.display();
+
+            sf::Sprite out(s_pixelComposite.getTexture());
+            out.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * op)));
+            target.draw(out, layerStates);
+            return;
+        }
+
         if (layer.texture) {
             sf::Sprite spr(layer.texture->getTexture());
             spr.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(255.0f * op)));
@@ -387,15 +437,13 @@ void Canvas::drawLayerContent(sf::RenderTarget& target, int frameIndex, int laye
             }
         }
 
-        if (!isPixelMode) {
-            for (const auto& vs : m_vectorStrokes) {
-                if (vs.frame != frameIndex || vs.layer != layerIndex) continue;
-                if (op < 0.999f) target.draw(meshWithOpacity(vs.mesh, op), layerStates);
-                else target.draw(vs.mesh, layerStates);
-            }
-            if (isActiveLayerForPreview && m_isVectorStrokeActive && m_activeVectorMesh.getVertexCount() > 0) {
-                target.draw(m_activeVectorMesh, layerStates);
-            }
+        for (const auto& vs : m_vectorStrokes) {
+            if (vs.frame != frameIndex || vs.layer != layerIndex) continue;
+            if (op < 0.999f) target.draw(meshWithOpacity(vs.mesh, op), layerStates);
+            else target.draw(vs.mesh, layerStates);
+        }
+        if (isActiveLayerForPreview && m_isVectorStrokeActive && m_activeVectorMesh.getVertexCount() > 0) {
+            target.draw(m_activeVectorMesh, layerStates);
         }
         return;
     }
@@ -3248,9 +3296,9 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                                 sf::Image dst;
                                 dst.create(newW, newH, sf::Color::Transparent);
                                 for (int y = 0; y < newH; ++y) {
-                                    int sy = std::min(srcH - 1, (y * srcH) / newH);
+                                    int sy = std::clamp(static_cast<int>((static_cast<float>(y) + 0.5f) * static_cast<float>(srcH) / static_cast<float>(newH)), 0, srcH - 1);
                                     for (int x = 0; x < newW; ++x) {
-                                        int sx = std::min(srcW - 1, (x * srcW) / newW);
+                                        int sx = std::clamp(static_cast<int>((static_cast<float>(x) + 0.5f) * static_cast<float>(srcW) / static_cast<float>(newW)), 0, srcW - 1);
                                         dst.setPixel(x, y, src.getPixel(sx, sy));
                                     }
                                 }
@@ -3258,11 +3306,45 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                                 nTex->setSmooth(false);
                                 nTex->loadFromImage(dst);
                                 ci.texture = nTex;
+                                ci.bounds.left = std::round(ci.bounds.left);
+                                ci.bounds.top = std::round(ci.bounds.top);
                                 ci.bounds.width = static_cast<float>(newW);
                                 ci.bounds.height = static_cast<float>(newH);
                             }
                         }
                     }
+                }
+
+                std::vector<sf::FloatRect> updatedSub;
+                sf::FloatRect masterBox;
+                bool first = true;
+                for (int sIdx : m_selectedStrokes) {
+                    sf::FloatRect b = getStrokeBounds(m_vectorStrokes[sIdx]);
+                    updatedSub.push_back(b);
+                    if (first) { masterBox = b; first = false; }
+                    else {
+                        float x0 = std::min(masterBox.left, b.left);
+                        float y0 = std::min(masterBox.top, b.top);
+                        float x1 = std::max(masterBox.left + masterBox.width, b.left + b.width);
+                        float y1 = std::max(masterBox.top + masterBox.height, b.top + b.height);
+                        masterBox = sf::FloatRect(x0, y0, x1 - x0, y1 - y0);
+                    }
+                }
+                for (int iIdx : m_selectedImages) {
+                    sf::FloatRect b = m_canvasImages[iIdx].bounds;
+                    updatedSub.push_back(b);
+                    if (first) { masterBox = b; first = false; }
+                    else {
+                        float x0 = std::min(masterBox.left, b.left);
+                        float y0 = std::min(masterBox.top, b.top);
+                        float x1 = std::max(masterBox.left + masterBox.width, b.left + b.width);
+                        float y1 = std::max(masterBox.top + masterBox.height, b.top + b.height);
+                        masterBox = sf::FloatRect(x0, y0, x1 - x0, y1 - y0);
+                    }
+                }
+                if (!updatedSub.empty()) {
+                    selection.setBoundingBox(masterBox);
+                    selection.setSubItemBoxes(updatedSub);
                 }
             }
             m_resizeImageSnapshots.clear();
@@ -3833,8 +3915,14 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
 
             for (int iIdx : m_selectedImages) {
                 if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
-                    m_canvasImages[iIdx].bounds.left += delta.x;
-                    m_canvasImages[iIdx].bounds.top += delta.y;
+                    if (isPixelMode) {
+                        m_canvasImages[iIdx].bounds.left = std::round(m_canvasImages[iIdx].bounds.left + delta.x);
+                        m_canvasImages[iIdx].bounds.top = std::round(m_canvasImages[iIdx].bounds.top + delta.y);
+                    }
+                    else {
+                        m_canvasImages[iIdx].bounds.left += delta.x;
+                        m_canvasImages[iIdx].bounds.top += delta.y;
+                    }
                 }
             }
 
