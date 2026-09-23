@@ -195,28 +195,160 @@ void PathShape::applySymmetry(const sf::Vector2f& symStart, const sf::Vector2f& 
     points.insert(points.end(), mirrored.begin(), mirrored.end());
 }
 
+void PathShape::drawBresenhamLine(sf::VertexArray& va, int x0, int y0, int x1, int y1, sf::Color color, int strokeThick) {
+    int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    int dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy, e2;
+    int half = std::max(0, (strokeThick - 1) / 2);
+
+    while (true) {
+        for (int oy = -half; oy <= half; ++oy) {
+            for (int ox = -half; ox <= half; ++ox) {
+                float fx = static_cast<float>(x0 + ox);
+                float fy = static_cast<float>(y0 + oy);
+                va.append(sf::Vertex(sf::Vector2f(fx, fy), color));
+                va.append(sf::Vertex(sf::Vector2f(fx + 1.f, fy), color));
+                va.append(sf::Vertex(sf::Vector2f(fx + 1.f, fy + 1.f), color));
+                va.append(sf::Vertex(sf::Vector2f(fx, fy + 1.f), color));
+            }
+        }
+        if (x0 == x1 && y0 == y1) break;
+        e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; }
+        if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+}
+
+void PathShape::fillScanlinePolygon(sf::VertexArray& va, const std::vector<sf::Vector2f>& polyPoints, sf::Color color) {
+    if (polyPoints.size() < 3) return;
+
+    float minY = polyPoints[0].y;
+    float maxY = polyPoints[0].y;
+    for (size_t i = 1; i < polyPoints.size(); ++i) {
+        if (polyPoints[i].y < minY) minY = polyPoints[i].y;
+        if (polyPoints[i].y > maxY) maxY = polyPoints[i].y;
+    }
+
+    int startY = static_cast<int>(std::floor(minY));
+    int endY = static_cast<int>(std::ceil(maxY));
+    int n = static_cast<int>(polyPoints.size());
+
+    std::vector<float> nodeX;
+
+    for (int y = startY; y <= endY; ++y) {
+        nodeX.clear();
+        float curY = static_cast<float>(y) + 0.5f;
+
+        for (int i = 0; i < n; ++i) {
+            int next = (i + 1) % n;
+            float y1 = polyPoints[i].y;
+            float y2 = polyPoints[next].y;
+            float x1 = polyPoints[i].x;
+            float x2 = polyPoints[next].x;
+
+            if ((y1 < curY && y2 >= curY) || (y2 < curY && y1 >= curY)) {
+                float intersectX = x1 + (curY - y1) / (y2 - y1) * (x2 - x1);
+                nodeX.push_back(intersectX);
+            }
+        }
+
+        std::sort(nodeX.begin(), nodeX.end());
+
+        for (size_t i = 0; i + 1 < nodeX.size(); i += 2) {
+            int xStart = static_cast<int>(std::floor(nodeX[i]));
+            int xEnd = static_cast<int>(std::ceil(nodeX[i + 1]));
+
+            for (int x = xStart; x < xEnd; ++x) {
+                float fx = static_cast<float>(x);
+                float fy = static_cast<float>(y);
+                va.append(sf::Vertex(sf::Vector2f(fx, fy), color));
+                va.append(sf::Vertex(sf::Vector2f(fx + 1.f, fy), color));
+                va.append(sf::Vertex(sf::Vector2f(fx + 1.f, fy + 1.f), color));
+                va.append(sf::Vertex(sf::Vector2f(fx, fy + 1.f), color));
+            }
+        }
+    }
+}
+
 void PathShape::drawBresenham(sf::RenderTarget& target, sf::RenderStates states) {
     if (points.empty()) return;
 
-    sf::VertexArray lines(shapeId == ShapeId::Line || shapeId == ShapeId::Arrow || shapeId == ShapeId::FilledArrow ? sf::Lines : sf::LineStrip, points.size() + (isFilled ? 1 : 0));
-    for (size_t i = 0; i < points.size(); ++i) {
-        lines[i].position = sf::Vector2f(std::round(points[i].x), std::round(points[i].y));
-        lines[i].color = strokeColor;
-    }
+    sf::VertexArray pixelQuads(sf::Quads);
+    int strokeThick = std::max(1, static_cast<int>(std::round(strokeWidth)));
 
-    if (isFilled && points.size() > 2) {
-        lines[points.size()].position = sf::Vector2f(std::round(points[0].x), std::round(points[0].y));
-        lines[points.size()].color = strokeColor;
+    // 1. Fill interior
+    if (isFilled && fillColor.a > 0 && points.size() >= 3) {
+        if (shapeId == ShapeId::FilledRectangle || shapeId == ShapeId::FilledRoundedRectangle) {
+            int x0 = static_cast<int>(std::round(bounds.left));
+            int y0 = static_cast<int>(std::round(bounds.top));
+            int x1 = static_cast<int>(std::round(bounds.left + bounds.width));
+            int y1 = static_cast<int>(std::round(bounds.top + bounds.height));
 
-        sf::ConvexShape convex;
-        convex.setPointCount(points.size());
-        for (size_t i = 0; i < points.size(); ++i) {
-            convex.setPoint(i, sf::Vector2f(std::round(points[i].x), std::round(points[i].y)));
+            for (int py = y0; py < y1; ++py) {
+                for (int px = x0; px < x1; ++px) {
+                    float fx = static_cast<float>(px);
+                    float fy = static_cast<float>(py);
+                    pixelQuads.append(sf::Vertex(sf::Vector2f(fx, fy), fillColor));
+                    pixelQuads.append(sf::Vertex(sf::Vector2f(fx + 1.f, fy), fillColor));
+                    pixelQuads.append(sf::Vertex(sf::Vector2f(fx + 1.f, fy + 1.f), fillColor));
+                    pixelQuads.append(sf::Vertex(sf::Vector2f(fx, fy + 1.f), fillColor));
+                }
+            }
         }
-        convex.setFillColor(fillColor);
-        target.draw(convex, states);
+        else if (shapeId == ShapeId::FilledCircle || shapeId == ShapeId::FilledEllipse) {
+            float rx = bounds.width * 0.5f;
+            float ry = bounds.height * 0.5f;
+            float cx = bounds.left + rx;
+            float cy = bounds.top + ry;
+
+            if (rx > 0.f && ry > 0.f) {
+                int y0 = static_cast<int>(std::floor(bounds.top));
+                int y1 = static_cast<int>(std::ceil(bounds.top + bounds.height));
+                for (int py = y0; py <= y1; ++py) {
+                    float dy = (static_cast<float>(py) + 0.5f - cy) / ry;
+                    if (std::abs(dy) <= 1.f) {
+                        float dx = rx * std::sqrt(std::max(0.f, 1.f - dy * dy));
+                        int x0 = static_cast<int>(std::floor(cx - dx));
+                        int x1 = static_cast<int>(std::ceil(cx + dx));
+                        for (int px = x0; px < x1; ++px) {
+                            float fx = static_cast<float>(px);
+                            float fy = static_cast<float>(py);
+                            pixelQuads.append(sf::Vertex(sf::Vector2f(fx, fy), fillColor));
+                            pixelQuads.append(sf::Vertex(sf::Vector2f(fx + 1.f, fy), fillColor));
+                            pixelQuads.append(sf::Vertex(sf::Vector2f(fx + 1.f, fy + 1.f), fillColor));
+                            pixelQuads.append(sf::Vertex(sf::Vector2f(fx, fy + 1.f), fillColor));
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            fillScanlinePolygon(pixelQuads, points, fillColor);
+        }
     }
-    target.draw(lines, states);
+
+    // 2. Outline stroke
+    if (strokeColor.a > 0 && strokeThick > 0 && points.size() >= 2) {
+        if (shapeId == ShapeId::Line) {
+            drawBresenhamLine(pixelQuads,
+                static_cast<int>(std::round(points[0].x)), static_cast<int>(std::round(points[0].y)),
+                static_cast<int>(std::round(points[1].x)), static_cast<int>(std::round(points[1].y)),
+                strokeColor, strokeThick);
+        }
+        else {
+            for (size_t i = 0; i < points.size(); ++i) {
+                size_t next = (i + 1) % points.size();
+                drawBresenhamLine(pixelQuads,
+                    static_cast<int>(std::round(points[i].x)), static_cast<int>(std::round(points[i].y)),
+                    static_cast<int>(std::round(points[next].x)), static_cast<int>(std::round(points[next].y)),
+                    strokeColor, strokeThick);
+            }
+        }
+    }
+
+    if (pixelQuads.getVertexCount() > 0) {
+        target.draw(pixelQuads, states);
+    }
 }
 
 sf::VertexArray PathShape::toVectorMesh() {

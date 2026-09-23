@@ -2782,6 +2782,20 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             if (!isPixelMode && m_deformStrokeIndex >= 0 && m_deformStrokeIndex < static_cast<int>(m_vectorStrokes.size())) {
                 m_vectorStrokes[m_deformStrokeIndex].mesh = m_originalDeformMesh;
             }
+            else if (isPixelMode) {
+                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                if (targetTex) {
+                    sf::RenderStates rsNone;
+                    rsNone.blendMode = sf::BlendNone;
+                    sf::RectangleShape drawPx(sf::Vector2f(1.f, 1.f));
+                    for (const auto& dp : deformPixels) {
+                        drawPx.setPosition(static_cast<float>(dp.x), static_cast<float>(dp.y));
+                        drawPx.setFillColor(dp.color);
+                        targetTex->draw(drawPx, rsNone);
+                    }
+                    targetTex->display();
+                }
+            }
             isDeforming = false;
             m_deformStrokeIndex = -1;
             m_originalDeformMesh.clear();
@@ -3016,6 +3030,17 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 deformCurrentPos = deformClickPos;
                 isDeforming = true;
                 updateDeformPixels(sf::Vector2f(0.f, 0.f));
+
+                // Clear original pixels from the texture immediately so they do not show under the live curve
+                sf::RenderStates rsNone;
+                rsNone.blendMode = sf::BlendNone;
+                sf::RectangleShape clearPx(sf::Vector2f(1.f, 1.f));
+                clearPx.setFillColor(sf::Color::Transparent);
+                for (const auto& dp : deformPixels) {
+                    clearPx.setPosition(static_cast<float>(dp.x), static_cast<float>(dp.y));
+                    targetTex->draw(clearPx, rsNone);
+                }
+                targetTex->display();
                 return;
             }
 
@@ -3531,31 +3556,32 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                 return;
             }
 
-            if (std::abs(delta.x) >= 1.0f || std::abs(delta.y) >= 1.0f) {
-                saveUndoState();
-                updateDeformPixels(delta);
+            sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+            if (targetTex) {
+                sf::RenderStates rsNone;
+                rsNone.blendMode = sf::BlendNone;
+                sf::RectangleShape drawPx(sf::Vector2f(1.f, 1.f));
 
-                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
-                if (targetTex) {
-                    sf::RenderStates rsNone;
-                    rsNone.blendMode = sf::BlendNone;
-                    sf::RectangleShape clearPx(sf::Vector2f(1.f, 1.f));
-                    clearPx.setFillColor(sf::Color::Transparent);
+                if (std::abs(delta.x) >= 1.0f || std::abs(delta.y) >= 1.0f) {
+                    saveUndoState();
+                    updateDeformPixels(delta);
 
-                    for (const auto& dp : deformPixels) {
-                        clearPx.setPosition(static_cast<float>(dp.x), static_cast<float>(dp.y));
-                        targetTex->draw(clearPx, rsNone);
-                    }
-
-                    sf::RectangleShape drawPx(sf::Vector2f(1.f, 1.f));
                     for (const auto& dp : currentDeformedPixels) {
                         drawPx.setPosition(static_cast<float>(dp.x), static_cast<float>(dp.y));
                         drawPx.setFillColor(dp.color);
                         targetTex->draw(drawPx, rsNone);
                     }
-                    targetTex->display();
+                    isDirty = true;
                 }
-                isDirty = true;
+                else {
+                    // Clicked without moving: restore original un-deformed pixels
+                    for (const auto& dp : deformPixels) {
+                        drawPx.setPosition(static_cast<float>(dp.x), static_cast<float>(dp.y));
+                        drawPx.setFillColor(dp.color);
+                        targetTex->draw(drawPx, rsNone);
+                    }
+                }
+                targetTex->display();
             }
 
             isDeforming = false;

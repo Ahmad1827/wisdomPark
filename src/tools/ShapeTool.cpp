@@ -5,12 +5,13 @@
 
 ShapeTool::ShapeTool(Canvas& canvas, Timeline& timeline)
     : m_canvas(canvas), m_timeline(timeline), m_isDragging(false), m_isPanning(false),
-    m_currentShapeId(ShapeId::Rectangle), m_panelPos(64.f, 78.f), m_panelSize(210.f, 320.f),
+    m_currentShapeId(ShapeId::Rectangle), m_panelPos(64.f, 78.f), m_panelSize(310.f, 330.f),
     m_isDraggingPanel(false) {}
 
 void ShapeTool::Initialize() {
     m_font.loadFromFile("assets/font.otf");
     m_panelPos = sf::Vector2f(64.f, 78.f);
+    m_panelSize = sf::Vector2f(310.f, 330.f);
 }
 
 void ShapeTool::SetBounds(const sf::FloatRect& bounds) {
@@ -84,7 +85,9 @@ void ShapeTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& wind
         if (m_shapeManager.activeShape) {
             m_shapeManager.activeShape->strokeColor = m_canvas.getPrimaryColor();
             m_shapeManager.activeShape->fillColor = m_canvas.getSecondaryColor();
-            m_shapeManager.activeShape->strokeWidth = m_canvas.getBrushSize();
+            m_shapeManager.activeShape->strokeWidth = m_canvas.getPixelMode()
+                ? static_cast<float>(m_canvas.getPixelBrushSize())
+                : m_canvas.getBrushSize();
         }
     }
     else if (event.type == sf::Event::MouseMoved && m_isDragging) {
@@ -188,39 +191,60 @@ void ShapeTool::drawPropertiesPanel(sf::RenderWindow& window) {
     sf::FloatRect panelBounds(m_panelPos.x, m_panelPos.y, m_panelSize.x, m_panelSize.y);
     WisdomUI::Theme::DrawSunsetPanel(window, panelBounds, 1.0f);
 
-    sf::FloatRect headerGrip(m_panelPos.x + 8.f, m_panelPos.y + 6.f, m_panelSize.x - 16.f, 26.f);
+    sf::FloatRect headerGrip(m_panelPos.x + 10.f, m_panelPos.y + 8.f, m_panelSize.x - 20.f, 32.f);
     sf::RectangleShape gripBg(sf::Vector2f(headerGrip.width, headerGrip.height));
     gripBg.setPosition(headerGrip.left, headerGrip.top);
     gripBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-    gripBg.setOutlineThickness(1.f);
+    gripBg.setOutlineThickness(1.2f);
     gripBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(gripBg);
 
-    WisdomUI::Theme::DrawCrispText(window, m_font, ":: VECTOR SHAPES ::", 12, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    std::string headerTitle = m_canvas.getPixelMode() ? ":: PIXEL SHAPES ::" : ":: VECTOR SHAPES ::";
+    WisdomUI::Theme::DrawCrispText(window, m_font, headerTitle, 15, headerGrip.left + headerGrip.width / 2.0f, headerGrip.top + headerGrip.height / 2.0f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
 
-    std::vector<std::pair<std::string, ShapeId>> opts = {
-        {"Line", ShapeId::Line},
-        {"Rectangle", ShapeId::Rectangle},
-        {"Filled Rect", ShapeId::FilledRectangle},
-        {"Circle", ShapeId::Circle},
-        {"Filled Circle", ShapeId::FilledCircle},
-        {"Polygon", ShapeId::Polygon},
-        {"Star", ShapeId::Star},
-        {"Arrow", ShapeId::Arrow}
+    std::vector<std::pair<std::string, ShapeId>> col1 = {
+        { "Line", ShapeId::Line },
+        { "Rectangle", ShapeId::Rectangle },
+        { "Circle", ShapeId::Circle },
+        { "Triangle", ShapeId::Triangle },
+        { "Star", ShapeId::Star }
+    };
+
+    std::vector<std::pair<std::string, ShapeId>> col2 = {
+        { "Arrow", ShapeId::Arrow },
+        { "Filled Rect", ShapeId::FilledRectangle },
+        { "Filled Circle", ShapeId::FilledCircle },
+        { "Filled Tri", ShapeId::FilledTriangle },
+        { "Filled Star", ShapeId::FilledStar }
     };
 
     m_shapeButtons.clear();
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-    float y = m_panelPos.y + 40.f;
 
-    for (const auto& o : opts) {
-        sf::FloatRect btnRect(m_panelPos.x + 12.f, y, m_panelSize.x - 24.f, 28.f);
-        m_shapeButtons.push_back({ btnRect, o.second });
+    float btnW = 135.f;
+    float btnH = 42.f;
+    float startX1 = m_panelPos.x + 14.f;
+    float startX2 = m_panelPos.x + 14.f + btnW + 12.f;
+    float startY = m_panelPos.y + 52.f;
+    float rowSpacing = 50.f;
 
-        bool isActive = (m_currentShapeId == o.second);
-        bool isHovered = btnRect.contains(mPos);
+    for (size_t i = 0; i < col1.size(); ++i) {
+        float y = startY + static_cast<float>(i) * rowSpacing;
 
-        WisdomUI::Theme::DrawSunsetButton(window, btnRect, o.first, m_font, 11, isActive, isHovered, isActive, 1.0f);
-        y += 33.f;
+        // Left Column
+        sf::FloatRect btn1(startX1, y, btnW, btnH);
+        m_shapeButtons.push_back({ btn1, col1[i].second });
+        bool active1 = (m_currentShapeId == col1[i].second);
+        bool hov1 = btn1.contains(mPos);
+        WisdomUI::Theme::DrawSunsetButton(window, btn1, col1[i].first, m_font, 14, active1, hov1, active1, 1.0f);
+
+        // Right Column
+        sf::FloatRect btn2(startX2, y, btnW, btnH);
+        m_shapeButtons.push_back({ btn2, col2[i].second });
+        bool active2 = (m_currentShapeId == col2[i].second);
+        bool hov2 = btn2.contains(mPos);
+        WisdomUI::Theme::DrawSunsetButton(window, btn2, col2[i].first, m_font, 14, active2, hov2, active2, 1.0f);
     }
+
+    WisdomUI::Theme::DrawCrispText(window, m_font, "[Shift] Square/Circle   [Ctrl] From Center", 11, m_panelPos.x + m_panelSize.x * 0.5f, m_panelPos.y + m_panelSize.y - 16.f, WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
 }

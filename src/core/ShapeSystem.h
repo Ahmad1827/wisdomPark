@@ -60,6 +60,8 @@ private:
     void generatePoints();
     void drawBresenham(sf::RenderTarget& target, sf::RenderStates states);
     void drawSmooth(sf::RenderTarget& target, sf::RenderStates states);
+    void drawBresenhamLine(sf::VertexArray& va, int x0, int y0, int x1, int y1, sf::Color color, int strokeThick);
+    void fillScanlinePolygon(sf::VertexArray& va, const std::vector<sf::Vector2f>& polyPoints, sf::Color color);
     sf::Vector2f reflectPoint(const sf::Vector2f& p, const sf::Vector2f& sA, const sf::Vector2f& sB) const;
 };
 
