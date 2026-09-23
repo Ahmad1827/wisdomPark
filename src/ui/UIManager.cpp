@@ -354,6 +354,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
                 if (projManager->loadProject(activeProjectPath, *baseCanvas, loadedFps, isPix)) {
                     baseCanvas->setPixelMode(isPix);
                     baseCanvas->clearIsDirty();
+                    baseCanvas->clearHistory();
 
                     if (baseCanvas->getFrameCount() > 0) {
                         int targetLayer = (baseCanvas->getFrameReadOnly(0)->layers.size() > 1) ? 1 : 0;
@@ -526,6 +527,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
                 if (projManager->loadProject(activeProjectPath, *baseCanvas, fps, pix)) {
                     baseCanvas->setPixelMode(pix);
                     baseCanvas->clearIsDirty();
+                    baseCanvas->clearHistory();
                     if (baseCanvas->getFrameCount() > 0) {
                         int targetLayer = (baseCanvas->getFrameReadOnly(0)->layers.size() > 1) ? 1 : 0;
                         baseCanvas->setActiveLayer(targetLayer, 0);
@@ -1048,9 +1050,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 activeProjectName = (newProjectModal.getIsPixelMode() ? "Pixel_Art_" : "New_Project_") + std::to_string(static_cast<long long>(std::time(nullptr)));
             }
             activeProjectPath = "projects/" + activeProjectName + ".wpk";
+            canvas.clearCanvasImages();
+            canvas.clearObjectSelection();
             canvas.setPixelMode(newProjectModal.getIsPixelMode());
             pm.createNewProject(activeProjectName, newProjectModal.getWidth(), newProjectModal.getHeight(), 12, newProjectModal.getIsPixelMode(), canvas);
             canvas.clearIsDirty();
+            canvas.clearHistory();
             currentState = AppState::Painting;
             showMessage("Created Project: " + std::to_string(newProjectModal.getWidth()) + "x" + std::to_string(newProjectModal.getHeight()), sf::Color::Green);
         }
@@ -1166,6 +1171,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         timeline.setFrame(0);
                         canvas.setPixelMode(isPix);
                         canvas.clearIsDirty();
+                        canvas.clearHistory();
+
 
                         // Ensure a writable artwork layer is selected
                         if (canvas.getFrameCount() > 0) {
@@ -1191,9 +1198,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         activeProjectName = std::filesystem::path(file).stem().string();
                         int loadedFps = 12;
                         bool isPix = false;
+                        canvas.clearCanvasImages();
+                        canvas.clearObjectSelection();
                         if (pm.loadProject(activeProjectPath, canvas, loadedFps, isPix)) {
                             timeline.setFrame(0);
                             canvas.clearIsDirty();
+                            canvas.clearHistory();
                             currentState = AppState::Painting;
                             showMessage("Loaded Native Project", sf::Color::Green);
                         }
@@ -1460,7 +1470,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         std::string path = activeProjectPath.empty() ? "project.wpk" : activeProjectPath;
                         int loadedFps = 12;
                         bool loadedPixelMode = false;
+                        canvas.clearCanvasImages();
+                        canvas.clearObjectSelection();
                         projManager->loadProject(path, canvas, loadedFps, loadedPixelMode);
+                        canvas.clearHistory();
                     }
                     canvas.clearIsDirty();
                 }
@@ -1919,6 +1932,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             timeline.setFrame(0);
                             canvas.setPixelMode(isPix);
                             canvas.clearIsDirty();
+                            canvas.clearHistory();
+
+                            // Ensure a writable artwork layer is selected
 
                             // Ensure a writable artwork layer is selected
                             if (canvas.getFrameCount() > 0) {
@@ -2226,11 +2242,14 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 else if (isProject) {
                     int loadedFps = 12;
                     bool isPix = false;
+                    canvas.clearCanvasImages();
+                    canvas.clearObjectSelection();
                     if (projManager && projManager->loadProject(filePath, canvas, loadedFps, isPix)) {
                         activeProjectPath = filePath;
                         activeProjectName = std::filesystem::path(filePath).stem().string();
                         timeline.setFrame(0);
                         canvas.clearIsDirty();
+                        canvas.clearHistory();
                         showMessage("Opened Project: " + activeProjectName, sf::Color::Green);
                     }
                 }

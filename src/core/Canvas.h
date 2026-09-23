@@ -420,6 +420,14 @@ public:
     bool getIsDirty() const;
     void clearIsDirty();
     void resetRecolorLatch() { m_recolorUndoSaved = false; }
+    void clearHistory() {
+        undoHistory.clear();
+        redoHistory.clear();
+        m_pixelStrokePoints.clear();
+        m_recolorUndoSaved = false;
+        m_lastClickedImageIdx = -1;
+        m_lastClickedEntityIdx = -1;
+    }
 
     void drawLayerThumbnail(sf::RenderTarget& target, int frameIndex, int layerIndex, sf::FloatRect bounds);
 
