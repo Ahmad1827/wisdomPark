@@ -252,7 +252,7 @@ private:
     float computeHandleHitRadius() const;
     bool isImageResourceActive(int currentFrame) const;
 
-    size_t maxUndoHistory{ 50 };
+    size_t maxUndoHistory{ 100 };
 
     void eraseVectorStrokesAt(sf::Vector2f p1, sf::Vector2f p2, float radius, int currentFrame);
 

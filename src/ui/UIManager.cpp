@@ -207,7 +207,7 @@ static bool g_selectingOutlineColor = false;
 static sf::Color g_outlineColor = sf::Color::Black;
 static bool g_selectingGridColor = false;
 
-UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(true), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(15), easterEggClicks(0), m_debugUseSpriteStudio(false) {}
+UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(true), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(100), easterEggClicks(0), m_debugUseSpriteStudio(false) {}
 
 void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     projManager = pm;
@@ -1266,12 +1266,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     if (checkStepperR(c1X + 16.f, r2Y + 120.f)) { uiAnimFps = (uiAnimFps == 12) ? 24 : ((uiAnimFps == 24) ? 60 : 12); settings.animFps = uiAnimFps; }
 
                     if (checkStepperL(c1X + 16.f, r2Y + 180.f)) {
-                        uiHistorySize = (uiHistorySize == 15) ? 50 : ((uiHistorySize == 30) ? 15 : 30);
+                        uiHistorySize = (uiHistorySize == 50) ? 200 : ((uiHistorySize == 100) ? 50 : 100);
                         settings.historySize = uiHistorySize;
                         canvas.setMaxUndoHistory(uiHistorySize);
                     }
                     if (checkStepperR(c1X + 16.f, r2Y + 180.f)) {
-                        uiHistorySize = (uiHistorySize == 15) ? 30 : ((uiHistorySize == 30) ? 50 : 15);
+                        uiHistorySize = (uiHistorySize == 50) ? 100 : ((uiHistorySize == 100) ? 200 : 50);
                         settings.historySize = uiHistorySize;
                         canvas.setMaxUndoHistory(uiHistorySize);
                     }
