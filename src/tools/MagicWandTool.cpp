@@ -44,36 +44,52 @@ std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
         img = ExportManager::flattenFrame(m_canvas, m_timeline.getCurrentFrame());
     }
     else {
-        if (m_canvas.getPixelMode()) {
+        sf::RenderTexture scratch;
+        if (m_canvas.renderLayerToTexture(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), scratch)) {
+            img = scratch.getTexture().copyToImage();
+        }
+        else {
             auto* tex = m_canvas.getActiveRenderTexture(m_timeline.getCurrentFrame());
             if (!tex) return mask;
             img = tex->getTexture().copyToImage();
         }
-        else {
-            sf::RenderTexture scratch;
-            if (!m_canvas.renderLayerToTexture(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), scratch)) {
-                return mask;
-            }
-            img = scratch.getTexture().copyToImage();
-        }
+    }
+
+    if (startPos.x >= static_cast<int>(img.getSize().x) || startPos.y >= static_cast<int>(img.getSize().y)) {
+        return mask;
     }
 
     sf::Color targetCol = img.getPixel(startPos.x, startPos.y);
+
+    if (targetCol.a <= 20) {
+        bool foundNearby = false;
+        for (int dy = -1; dy <= 1 && !foundNearby; ++dy) {
+            for (int dx = -1; dx <= 1 && !foundNearby; ++dx) {
+                int nx = startPos.x + dx;
+                int ny = startPos.y + dy;
+                if (nx >= 0 && nx < static_cast<int>(img.getSize().x) && ny >= 0 && ny < static_cast<int>(img.getSize().y)) {
+                    sf::Color c = img.getPixel(nx, ny);
+                    if (c.a > 20) {
+                        startPos = sf::Vector2i(nx, ny);
+                        targetCol = c;
+                        foundNearby = true;
+                    }
+                }
+            }
+        }
+        if (!foundNearby) {
+            return mask;
+        }
+    }
+
     const sf::Uint8* pixels = img.getPixelsPtr();
 
-    bool targetIsStroke = (targetCol.a > 20);
-
     auto matchesTarget = [&](const sf::Color& c) -> bool {
-        if (targetIsStroke) {
-            if (c.a <= 20) return false;
-            float r = std::abs(static_cast<float>(c.r) - static_cast<float>(targetCol.r));
-            float g = std::abs(static_cast<float>(c.g) - static_cast<float>(targetCol.g));
-            float b = std::abs(static_cast<float>(c.b) - static_cast<float>(targetCol.b));
-            return std::max({ r, g, b }) <= static_cast<float>(m_tolerance);
-        }
-        else {
-            return c.a <= (20 + m_tolerance);
-        }
+        if (c.a <= 20) return false;
+        float r = std::abs(static_cast<float>(c.r) - static_cast<float>(targetCol.r));
+        float g = std::abs(static_cast<float>(c.g) - static_cast<float>(targetCol.g));
+        float b = std::abs(static_cast<float>(c.b) - static_cast<float>(targetCol.b));
+        return std::max({ r, g, b }) <= static_cast<float>(m_tolerance);
         };
 
     if (m_contiguous) {
@@ -229,6 +245,13 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
     }
 
     if (event.type == sf::Event::MouseButtonPressed && (event.mouseButton.button == sf::Mouse::Right || event.mouseButton.button == sf::Mouse::Middle)) {
+        if (event.mouseButton.button == sf::Mouse::Right && m_canvas.getSelectionManager().isActive()) {
+            m_canvas.saveUndoState();
+            m_canvas.commitSelection(m_timeline.getCurrentFrame());
+            m_canvas.clearObjectSelection();
+            return;
+        }
+
         m_isPanning = true;
         m_lastPanPos = sf::Vector2f(static_cast<float>(mousePosI.x), static_cast<float>(mousePosI.y));
         return;
@@ -250,116 +273,84 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
     sf::Vector2f viewPos = m_canvas.getInverseTransform().transformPoint(mousePos);
     float scaleX = static_cast<float>(m_canvas.getCanvasSize().x) / m_canvas.getDrawArea().width;
     float scaleY = static_cast<float>(m_canvas.getCanvasSize().y) / m_canvas.getDrawArea().height;
-    sf::Vector2i logicalPos(static_cast<int>((viewPos.x - m_canvas.getDrawArea().left) * scaleX),
-        static_cast<int>((viewPos.y - m_canvas.getDrawArea().top) * scaleY));
+    float lx = (viewPos.x - m_canvas.getDrawArea().left) * scaleX;
+    float ly = (viewPos.y - m_canvas.getDrawArea().top) * scaleY;
+    sf::Vector2i logicalPos(static_cast<int>(std::floor(lx)), static_cast<int>(std::floor(ly)));
 
     if (m_canvas.getDrawArea().contains(viewPos)) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            m_canvas.saveUndoState();
+
             auto mask = extractSelectionMask(logicalPos);
             int w = m_canvas.getCanvasSize().x;
             int h = m_canvas.getCanvasSize().y;
 
-            if (!m_canvas.getPixelMode()) {
-                sf::RenderTexture scratch;
-                if (m_canvas.renderLayerToTexture(m_timeline.getCurrentFrame(), m_canvas.getActiveLayer(), scratch)) {
-                    sf::Image sampleImg = scratch.getTexture().copyToImage();
-                    if (logicalPos.x >= 0 && logicalPos.x < w && logicalPos.y >= 0 && logicalPos.y < h) {
-                        if (sampleImg.getPixel(logicalPos.x, logicalPos.y).a > 20) {
-                            const int dx8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
-                            const int dy8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
-                            for (int pass = 0; pass < 2; ++pass) {
-                                std::vector<bool> passMask = mask;
-                                for (int y = 0; y < h; ++y) {
-                                    for (int x = 0; x < w; ++x) {
-                                        if (passMask[y * w + x]) {
-                                            for (int d = 0; d < 8; ++d) {
-                                                int nx = x + dx8[d];
-                                                int ny = y + dy8[d];
-                                                if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                                                    mask[ny * w + nx] = true;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+            std::vector<sf::Vector2i> exactPixels;
+            for (int y = 0; y < h; ++y) {
+                for (int x = 0; x < w; ++x) {
+                    if (mask[y * w + x]) {
+                        exactPixels.push_back({ x, y });
                     }
                 }
             }
 
-            std::vector<std::vector<sf::Vector2f>> polygons;
+            if (exactPixels.empty()) {
+                m_canvas.commitSelection(m_timeline.getCurrentFrame());
+                m_canvas.clearObjectSelection();
+                return;
+            }
+
+            std::vector<std::vector<sf::Vector2i>> islands;
             std::vector<bool> visited(w * h, false);
 
             for (int y = 0; y < h; ++y) {
                 for (int x = 0; x < w; ++x) {
                     if (mask[y * w + x] && !visited[y * w + x]) {
-                        std::vector<bool> islandMask(w * h, false);
+                        std::vector<sf::Vector2i> comp;
                         std::queue<sf::Vector2i> q;
                         q.push({ x, y });
                         visited[y * w + x] = true;
-                        islandMask[y * w + x] = true;
 
                         while (!q.empty()) {
                             sf::Vector2i p = q.front(); q.pop();
+                            comp.push_back(p);
                             sf::Vector2i n[4] = { {p.x + 1, p.y}, {p.x - 1, p.y}, {p.x, p.y + 1}, {p.x, p.y - 1} };
                             for (auto& i : n) {
                                 if (i.x >= 0 && i.x < w && i.y >= 0 && i.y < h) {
                                     if (mask[i.y * w + i.x] && !visited[i.y * w + i.x]) {
                                         visited[i.y * w + i.x] = true;
-                                        islandMask[i.y * w + i.x] = true;
                                         q.push(i);
                                     }
                                 }
                             }
                         }
-
-                        auto poly = traceBoundary(islandMask, w, h, { x, y });
-                        if (!poly.empty()) polygons.push_back(poly);
+                        if (!comp.empty()) islands.push_back(std::move(comp));
                     }
                 }
             }
 
-            if (!polygons.empty()) {
-                std::vector<sf::Vector2f> unified;
-                for (size_t i = 0; i < polygons.size(); ++i) {
-                    unified.insert(unified.end(), polygons[i].begin(), polygons[i].end());
-                    unified.push_back(polygons[i].front());
-                    if (i + 1 < polygons.size()) {
-                        unified.push_back(polygons[i + 1].front());
-                    }
+            std::vector<sf::FloatRect> subBoxes;
+            for (const auto& comp : islands) {
+                int minX = comp[0].x, maxX = comp[0].x, minY = comp[0].y, maxY = comp[0].y;
+                for (const auto& pt : comp) {
+                    minX = std::min(minX, pt.x); maxX = std::max(maxX, pt.x);
+                    minY = std::min(minY, pt.y); maxY = std::max(maxY, pt.y);
                 }
-                for (int i = static_cast<int>(polygons.size()) - 2; i >= 0; --i) {
-                    unified.push_back(polygons[i].front());
-                }
-
-                m_canvas.commitSelection(m_timeline.getCurrentFrame());
-                m_canvas.getSelectionManager().clearSelection();
-
-                m_canvas.getSelectionManager().startLasso(unified[0], m_canvas.getCanvasSize());
-                for (size_t i = 1; i < unified.size(); ++i) {
-                    m_canvas.getSelectionManager().addLassoPoint(unified[i], m_canvas.getCanvasSize());
-                }
-                m_canvas.getSelectionManager().endLasso();
+                subBoxes.push_back(sf::FloatRect(
+                    static_cast<float>(minX), static_cast<float>(minY),
+                    static_cast<float>(maxX - minX + 1), static_cast<float>(maxY - minY + 1)
+                ));
             }
-            else {
-                m_canvas.commitSelection(m_timeline.getCurrentFrame());
-                m_canvas.getSelectionManager().clearSelection();
-            }
+
+            m_canvas.commitSelection(m_timeline.getCurrentFrame());
+            m_canvas.getSelectionManager().setPixelSelection(exactPixels, m_canvas.getCanvasSize(), subBoxes);
         }
     }
 }
 
 void MagicWandTool::Update(float deltaTime, const sf::RenderWindow& window) {
     m_canvas.updateTransform(deltaTime, m_bounds);
-
-    sf::Color currentPrimary = m_canvas.getPrimaryColor();
-    if (currentPrimary != m_lastPrimaryColor) {
-        if (m_canvas.getSelectionManager().isActive()) {
-            m_canvas.fillSelection(currentPrimary, m_timeline.getCurrentFrame());
-        }
-        m_lastPrimaryColor = currentPrimary;
-    }
+    m_lastPrimaryColor = m_canvas.getPrimaryColor();
 }
 
 void MagicWandTool::Render(sf::RenderWindow& window) {

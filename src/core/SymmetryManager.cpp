@@ -3,7 +3,7 @@
 
 SymmetryManager::SymmetryManager()
     : startPoint(0.f, 0.f), endPoint(0.f, 0.f), direction(0.f, 0.f), normal(0.f, 0.f),
-    enabled(false), visible(true), snapToPixel(false), snapTo45(false),
+    enabled(false), visible(false), snapToPixel(false), snapTo45(false),
     guideColor(255, 195, 75, 220), guideThickness(1.5f) {}
 
 void SymmetryManager::setEndpoints(sf::Vector2f start, sf::Vector2f end) {

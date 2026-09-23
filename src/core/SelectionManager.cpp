@@ -4,7 +4,8 @@
 
 SelectionManager::SelectionManager() : state(SelectionState::Inactive), isLassoSelection(true), dashOffset(0.f), hasClipboard(false), m_isDragging(false),
 showHandles(false), handleVisualSize(6.f), isResizingFlag(false), activeHandle(-1),
-resizeAnchorWorld(0.f, 0.f), resizeAnchorLocal(0.f, 0.f), resizeDraggedLocal(0.f, 0.f), resizeStartBox(0.f, 0.f, 0.f, 0.f) {
+resizeAnchorWorld(0.f, 0.f), resizeAnchorLocal(0.f, 0.f), resizeDraggedLocal(0.f, 0.f), resizeStartBox(0.f, 0.f, 0.f, 0.f),
+m_isMagicWandStyle(false), animationTime(0.f) {
     sf::Image dashImg;
     dashImg.create(12, 2, sf::Color::Transparent);
     for (int i = 0; i < 6; i++) {
@@ -22,6 +23,7 @@ resizeAnchorWorld(0.f, 0.f), resizeAnchorLocal(0.f, 0.f), resizeDraggedLocal(0.f
 void SelectionManager::update(float dt) {
     if (state != SelectionState::Inactive) {
         dashOffset -= 30.f * dt;
+        animationTime += dt;
     }
 }
 
@@ -42,7 +44,7 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
             sf::VertexArray darkUnder(sf::LineStrip, pathPoints.size());
             for (size_t i = 0; i < pathPoints.size(); ++i) {
                 darkUnder[i].position = pathPoints[i];
-                darkUnder[i].color = sf::Color(15, 10, 25, 220);
+                darkUnder[i].color = m_isMagicWandStyle ? sf::Color(45, 10, 60, 230) : sf::Color(15, 10, 25, 220);
             }
             window.draw(darkUnder, states);
 
@@ -55,7 +57,7 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
                 }
                 ants[i].position = pathPoints[i];
                 ants[i].texCoords = sf::Vector2f(dist + dashOffset, 0.5f);
-                ants[i].color = sf::Color::White;
+                ants[i].color = m_isMagicWandStyle ? sf::Color(220, 120, 255) : sf::Color::White;
             }
             sf::RenderStates dashStates = states;
             dashStates.texture = &dashTexture;
@@ -64,13 +66,51 @@ void SelectionManager::draw(sf::RenderWindow& window, const sf::RenderStates& ba
     }
     else {
         float borderThickness = std::max(0.02f, handleVisualSize / 8.0f);
-        for (const auto& box : subItemBoxes) {
-            sf::RectangleShape r(sf::Vector2f(box.width, box.height));
-            r.setPosition(box.left, box.top);
-            r.setFillColor(sf::Color(0, 191, 255, 14));
-            r.setOutlineThickness(borderThickness);
-            r.setOutlineColor(sf::Color(0, 191, 255, 100));
-            window.draw(r, states);
+        if (m_isMagicWandStyle) {
+            for (const auto& box : subItemBoxes) {
+                sf::RectangleShape r(sf::Vector2f(box.width, box.height));
+                r.setPosition(box.left, box.top);
+                r.setFillColor(sf::Color(160, 60, 255, 26));
+                r.setOutlineThickness(borderThickness * 1.6f);
+                r.setOutlineColor(sf::Color(190, 60, 255, 180));
+                window.draw(r, states);
+
+                sf::RectangleShape inner(sf::Vector2f(box.width, box.height));
+                inner.setPosition(box.left, box.top);
+                inner.setFillColor(sf::Color::Transparent);
+                inner.setOutlineThickness(borderThickness * 0.9f);
+                inner.setOutlineColor(sf::Color(0, 240, 255, 230));
+                window.draw(inner, states);
+            }
+
+            float starSize = std::max(0.8f, handleVisualSize * 0.55f);
+            sf::RectangleShape star(sf::Vector2f(starSize, starSize));
+            star.setOrigin(starSize * 0.5f, starSize * 0.5f);
+            star.setRotation(45.f);
+            star.setFillColor(sf::Color(255, 235, 110));
+            star.setOutlineThickness(std::max(0.04f, starSize * 0.18f));
+            star.setOutlineColor(sf::Color(20, 10, 30));
+
+            sf::Vector2f corners[4] = {
+                { boundingBox.left, boundingBox.top },
+                { boundingBox.left + boundingBox.width, boundingBox.top },
+                { boundingBox.left + boundingBox.width, boundingBox.top + boundingBox.height },
+                { boundingBox.left, boundingBox.top + boundingBox.height }
+            };
+            for (const auto& c : corners) {
+                star.setPosition(c);
+                window.draw(star, states);
+            }
+        }
+        else {
+            for (const auto& box : subItemBoxes) {
+                sf::RectangleShape r(sf::Vector2f(box.width, box.height));
+                r.setPosition(box.left, box.top);
+                r.setFillColor(sf::Color(0, 191, 255, 14));
+                r.setOutlineThickness(borderThickness);
+                r.setOutlineColor(sf::Color(0, 191, 255, 100));
+                window.draw(r, states);
+            }
         }
     }
 
@@ -220,6 +260,14 @@ bool SelectionManager::isInsidePolygon(sf::Vector2f point, const std::vector<sf:
 bool SelectionManager::isPointInsideSelection(sf::Vector2f pos) const {
     if (state == SelectionState::Selected || state == SelectionState::Floating) {
         if (!boundingBox.contains(pos)) return false;
+
+        if (m_isMagicWandStyle && !m_magicWandMask.empty()) {
+            int px = static_cast<int>(std::floor(pos.x));
+            int py = static_cast<int>(std::floor(pos.y));
+            if (px < 0 || py < 0 || px >= static_cast<int>(m_maskCanvasSize.x) || py >= static_cast<int>(m_maskCanvasSize.y)) return false;
+            return m_magicWandMask[py * m_maskCanvasSize.x + px];
+        }
+
         if (isLassoSelection && pathPoints.size() > 2) {
             return isInsidePolygon(pos, pathPoints);
         }
@@ -318,6 +366,43 @@ void SelectionManager::clearSelection() {
     pathPoints.clear();
     localPoints.clear();
     boundingBox = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
+    m_isMagicWandStyle = false;
+    m_magicWandPixels.clear();
+    m_magicWandMask.clear();
+    m_maskCanvasSize = { 0, 0 };
+}
+
+void SelectionManager::setPixelSelection(const std::vector<sf::Vector2i>& pixels, sf::Vector2u canvasSize, const std::vector<sf::FloatRect>& subBoxes) {
+    if (pixels.empty()) {
+        clearSelection();
+        return;
+    }
+
+    m_magicWandPixels = pixels;
+    m_maskCanvasSize = canvasSize;
+    m_magicWandMask.assign(canvasSize.x * canvasSize.y, false);
+
+    int minX = pixels[0].x, maxX = pixels[0].x;
+    int minY = pixels[0].y, maxY = pixels[0].y;
+
+    for (const auto& p : pixels) {
+        if (p.x >= 0 && p.y >= 0 && p.x < static_cast<int>(canvasSize.x) && p.y < static_cast<int>(canvasSize.y)) {
+            m_magicWandMask[p.y * canvasSize.x + p.x] = true;
+        }
+        minX = std::min(minX, p.x);
+        maxX = std::max(maxX, p.x);
+        minY = std::min(minY, p.y);
+        maxY = std::max(maxY, p.y);
+    }
+
+    boundingBox = sf::FloatRect(static_cast<float>(minX), static_cast<float>(minY),
+        static_cast<float>(maxX - minX + 1), static_cast<float>(maxY - minY + 1));
+    subItemBoxes = subBoxes.empty() ? std::vector<sf::FloatRect>{ boundingBox } : subBoxes;
+    pathPoints.clear();
+    isLassoSelection = false;
+    m_isMagicWandStyle = true;
+    state = SelectionState::Selected;
+    showHandles = false;
 }
 
 void SelectionManager::startDrag(sf::Vector2f pos) {

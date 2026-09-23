@@ -689,6 +689,7 @@ void Canvas::initCustom(int width, int height) {
     undoHistory.clear();
     redoHistory.clear();
     selection.clearSelection();
+    clearSymmetry();
     transformMode = TransformState::None;
     pendingTransform = false;
     isDrawing = false;
@@ -1679,22 +1680,61 @@ void Canvas::fillSelection(sf::Color color, int currentFrame) {
         return;
     }
 
-    // --- PIXEL ART MODE (Retained) ---
-    sf::Image img = frames[currentFrame].layers[activeLayer].texture->getTexture().copyToImage();
-    unsigned int w = std::min(img.getSize().x, canvasLogicalSize.x);
-    unsigned int h = std::min(img.getSize().y, canvasLogicalSize.y);
-    for (unsigned int y = 0; y < h; ++y) {
-        for (unsigned int x = 0; x < w; ++x) {
-            if (!selection.isActive() || selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) {
-                img.setPixel(x, y, color);
+    if (!selection.isActive()) return;
+
+    if (color == sf::Color::Transparent || color.a == 0) {
+        sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+        if (targetTex) {
+            sf::Image img = targetTex->getTexture().copyToImage();
+            sf::FloatRect bb = selection.getBoundingBox();
+            int x0 = std::max(0, static_cast<int>(std::floor(bb.left)));
+            int y0 = std::max(0, static_cast<int>(std::floor(bb.top)));
+            int x1 = std::min(static_cast<int>(canvasLogicalSize.x), static_cast<int>(std::ceil(bb.left + bb.width)));
+            int y1 = std::min(static_cast<int>(canvasLogicalSize.y), static_cast<int>(std::ceil(bb.top + bb.height)));
+
+            for (int y = y0; y < y1; ++y) {
+                for (int x = x0; x < x1; ++x) {
+                    if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f))) {
+                        img.setPixel(x, y, sf::Color::Transparent);
+                    }
+                }
+            }
+            sf::Texture newTex; newTex.loadFromImage(img);
+            targetTex->clear(sf::Color::Transparent);
+            targetTex->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
+            targetTex->display();
+        }
+
+        for (auto& ci : m_canvasImages) {
+            if (ci.frame == currentFrame && ci.layer == activeLayer && ci.texture) {
+                sf::Image img = ci.texture->copyToImage();
+                int iw = static_cast<int>(img.getSize().x);
+                int ih = static_cast<int>(img.getSize().y);
+                int bx = static_cast<int>(std::round(ci.bounds.left));
+                int by = static_cast<int>(std::round(ci.bounds.top));
+                bool mod = false;
+
+                for (int ly = 0; ly < ih; ++ly) {
+                    for (int lx = 0; lx < iw; ++lx) {
+                        if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(bx + lx) + 0.5f, static_cast<float>(by + ly) + 0.5f))) {
+                            img.setPixel(lx, ly, sf::Color::Transparent);
+                            mod = true;
+                        }
+                    }
+                }
+                if (mod) {
+                    auto newTex = std::make_shared<sf::Texture>();
+                    newTex->setSmooth(!isPixelMode);
+                    newTex->loadFromImage(img);
+                    ci.texture = newTex;
+                }
             }
         }
+        isDirty = true;
+        return;
     }
-    sf::Texture newTex; newTex.loadFromImage(img);
-    frames[currentFrame].layers[activeLayer].texture->clear(sf::Color::Transparent);
-    frames[currentFrame].layers[activeLayer].texture->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
-    frames[currentFrame].layers[activeLayer].texture->display();
-    isDirty = true;
+
+    recolorActiveSelection(color);
 }
 
 void Canvas::flipSelectionHorizontal(int currentFrame) {
@@ -2009,25 +2049,102 @@ void Canvas::setSelectionZOrder(int newZ, int currentFrame) {
 void Canvas::recolorActiveSelection(sf::Color newColor) {
     if (!selection.isActive()) return;
 
-    if (isPixelMode) {
-        for (int iIdx : m_selectedImages) {
-            if (iIdx >= 0 && iIdx < static_cast<int>(m_canvasImages.size())) {
-                auto& ci = m_canvasImages[iIdx];
-                if (ci.texture && ci.texture->getSize().x > 0 && ci.texture->getSize().y > 0) {
-                    sf::Image img = ci.texture->copyToImage();
-                    unsigned int iw = img.getSize().x;
-                    unsigned int ih = img.getSize().y;
+    if (!m_recolorUndoSaved) {
+        saveUndoState();
+        m_recolorUndoSaved = true;
+    }
 
-                    for (unsigned int y = 0; y < ih; ++y) {
-                        for (unsigned int x = 0; x < iw; ++x) {
+    int curFrame = std::clamp(m_currentFrame, 0, static_cast<int>(frames.size()) - 1);
+
+    if (isPixelMode) {
+        sf::RenderTexture* targetTex = frames[curFrame].layers[activeLayer].texture.get();
+        if (targetTex) {
+            sf::Image img = targetTex->getTexture().copyToImage();
+            int iw = static_cast<int>(img.getSize().x);
+            int ih = static_cast<int>(img.getSize().y);
+            bool texMod = false;
+
+            if (selection.isMagicWandStyle() && !selection.getMagicWandPixels().empty()) {
+                for (const auto& pt : selection.getMagicWandPixels()) {
+                    if (pt.x >= 0 && pt.y >= 0 && pt.x < iw && pt.y < ih) {
+                        sf::Color c = img.getPixel(pt.x, pt.y);
+                        if (c.a > 0) {
+                            sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
+                            img.setPixel(pt.x, pt.y, sf::Color(newColor.r, newColor.g, newColor.b, a));
+                            texMod = true;
+                        }
+                    }
+                }
+            }
+            else {
+                sf::FloatRect bb = selection.getBoundingBox();
+                int x0 = std::max(0, static_cast<int>(std::floor(bb.left)));
+                int y0 = std::max(0, static_cast<int>(std::floor(bb.top)));
+                int x1 = std::min(iw, static_cast<int>(std::ceil(bb.left + bb.width)));
+                int y1 = std::min(ih, static_cast<int>(std::ceil(bb.top + bb.height)));
+
+                for (int y = y0; y < y1; ++y) {
+                    for (int x = x0; x < x1; ++x) {
+                        if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f))) {
                             sf::Color c = img.getPixel(x, y);
                             if (c.a > 0) {
                                 sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
                                 img.setPixel(x, y, sf::Color(newColor.r, newColor.g, newColor.b, a));
+                                texMod = true;
                             }
                         }
                     }
+                }
+            }
 
+            if (texMod) {
+                sf::Texture newTex;
+                newTex.loadFromImage(img);
+                targetTex->clear(sf::Color::Transparent);
+                targetTex->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
+                targetTex->display();
+            }
+        }
+
+        for (auto& ci : m_canvasImages) {
+            if (ci.frame == curFrame && ci.layer == activeLayer && ci.texture) {
+                sf::Image img = ci.texture->copyToImage();
+                int iw = static_cast<int>(img.getSize().x);
+                int ih = static_cast<int>(img.getSize().y);
+                int bx = static_cast<int>(std::round(ci.bounds.left));
+                int by = static_cast<int>(std::round(ci.bounds.top));
+                bool imgMod = false;
+
+                if (selection.isMagicWandStyle() && !selection.getMagicWandPixels().empty()) {
+                    for (const auto& pt : selection.getMagicWandPixels()) {
+                        int lx = pt.x - bx;
+                        int ly = pt.y - by;
+                        if (lx >= 0 && ly >= 0 && lx < iw && ly < ih) {
+                            sf::Color c = img.getPixel(lx, ly);
+                            if (c.a > 0) {
+                                sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
+                                img.setPixel(lx, ly, sf::Color(newColor.r, newColor.g, newColor.b, a));
+                                imgMod = true;
+                            }
+                        }
+                    }
+                }
+                else {
+                    for (int ly = 0; ly < ih; ++ly) {
+                        for (int lx = 0; lx < iw; ++lx) {
+                            if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(bx + lx) + 0.5f, static_cast<float>(by + ly) + 0.5f))) {
+                                sf::Color c = img.getPixel(lx, ly);
+                                if (c.a > 0) {
+                                    sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
+                                    img.setPixel(lx, ly, sf::Color(newColor.r, newColor.g, newColor.b, a));
+                                    imgMod = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (imgMod) {
                     auto newTex = std::make_shared<sf::Texture>();
                     newTex->setSmooth(!isPixelMode);
                     newTex->loadFromImage(img);
@@ -2035,6 +2152,8 @@ void Canvas::recolorActiveSelection(sf::Color newColor) {
                 }
             }
         }
+        isDirty = true;
+        return;
     }
     else {
         for (int sIdx : m_selectedStrokes) {
@@ -2142,6 +2261,12 @@ void Canvas::saveUndoState() {
     state.isMultiSelectionGroup = m_isMultiSelectionGroup;
     state.pendingTransform = pendingTransform;
     state.transformMode = transformMode;
+    state.symmetryEnabled = symmetryManager.enabled;
+    state.symmetryVisible = symmetryManager.visible;
+    state.symmetryStartPoint = symmetryManager.startPoint;
+    state.symmetryEndPoint = symmetryManager.endPoint;
+    state.isMagicWandStyle = selection.isMagicWandStyle();
+    state.magicWandPixels = selection.getMagicWandPixels();
     undoHistory.push_back(state);
     if (undoHistory.size() > maxUndoHistory) {
         undoHistory.erase(undoHistory.begin());
@@ -2196,6 +2321,12 @@ void Canvas::undo() {
         currentState.isMultiSelectionGroup = m_isMultiSelectionGroup;
         currentState.pendingTransform = pendingTransform;
         currentState.transformMode = transformMode;
+        currentState.symmetryEnabled = symmetryManager.enabled;
+        currentState.symmetryVisible = symmetryManager.visible;
+        currentState.symmetryStartPoint = symmetryManager.startPoint;
+        currentState.symmetryEndPoint = symmetryManager.endPoint;
+        currentState.isMagicWandStyle = selection.isMagicWandStyle();
+        currentState.magicWandPixels = selection.getMagicWandPixels();
         redoHistory.push_back(currentState);
 
         UndoState prevState = undoHistory.back();
@@ -2206,17 +2337,29 @@ void Canvas::undo() {
         m_canvasImages = prevState.canvasImages;
         m_floatingVectorStrokes.clear();
 
-        selection.setState(prevState.selectionState);
-        selection.setBoundingBox(prevState.selectionBoundingBox);
-        selection.setSubItemBoxes(prevState.selectionSubItemBoxes);
-        selection.setPathPoints(prevState.selectionPathPoints);
-        selection.setLassoMode(prevState.isLassoSelection);
-        selection.setShowHandles(prevState.showHandles);
+        if (prevState.isMagicWandStyle && !prevState.magicWandPixels.empty()) {
+            selection.setPixelSelection(prevState.magicWandPixels, canvasLogicalSize, prevState.selectionSubItemBoxes);
+        }
+        else {
+            selection.setState(prevState.selectionState);
+            selection.setBoundingBox(prevState.selectionBoundingBox);
+            selection.setSubItemBoxes(prevState.selectionSubItemBoxes);
+            selection.setPathPoints(prevState.selectionPathPoints);
+            selection.setLassoMode(prevState.isLassoSelection);
+            selection.setShowHandles(prevState.showHandles);
+            selection.setMagicWandStyle(false);
+        }
         m_selectedStrokes = prevState.selectedStrokes;
         m_selectedImages = prevState.selectedImages;
         m_isMultiSelectionGroup = prevState.isMultiSelectionGroup;
         pendingTransform = prevState.pendingTransform;
         transformMode = prevState.transformMode;
+
+        symmetryManager.enabled = prevState.symmetryEnabled;
+        symmetryManager.visible = prevState.symmetryVisible;
+        symmetryManager.startPoint = prevState.symmetryStartPoint;
+        symmetryManager.endPoint = prevState.symmetryEndPoint;
+        symmetryManager.updateVectors();
 
         isDeforming = false;
         deformPixels.clear();
@@ -2248,6 +2391,12 @@ void Canvas::redo() {
         currentState.isMultiSelectionGroup = m_isMultiSelectionGroup;
         currentState.pendingTransform = pendingTransform;
         currentState.transformMode = transformMode;
+        currentState.symmetryEnabled = symmetryManager.enabled;
+        currentState.symmetryVisible = symmetryManager.visible;
+        currentState.symmetryStartPoint = symmetryManager.startPoint;
+        currentState.symmetryEndPoint = symmetryManager.endPoint;
+        currentState.isMagicWandStyle = selection.isMagicWandStyle();
+        currentState.magicWandPixels = selection.getMagicWandPixels();
         undoHistory.push_back(currentState);
 
         UndoState nextState = redoHistory.back();
@@ -2258,17 +2407,29 @@ void Canvas::redo() {
         m_canvasImages = nextState.canvasImages;
         m_floatingVectorStrokes.clear();
 
-        selection.setState(nextState.selectionState);
-        selection.setBoundingBox(nextState.selectionBoundingBox);
-        selection.setSubItemBoxes(nextState.selectionSubItemBoxes);
-        selection.setPathPoints(nextState.selectionPathPoints);
-        selection.setLassoMode(nextState.isLassoSelection);
-        selection.setShowHandles(nextState.showHandles);
+        if (nextState.isMagicWandStyle && !nextState.magicWandPixels.empty()) {
+            selection.setPixelSelection(nextState.magicWandPixels, canvasLogicalSize, nextState.selectionSubItemBoxes);
+        }
+        else {
+            selection.setState(nextState.selectionState);
+            selection.setBoundingBox(nextState.selectionBoundingBox);
+            selection.setSubItemBoxes(nextState.selectionSubItemBoxes);
+            selection.setPathPoints(nextState.selectionPathPoints);
+            selection.setLassoMode(nextState.isLassoSelection);
+            selection.setShowHandles(nextState.showHandles);
+            selection.setMagicWandStyle(false);
+        }
         m_selectedStrokes = nextState.selectedStrokes;
         m_selectedImages = nextState.selectedImages;
         m_isMultiSelectionGroup = nextState.isMultiSelectionGroup;
         pendingTransform = nextState.pendingTransform;
         transformMode = nextState.transformMode;
+
+        symmetryManager.enabled = nextState.symmetryEnabled;
+        symmetryManager.visible = nextState.symmetryVisible;
+        symmetryManager.startPoint = nextState.symmetryStartPoint;
+        symmetryManager.endPoint = nextState.symmetryEndPoint;
+        symmetryManager.updateVectors();
 
         isDeforming = false;
         deformPixels.clear();
@@ -2764,6 +2925,7 @@ bool Canvas::isImageResourceActive(int currentFrame) const {
 
 void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int currentFrame) {
     if (currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    m_currentFrame = currentFrame;
     if (activeTool == ToolType::None) return;
 
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
@@ -2778,6 +2940,13 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
     }
 
     if (rightClick) {
+        if ((activeTool == ToolType::Select || activeTool == ToolType::MagicWand) && selection.isActive()) {
+            saveUndoState();
+            commitSelection(currentFrame);
+            clearObjectSelection();
+            return;
+        }
+
         if (activeTool == ToolType::Curve && isDeforming) {
             if (!isPixelMode && m_deformStrokeIndex >= 0 && m_deformStrokeIndex < static_cast<int>(m_vectorStrokes.size())) {
                 m_vectorStrokes[m_deformStrokeIndex].mesh = m_originalDeformMesh;
@@ -3038,12 +3207,13 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 else if (deformT0 > 0.85f) deformMode = 1;
                 else deformMode = 0;
 
+                saveUndoState();
+
                 deformClickPos = sf::Vector2f(static_cast<float>(sx), static_cast<float>(sy));
                 deformCurrentPos = deformClickPos;
                 isDeforming = true;
                 updateDeformPixels(sf::Vector2f(0.f, 0.f));
 
-                // Clear original pixels from the texture immediately so they do not show under the live curve
                 sf::RenderStates rsNone;
                 rsNone.blendMode = sf::BlendNone;
                 sf::RectangleShape clearPx(sf::Vector2f(1.f, 1.f));
@@ -3064,6 +3234,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             }
 
             if (activeTool == ToolType::Symmetry) {
+                saveUndoState();
                 isDrawing = true;
                 float hitRadius = computeHandleHitRadius() * 1.5f;
 
@@ -3241,6 +3412,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                     }
                 }
 
+                selection.setMagicWandStyle(false);
                 m_dragStartMousePos = localPos;
                 selection.startLasso(localPos, canvasLogicalSize);
                 return;
@@ -3541,6 +3713,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 }
 
 void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
+    m_recolorUndoSaved = false;
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
     float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
@@ -3575,7 +3748,6 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                 sf::RectangleShape drawPx(sf::Vector2f(1.f, 1.f));
 
                 if (std::abs(delta.x) >= 1.0f || std::abs(delta.y) >= 1.0f) {
-                    saveUndoState();
                     updateDeformPixels(delta);
 
                     for (const auto& dp : currentDeformedPixels) {
@@ -3586,11 +3758,13 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                     isDirty = true;
                 }
                 else {
-                    // Clicked without moving: restore original un-deformed pixels
                     for (const auto& dp : deformPixels) {
                         drawPx.setPosition(static_cast<float>(dp.x), static_cast<float>(dp.y));
                         drawPx.setFillColor(dp.color);
                         targetTex->draw(drawPx, rsNone);
+                    }
+                    if (!undoHistory.empty()) {
+                        undoHistory.pop_back();
                     }
                 }
                 targetTex->display();
@@ -4575,6 +4749,7 @@ void Canvas::drawLayerThumbnail(sf::RenderTarget& target, int frameIndex, int la
 
 void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states) {
     g_activeWindow = &window;
+    m_currentFrame = currentFrame;
 
     window.draw(deskSprite, states);
 
@@ -4617,12 +4792,6 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             }
         }
         window.draw(checkerboard, innerStates);
-
-        // Hardcoded 1px pixel grid removed
-    }
-
-    if (symmetryManager.visible) {
-        symmetryManager.drawGuides(window, innerStates, sf::FloatRect(0, 0, static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y)), viewScale);
     }
 
     // Prominent instructional banner when Symmetry tool is active
@@ -4879,6 +5048,10 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     }
 
     selection.draw(window, innerStates);
+
+    if (symmetryManager.visible) {
+        symmetryManager.drawGuides(window, innerStates, sf::FloatRect(0, 0, static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y)), viewScale);
+    }
 
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f currentRawMousePos = window.mapPixelToCoords(mousePosI);

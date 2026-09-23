@@ -129,14 +129,7 @@ namespace WisdomUI {
 
         float rightAnchor = m_quickBtns.empty() ? (bounds.left + bounds.width - 14.0f) : (m_quickBtns.front().bounds.left - 12.0f);
 
-        if (m_symmetryActive) {
-            float symW = 146.0f;
-            rightAnchor -= symW + 6.0f;
-            m_symmetryBtnBounds = sf::FloatRect(std::floor(rightAnchor), btnY, symW, btnH);
-        }
-        else {
-            m_symmetryBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
-        }
+    
 
         if (m_gridControlsVisible) {
             float totalGridW = 90.f + 5.f + 30.f + 5.f + 30.f + 5.f + 64.f + 5.f + 30.f;
@@ -340,10 +333,7 @@ namespace WisdomUI {
                 return true;
             }
 
-            if (m_symmetryActive && m_symmetryBtnBounds.contains(mousePos)) {
-                if (m_onDisableSymmetry) m_onDisableSymmetry();
-                return true;
-            }
+            
             if (m_opaqueCheckboxBounds.contains(mousePos)) {
                 m_opaqueBg = !m_opaqueBg;
                 return true;
@@ -585,10 +575,7 @@ namespace WisdomUI {
             Theme::DrawSunsetButton(window, m_gridPlusBtnBounds, "+", m_font, 15, false, hovPlus, false, 1.0f);
         }
 
-        if (m_symmetryActive) {
-            bool isHov = m_symmetryBtnBounds.contains(mPos);
-            Theme::DrawSunsetButton(window, m_symmetryBtnBounds, "Symmetry ON [X]", m_font, 12, true, isHov, true, 1.0f);
-        }
+        
 
         for (const auto& qb : m_quickBtns) {
             Theme::DrawSunsetButton(window, qb.bounds, "", m_font, 12, false, qb.hoverAlpha > 0.5f, false, qb.scale);

@@ -11,6 +11,7 @@ namespace WisdomUI {
             { "flip_h", "Flip H", sf::FloatRect(), 0.0f },
             { "flip_v", "Flip V", sf::FloatRect(), 0.0f },
             { "duplicate", "Duplicate", sf::FloatRect(), 0.0f },
+            { "deselect", "Deselect", sf::FloatRect(), 0.0f },
             { "delete", "Delete Area", sf::FloatRect(), 0.0f }
         };
     }
@@ -46,6 +47,7 @@ namespace WisdomUI {
             if (btn.id == "resize") btnW = 74.0f;
             else if (btn.id == "flip_h" || btn.id == "flip_v") btnW = 66.0f;
             else if (btn.id == "duplicate") btnW = 90.0f;
+            else if (btn.id == "deselect") btnW = 86.0f;
             else if (btn.id == "delete") btnW = 100.0f;
 
             btn.bounds = sf::FloatRect(btnX, btnY, btnW, btnH);
@@ -67,12 +69,14 @@ namespace WisdomUI {
         m_outlineBtnBounds = sf::FloatRect(std::floor(bounds.left + 636.0f), btnY, 82.0f, btnH);
         m_outlineColorBoxBounds = sf::FloatRect(std::floor(bounds.left + 724.0f), btnY, 28.0f, 28.0f);
 
+        m_clearSymBtnBounds = sf::FloatRect(std::floor(bounds.left + bounds.width - 150.0f), btnY, 134.0f, btnH);
+
         m_stabSliderBounds = sf::FloatRect(std::floor(bounds.left + 475.0f), std::floor(bounds.top + (bounds.height - 14.0f) * 0.5f), 125.0f, 14.0f);
 
         updateSelectionButtonLayout();
     }
 
-    void ToolOptionsBar::SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization, int zOrder, int maxZ, PixelBrushShape shape) {
+    void ToolOptionsBar::SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization, int zOrder, int maxZ, PixelBrushShape shape, bool hasSelection, bool symmetryActive) {
         m_activeToolName = toolName;
         m_size = size;
         m_pixelMode = pixelMode;
@@ -83,6 +87,8 @@ namespace WisdomUI {
         }
         m_maxZOrder = maxZ;
         m_pixelBrushShape = shape;
+        m_hasSelection = hasSelection;
+        m_symmetryActive = symmetryActive;
     }
 
     void ToolOptionsBar::Update(float deltaTime, const sf::Vector2f& mousePos) {
@@ -123,9 +129,17 @@ namespace WisdomUI {
         std::function<void()> onPickOutlineColor,
         std::function<void(float)> onStabilizationChange,
         std::function<void(int)> onSetZOrder,
-        std::function<void(PixelBrushShape)> onShapeChange) {
+        std::function<void(PixelBrushShape)> onShapeChange,
+        std::function<void()> onClearSymmetry) {
 
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            if (m_symmetryActive && m_clearSymBtnBounds.contains(mousePos)) {
+                if (onClearSymmetry) onClearSymmetry();
+                return true;
+            }
+        }
         bool isSelectTool = (m_activeToolName == "Select" || m_activeToolName == "Magic Wand");
         bool showStab = !m_pixelMode && (m_activeToolName == "Brush" || m_activeToolName == "Pencil");
 
@@ -162,7 +176,7 @@ namespace WisdomUI {
         }
 
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            if (isSelectTool) {
+            if (isSelectTool && m_hasSelection) {
                 if (m_zDecBtnBounds.contains(mousePos)) {
                     if (onSetZOrder) onSetZOrder(m_currentZOrder - 1);
                     return true;
@@ -261,30 +275,37 @@ namespace WisdomUI {
         Theme::DrawCrispText(window, m_font, "TOOL: " + m_activeToolName, 15, std::floor(m_bounds.left + 24.0f), centerY, Theme::SunsetAmber, sf::Color(14, 6, 20), false, true);
 
         if (m_activeToolName == "Select" || m_activeToolName == "Magic Wand") {
-            for (const auto& btn : m_selectionButtons) {
-                bool isHov = btn.bounds.contains(mousePos);
-                bool isDel = (btn.id == "delete");
-                Theme::DrawSunsetButton(window, btn.bounds, btn.label, m_font, 12, false, isHov, isDel, 1.0f);
+            if (m_hasSelection) {
+                for (const auto& btn : m_selectionButtons) {
+                    bool isHov = btn.bounds.contains(mousePos);
+                    bool isDel = (btn.id == "delete");
+                    Theme::DrawSunsetButton(window, btn.bounds, btn.label, m_font, 12, false, isHov, isDel, 1.0f);
+                }
+
+                Theme::DrawCrispText(window, m_font, "Z:", 13, m_zLabelBounds.left, centerY, Theme::TextSecondary, sf::Color(14, 6, 20), false, true);
+
+                bool hovDec = m_zDecBtnBounds.contains(mousePos);
+                Theme::DrawSunsetButton(window, m_zDecBtnBounds, "<", m_font, 13, false, hovDec, false, 1.0f);
+
+                sf::RectangleShape zBox(sf::Vector2f(m_zBoxBounds.width, m_zBoxBounds.height));
+                zBox.setPosition(m_zBoxBounds.left, m_zBoxBounds.top);
+                zBox.setFillColor(Theme::SunsetDeepDark);
+                zBox.setOutlineThickness(1.2f);
+                zBox.setOutlineColor(m_isTypingZ ? Theme::SunsetGold : Theme::SunsetPlum);
+                window.draw(zBox);
+
+                std::string zDisp = m_isTypingZ ? (m_zInputBuffer + "_") : std::to_string(m_currentZOrder);
+                Theme::DrawCrispText(window, m_font, zDisp, 14, m_zBoxBounds.left + m_zBoxBounds.width * 0.5f, centerY, Theme::SunsetGold, sf::Color::Transparent, true, true);
+
+                bool hovInc = m_zIncBtnBounds.contains(mousePos);
+                Theme::DrawSunsetButton(window, m_zIncBtnBounds, ">", m_font, 13, false, hovInc, false, 1.0f);
             }
-
-            // Draw Z-Order numeric control
-            Theme::DrawCrispText(window, m_font, "Z:", 13, m_zLabelBounds.left, centerY, Theme::TextSecondary, sf::Color(14, 6, 20), false, true);
-
-            bool hovDec = m_zDecBtnBounds.contains(mousePos);
-            Theme::DrawSunsetButton(window, m_zDecBtnBounds, "<", m_font, 13, false, hovDec, false, 1.0f);
-
-            sf::RectangleShape zBox(sf::Vector2f(m_zBoxBounds.width, m_zBoxBounds.height));
-            zBox.setPosition(m_zBoxBounds.left, m_zBoxBounds.top);
-            zBox.setFillColor(Theme::SunsetDeepDark);
-            zBox.setOutlineThickness(1.2f);
-            zBox.setOutlineColor(m_isTypingZ ? Theme::SunsetGold : Theme::SunsetPlum);
-            window.draw(zBox);
-
-            std::string zDisp = m_isTypingZ ? (m_zInputBuffer + "_") : std::to_string(m_currentZOrder);
-            Theme::DrawCrispText(window, m_font, zDisp, 14, m_zBoxBounds.left + m_zBoxBounds.width * 0.5f, centerY, Theme::SunsetGold, sf::Color::Transparent, true, true);
-
-            bool hovInc = m_zIncBtnBounds.contains(mousePos);
-            Theme::DrawSunsetButton(window, m_zIncBtnBounds, ">", m_font, 13, false, hovInc, false, 1.0f);
+            else {
+                std::string hint = (m_activeToolName == "Select")
+                    ? "Click or drag across canvas to select | Right-Click to deselect"
+                    : "Click color region to select | Right-Click to deselect";
+                Theme::DrawCrispText(window, m_font, hint, 13, std::floor(m_bounds.left + 160.0f), centerY, Theme::TextSecondary, sf::Color(14, 6, 20), false, true);
+            }
         }
         else {
             Theme::DrawCrispText(window, m_font, "SIZE:", 13, std::floor(m_bounds.left + 175.0f), centerY, Theme::TextSecondary, sf::Color(14, 6, 20), false, true);
@@ -380,6 +401,11 @@ namespace WisdomUI {
             innerEdge.setOutlineThickness(1.0f);
             innerEdge.setOutlineColor(sf::Color(255, 255, 255, 50));
             window.draw(innerEdge);
+        }
+
+        if (m_symmetryActive) {
+            bool hovSym = m_clearSymBtnBounds.contains(mousePos);
+            Theme::DrawSunsetButton(window, m_clearSymBtnBounds, "Clear Symmetry", m_font, 12, false, hovSym, true, 1.0f);
         }
     }
 

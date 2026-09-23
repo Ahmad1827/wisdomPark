@@ -20,7 +20,7 @@ namespace WisdomUI {
         ToolOptionsBar();
         void Initialize(const sf::Font& font);
         void SetBounds(const sf::FloatRect& bounds);
-        void SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization = 0.0f, int zOrder = 0, int maxZ = 0, PixelBrushShape shape = PixelBrushShape::Square);
+        void SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization = 0.0f, int zOrder = 0, int maxZ = 0, PixelBrushShape shape = PixelBrushShape::Square, bool hasSelection = false, bool symmetryActive = false);
 
         void SetOutlineColor(sf::Color color) { m_outlineColor = color; }
         sf::Color GetOutlineColor() const { return m_outlineColor; }
@@ -33,7 +33,8 @@ namespace WisdomUI {
             std::function<void()> onPickOutlineColor = nullptr,
             std::function<void(float)> onStabilizationChange = nullptr,
             std::function<void(int)> onSetZOrder = nullptr,
-            std::function<void(PixelBrushShape)> onShapeChange = nullptr);
+            std::function<void(PixelBrushShape)> onShapeChange = nullptr,
+            std::function<void()> onClearSymmetry = nullptr);
 
         void Update(float deltaTime, const sf::Vector2f& mousePos);
         void Render(sf::RenderWindow& window);
@@ -57,6 +58,9 @@ namespace WisdomUI {
         sf::FloatRect m_outlineColorBoxBounds;
 
         PixelBrushShape m_pixelBrushShape{ PixelBrushShape::Square };
+        bool m_hasSelection{ false };
+        bool m_symmetryActive{ false };
+        sf::FloatRect m_clearSymBtnBounds;
 
         sf::Color m_outlineColor{ sf::Color::Black };
 

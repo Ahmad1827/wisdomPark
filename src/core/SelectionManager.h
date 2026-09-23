@@ -37,6 +37,12 @@ private:
     sf::Vector2f resizeDraggedLocal;
     sf::FloatRect resizeStartBox;
 
+    bool m_isMagicWandStyle{ false };
+    float animationTime{ 0.0f };
+    std::vector<sf::Vector2i> m_magicWandPixels;
+    std::vector<bool> m_magicWandMask;
+    sf::Vector2u m_maskCanvasSize{ 0, 0 };
+
     bool isInsidePolygon(sf::Vector2f point, const std::vector<sf::Vector2f>& polygon) const;
     void calculateBoundingBox();
     void clampToCanvas(sf::Vector2u canvasSize, bool skip = false);
@@ -94,6 +100,10 @@ public:
     void setShowHandles(bool show);
     bool isShowingHandles() const { return showHandles; }
     void setHandleVisualSize(float localSize);
+    void setMagicWandStyle(bool wand) { m_isMagicWandStyle = wand; }
+    bool isMagicWandStyle() const { return m_isMagicWandStyle; }
+    void setPixelSelection(const std::vector<sf::Vector2i>& pixels, sf::Vector2u canvasSize, const std::vector<sf::FloatRect>& subBoxes = {});
+    const std::vector<sf::Vector2i>& getMagicWandPixels() const { return m_magicWandPixels; }
     std::array<sf::Vector2f, 8> getHandlePositions() const;
     int hitTestHandle(sf::Vector2f pos, float handleRadius) const;
     bool startResize(sf::Vector2f pos, float handleRadius);

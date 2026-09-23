@@ -927,6 +927,10 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
 }
 
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
+    if (event.type == sf::Event::MouseButtonReleased) {
+        canvas.resetRecolorLatch();
+    }
+
     if (event.type == sf::Event::Closed) {
         if (currentState == AppState::Painting) {
             triggerSave(canvas, timeline);
@@ -1487,6 +1491,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 else if (action == "flip_h") canvas.flipSelectionHorizontal(curFrame);
                 else if (action == "flip_v") canvas.flipSelectionVertical(curFrame);
                 else if (action == "duplicate") canvas.duplicateSelection(curFrame);
+                else if (action == "deselect") {
+                    canvas.saveUndoState();
+                    canvas.commitSelection(curFrame);
+                    canvas.clearObjectSelection();
+                    showMessage("Deselected", sf::Color::Cyan);
+                }
                 else if (action == "crop") canvas.cropSelection(curFrame);
                 else if (action == "delete") canvas.deleteSelection(curFrame);
             },
@@ -1513,6 +1523,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 else if (shape == PixelBrushShape::Slash) sName = "Slash";
                 else if (shape == PixelBrushShape::Rectangle) sName = "Rectangle";
                 showMessage("Brush Shape: " + sName, sf::Color::Green);
+            },
+            [&]() {
+                canvas.clearSymmetry();
+                showMessage("Symmetry Cleared", sf::Color::Cyan);
             }
         )) return;
 
@@ -2428,11 +2442,15 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         bool rightDockOpen = (m_activeRightTab != RightTabMode::None);
         auto regions = m_workspaceLayout.Update(rightDockOpen, m_showTimeline);
 
+        bool symActive = canvas.getSymmetryManager().enabled && canvas.getSymmetryManager().visible &&
+            (std::hypot(canvas.getSymmetryManager().endPoint.x - canvas.getSymmetryManager().startPoint.x,
+                canvas.getSymmetryManager().endPoint.y - canvas.getSymmetryManager().startPoint.y) > 2.0f);
+
         m_topBar.SetBounds(regions.topBar);
         m_topBar.SetProjectName(activeProjectName, canvas.getIsDirty());
         m_topBar.Update(dt, mousePos);
         m_topBar.SetSymmetryState(
-            canvas.getSymmetryManager().enabled,
+            symActive,
             [this, &canvas]() {
                 canvas.clearSymmetry();
                 if (canvas.getActiveTool() == ToolType::Symmetry) {
@@ -2487,7 +2505,8 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         float curSize = canvas.getPixelMode() ? static_cast<float>(canvas.getPixelBrushSize()) : canvas.getBrushSize();
         int curZ = canvas.getSelectionZOrder(timeline.getCurrentFrame());
         int maxZ = canvas.getMaxZOrder(timeline.getCurrentFrame());
-        m_toolOptionsBar.SyncState(toolName, curSize, canvas.getPixelMode(), canvas.isPixelPerfectEnabled(), canvas.getStabilizer(), curZ, maxZ, canvas.getPixelBrushShape());
+        bool hasSel = canvas.getSelection().isActive();
+        m_toolOptionsBar.SyncState(toolName, curSize, canvas.getPixelMode(), canvas.isPixelPerfectEnabled(), canvas.getStabilizer(), curZ, maxZ, canvas.getPixelBrushShape(), hasSel, false);
         m_toolOptionsBar.Update(dt, mousePos);
 
         m_toolDock.SetBounds(regions.toolDock);

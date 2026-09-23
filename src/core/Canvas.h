@@ -106,6 +106,12 @@ private:
         bool isMultiSelectionGroup{ false };
         bool pendingTransform{ false };
         TransformState transformMode{ TransformState::None };
+        bool symmetryEnabled{ false };
+        bool symmetryVisible{ false };
+        sf::Vector2f symmetryStartPoint{ 0.f, 0.f };
+        sf::Vector2f symmetryEndPoint{ 0.f, 0.f };
+        bool isMagicWandStyle{ false };
+        std::vector<sf::Vector2i> magicWandPixels;
     };
     PerspectiveManager* m_perspectiveManager = nullptr;
     SymmetryManager symmetryManager;
@@ -204,6 +210,8 @@ private:
     bool isPixelMode;
     int pixelBrushSize;
     PixelBrushShape m_pixelBrushShape{ PixelBrushShape::Square };
+    bool m_recolorUndoSaved{ false };
+    int m_currentFrame{ 0 };
     std::vector<sf::Vector2i> m_pixelBrushMask{ {0, 0} };
     void rebuildPixelBrushMask();
     bool pixelGridEnabled{ false };
@@ -395,6 +403,7 @@ public:
     void fillSelection(sf::Color color, int currentFrame);
     bool getIsDirty() const;
     void clearIsDirty();
+    void resetRecolorLatch() { m_recolorUndoSaved = false; }
 
     void drawLayerThumbnail(sf::RenderTarget& target, int frameIndex, int layerIndex, sf::FloatRect bounds);
 
@@ -407,12 +416,14 @@ public:
 
     SymmetryManager& getSymmetryManager() { return symmetryManager; }
     void clearSymmetry() {
+        saveUndoState();
         symmetryManager.enabled = false;
         symmetryManager.visible = false;
         symmetryManager.direction = { 0.f, 0.f };
         symmetryManager.startPoint = { 0.f, 0.f };
         symmetryManager.endPoint = { 0.f, 0.f };
         m_symmetryDragMode = SymmetryDragMode::None;
+        isDirty = true;
     }
     DitherManager& getDitherManager() { return ditherManager; }
     SelectionManager& getSelectionManager() { return selection; }
