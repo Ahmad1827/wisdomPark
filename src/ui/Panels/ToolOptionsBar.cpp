@@ -11,6 +11,7 @@ namespace WisdomUI {
             { "flip_h", "Flip H", sf::FloatRect(), 0.0f },
             { "flip_v", "Flip V", sf::FloatRect(), 0.0f },
             { "duplicate", "Duplicate", sf::FloatRect(), 0.0f },
+            { "merge", "Merge", sf::FloatRect(), 0.0f },
             { "deselect", "Deselect", sf::FloatRect(), 0.0f },
             { "delete", "Delete Area", sf::FloatRect(), 0.0f }
         };
@@ -47,6 +48,7 @@ namespace WisdomUI {
             if (btn.id == "resize") btnW = 74.0f;
             else if (btn.id == "flip_h" || btn.id == "flip_v") btnW = 66.0f;
             else if (btn.id == "duplicate") btnW = 90.0f;
+            else if (btn.id == "merge") btnW = 74.0f;
             else if (btn.id == "deselect") btnW = 86.0f;
             else if (btn.id == "delete") btnW = 100.0f;
 

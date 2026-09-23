@@ -1491,6 +1491,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 else if (action == "flip_h") canvas.flipSelectionHorizontal(curFrame);
                 else if (action == "flip_v") canvas.flipSelectionVertical(curFrame);
                 else if (action == "duplicate") canvas.duplicateSelection(curFrame);
+                else if (action == "merge") {
+                    canvas.mergeSelectedObjects(curFrame);
+                    showMessage("Merged Objects into One", sf::Color::Green);
+                }
                 else if (action == "deselect") {
                     canvas.saveUndoState();
                     canvas.commitSelection(curFrame);

@@ -1816,6 +1816,148 @@ void Canvas::flipSelectionVertical(int currentFrame) {
     selection.setSubItemBoxes(updatedSub);
     isDirty = true;
 }
+void Canvas::mergeSelectedObjects(int currentFrame) {
+    if (frames.empty() || currentFrame < 0 || currentFrame >= static_cast<int>(frames.size())) return;
+    if (!selection.isActive()) return;
+
+    saveUndoState();
+
+    if (isPixelMode) {
+        if (m_selectedImages.size() <= 1) return;
+
+        float minX = 999999.f, minY = 999999.f, maxX = -999999.f, maxY = -999999.f;
+        for (int idx : m_selectedImages) {
+            if (idx >= 0 && idx < static_cast<int>(m_canvasImages.size())) {
+                const auto& b = m_canvasImages[idx].bounds;
+                minX = std::min(minX, b.left);
+                minY = std::min(minY, b.top);
+                maxX = std::max(maxX, b.left + b.width);
+                maxY = std::max(maxY, b.top + b.height);
+            }
+        }
+
+        int masterX = static_cast<int>(std::floor(minX));
+        int masterY = static_cast<int>(std::floor(minY));
+        int masterW = static_cast<int>(std::ceil(maxX - minX));
+        int masterH = static_cast<int>(std::ceil(maxY - minY));
+
+        if (masterW <= 0 || masterH <= 0) return;
+
+        sf::Image mergedImg;
+        mergedImg.create(masterW, masterH, sf::Color::Transparent);
+
+        std::vector<int> sortedIndices = m_selectedImages;
+        std::sort(sortedIndices.begin(), sortedIndices.end());
+
+        for (int idx : sortedIndices) {
+            if (idx >= 0 && idx < static_cast<int>(m_canvasImages.size())) {
+                const auto& ci = m_canvasImages[idx];
+                if (!ci.texture) continue;
+                sf::Image img = ci.texture->copyToImage();
+                int iw = static_cast<int>(img.getSize().x);
+                int ih = static_cast<int>(img.getSize().y);
+                int bx = static_cast<int>(std::round(ci.bounds.left));
+                int by = static_cast<int>(std::round(ci.bounds.top));
+
+                for (int y = 0; y < ih; ++y) {
+                    for (int x = 0; x < iw; ++x) {
+                        sf::Color c = img.getPixel(x, y);
+                        if (c.a > 0) {
+                            int destX = (bx + x) - masterX;
+                            int destY = (by + y) - masterY;
+                            if (destX >= 0 && destX < masterW && destY >= 0 && destY < masterH) {
+                                sf::Color dst = mergedImg.getPixel(destX, destY);
+                                if (dst.a == 0) {
+                                    mergedImg.setPixel(destX, destY, c);
+                                }
+                                else {
+                                    float alpha = c.a / 255.f;
+                                    float inv = 1.f - alpha;
+                                    sf::Uint8 r = static_cast<sf::Uint8>(c.r * alpha + dst.r * inv);
+                                    sf::Uint8 g = static_cast<sf::Uint8>(c.g * alpha + dst.g * inv);
+                                    sf::Uint8 b = static_cast<sf::Uint8>(c.b * alpha + dst.b * inv);
+                                    sf::Uint8 a = static_cast<sf::Uint8>(std::min(255.f, c.a + dst.a * inv));
+                                    mergedImg.setPixel(destX, destY, sf::Color(r, g, b, a));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        std::sort(sortedIndices.rbegin(), sortedIndices.rend());
+        for (int idx : sortedIndices) {
+            if (idx >= 0 && idx < static_cast<int>(m_canvasImages.size())) {
+                m_canvasImages.erase(m_canvasImages.begin() + idx);
+            }
+        }
+
+        CanvasImage newCi;
+        newCi.id = ++m_nextImageId;
+        newCi.frame = currentFrame;
+        newCi.layer = activeLayer;
+        newCi.bounds = sf::FloatRect(static_cast<float>(masterX), static_cast<float>(masterY),
+            static_cast<float>(masterW), static_cast<float>(masterH));
+        newCi.texture = std::make_shared<sf::Texture>();
+        newCi.texture->setSmooth(false);
+        newCi.texture->loadFromImage(mergedImg);
+
+        m_canvasImages.push_back(std::move(newCi));
+        int newIdx = static_cast<int>(m_canvasImages.size()) - 1;
+
+        m_selectedImages = { newIdx };
+        m_selectedStrokes.clear();
+        m_isMultiSelectionGroup = false;
+
+        sf::FloatRect newBox(static_cast<float>(masterX), static_cast<float>(masterY),
+            static_cast<float>(masterW), static_cast<float>(masterH));
+        selection.setSelectionBoxes(newBox, { newBox });
+        selection.setShowHandles(pendingTransform);
+        isDirty = true;
+    }
+    else {
+        if (m_selectedStrokes.size() <= 1) return;
+
+        std::vector<int> sortedIndices = m_selectedStrokes;
+        std::sort(sortedIndices.begin(), sortedIndices.end());
+
+        VectorStroke mergedVs;
+        mergedVs.layer = activeLayer;
+        mergedVs.frame = currentFrame;
+        mergedVs.isErase = false;
+        mergedVs.mesh.setPrimitiveType(sf::Triangles);
+
+        for (int idx : sortedIndices) {
+            if (idx >= 0 && idx < static_cast<int>(m_vectorStrokes.size())) {
+                const auto& vs = m_vectorStrokes[idx];
+                for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+                    mergedVs.mesh.append(vs.mesh[v]);
+                }
+            }
+        }
+
+        std::sort(sortedIndices.rbegin(), sortedIndices.rend());
+        for (int idx : sortedIndices) {
+            if (idx >= 0 && idx < static_cast<int>(m_vectorStrokes.size())) {
+                m_vectorStrokes.erase(m_vectorStrokes.begin() + idx);
+            }
+        }
+
+        m_vectorStrokes.push_back(std::move(mergedVs));
+        int newIdx = static_cast<int>(m_vectorStrokes.size()) - 1;
+
+        m_selectedStrokes = { newIdx };
+        m_selectedImages.clear();
+        m_isMultiSelectionGroup = false;
+
+        sf::FloatRect newBox = getStrokeBounds(m_vectorStrokes[newIdx]);
+        selection.setSelectionBoxes(newBox, { newBox });
+        selection.setShowHandles(pendingTransform);
+        isDirty = true;
+    }
+}
+
 void Canvas::duplicateSelection(int currentFrame) {
     if (!selection.isActive()) return;
     if (m_selectedStrokes.empty() && m_selectedImages.empty()) return;
@@ -2639,6 +2781,32 @@ void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
             if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(ix) + 0.5f, static_cast<float>(iy) + 0.5f))) continue;
 
             if (ix < 0 || iy < 0 || ix >= maxCW || iy >= maxCH) continue;
+
+            if (isDrawing && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil) && c != sf::Color::Transparent) {
+                m_pixelStrokePoints.push_back({ ix, iy, c });
+            }
+
+            // If erasing, clear overlapping pixels from canvas image objects as well
+            if (activeTool == ToolType::Eraser || c == sf::Color::Transparent) {
+                for (auto& ci : m_canvasImages) {
+                    if (ci.frame == frameIdx && ci.layer == activeLayer && ci.texture) {
+                        if (ci.bounds.contains(static_cast<float>(ix), static_cast<float>(iy))) {
+                            int lx = ix - static_cast<int>(std::round(ci.bounds.left));
+                            int ly = iy - static_cast<int>(std::round(ci.bounds.top));
+                            sf::Image img = ci.texture->copyToImage();
+                            if (lx >= 0 && ly >= 0 && lx < static_cast<int>(img.getSize().x) && ly < static_cast<int>(img.getSize().y)) {
+                                if (img.getPixel(lx, ly).a > 0) {
+                                    img.setPixel(lx, ly, sf::Color::Transparent);
+                                    auto nTex = std::make_shared<sf::Texture>();
+                                    nTex->setSmooth(false);
+                                    nTex->loadFromImage(img);
+                                    ci.texture = nTex;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             sf::RectangleShape px(sf::Vector2f(1.0f, 1.0f));
             px.setFillColor(c);
@@ -3636,6 +3804,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
             saveUndoState();
             isDrawing = true;
+            m_pixelStrokePoints.clear();
             startPos = localPos;
             lastPos = localPos;
             shiftAnchor = localPos;
@@ -4262,6 +4431,57 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     }
 
     if (isDrawing) {
+        if (isPixelMode && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil) && !m_pixelStrokePoints.empty()) {
+            sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+            if (targetTex) {
+                int minX = m_pixelStrokePoints[0].x, maxX = m_pixelStrokePoints[0].x;
+                int minY = m_pixelStrokePoints[0].y, maxY = m_pixelStrokePoints[0].y;
+                for (const auto& pt : m_pixelStrokePoints) {
+                    minX = std::min(minX, pt.x); maxX = std::max(maxX, pt.x);
+                    minY = std::min(minY, pt.y); maxY = std::max(maxY, pt.y);
+                }
+                int sw = maxX - minX + 1;
+                int sh = maxY - minY + 1;
+
+                if (sw > 0 && sh > 0) {
+                    // Clear just the stroke pixels from the layer texture without GPU readback
+                    sf::RenderStates rsNone;
+                    rsNone.blendMode = sf::BlendNone;
+                    sf::RectangleShape clearPx(sf::Vector2f(1.f, 1.f));
+                    clearPx.setFillColor(sf::Color::Transparent);
+
+                    for (const auto& pt : m_pixelStrokePoints) {
+                        clearPx.setPosition(static_cast<float>(pt.x), static_cast<float>(pt.y));
+                        targetTex->draw(clearPx, rsNone);
+                    }
+                    targetTex->display();
+
+                    // Generate stroke texture directly with exact drawn colors
+                    sf::Image strokeImg;
+                    strokeImg.create(sw, sh, sf::Color::Transparent);
+
+                    for (const auto& pt : m_pixelStrokePoints) {
+                        strokeImg.setPixel(pt.x - minX, pt.y - minY, pt.color);
+                    }
+
+                    auto tex = std::make_shared<sf::Texture>();
+                    tex->setSmooth(false);
+                    tex->loadFromImage(strokeImg);
+
+                    CanvasImage ci;
+                    ci.id = ++m_nextImageId;
+                    ci.frame = currentFrame;
+                    ci.layer = activeLayer;
+                    ci.texture = tex;
+                    ci.bounds = sf::FloatRect(static_cast<float>(minX), static_cast<float>(minY),
+                        static_cast<float>(sw), static_cast<float>(sh));
+                    m_canvasImages.push_back(std::move(ci));
+                    isDirty = true;
+                }
+            }
+            m_pixelStrokePoints.clear();
+        }
+
         shiftAnchor = localPos;
         hasShiftAnchor = true;
     }
@@ -5561,101 +5781,42 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
             return false;
             };
 
-        // 3. Chain touching CanvasImage objects AND extract any touching pixels from targetTex
+
+        bool isDoubleClick = (m_selectClickClock.getElapsedTime().asMilliseconds() < 400 &&
+            m_lastClickedImageIdx == clickedImageIdx &&
+            m_selectedImages.size() > 1);
+        m_selectClickClock.restart();
+        m_lastClickedImageIdx = clickedImageIdx;
+
+        if (isDoubleClick) {
+            // Double-click: drill down to isolate strictly the clicked stroke
+            m_selectedImages = { clickedImageIdx };
+            m_selectedStrokes.clear();
+            m_isMultiSelectionGroup = false;
+
+            const auto& b = m_canvasImages[clickedImageIdx].bounds;
+            float x0 = std::clamp(b.left, 0.f, static_cast<float>(maxCW));
+            float y0 = std::clamp(b.top, 0.f, static_cast<float>(maxCH));
+            float x1 = std::clamp(b.left + b.width, 0.f, static_cast<float>(maxCW));
+            float y1 = std::clamp(b.top + b.height, 0.f, static_cast<float>(maxCH));
+            sf::FloatRect visB(x0, y0, std::max(0.f, x1 - x0), std::max(0.f, y1 - y0));
+
+            selection.setSelectionBoxes(visB, { visB });
+            selection.setShowHandles(pendingTransform);
+            isDirty = true;
+            return;
+        }
+
+        // Single-click: chain all touching/glued objects together
         std::vector<int> chain;
         std::vector<bool> inChain(m_canvasImages.size(), false);
         chain.push_back(clickedImageIdx);
         inChain[clickedImageIdx] = true;
 
         size_t cHead = 0;
-        bool modifiedTargetTex = false;
-
         while (cHead < chain.size()) {
             int curr = chain[cHead++];
 
-            // A. Check for any touching drawings on the base layer texture and extract them
-            if (layerImgLoaded) {
-                const auto& ci = m_canvasImages[curr];
-                int bx0 = std::max(0, static_cast<int>(std::floor(ci.bounds.left)) - 1);
-                int by0 = std::max(0, static_cast<int>(std::floor(ci.bounds.top)) - 1);
-                int bx1 = std::min(maxCW - 1, static_cast<int>(std::ceil(ci.bounds.left + ci.bounds.width)) + 1);
-                int by1 = std::min(maxCH - 1, static_cast<int>(std::ceil(ci.bounds.top + ci.bounds.height)) + 1);
-
-                for (int ty = by0; ty <= by1; ++ty) {
-                    for (int tx = bx0; tx <= bx1; ++tx) {
-                        if (layerImg.getPixel(tx, ty).a > 0) {
-                            bool touchesCurr = false;
-                            for (int d = 0; d < 9; ++d) {
-                                if (hasPixel(curr, tx + dx8[d], ty + dy8[d])) {
-                                    touchesCurr = true;
-                                    break;
-                                }
-                            }
-
-                            if (touchesCurr) {
-                                std::vector<bool> visited(maxCW * maxCH, false);
-                                std::vector<sf::Vector2i> q;
-                                q.push_back({ tx, ty });
-                                visited[ty * maxCW + tx] = true;
-
-                                int minX = tx, maxX = tx, minY = ty, maxY = ty;
-                                size_t head = 0;
-                                while (head < q.size()) {
-                                    sf::Vector2i p = q[head++];
-                                    minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
-                                    minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
-                                    for (int d = 1; d <= 8; ++d) {
-                                        int nx = p.x + dx8[d];
-                                        int ny = p.y + dy8[d];
-                                        if (nx >= 0 && nx < maxCW && ny >= 0 && ny < maxCH) {
-                                            int idx = ny * maxCW + nx;
-                                            if (!visited[idx] && layerImg.getPixel(nx, ny).a > 0) {
-                                                visited[idx] = true;
-                                                q.push_back({ nx, ny });
-                                            }
-                                        }
-                                    }
-                                }
-
-                                int compW = maxX - minX + 1;
-                                int compH = maxY - minY + 1;
-                                sf::Image compImg;
-                                compImg.create(compW, compH, sf::Color::Transparent);
-
-                                for (const auto& pt : q) {
-                                    compImg.setPixel(pt.x - minX, pt.y - minY, layerImg.getPixel(pt.x, pt.y));
-                                    layerImg.setPixel(pt.x, pt.y, sf::Color::Transparent);
-                                }
-                                modifiedTargetTex = true;
-
-                                auto tex = std::make_shared<sf::Texture>();
-                                tex->setSmooth(false);
-                                tex->loadFromImage(compImg);
-
-                                CanvasImage newCi;
-                                newCi.id = ++m_nextImageId;
-                                newCi.frame = currentFrame;
-                                newCi.layer = activeLayer;
-                                newCi.texture = tex;
-                                newCi.bounds = sf::FloatRect(static_cast<float>(minX), static_cast<float>(minY),
-                                    static_cast<float>(compW), static_cast<float>(compH));
-                                m_canvasImages.push_back(newCi);
-
-                                CachedImg nci;
-                                nci.img = compImg;
-                                nci.w = compW;
-                                nci.h = compH;
-                                cachedImgs.push_back(nci);
-
-                                inChain.push_back(true);
-                                chain.push_back(static_cast<int>(m_canvasImages.size()) - 1);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // B. Chain touching CanvasImage objects
             for (size_t next = 0; next < m_canvasImages.size(); ++next) {
                 if (next >= inChain.size()) inChain.resize(m_canvasImages.size(), false);
                 if (!inChain[next] && m_canvasImages[next].frame == currentFrame && m_canvasImages[next].layer == activeLayer) {
@@ -5665,14 +5826,6 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
                     }
                 }
             }
-        }
-
-        if (modifiedTargetTex && targetTex) {
-            sf::Texture updatedLayerTex;
-            updatedLayerTex.loadFromImage(layerImg);
-            targetTex->clear(sf::Color::Transparent);
-            targetTex->draw(sf::Sprite(updatedLayerTex), sf::RenderStates(sf::BlendNone));
-            targetTex->display();
         }
 
         m_selectedImages = chain;
@@ -5751,6 +5904,29 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
 
     const auto& clickedEnt = entities[clickedEntityIdx];
 
+    bool isDoubleClick = (m_selectClickClock.getElapsedTime().asMilliseconds() < 400 &&
+        m_lastClickedEntityIdx == clickedEntityIdx &&
+        (m_selectedStrokes.size() + m_selectedImages.size()) > 1);
+    m_selectClickClock.restart();
+    m_lastClickedEntityIdx = clickedEntityIdx;
+
+    if (isDoubleClick) {
+        // Double-click: isolate the specific clicked stroke or image
+        m_selectedStrokes.clear();
+        m_selectedImages.clear();
+        if (clickedEnt.type == SelectableEntity::Stroke) {
+            m_selectedStrokes.push_back(clickedEnt.originalIndex);
+        }
+        else {
+            m_selectedImages.push_back(clickedEnt.originalIndex);
+        }
+        m_isMultiSelectionGroup = false;
+        selection.setSelectionBoxes(clickedEnt.bounds, { clickedEnt.bounds });
+        selection.setShowHandles(pendingTransform);
+        return;
+    }
+
+    // Single-click: chain touching strokes and images
     std::vector<bool> inChain(entities.size(), false);
     std::vector<int> q;
     q.push_back(clickedEntityIdx);
@@ -5926,12 +6102,4 @@ void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFr
     if (img.loadFromFile(filepath)) {
         pasteImage(img, currentFrame, false);
     }
-}
-
-void Canvas::clearObjectSelection() {
-    m_selectedStrokes.clear();
-    m_selectedImages.clear();
-    m_isMultiSelectionGroup = false;
-    pendingTransform = false;
-    selection.clearSelection();
 }

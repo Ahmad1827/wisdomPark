@@ -74,7 +74,6 @@ private:
     bool m_isMultiSelectionGroup{ false };
     sf::Vector2f m_dragStartMousePos{ 0.f, 0.f };
     sf::Vector2f m_lastDragPos{ 0.f, 0.f };
-    sf::Clock m_selectClickClock;
     sf::Vector2f m_lastClickPos{ 0.f, 0.f };
     int m_nextImageId{ 0 };
 
@@ -210,8 +209,17 @@ private:
     bool isPixelMode;
     int pixelBrushSize;
     PixelBrushShape m_pixelBrushShape{ PixelBrushShape::Square };
+    struct PixelStrokePoint {
+        int x;
+        int y;
+        sf::Color color;
+    };
     bool m_recolorUndoSaved{ false };
     int m_currentFrame{ 0 };
+    std::vector<PixelStrokePoint> m_pixelStrokePoints;
+    sf::Clock m_selectClickClock;
+    int m_lastClickedImageIdx{ -1 };
+    int m_lastClickedEntityIdx{ -1 };
     std::vector<sf::Vector2i> m_pixelBrushMask{ {0, 0} };
     void rebuildPixelBrushMask();
     bool pixelGridEnabled{ false };
@@ -272,7 +280,14 @@ public:
     const std::vector<CanvasImage>& getCanvasImages() const { return m_canvasImages; }
     void setCanvasImages(const std::vector<CanvasImage>& images) { m_canvasImages = images; }
     void clearCanvasImages() { m_canvasImages.clear(); }
-    void clearObjectSelection();
+    void clearObjectSelection() {
+        m_selectedStrokes.clear();
+        m_selectedImages.clear();
+        m_isMultiSelectionGroup = false;
+        m_lastClickedImageIdx = -1;
+        m_lastClickedEntityIdx = -1;
+        selection.clearSelection();
+    }
     const std::vector<VectorStroke>& getVectorStrokes() const { return m_vectorStrokes; }
     void clearVectorStrokes() { m_vectorStrokes.clear(); }
     void setVectorStrokes(const std::vector<VectorStroke>& strokes) { m_vectorStrokes = strokes; }
@@ -335,6 +350,7 @@ public:
     void flipSelectionHorizontal(int currentFrame);
     void flipSelectionVertical(int currentFrame);
     void duplicateSelection(int currentFrame);
+    void mergeSelectedObjects(int currentFrame);
     void cropSelection(int currentFrame);
     void moveSelectionZOrder(int delta, int currentFrame);
     void bringSelectionToFront(int currentFrame);
