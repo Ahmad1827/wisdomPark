@@ -13,6 +13,7 @@
 enum class ToolType { None, Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text, Gradient, Curve, FilledContour, Grid };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
 enum class TransformState { None, Scaling };
+enum class PixelBrushShape { Square, Circle, Slash, Rectangle };
 
 struct Layer {
     std::string name;
@@ -202,6 +203,9 @@ private:
 
     bool isPixelMode;
     int pixelBrushSize;
+    PixelBrushShape m_pixelBrushShape{ PixelBrushShape::Square };
+    std::vector<sf::Vector2i> m_pixelBrushMask{ {0, 0} };
+    void rebuildPixelBrushMask();
     bool pixelGridEnabled{ false };
     bool customGridEnabled{ false };
     int customGridSize{ 16 };
@@ -371,6 +375,9 @@ public:
     void setPixelBrushSize(int size);
     int getPixelBrushSize() const;
     void cyclePixelBrushSize();
+    void setPixelBrushShape(PixelBrushShape shape);
+    PixelBrushShape getPixelBrushShape() const { return m_pixelBrushShape; }
+    const std::vector<sf::Vector2i>& getPixelBrushMask() const { return m_pixelBrushMask; }
     void togglePixelGrid() { toggleCustomGrid(); }
     bool isPixelGridEnabled() const { return customGridEnabled; }
     void setCustomGridEnabled(bool enabled) { customGridEnabled = enabled; }

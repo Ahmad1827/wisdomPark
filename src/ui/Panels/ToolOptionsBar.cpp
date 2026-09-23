@@ -60,15 +60,19 @@ namespace WisdomUI {
         float btnY = std::floor(bounds.top + (bounds.height - btnH) * 0.5f);
 
         m_sliderBounds = sf::FloatRect(std::floor(bounds.left + 225.0f), std::floor(bounds.top + (bounds.height - 14.0f) * 0.5f), 125.0f, 14.0f);
+
+        m_shapeBtnBounds = sf::FloatRect(std::floor(bounds.left + 410.0f), btnY, 94.0f, btnH);
+        m_perfBtnBounds = sf::FloatRect(std::floor(bounds.left + 512.0f), btnY, 115.0f, btnH);
+
+        m_outlineBtnBounds = sf::FloatRect(std::floor(bounds.left + 636.0f), btnY, 82.0f, btnH);
+        m_outlineColorBoxBounds = sf::FloatRect(std::floor(bounds.left + 724.0f), btnY, 28.0f, 28.0f);
+
         m_stabSliderBounds = sf::FloatRect(std::floor(bounds.left + 475.0f), std::floor(bounds.top + (bounds.height - 14.0f) * 0.5f), 125.0f, 14.0f);
-        m_perfBtnBounds = sf::FloatRect(std::floor(bounds.left + 420.0f), btnY, 125.0f, btnH);
-        m_outlineBtnBounds = sf::FloatRect(std::floor(bounds.left + 670.0f), btnY, 90.0f, btnH);
-        m_outlineColorBoxBounds = sf::FloatRect(std::floor(bounds.left + 768.0f), btnY, 28.0f, 28.0f);
 
         updateSelectionButtonLayout();
     }
 
-    void ToolOptionsBar::SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization, int zOrder, int maxZ) {
+    void ToolOptionsBar::SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization, int zOrder, int maxZ, PixelBrushShape shape) {
         m_activeToolName = toolName;
         m_size = size;
         m_pixelMode = pixelMode;
@@ -78,6 +82,7 @@ namespace WisdomUI {
             m_currentZOrder = zOrder;
         }
         m_maxZOrder = maxZ;
+        m_pixelBrushShape = shape;
     }
 
     void ToolOptionsBar::Update(float deltaTime, const sf::Vector2f& mousePos) {
@@ -117,7 +122,8 @@ namespace WisdomUI {
         std::function<void()> onMakeOutline,
         std::function<void()> onPickOutlineColor,
         std::function<void(float)> onStabilizationChange,
-        std::function<void(int)> onSetZOrder) {
+        std::function<void(int)> onSetZOrder,
+        std::function<void(PixelBrushShape)> onShapeChange) {
 
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
         bool isSelectTool = (m_activeToolName == "Select" || m_activeToolName == "Magic Wand");
@@ -196,6 +202,17 @@ namespace WisdomUI {
                 }
                 else if (showStab && m_stabSliderBounds.contains(mousePos)) {
                     m_isDraggingStabSlider = true;
+                    return true;
+                }
+                else if (m_pixelMode && m_shapeBtnBounds.contains(mousePos)) {
+                    if (onShapeChange) {
+                        PixelBrushShape nextShape = PixelBrushShape::Square;
+                        if (m_pixelBrushShape == PixelBrushShape::Square) nextShape = PixelBrushShape::Circle;
+                        else if (m_pixelBrushShape == PixelBrushShape::Circle) nextShape = PixelBrushShape::Slash;
+                        else if (m_pixelBrushShape == PixelBrushShape::Slash) nextShape = PixelBrushShape::Rectangle;
+                        else if (m_pixelBrushShape == PixelBrushShape::Rectangle) nextShape = PixelBrushShape::Square;
+                        onShapeChange(nextShape);
+                    }
                     return true;
                 }
                 else if (m_pixelMode && m_perfBtnBounds.contains(mousePos)) {
@@ -337,6 +354,14 @@ namespace WisdomUI {
             }
 
             if (m_pixelMode) {
+                std::string shapeLabel = "[#] Square";
+                if (m_pixelBrushShape == PixelBrushShape::Circle) shapeLabel = "(*) Circle";
+                else if (m_pixelBrushShape == PixelBrushShape::Slash) shapeLabel = "(/) Slash";
+                else if (m_pixelBrushShape == PixelBrushShape::Rectangle) shapeLabel = "(=) Rect";
+
+                bool hovShape = m_shapeBtnBounds.contains(mousePos);
+                Theme::DrawSunsetButton(window, m_shapeBtnBounds, shapeLabel, m_font, 12, false, hovShape, false, 1.0f);
+
                 Theme::DrawSunsetButton(window, m_perfBtnBounds, "Pixel Perfect", m_font, 12, m_pixelPerfect, m_perfHoverAlpha > 0.5f, true, 1.0f);
             }
 

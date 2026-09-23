@@ -1505,6 +1505,14 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             [&](int newZ) {
                 canvas.setSelectionZOrder(newZ, timeline.getCurrentFrame());
                 showMessage("Z-Order: " + std::to_string(canvas.getSelectionZOrder(timeline.getCurrentFrame())), sf::Color::Cyan);
+            },
+            [&](PixelBrushShape shape) {
+                canvas.setPixelBrushShape(shape);
+                std::string sName = "Square";
+                if (shape == PixelBrushShape::Circle) sName = "Circle";
+                else if (shape == PixelBrushShape::Slash) sName = "Slash";
+                else if (shape == PixelBrushShape::Rectangle) sName = "Rectangle";
+                showMessage("Brush Shape: " + sName, sf::Color::Green);
             }
         )) return;
 
@@ -2472,7 +2480,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         float curSize = canvas.getPixelMode() ? static_cast<float>(canvas.getPixelBrushSize()) : canvas.getBrushSize();
         int curZ = canvas.getSelectionZOrder(timeline.getCurrentFrame());
         int maxZ = canvas.getMaxZOrder(timeline.getCurrentFrame());
-        m_toolOptionsBar.SyncState(toolName, curSize, canvas.getPixelMode(), canvas.isPixelPerfectEnabled(), canvas.getStabilizer(), curZ, maxZ);
+        m_toolOptionsBar.SyncState(toolName, curSize, canvas.getPixelMode(), canvas.isPixelPerfectEnabled(), canvas.getStabilizer(), curZ, maxZ, canvas.getPixelBrushShape());
         m_toolOptionsBar.Update(dt, mousePos);
 
         m_toolDock.SetBounds(regions.toolDock);

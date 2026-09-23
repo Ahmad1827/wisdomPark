@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "../UIAnimation.h"
+#include "../../core/Canvas.h"
 
 namespace WisdomUI {
 
@@ -19,7 +20,7 @@ namespace WisdomUI {
         ToolOptionsBar();
         void Initialize(const sf::Font& font);
         void SetBounds(const sf::FloatRect& bounds);
-        void SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization = 0.0f, int zOrder = 0, int maxZ = 0);
+        void SyncState(const std::string& toolName, float size, bool pixelMode, bool pixelPerfect, float stabilization = 0.0f, int zOrder = 0, int maxZ = 0, PixelBrushShape shape = PixelBrushShape::Square);
 
         void SetOutlineColor(sf::Color color) { m_outlineColor = color; }
         sf::Color GetOutlineColor() const { return m_outlineColor; }
@@ -31,7 +32,8 @@ namespace WisdomUI {
             std::function<void()> onMakeOutline = nullptr,
             std::function<void()> onPickOutlineColor = nullptr,
             std::function<void(float)> onStabilizationChange = nullptr,
-            std::function<void(int)> onSetZOrder = nullptr);
+            std::function<void(int)> onSetZOrder = nullptr,
+            std::function<void(PixelBrushShape)> onShapeChange = nullptr);
 
         void Update(float deltaTime, const sf::Vector2f& mousePos);
         void Render(sf::RenderWindow& window);
@@ -48,10 +50,13 @@ namespace WisdomUI {
         bool m_isDraggingStabSlider{ false };
 
         sf::FloatRect m_sliderBounds;
+        sf::FloatRect m_shapeBtnBounds;
         sf::FloatRect m_stabSliderBounds;
         sf::FloatRect m_perfBtnBounds;
         sf::FloatRect m_outlineBtnBounds;
         sf::FloatRect m_outlineColorBoxBounds;
+
+        PixelBrushShape m_pixelBrushShape{ PixelBrushShape::Square };
 
         sf::Color m_outlineColor{ sf::Color::Black };
 

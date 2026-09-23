@@ -339,9 +339,10 @@ activeTool(ToolType::Brush), primaryColor(sf::Color::Black), secondaryColor(sf::
 fillTolerance(0.f), fillContiguous(true),
 activeLayer(1), onionSkinEnabled(true), onionSkinPrevOpacity(89.25f), onionSkinNextOpacity(89.25f), onionSkinPrevCount(1), onionSkinNextCount(1),
 viewScale(1.0f), targetScale(1.0f), canvasLogicalSize(DEFAULT_NORMAL_W, DEFAULT_NORMAL_H), zoomMultiplier(1.0f), panOffset(0.f, 0.f),
-isPixelMode(false), pixelBrushSize(1), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false), pixelPerfectEnabled(false), isDirty(false),
+isPixelMode(false), pixelBrushSize(1), m_pixelBrushShape(PixelBrushShape::Square), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false), pixelPerfectEnabled(false), isDirty(false),
 transformMode(TransformState::None), pendingTransform(false), currentRotation(0.0f), currentScale(1.0f, 1.0f), hasFrameAssets(false) {
     brushEngine.initDefaultPresets();
+    rebuildPixelBrushMask();
 }
 
 bool Canvas::layerHasErase(int frameIndex, int layerIndex) const {
@@ -1949,7 +1950,7 @@ void Canvas::setSelectionZOrder(int newZ, int currentFrame) {
         }
 
         int targetZ = std::clamp(newZ, 0, static_cast<int>(otherImgsOnLayer.size()));
-        otherImgsOnLayer.insert(otherImgsOnLayer.begin() + targetZ,
+        otherImgsOnLayer.insert(otherImgsOnLayer.begin() + static_cast<ptrdiff_t>(targetZ),
             std::make_move_iterator(selectedImgs.begin()),
             std::make_move_iterator(selectedImgs.end()));
 
@@ -1986,7 +1987,7 @@ void Canvas::setSelectionZOrder(int newZ, int currentFrame) {
         }
 
         int targetZ = std::clamp(newZ, 0, static_cast<int>(otherStrOnLayer.size()));
-        otherStrOnLayer.insert(otherStrOnLayer.begin() + targetZ,
+        otherStrOnLayer.insert(otherStrOnLayer.begin() + static_cast<ptrdiff_t>(targetZ),
             std::make_move_iterator(selectedStr.begin()),
             std::make_move_iterator(selectedStr.end()));
 
@@ -2463,37 +2464,41 @@ void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
     if (activeTool == ToolType::Eraser || c == sf::Color::Transparent) states.blendMode = sf::BlendNone;
 
     auto points = symmetryManager.getSymmetricPoints(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)));
+    int maxCW = static_cast<int>(canvasLogicalSize.x);
+    int maxCH = static_cast<int>(canvasLogicalSize.y);
 
     for (auto pt : points) {
-        if (selection.isActive() && !selection.isPointInsideSelection(pt)) continue;
+        int baseIX = static_cast<int>(std::round(pt.x));
+        int baseIY = static_cast<int>(std::round(pt.y));
 
-        int ix = static_cast<int>(std::round(pt.x));
-        int iy = static_cast<int>(std::round(pt.y));
+        for (const auto& offset : m_pixelBrushMask) {
+            int ix = baseIX + offset.x;
+            int iy = baseIY + offset.y;
 
-        if (ix < 0 || iy < 0 || ix >= static_cast<int>(canvasLogicalSize.x) || iy >= static_cast<int>(canvasLogicalSize.y)) continue;
+            if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(ix) + 0.5f, static_cast<float>(iy) + 0.5f))) continue;
 
-        sf::RectangleShape px(sf::Vector2f(static_cast<float>(pixelBrushSize), static_cast<float>(pixelBrushSize)));
-        px.setFillColor(c);
+            if (ix < 0 || iy < 0 || ix >= maxCW || iy >= maxCH) continue;
 
-        float tx = static_cast<float>(ix) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
-        float ty = static_cast<float>(iy) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
-        px.setPosition(tx, ty);
+            sf::RectangleShape px(sf::Vector2f(1.0f, 1.0f));
+            px.setFillColor(c);
+            px.setPosition(static_cast<float>(ix), static_cast<float>(iy));
 
-        target->draw(px, states);
+            target->draw(px, states);
 
-        if (tileModeX) {
-            px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty); target->draw(px, states);
-            px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty); target->draw(px, states);
-        }
-        if (tileModeY) {
-            px.setPosition(tx, ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
-            px.setPosition(tx, ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
-        }
-        if (tileModeX && tileModeY) {
-            px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
-            px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty - static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
-            px.setPosition(tx - static_cast<float>(canvasLogicalSize.x), ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
-            px.setPosition(tx + static_cast<float>(canvasLogicalSize.x), ty + static_cast<float>(canvasLogicalSize.y)); target->draw(px, states);
+            if (tileModeX) {
+                px.setPosition(static_cast<float>(ix - maxCW), static_cast<float>(iy)); target->draw(px, states);
+                px.setPosition(static_cast<float>(ix + maxCW), static_cast<float>(iy)); target->draw(px, states);
+            }
+            if (tileModeY) {
+                px.setPosition(static_cast<float>(ix), static_cast<float>(iy - maxCH)); target->draw(px, states);
+                px.setPosition(static_cast<float>(ix), static_cast<float>(iy + maxCH)); target->draw(px, states);
+            }
+            if (tileModeX && tileModeY) {
+                px.setPosition(static_cast<float>(ix - maxCW), static_cast<float>(iy - maxCH)); target->draw(px, states);
+                px.setPosition(static_cast<float>(ix + maxCW), static_cast<float>(iy - maxCH)); target->draw(px, states);
+                px.setPosition(static_cast<float>(ix - maxCW), static_cast<float>(iy + maxCH)); target->draw(px, states);
+                px.setPosition(static_cast<float>(ix + maxCW), static_cast<float>(iy + maxCH)); target->draw(px, states);
+            }
         }
     }
 }
@@ -4869,8 +4874,6 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                 : primaryColor;
 
             sf::VertexArray previewPixels(sf::Quads);
-            float pSize = static_cast<float>(pixelBrushSize);
-            float halfBrush = std::floor(pSize / 2.0f);
 
             for (const auto& pt : pts) {
                 std::vector<sf::Vector2f> symPoints;
@@ -4882,13 +4885,18 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                 }
 
                 for (const auto& sp : symPoints) {
-                    float ix = std::floor(sp.x) - halfBrush;
-                    float iy = std::floor(sp.y) - halfBrush;
+                    int baseIX = static_cast<int>(std::round(sp.x));
+                    int baseIY = static_cast<int>(std::round(sp.y));
 
-                    previewPixels.append(sf::Vertex(sf::Vector2f(ix, iy), previewCol));
-                    previewPixels.append(sf::Vertex(sf::Vector2f(ix + pSize, iy), previewCol));
-                    previewPixels.append(sf::Vertex(sf::Vector2f(ix + pSize, iy + pSize), previewCol));
-                    previewPixels.append(sf::Vertex(sf::Vector2f(ix, iy + pSize), previewCol));
+                    for (const auto& offset : m_pixelBrushMask) {
+                        float ix = static_cast<float>(baseIX + offset.x);
+                        float iy = static_cast<float>(baseIY + offset.y);
+
+                        previewPixels.append(sf::Vertex(sf::Vector2f(ix, iy), previewCol));
+                        previewPixels.append(sf::Vertex(sf::Vector2f(ix + 1.0f, iy), previewCol));
+                        previewPixels.append(sf::Vertex(sf::Vector2f(ix + 1.0f, iy + 1.0f), previewCol));
+                        previewPixels.append(sf::Vertex(sf::Vector2f(ix, iy + 1.0f), previewCol));
+                    }
                 }
             }
             window.draw(previewPixels, innerStates);
@@ -4927,15 +4935,19 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             lp.x = (lp.x - drawArea.left) * sX;
             lp.y = (lp.y - drawArea.top) * sY;
 
-            float tx = std::floor(lp.x) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
-            float ty = std::floor(lp.y) - std::floor(static_cast<float>(pixelBrushSize) / 2.0f);
+            int baseIX = static_cast<int>(std::floor(lp.x));
+            int baseIY = static_cast<int>(std::floor(lp.y));
 
-            sf::RectangleShape pxHover(sf::Vector2f(static_cast<float>(pixelBrushSize), static_cast<float>(pixelBrushSize)));
-            pxHover.setFillColor(sf::Color(20, 10, 30, 40));
-            pxHover.setOutlineThickness(0.2f);
-            pxHover.setOutlineColor(sf::Color(20, 10, 30, 220));
-            pxHover.setPosition(tx, ty);
+            sf::VertexArray pxHover(sf::Quads);
+            for (const auto& offset : m_pixelBrushMask) {
+                float fx = static_cast<float>(baseIX + offset.x);
+                float fy = static_cast<float>(baseIY + offset.y);
 
+                pxHover.append(sf::Vertex(sf::Vector2f(fx, fy), sf::Color(20, 10, 30, 140)));
+                pxHover.append(sf::Vertex(sf::Vector2f(fx + 1.0f, fy), sf::Color(20, 10, 30, 140)));
+                pxHover.append(sf::Vertex(sf::Vector2f(fx + 1.0f, fy + 1.0f), sf::Color(20, 10, 30, 140)));
+                pxHover.append(sf::Vertex(sf::Vector2f(fx, fy + 1.0f), sf::Color(20, 10, 30, 140)));
+            }
             window.draw(pxHover, innerStates);
         }
         else {
@@ -5065,7 +5077,11 @@ void Canvas::setPixelMode(bool enabled) {
 }
 
 bool Canvas::getPixelMode() const { return isPixelMode; }
-void Canvas::setPixelBrushSize(int size) { pixelBrushSize = size; }
+void Canvas::setPixelBrushSize(int size) {
+    pixelBrushSize = std::max(1, size);
+    rebuildPixelBrushMask();
+}
+
 int Canvas::getPixelBrushSize() const { return pixelBrushSize; }
 bool Canvas::getIsDirty() const { return isDirty; }
 void Canvas::clearIsDirty() { isDirty = false; }
@@ -5076,6 +5092,62 @@ void Canvas::cyclePixelBrushSize() {
     else if (pixelBrushSize == 4) pixelBrushSize = 8;
     else if (pixelBrushSize == 8) pixelBrushSize = 16;
     else pixelBrushSize = 1;
+    rebuildPixelBrushMask();
+}
+
+void Canvas::setPixelBrushShape(PixelBrushShape shape) {
+    m_pixelBrushShape = shape;
+    rebuildPixelBrushMask();
+}
+
+void Canvas::rebuildPixelBrushMask() {
+    m_pixelBrushMask.clear();
+
+    if (m_pixelBrushShape == PixelBrushShape::Square) {
+        int half = pixelBrushSize / 2;
+        int oddOffset = (pixelBrushSize % 2 == 0) ? 1 : 0;
+        for (int y = -half; y <= half - oddOffset; ++y) {
+            for (int x = -half; x <= half - oddOffset; ++x) {
+                m_pixelBrushMask.push_back({ x, y });
+            }
+        }
+    }
+    else if (m_pixelBrushShape == PixelBrushShape::Circle) {
+        float r = static_cast<float>(pixelBrushSize) * 0.5f;
+        float rSq = r * r;
+        int half = static_cast<int>(std::ceil(r));
+        for (int y = -half; y <= half; ++y) {
+            for (int x = -half; x <= half; ++x) {
+                float distSq = (static_cast<float>(x) + 0.5f) * (static_cast<float>(x) + 0.5f) +
+                    (static_cast<float>(y) + 0.5f) * (static_cast<float>(y) + 0.5f);
+                if (distSq <= rSq) {
+                    m_pixelBrushMask.push_back({ x, y });
+                }
+            }
+        }
+        if (m_pixelBrushMask.empty()) m_pixelBrushMask.push_back({ 0, 0 });
+    }
+    else if (m_pixelBrushShape == PixelBrushShape::Rectangle) {
+        int w = std::max(2, pixelBrushSize);
+        int h = std::max(1, pixelBrushSize / 2);
+        int halfW = w / 2;
+        int halfH = h / 2;
+        int oddW = (w % 2 == 0) ? 1 : 0;
+        int oddH = (h % 2 == 0) ? 1 : 0;
+        for (int y = -halfH; y <= halfH - oddH; ++y) {
+            for (int x = -halfW; x <= halfW - oddW; ++x) {
+                m_pixelBrushMask.push_back({ x, y });
+            }
+        }
+        if (m_pixelBrushMask.empty()) m_pixelBrushMask.push_back({ 0, 0 });
+    }
+    else if (m_pixelBrushShape == PixelBrushShape::Slash) {
+        int half = pixelBrushSize / 2;
+        for (int i = -half; i <= half; ++i) {
+            m_pixelBrushMask.push_back({ i, -i });
+        }
+        if (m_pixelBrushMask.empty()) m_pixelBrushMask.push_back({ 0, 0 });
+    }
 }
 
 void Canvas::togglePixelSnap() { pixelSnapEnabled = !pixelSnapEnabled; }
