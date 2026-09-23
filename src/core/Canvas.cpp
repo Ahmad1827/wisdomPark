@@ -2083,6 +2083,10 @@ void Canvas::setActiveTool(ToolType tool, int currentFrame) {
     isDrawing = false;
     isDeforming = false;
 
+    if (tool != ToolType::Brush && tool != ToolType::Pencil && tool != ToolType::Eraser) {
+        hasShiftAnchor = false;
+    }
+
     if (tool == ToolType::Symmetry) {
         m_symmetryDragMode = SymmetryDragMode::None;
         if (std::hypot(symmetryManager.direction.x, symmetryManager.direction.y) > 0.001f) {
@@ -2544,6 +2548,16 @@ void Canvas::drawContinuousLine(sf::Vector2f from, sf::Vector2f to, sf::Color co
     appendVectorCap(vs.mesh, from, radius, meshCol);
     appendVectorSegment(vs.mesh, from, to, radius, meshCol);
     appendVectorCap(vs.mesh, to, radius, meshCol);
+
+    if (symmetryManager.enabled) {
+        auto p1 = symmetryManager.getSymmetricPoints(from);
+        auto p2 = symmetryManager.getSymmetricPoints(to);
+        if (p1.size() > 1 && p2.size() > 1) {
+            appendVectorCap(vs.mesh, p1[1], radius, meshCol);
+            appendVectorSegment(vs.mesh, p1[1], p2[1], radius, meshCol);
+            appendVectorCap(vs.mesh, p2[1], radius, meshCol);
+        }
+    }
 
     m_vectorStrokes.push_back(std::move(vs));
     isDirty = true;
@@ -4828,6 +4842,81 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     sf::Vector2f logicalPos = getInverseTransform().transformPoint(currentRawMousePos);
     bool currentlyHovering = drawArea.contains(logicalPos);
+
+    float sXHover = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
+    float sYHover = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
+    sf::Vector2f curLocalPos((logicalPos.x - drawArea.left) * sXHover, (logicalPos.y - drawArea.top) * sYHover);
+    curLocalPos.x = std::clamp(curLocalPos.x, 0.0f, static_cast<float>(canvasLogicalSize.x));
+    curLocalPos.y = std::clamp(curLocalPos.y, 0.0f, static_cast<float>(canvasLogicalSize.y));
+    if (isPixelMode) {
+        curLocalPos.x = std::floor(curLocalPos.x);
+        curLocalPos.y = std::floor(curLocalPos.y);
+    }
+
+    bool isShift = sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift);
+    bool canDrawLine = (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser);
+
+    // Dynamic Aseprite-style straight line preview while Shift is held
+    if (!isPlaying && currentlyHovering && canDrawLine && hasShiftAnchor && isShift && !isDrawing) {
+        if (isPixelMode) {
+            auto pts = getBresenhamPoints(
+                static_cast<int>(shiftAnchor.x), static_cast<int>(shiftAnchor.y),
+                static_cast<int>(curLocalPos.x), static_cast<int>(curLocalPos.y)
+            );
+
+            sf::Color previewCol = (activeTool == ToolType::Eraser)
+                ? sf::Color(255, 90, 90, 180)
+                : primaryColor;
+
+            sf::VertexArray previewPixels(sf::Quads);
+            float pSize = static_cast<float>(pixelBrushSize);
+            float halfBrush = std::floor(pSize / 2.0f);
+
+            for (const auto& pt : pts) {
+                std::vector<sf::Vector2f> symPoints;
+                if (symmetryManager.enabled) {
+                    symPoints = symmetryManager.getSymmetricPoints(sf::Vector2f(static_cast<float>(pt.x), static_cast<float>(pt.y)));
+                }
+                else {
+                    symPoints.push_back(sf::Vector2f(static_cast<float>(pt.x), static_cast<float>(pt.y)));
+                }
+
+                for (const auto& sp : symPoints) {
+                    float ix = std::floor(sp.x) - halfBrush;
+                    float iy = std::floor(sp.y) - halfBrush;
+
+                    previewPixels.append(sf::Vertex(sf::Vector2f(ix, iy), previewCol));
+                    previewPixels.append(sf::Vertex(sf::Vector2f(ix + pSize, iy), previewCol));
+                    previewPixels.append(sf::Vertex(sf::Vector2f(ix + pSize, iy + pSize), previewCol));
+                    previewPixels.append(sf::Vertex(sf::Vector2f(ix, iy + pSize), previewCol));
+                }
+            }
+            window.draw(previewPixels, innerStates);
+        }
+        else {
+            sf::VertexArray previewMesh(sf::Triangles);
+            float radius = brushEngine.getActivePreset().size * 0.5f;
+            sf::Color meshCol = (activeTool == ToolType::Eraser)
+                ? sf::Color(255, 90, 90, 180)
+                : primaryColor;
+
+            appendVectorCap(previewMesh, shiftAnchor, radius, meshCol);
+            appendVectorSegment(previewMesh, shiftAnchor, curLocalPos, radius, meshCol);
+            appendVectorCap(previewMesh, curLocalPos, radius, meshCol);
+
+            if (symmetryManager.enabled) {
+                auto p1 = symmetryManager.getSymmetricPoints(shiftAnchor);
+                auto p2 = symmetryManager.getSymmetricPoints(curLocalPos);
+                if (p1.size() > 1 && p2.size() > 1) {
+                    appendVectorCap(previewMesh, p1[1], radius, meshCol);
+                    appendVectorSegment(previewMesh, p1[1], p2[1], radius, meshCol);
+                    appendVectorCap(previewMesh, p2[1], radius, meshCol);
+                }
+            }
+
+            window.draw(previewMesh, innerStates);
+        }
+    }
 
     if (!isPlaying && currentlyHovering && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser || activeTool == ToolType::Curve || activeTool == ToolType::FilledContour)) {
         if (isPixelMode) {
