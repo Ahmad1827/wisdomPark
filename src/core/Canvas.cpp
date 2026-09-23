@@ -2821,19 +2821,33 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                         float d3 = sign(pt, v3, v1);
                         return !(((d1 < 0) || (d2 < 0) || (d3 < 0)) && ((d1 > 0) || (d2 > 0) || (d3 > 0)));
                         };
+                    auto distToSeg = [](sf::Vector2f pt, sf::Vector2f p1, sf::Vector2f p2) -> float {
+                        sf::Vector2f d = p2 - p1;
+                        float lenSq = d.x * d.x + d.y * d.y;
+                        if (lenSq < 0.0001f) return std::hypot(pt.x - p1.x, pt.y - p1.y);
+                        float t = std::clamp(((pt.x - p1.x) * d.x + (pt.y - p1.y) * d.y) / lenSq, 0.0f, 1.0f);
+                        sf::Vector2f proj = p1 + t * d;
+                        return std::hypot(pt.x - proj.x, pt.y - proj.y);
+                        };
 
                     int hitStrokeIdx = -1;
                     for (int s = static_cast<int>(m_vectorStrokes.size()) - 1; s >= 0; --s) {
                         const auto& vs = m_vectorStrokes[s];
                         if (vs.frame == currentFrame && vs.layer == activeLayer && !vs.isErase) {
                             for (size_t v = 0; v + 2 < vs.mesh.getVertexCount(); v += 3) {
-                                if (ptInTri(localPos, vs.mesh[v].position, vs.mesh[v + 1].position, vs.mesh[v + 2].position)) {
+                                sf::Vector2f pa = vs.mesh[v].position;
+                                sf::Vector2f pb = vs.mesh[v + 1].position;
+                                sf::Vector2f pc = vs.mesh[v + 2].position;
+
+                                if (ptInTri(localPos, pa, pb, pc)) {
                                     hitStrokeIdx = s;
                                     break;
                                 }
-                                if (std::hypot(vs.mesh[v].position.x - localPos.x, vs.mesh[v].position.y - localPos.y) <= 10.f ||
-                                    std::hypot(vs.mesh[v + 1].position.x - localPos.x, vs.mesh[v + 1].position.y - localPos.y) <= 10.f ||
-                                    std::hypot(vs.mesh[v + 2].position.x - localPos.x, vs.mesh[v + 2].position.y - localPos.y) <= 10.f) {
+
+                                float d1 = distToSeg(localPos, pa, pb);
+                                float d2 = distToSeg(localPos, pb, pc);
+                                float d3 = distToSeg(localPos, pc, pa);
+                                if (std::min({ d1, d2, d3 }) <= 12.0f) {
                                     hitStrokeIdx = s;
                                     break;
                                 }
@@ -2882,6 +2896,22 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
                 if (!targetTex) return;
 
+                // Flatten any floating canvas images on this layer into targetTex first
+                for (const auto& ci : m_canvasImages) {
+                    if (ci.frame == currentFrame && ci.layer == activeLayer && ci.texture) {
+                        sf::Sprite spr(*ci.texture);
+                        spr.setPosition(std::round(ci.bounds.left), std::round(ci.bounds.top));
+                        float sx = std::round(ci.bounds.width) / static_cast<float>(ci.texture->getSize().x);
+                        float sy = std::round(ci.bounds.height) / static_cast<float>(ci.texture->getSize().y);
+                        spr.setScale(sx, sy);
+                        targetTex->draw(spr);
+                    }
+                }
+                targetTex->display();
+                m_canvasImages.erase(std::remove_if(m_canvasImages.begin(), m_canvasImages.end(),
+                    [&](const CanvasImage& ci) { return ci.frame == currentFrame && ci.layer == activeLayer; }),
+                    m_canvasImages.end());
+
                 int w = static_cast<int>(canvasLogicalSize.x);
                 int h = static_cast<int>(canvasLogicalSize.y);
                 int sx = static_cast<int>(localPos.x);
@@ -2914,57 +2944,39 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 }
                 else {
                     sf::Image activeImg = targetTex->getTexture().copyToImage();
+
+                    // 1. Direct hit on the active layer
                     if (sx >= 0 && sy >= 0 && sx < w && sy < h && activeImg.getPixel(sx, sy).a > 0) {
                         targetLayerIndex = activeLayer;
                         targetImg = activeImg;
                     }
-
-                    if (targetLayerIndex == -1) {
-                        for (int i = static_cast<int>(frames[currentFrame].layers.size()) - 1; i >= 0; --i) {
-                            if (!frames[currentFrame].layers[i].visible || frames[currentFrame].layers[i].locked) continue;
-                            sf::Image tempImg = frames[currentFrame].layers[i].texture->getTexture().copyToImage();
-                            if (sx >= 0 && sy >= 0 && sx < static_cast<int>(tempImg.getSize().x) && sy < static_cast<int>(tempImg.getSize().y)) {
-                                if (tempImg.getPixel(sx, sy).a > 0) {
-                                    targetLayerIndex = i;
-                                    targetImg = tempImg;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (targetLayerIndex == -1) {
+                    else {
+                        // 2. Proximity search (up to 4px) strictly on the ACTIVE layer first
                         float bestDist = 9999.0f;
                         int foundX = -1, foundY = -1;
-                        for (int i = static_cast<int>(frames[currentFrame].layers.size()) - 1; i >= 0; --i) {
-                            if (!frames[currentFrame].layers[i].visible || frames[currentFrame].layers[i].locked) continue;
-                            sf::Image tempImg = frames[currentFrame].layers[i].texture->getTexture().copyToImage();
-                            int imgW = static_cast<int>(tempImg.getSize().x);
-                            int imgH = static_cast<int>(tempImg.getSize().y);
-                            for (int r = 1; r <= 5; ++r) {
-                                for (int dy = -r; dy <= r; ++dy) {
-                                    for (int dx = -r; dx <= r; ++dx) {
-                                        int nx = sx + dx;
-                                        int ny = sy + dy;
-                                        if (nx >= 0 && ny >= 0 && nx < imgW && ny < imgH) {
-                                            if (tempImg.getPixel(nx, ny).a > 0) {
-                                                float d = static_cast<float>(dx * dx + dy * dy);
-                                                if (d < bestDist) {
-                                                    bestDist = d;
-                                                    foundX = nx;
-                                                    foundY = ny;
-                                                    targetLayerIndex = i;
-                                                    targetImg = tempImg;
-                                                }
+                        for (int r = 1; r <= 4; ++r) {
+                            for (int dy = -r; dy <= r; ++dy) {
+                                for (int dx = -r; dx <= r; ++dx) {
+                                    int nx = sx + dx;
+                                    int ny = sy + dy;
+                                    if (nx >= 0 && ny >= 0 && nx < w && ny < h) {
+                                        if (activeImg.getPixel(nx, ny).a > 0) {
+                                            float d = static_cast<float>(dx * dx + dy * dy);
+                                            if (d < bestDist) {
+                                                bestDist = d;
+                                                foundX = nx;
+                                                foundY = ny;
                                             }
                                         }
                                     }
                                 }
-                                if (targetLayerIndex != -1) break;
                             }
-                            if (targetLayerIndex != -1) break;
+                            if (foundX != -1) break;
                         }
-                        if (targetLayerIndex != -1) {
+
+                        if (foundX != -1) {
+                            targetLayerIndex = activeLayer;
+                            targetImg = activeImg;
                             sx = foundX;
                             sy = foundY;
                         }

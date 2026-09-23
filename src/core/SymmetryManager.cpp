@@ -4,7 +4,7 @@
 SymmetryManager::SymmetryManager()
     : startPoint(0.f, 0.f), endPoint(0.f, 0.f), direction(0.f, 0.f), normal(0.f, 0.f),
     enabled(false), visible(true), snapToPixel(false), snapTo45(false),
-    guideColor(0, 255, 255, 200), guideThickness(2.0f) {}
+    guideColor(255, 195, 75, 220), guideThickness(1.5f) {}
 
 void SymmetryManager::setEndpoints(sf::Vector2f start, sf::Vector2f end) {
     startPoint = start;
@@ -50,36 +50,53 @@ void SymmetryManager::drawGuides(sf::RenderWindow& window, const sf::RenderState
     float len = std::hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y);
     if (len < 1.0f) return;
 
+    // Compute exact screen pixels per logical canvas unit to keep visual sizes constant
+    sf::Vector2f p0 = states.transform.transformPoint(0.f, 0.f);
+    sf::Vector2f p1 = states.transform.transformPoint(1.f, 0.f);
+    float pxPerUnit = std::hypot(p1.x - p0.x, p1.y - p0.y);
+    if (pxPerUnit < 0.0001f) pxPerUnit = 1.0f;
+
+    float localLineThick = 1.5f / pxPerUnit;
+    float localShadowThick = 3.0f / pxPerUnit;
+    float localHandleR = 5.0f / pxPerUnit;
+    float localHandleOutline = 1.2f / pxPerUnit;
+    float localInnerDotR = 1.5f / pxPerUnit;
+
     float angle = std::atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x) * 180.f / 3.14159265f;
 
-    // Dark outline behind the line for contrast
+    // Contrast shadow under the symmetry axis
     sf::RectangleShape darkLine;
-    darkLine.setSize(sf::Vector2f(len, (guideThickness + 2.0f) / scale));
-    darkLine.setOrigin(0.f, ((guideThickness + 2.0f) / scale) * 0.5f);
+    darkLine.setSize(sf::Vector2f(len, localShadowThick));
+    darkLine.setOrigin(0.f, localShadowThick * 0.5f);
     darkLine.setPosition(startPoint);
     darkLine.setRotation(angle);
-    darkLine.setFillColor(sf::Color(14, 6, 20, 220));
+    darkLine.setFillColor(sf::Color(14, 6, 20, 160));
     window.draw(darkLine, states);
 
-    // Cyan core line from point to point
+    // Warm amber-gold axis line
     sf::RectangleShape coreLine;
-    coreLine.setSize(sf::Vector2f(len, guideThickness / scale));
-    coreLine.setOrigin(0.f, (guideThickness / scale) * 0.5f);
+    coreLine.setSize(sf::Vector2f(len, localLineThick));
+    coreLine.setOrigin(0.f, localLineThick * 0.5f);
     coreLine.setPosition(startPoint);
     coreLine.setRotation(angle);
-    coreLine.setFillColor(sf::Color(0, 220, 255, 230));
+    coreLine.setFillColor(sf::Color(255, 195, 75, 220));
     window.draw(coreLine, states);
 
-    // Endpoint control handles (grab to lengthen, shorten, or rotate)
+    // Compact end handles with center pivot points
     auto drawHandle = [&](sf::Vector2f pos) {
-        float r = 7.f / scale;
-        sf::CircleShape h(r);
-        h.setOrigin(r, r);
+        sf::CircleShape h(localHandleR);
+        h.setOrigin(localHandleR, localHandleR);
         h.setPosition(pos);
-        h.setFillColor(sf::Color(255, 215, 60));
-        h.setOutlineThickness(2.f / scale);
-        h.setOutlineColor(sf::Color(14, 6, 20));
+        h.setFillColor(sf::Color(255, 215, 90));
+        h.setOutlineThickness(localHandleOutline);
+        h.setOutlineColor(sf::Color(14, 6, 20, 230));
         window.draw(h, states);
+
+        sf::CircleShape dot(localInnerDotR);
+        dot.setOrigin(localInnerDotR, localInnerDotR);
+        dot.setPosition(pos);
+        dot.setFillColor(sf::Color(14, 6, 20, 220));
+        window.draw(dot, states);
         };
 
     drawHandle(startPoint);
