@@ -117,6 +117,7 @@ private:
     PaletteResizeDir getResizeDirection(sf::Vector2f mousePos) const;
     void drawTooltip(sf::RenderWindow& window, const std::string& text, sf::Vector2f pos);
     sf::FloatRect m_addSwatchBtnBounds;
+    bool m_wantsClose{ false };
 
 public:
     ColorPalettePanel();
@@ -139,6 +140,8 @@ public:
 
     float getCurrentX() const;
     void forceClose();
+    bool wantsClose() const { return m_wantsClose; }
+    void clearWantsClose() { m_wantsClose = false; }
     bool isHovered() const;
     bool isPanelPinned() const;
     sf::FloatRect getHandleBounds() const;

@@ -449,23 +449,36 @@ void SelectionManager::setHandleVisualSize(float localSize) {
     handleVisualSize = std::max(0.05f, localSize);
 }
 
-std::array<sf::Vector2f, 4> SelectionManager::getHandlePositions() const {
+std::array<sf::Vector2f, 8> SelectionManager::getHandlePositions() const {
     float w = boundingBox.width;
     float h = boundingBox.height;
-    sf::Transform t = floatingSprite.getTransform();
+    float l = boundingBox.left;
+    float t = boundingBox.top;
+    float cx = l + w * 0.5f;
+    float cy = t + h * 0.5f;
+
     if (state == SelectionState::Floating) {
+        sf::Transform tr = floatingSprite.getTransform();
         return {
-            t.transformPoint(0.f, 0.f),
-            t.transformPoint(w, 0.f),
-            t.transformPoint(w, h),
-            t.transformPoint(0.f, h)
+            tr.transformPoint(0.f, 0.f),         // 0: Top-Left
+            tr.transformPoint(w, 0.f),           // 1: Top-Right
+            tr.transformPoint(w, h),             // 2: Bottom-Right
+            tr.transformPoint(0.f, h),           // 3: Bottom-Left
+            tr.transformPoint(w * 0.5f, 0.f),    // 4: Top-Center
+            tr.transformPoint(w, h * 0.5f),      // 5: Right-Center
+            tr.transformPoint(w * 0.5f, h),      // 6: Bottom-Center
+            tr.transformPoint(0.f, h * 0.5f)     // 7: Left-Center
         };
     }
     return {
-        sf::Vector2f(boundingBox.left, boundingBox.top),
-        sf::Vector2f(boundingBox.left + w, boundingBox.top),
-        sf::Vector2f(boundingBox.left + w, boundingBox.top + h),
-        sf::Vector2f(boundingBox.left, boundingBox.top + h)
+        sf::Vector2f(l, t),            // 0: Top-Left
+        sf::Vector2f(l + w, t),        // 1: Top-Right
+        sf::Vector2f(l + w, t + h),    // 2: Bottom-Right
+        sf::Vector2f(l, t + h),        // 3: Bottom-Left
+        sf::Vector2f(cx, t),           // 4: Top-Center
+        sf::Vector2f(l + w, cy),       // 5: Right-Center
+        sf::Vector2f(cx, t + h),       // 6: Bottom-Center
+        sf::Vector2f(l, cy)            // 7: Left-Center
     };
 }
 
@@ -484,10 +497,17 @@ bool SelectionManager::startResize(sf::Vector2f pos, float handleRadius) {
     if (idx == -1) return false;
 
     activeHandle = idx;
-    int anchorIdx = (idx + 2) % 4;
+    auto handles = getHandlePositions();
 
-    auto corners = getHandlePositions();
-    resizeAnchorWorld = corners[anchorIdx];
+    if (idx == 0) resizeAnchorWorld = handles[2];      // TL -> Anchor BR
+    else if (idx == 1) resizeAnchorWorld = handles[3]; // TR -> Anchor BL
+    else if (idx == 2) resizeAnchorWorld = handles[0]; // BR -> Anchor TL
+    else if (idx == 3) resizeAnchorWorld = handles[1]; // BL -> Anchor TR
+    else if (idx == 4) resizeAnchorWorld = handles[6]; // TC -> Anchor BC
+    else if (idx == 5) resizeAnchorWorld = handles[7]; // RC -> Anchor LC
+    else if (idx == 6) resizeAnchorWorld = handles[4]; // BC -> Anchor TC
+    else if (idx == 7) resizeAnchorWorld = handles[5]; // LC -> Anchor RC
+
     resizeStartBox = boundingBox;
     isResizingFlag = true;
     return true;
@@ -496,6 +516,31 @@ bool SelectionManager::startResize(sf::Vector2f pos, float handleRadius) {
 void SelectionManager::resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas) {
     if (!isResizingFlag) return;
 
+    // Edge handles: Single-axis stretch
+    if (activeHandle == 4) { // Top-Center
+        float newH = std::max(1.0f, std::round(resizeAnchorWorld.y - pos.y));
+        float newTop = resizeAnchorWorld.y - newH;
+        boundingBox = sf::FloatRect(resizeStartBox.left, newTop, resizeStartBox.width, newH);
+        return;
+    }
+    if (activeHandle == 6) { // Bottom-Center
+        float newH = std::max(1.0f, std::round(pos.y - resizeAnchorWorld.y));
+        boundingBox = sf::FloatRect(resizeStartBox.left, resizeAnchorWorld.y, resizeStartBox.width, newH);
+        return;
+    }
+    if (activeHandle == 7) { // Left-Center
+        float newW = std::max(1.0f, std::round(resizeAnchorWorld.x - pos.x));
+        float newLeft = resizeAnchorWorld.x - newW;
+        boundingBox = sf::FloatRect(newLeft, resizeStartBox.top, newW, resizeStartBox.height);
+        return;
+    }
+    if (activeHandle == 5) { // Right-Center
+        float newW = std::max(1.0f, std::round(pos.x - resizeAnchorWorld.x));
+        boundingBox = sf::FloatRect(resizeAnchorWorld.x, resizeStartBox.top, newW, resizeStartBox.height);
+        return;
+    }
+
+    // Corner handles (0, 1, 2, 3): 2D scaling
     float dirX = (activeHandle == 1 || activeHandle == 2) ? 1.0f : -1.0f;
     float dirY = (activeHandle == 2 || activeHandle == 3) ? 1.0f : -1.0f;
 

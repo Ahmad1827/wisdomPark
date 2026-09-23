@@ -94,7 +94,7 @@ public:
     void setShowHandles(bool show);
     bool isShowingHandles() const { return showHandles; }
     void setHandleVisualSize(float localSize);
-    std::array<sf::Vector2f, 4> getHandlePositions() const;
+    std::array<sf::Vector2f, 8> getHandlePositions() const;
     int hitTestHandle(sf::Vector2f pos, float handleRadius) const;
     bool startResize(sf::Vector2f pos, float handleRadius);
     void resize(sf::Vector2f pos, sf::Vector2u canvasSize, bool allowOutsideCanvas = true);

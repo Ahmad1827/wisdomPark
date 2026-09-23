@@ -1169,7 +1169,11 @@ void ColorPalettePanel::setColors(sf::Color primary, sf::Color secondary) {
 }
 
 float ColorPalettePanel::getCurrentX() const { return currentX; }
-void ColorPalettePanel::forceClose() { targetX = 1920.f; }
+void ColorPalettePanel::forceClose() {
+    targetX = 1920.f;
+    state = PalettePanelState::Hidden;
+    m_wantsClose = true;
+}
 bool ColorPalettePanel::isHovered() const { return state == PalettePanelState::Visible; }
 bool ColorPalettePanel::isPanelPinned() const { return state == PalettePanelState::Pinned; }
 sf::FloatRect ColorPalettePanel::getHandleBounds() const { return sf::FloatRect(0, 0, 0, 0); }

@@ -1539,6 +1539,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
             if (!isKeyEvent || colorPalettePanel.isTypingInput()) {
                 if (colorPalettePanel.handleEvent(event, mousePos, canvas)) {
+                    if (colorPalettePanel.wantsClose()) {
+                        colorPalettePanel.clearWantsClose();
+                        m_activeRightTab = RightTabMode::None;
+                        g_selectingOutlineColor = false;
+                        g_selectingGridColor = false;
+                        return;
+                    }
                     if (g_selectingOutlineColor) {
                         g_outlineColor = canvas.getPrimaryColor();
                         m_toolOptionsBar.SetOutlineColor(g_outlineColor);
