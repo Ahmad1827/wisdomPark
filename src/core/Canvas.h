@@ -58,11 +58,12 @@ struct VectorStroke {
 };
 
 struct CanvasImage {
-    int id{ 0 };
-    int frame{ 0 };
-    int layer{ 0 };
-    std::shared_ptr<sf::Texture> texture;
+    int id = 0;
+    int frame = 0;
+    int layer = 0;
     sf::FloatRect bounds;
+    std::shared_ptr<sf::Texture> texture;
+    sf::Image image;
 };
 
 class Canvas {
@@ -278,7 +279,14 @@ public:
     void initCustom(int width, int height);
 
     const std::vector<CanvasImage>& getCanvasImages() const { return m_canvasImages; }
-    void setCanvasImages(const std::vector<CanvasImage>& images) { m_canvasImages = images; }
+    void setCanvasImages(const std::vector<CanvasImage>& images) {
+        m_canvasImages = images;
+        for (const auto& ci : m_canvasImages) {
+            if (ci.id > m_nextImageId) {
+                m_nextImageId = ci.id;
+            }
+        }
+    }
     void clearCanvasImages() { m_canvasImages.clear(); }
     void clearObjectSelection() {
         m_selectedStrokes.clear();
@@ -419,6 +427,7 @@ public:
     void fillSelection(sf::Color color, int currentFrame);
     bool getIsDirty() const;
     void clearIsDirty();
+    sf::Image& getCanvasImageCPU(CanvasImage& ci);
     void resetRecolorLatch() { m_recolorUndoSaved = false; }
     void clearHistory() {
         undoHistory.clear();

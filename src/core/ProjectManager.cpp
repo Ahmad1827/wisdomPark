@@ -397,6 +397,7 @@ bool ProjectManager::loadProject(const std::string& path, Canvas& canvas, int& o
                         tex->setSmooth(!outIsPixelMode);
                         tex->loadFromImage(sImg);
                         ci.texture = tex;
+                        ci.image = std::move(sImg);
                     }
                 }
                 loadedImages.push_back(std::move(ci));

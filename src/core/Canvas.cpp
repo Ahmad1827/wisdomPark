@@ -1582,6 +1582,37 @@ void Canvas::deleteSelection(int currentFrame) {
         }
     }
 
+    if (currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
+        sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+        if (targetTex) {
+            sf::Image img = targetTex->getTexture().copyToImage();
+            sf::FloatRect bb = selection.getBoundingBox();
+            int x0 = std::max(0, static_cast<int>(std::floor(bb.left)));
+            int y0 = std::max(0, static_cast<int>(std::floor(bb.top)));
+            int x1 = std::min(static_cast<int>(canvasLogicalSize.x), static_cast<int>(std::ceil(bb.left + bb.width)));
+            int y1 = std::min(static_cast<int>(canvasLogicalSize.y), static_cast<int>(std::ceil(bb.top + bb.height)));
+
+            bool mod = false;
+            for (int y = y0; y < y1; ++y) {
+                for (int x = x0; x < x1; ++x) {
+                    if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f))) {
+                        if (img.getPixel(x, y).a > 0) {
+                            img.setPixel(x, y, sf::Color::Transparent);
+                            mod = true;
+                        }
+                    }
+                }
+            }
+            if (mod) {
+                sf::Texture newTex;
+                newTex.loadFromImage(img);
+                targetTex->clear(sf::Color::Transparent);
+                targetTex->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
+                targetTex->display();
+            }
+        }
+    }
+
     clearObjectSelection();
     isDirty = true;
 }
@@ -2132,7 +2163,7 @@ void Canvas::setSelectionZOrder(int newZ, int currentFrame) {
         }
 
         int targetZ = std::clamp(newZ, 0, static_cast<int>(otherImgsOnLayer.size()));
-        otherImgsOnLayer.insert(otherImgsOnLayer.begin() + static_cast<ptrdiff_t>(targetZ),
+        otherImgsOnLayer.insert(otherImgsOnLayer.begin() + static_cast<std::ptrdiff_t>(targetZ),
             std::make_move_iterator(selectedImgs.begin()),
             std::make_move_iterator(selectedImgs.end()));
 
@@ -2169,7 +2200,7 @@ void Canvas::setSelectionZOrder(int newZ, int currentFrame) {
         }
 
         int targetZ = std::clamp(newZ, 0, static_cast<int>(otherStrOnLayer.size()));
-        otherStrOnLayer.insert(otherStrOnLayer.begin() + static_cast<ptrdiff_t>(targetZ),
+        otherStrOnLayer.insert(otherStrOnLayer.begin() + static_cast<std::ptrdiff_t>(targetZ),
             std::make_move_iterator(selectedStr.begin()),
             std::make_move_iterator(selectedStr.end()));
 
@@ -2757,81 +2788,6 @@ void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf
     }
 }
 
-void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
-    if (useDithering && !ditherManager.shouldDrawPixel(x, y)) return;
-
-    sf::RenderTexture* target = getActiveRenderTexture(frameIdx);
-    if (!target) return;
-
-    sf::RenderStates states;
-    if (activeTool == ToolType::Eraser || c == sf::Color::Transparent) states.blendMode = sf::BlendNone;
-
-    auto points = symmetryManager.getSymmetricPoints(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)));
-    int maxCW = static_cast<int>(canvasLogicalSize.x);
-    int maxCH = static_cast<int>(canvasLogicalSize.y);
-
-    for (auto pt : points) {
-        int baseIX = static_cast<int>(std::round(pt.x));
-        int baseIY = static_cast<int>(std::round(pt.y));
-
-        for (const auto& offset : m_pixelBrushMask) {
-            int ix = baseIX + offset.x;
-            int iy = baseIY + offset.y;
-
-            if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(ix) + 0.5f, static_cast<float>(iy) + 0.5f))) continue;
-
-            if (ix < 0 || iy < 0 || ix >= maxCW || iy >= maxCH) continue;
-
-            if (isDrawing && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil) && c != sf::Color::Transparent) {
-                m_pixelStrokePoints.push_back({ ix, iy, c });
-            }
-
-            // If erasing, clear overlapping pixels from canvas image objects as well
-            if (activeTool == ToolType::Eraser || c == sf::Color::Transparent) {
-                for (auto& ci : m_canvasImages) {
-                    if (ci.frame == frameIdx && ci.layer == activeLayer && ci.texture) {
-                        if (ci.bounds.contains(static_cast<float>(ix), static_cast<float>(iy))) {
-                            int lx = ix - static_cast<int>(std::round(ci.bounds.left));
-                            int ly = iy - static_cast<int>(std::round(ci.bounds.top));
-                            sf::Image img = ci.texture->copyToImage();
-                            if (lx >= 0 && ly >= 0 && lx < static_cast<int>(img.getSize().x) && ly < static_cast<int>(img.getSize().y)) {
-                                if (img.getPixel(lx, ly).a > 0) {
-                                    img.setPixel(lx, ly, sf::Color::Transparent);
-                                    auto nTex = std::make_shared<sf::Texture>();
-                                    nTex->setSmooth(false);
-                                    nTex->loadFromImage(img);
-                                    ci.texture = nTex;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            sf::RectangleShape px(sf::Vector2f(1.0f, 1.0f));
-            px.setFillColor(c);
-            px.setPosition(static_cast<float>(ix), static_cast<float>(iy));
-
-            target->draw(px, states);
-
-            if (tileModeX) {
-                px.setPosition(static_cast<float>(ix - maxCW), static_cast<float>(iy)); target->draw(px, states);
-                px.setPosition(static_cast<float>(ix + maxCW), static_cast<float>(iy)); target->draw(px, states);
-            }
-            if (tileModeY) {
-                px.setPosition(static_cast<float>(ix), static_cast<float>(iy - maxCH)); target->draw(px, states);
-                px.setPosition(static_cast<float>(ix), static_cast<float>(iy + maxCH)); target->draw(px, states);
-            }
-            if (tileModeX && tileModeY) {
-                px.setPosition(static_cast<float>(ix - maxCW), static_cast<float>(iy - maxCH)); target->draw(px, states);
-                px.setPosition(static_cast<float>(ix + maxCW), static_cast<float>(iy - maxCH)); target->draw(px, states);
-                px.setPosition(static_cast<float>(ix - maxCW), static_cast<float>(iy + maxCH)); target->draw(px, states);
-                px.setPosition(static_cast<float>(ix + maxCW), static_cast<float>(iy + maxCH)); target->draw(px, states);
-            }
-        }
-    }
-}
-
 std::vector<sf::Vector2i> Canvas::getBresenhamPoints(int x0, int y0, int x1, int y1) {
     std::vector<sf::Vector2i> pts;
     int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
@@ -2847,10 +2803,123 @@ std::vector<sf::Vector2i> Canvas::getBresenhamPoints(int x0, int y0, int x1, int
     return pts;
 }
 
+void Canvas::drawPixelExact(int x, int y, sf::Color c, int frameIdx) {
+    drawBresenhamLine(x, y, x, y, c, frameIdx);
+}
+
 void Canvas::drawBresenhamLine(int x0, int y0, int x1, int y1, sf::Color c, int frameIdx) {
+    sf::RenderTexture* target = getActiveRenderTexture(frameIdx);
+    if (!target) return;
+
     auto pts = getBresenhamPoints(x0, y0, x1, y1);
-    for (auto p : pts) {
-        drawPixelExact(p.x, p.y, c, frameIdx);
+    if (pts.empty()) return;
+
+    int maxCW = static_cast<int>(canvasLogicalSize.x);
+    int maxCH = static_cast<int>(canvasLogicalSize.y);
+    if (maxCW <= 0 || maxCH <= 0) return;
+
+    static std::vector<int> s_visitedPixels;
+    static int s_visitToken = 0;
+    s_visitToken++;
+    if (s_visitToken <= 0) {
+        s_visitToken = 1;
+        s_visitedPixels.assign(maxCW * maxCH, 0);
+    }
+    if (s_visitedPixels.size() != static_cast<size_t>(maxCW * maxCH)) {
+        s_visitedPixels.assign(maxCW * maxCH, 0);
+    }
+
+    sf::RenderStates states;
+    bool isErasing = (activeTool == ToolType::Eraser || c == sf::Color::Transparent);
+    if (isErasing) states.blendMode = sf::BlendNone;
+
+    sf::VertexArray va(sf::Quads);
+
+    auto addQuad = [&](float fx, float fy) {
+        va.append(sf::Vertex(sf::Vector2f(fx, fy), c));
+        va.append(sf::Vertex(sf::Vector2f(fx + 1.0f, fy), c));
+        va.append(sf::Vertex(sf::Vector2f(fx + 1.0f, fy + 1.0f), c));
+        va.append(sf::Vertex(sf::Vector2f(fx, fy + 1.0f), c));
+        };
+
+    std::vector<bool> ciModified(m_canvasImages.size(), false);
+    bool anyCiModified = false;
+
+    for (const auto& p : pts) {
+        if (useDithering && !ditherManager.shouldDrawPixel(p.x, p.y)) continue;
+
+        auto points = symmetryManager.getSymmetricPoints(sf::Vector2f(static_cast<float>(p.x), static_cast<float>(p.y)));
+
+        for (const auto& pt : points) {
+            int baseIX = static_cast<int>(std::round(pt.x));
+            int baseIY = static_cast<int>(std::round(pt.y));
+
+            for (const auto& offset : m_pixelBrushMask) {
+                int ix = baseIX + offset.x;
+                int iy = baseIY + offset.y;
+
+                if (ix < 0 || iy < 0 || ix >= maxCW || iy >= maxCH) continue;
+
+                size_t pIdx = static_cast<size_t>(iy) * maxCW + ix;
+                if (s_visitedPixels[pIdx] == s_visitToken) continue;
+                s_visitedPixels[pIdx] = s_visitToken;
+
+                if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(ix) + 0.5f, static_cast<float>(iy) + 0.5f))) continue;
+
+                if (isDrawing && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil) && !isErasing) {
+                    m_pixelStrokePoints.push_back({ ix, iy, c });
+                }
+
+                if (isErasing) {
+                    for (size_t i = 0; i < m_canvasImages.size(); ++i) {
+                        auto& ci = m_canvasImages[i];
+                        if (ci.frame == frameIdx && ci.layer == activeLayer && ci.texture) {
+                            if (ci.bounds.contains(static_cast<float>(ix), static_cast<float>(iy))) {
+                                int lx = ix - static_cast<int>(std::round(ci.bounds.left));
+                                int ly = iy - static_cast<int>(std::round(ci.bounds.top));
+                                sf::Image& cpuImg = getCanvasImageCPU(ci);
+                                if (lx >= 0 && ly >= 0 && lx < static_cast<int>(cpuImg.getSize().x) && ly < static_cast<int>(cpuImg.getSize().y)) {
+                                    if (cpuImg.getPixel(lx, ly).a > 0) {
+                                        cpuImg.setPixel(lx, ly, sf::Color::Transparent);
+                                        ciModified[i] = true;
+                                        anyCiModified = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                addQuad(static_cast<float>(ix), static_cast<float>(iy));
+
+                if (tileModeX) {
+                    addQuad(static_cast<float>(ix - maxCW), static_cast<float>(iy));
+                    addQuad(static_cast<float>(ix + maxCW), static_cast<float>(iy));
+                }
+                if (tileModeY) {
+                    addQuad(static_cast<float>(ix), static_cast<float>(iy - maxCH));
+                    addQuad(static_cast<float>(ix), static_cast<float>(iy + maxCH));
+                }
+                if (tileModeX && tileModeY) {
+                    addQuad(static_cast<float>(ix - maxCW), static_cast<float>(iy - maxCH));
+                    addQuad(static_cast<float>(ix + maxCW), static_cast<float>(iy - maxCH));
+                    addQuad(static_cast<float>(ix - maxCW), static_cast<float>(iy + maxCH));
+                    addQuad(static_cast<float>(ix + maxCW), static_cast<float>(iy + maxCH));
+                }
+            }
+        }
+    }
+
+    if (va.getVertexCount() > 0) {
+        target->draw(va, states);
+    }
+
+    if (anyCiModified) {
+        for (size_t i = 0; i < m_canvasImages.size(); ++i) {
+            if (ciModified[i] && m_canvasImages[i].texture) {
+                m_canvasImages[i].texture->loadFromImage(m_canvasImages[i].image);
+            }
+        }
     }
 }
 
@@ -3886,6 +3955,8 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     float scaleX = static_cast<float>(canvasLogicalSize.x) / drawArea.width;
     float scaleY = static_cast<float>(canvasLogicalSize.y) / drawArea.height;
     sf::Vector2f localPos((logicalPos.x - drawArea.left) * scaleX, (logicalPos.y - drawArea.top) * scaleY);
+    localPos.x = std::clamp(localPos.x, 0.0f, static_cast<float>(canvasLogicalSize.x));
+    localPos.y = std::clamp(localPos.y, 0.0f, static_cast<float>(canvasLogicalSize.y));
 
     if (isPixelMode) {
         localPos.x = std::floor(localPos.x);
@@ -4147,6 +4218,7 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                         newCi.frame = currentFrame;
                         newCi.layer = activeLayer;
                         newCi.texture = cutTex;
+                        newCi.image = std::move(cutImg);
                         newCi.bounds = sf::FloatRect(static_cast<float>(cMinX), static_cast<float>(cMinY),
                             static_cast<float>(cW), static_cast<float>(cH));
                         newSplitImages.push_back(std::move(newCi));
@@ -4457,6 +4529,7 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                     targetTex->display();
 
                     // Generate stroke texture directly with exact drawn colors
+                    // Generate stroke texture directly with exact drawn colors
                     sf::Image strokeImg;
                     strokeImg.create(sw, sh, sf::Color::Transparent);
 
@@ -4473,6 +4546,7 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
                     ci.frame = currentFrame;
                     ci.layer = activeLayer;
                     ci.texture = tex;
+                    ci.image = std::move(strokeImg);
                     ci.bounds = sf::FloatRect(static_cast<float>(minX), static_cast<float>(minY),
                         static_cast<float>(sw), static_cast<float>(sh));
                     m_canvasImages.push_back(std::move(ci));
@@ -4864,27 +4938,6 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
         lastPos = targetPos;
         shiftAnchor = targetPos;
         hasShiftAnchor = true;
-
-        if (!isHoveringCanvas && isDrawing) {
-            if (!isPixelMode && m_isVectorStrokeActive) {
-                float radius = brushEngine.getActivePreset().size * 0.5f;
-                sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : primaryColor;
-                appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, meshCol);
-                appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, meshCol);
-
-                if (m_activeVectorMesh.getVertexCount() > 0) {
-                    VectorStroke vs;
-                    vs.mesh = m_activeVectorMesh;
-                    vs.layer = activeLayer;
-                    vs.frame = currentFrame;
-                    vs.isErase = m_activeStrokeIsErase;
-                    m_vectorStrokes.push_back(std::move(vs));
-                }
-                m_isVectorStrokeActive = false;
-                m_activeVectorMesh.clear();
-            }
-            isDrawing = false;
-        }
     }
 }
 
@@ -5449,6 +5502,13 @@ void Canvas::drawShadows(sf::RenderWindow& window, sf::Vector2f logicalSunPos, c
 sf::FloatRect Canvas::getDrawArea() const { return drawArea; }
 sf::Vector2u Canvas::getCanvasSize() const { return canvasLogicalSize; }
 
+sf::Image& Canvas::getCanvasImageCPU(CanvasImage& ci) {
+    if (ci.image.getSize().x == 0 && ci.texture && ci.texture->getSize().x > 0) {
+        ci.image = ci.texture->copyToImage();
+    }
+    return ci.image;
+}
+
 void Canvas::addVectorMesh(const sf::VertexArray& mesh, int frame, int layer) {
     if (mesh.getVertexCount() == 0) return;
     VectorStroke vs;
@@ -5735,6 +5795,7 @@ void Canvas::autoSelectObject(sf::Vector2f pos, int currentFrame) {
                 ci.frame = currentFrame;
                 ci.layer = activeLayer;
                 ci.texture = tex;
+                ci.image = compImg;
                 ci.bounds = sf::FloatRect(static_cast<float>(minX), static_cast<float>(minY),
                     static_cast<float>(compW), static_cast<float>(compH));
                 m_canvasImages.push_back(ci);
