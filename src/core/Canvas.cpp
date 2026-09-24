@@ -1572,6 +1572,53 @@ void Canvas::deleteSelection(int currentFrame) {
     int ch = static_cast<int>(canvasLogicalSize.y);
     sf::FloatRect selBox = selection.getBoundingBox();
 
+    if (!isPixelMode) {
+        if (!m_selectedStrokes.empty()) {
+            std::sort(m_selectedStrokes.rbegin(), m_selectedStrokes.rend());
+            for (int idx : m_selectedStrokes) {
+                if (idx >= 0 && idx < static_cast<int>(m_vectorStrokes.size())) {
+                    m_vectorStrokes.erase(m_vectorStrokes.begin() + idx);
+                }
+            }
+            m_selectedStrokes.clear();
+        }
+
+        if (selection.isMagicWandStyle() && !selection.getMagicWandPixels().empty()) {
+            const auto& wandPts = selection.getMagicWandPixels();
+            std::vector<bool> wandMask(cw * ch, false);
+            for (const auto& pt : wandPts) {
+                if (pt.x >= 0 && pt.y >= 0 && pt.x < cw && pt.y < ch) {
+                    wandMask[pt.y * cw + pt.x] = true;
+                }
+            }
+
+            for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
+                if (it->frame == currentFrame && it->layer == activeLayer && !it->isErase) {
+                    if (getStrokeBounds(*it).intersects(selBox)) {
+                        int insideCount = 0;
+                        for (size_t v = 0; v < it->mesh.getVertexCount(); ++v) {
+                            int vx = static_cast<int>(std::floor(it->mesh[v].position.x));
+                            int vy = static_cast<int>(std::floor(it->mesh[v].position.y));
+                            if (vx >= 0 && vy >= 0 && vx < cw && vy < ch && wandMask[vy * cw + vx]) {
+                                insideCount++;
+                            }
+                        }
+                        if (insideCount > static_cast<int>(it->mesh.getVertexCount()) * 0.4f) {
+                            it = m_vectorStrokes.erase(it);
+                            continue;
+                        }
+                    }
+                }
+                ++it;
+            }
+        }
+
+        clearObjectSelection();
+        selection.clearSelection();
+        isDirty = true;
+        return;
+    }
+
     std::vector<bool> wandMask;
     bool isWand = selection.isMagicWandStyle() && !selection.getMagicWandPixels().empty();
     if (isWand) {
@@ -1595,14 +1642,6 @@ void Canvas::deleteSelection(int currentFrame) {
         return selection.isPointInsideSelection(sf::Vector2f(x, y));
         };
 
-    std::sort(m_selectedStrokes.rbegin(), m_selectedStrokes.rend());
-    for (int idx : m_selectedStrokes) {
-        if (idx >= 0 && idx < static_cast<int>(m_vectorStrokes.size())) {
-            m_vectorStrokes.erase(m_vectorStrokes.begin() + idx);
-        }
-    }
-    m_selectedStrokes.clear();
-
     std::sort(m_selectedImages.rbegin(), m_selectedImages.rend());
     for (int idx : m_selectedImages) {
         if (idx >= 0 && idx < static_cast<int>(m_canvasImages.size())) {
@@ -1610,33 +1649,6 @@ void Canvas::deleteSelection(int currentFrame) {
         }
     }
     m_selectedImages.clear();
-
-    for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
-        if (it->frame == currentFrame && it->layer == activeLayer && !it->isErase) {
-            if (getStrokeBounds(*it).intersects(selBox)) {
-                sf::VertexArray kept(sf::Triangles);
-                for (size_t v = 0; v + 2 < it->mesh.getVertexCount(); v += 3) {
-                    sf::Vector2f centroid = (it->mesh[v].position + it->mesh[v + 1].position + it->mesh[v + 2].position) / 3.0f;
-                    if (!isInside(centroid.x, centroid.y) &&
-                        !isInside(it->mesh[v].position.x, it->mesh[v].position.y) &&
-                        !isInside(it->mesh[v + 1].position.x, it->mesh[v + 1].position.y) &&
-                        !isInside(it->mesh[v + 2].position.x, it->mesh[v + 2].position.y)) {
-                        kept.append(it->mesh[v]);
-                        kept.append(it->mesh[v + 1]);
-                        kept.append(it->mesh[v + 2]);
-                    }
-                }
-                if (kept.getVertexCount() == 0) {
-                    it = m_vectorStrokes.erase(it);
-                    continue;
-                }
-                else {
-                    it->mesh = kept;
-                }
-            }
-        }
-        ++it;
-    }
 
     for (auto it = m_canvasImages.begin(); it != m_canvasImages.end(); ) {
         if (it->frame == currentFrame && it->layer == activeLayer && it->texture) {
@@ -2330,6 +2342,109 @@ void Canvas::recolorActiveSelection(sf::Color newColor) {
     int ch = static_cast<int>(canvasLogicalSize.y);
     sf::FloatRect selBox = selection.getBoundingBox();
 
+    if (!isPixelMode) {
+        if (!m_selectedStrokes.empty()) {
+            for (int sIdx : m_selectedStrokes) {
+                if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
+                    auto& vs = m_vectorStrokes[sIdx];
+                    if (!vs.isErase) {
+                        for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+                            vs.mesh[v].color = newColor;
+                        }
+                    }
+                }
+            }
+            isDirty = true;
+            return;
+        }
+
+        if (selection.isMagicWandStyle() && !selection.getMagicWandPixels().empty()) {
+            const auto& wandPts = selection.getMagicWandPixels();
+            std::vector<bool> wandMask(cw * ch, false);
+            for (const auto& pt : wandPts) {
+                if (pt.x >= 0 && pt.y >= 0 && pt.x < cw && pt.y < ch) {
+                    wandMask[pt.y * cw + pt.x] = true;
+                }
+            }
+
+            bool recoloredExisting = false;
+            for (auto& vs : m_vectorStrokes) {
+                if (vs.frame == curFrame && vs.layer == activeLayer && !vs.isErase) {
+                    if (getStrokeBounds(vs).intersects(selBox)) {
+                        int insideCount = 0;
+                        for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+                            int vx = static_cast<int>(std::floor(vs.mesh[v].position.x));
+                            int vy = static_cast<int>(std::floor(vs.mesh[v].position.y));
+                            if (vx >= 0 && vy >= 0 && vx < cw && vy < ch && wandMask[vy * cw + vx]) {
+                                insideCount++;
+                            }
+                        }
+                        if (insideCount > static_cast<int>(vs.mesh.getVertexCount()) * 0.4f) {
+                            for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+                                vs.mesh[v].color = newColor;
+                            }
+                            recoloredExisting = true;
+                        }
+                    }
+                }
+            }
+
+            if (!recoloredExisting && newColor.a > 0) {
+                VectorStroke vs;
+                vs.mesh.setPrimitiveType(sf::Triangles);
+                vs.layer = activeLayer;
+                vs.frame = curFrame;
+                vs.isErase = false;
+
+                int x0 = std::max(0, static_cast<int>(std::floor(selBox.left)));
+                int y0 = std::max(0, static_cast<int>(std::floor(selBox.top)));
+                int x1 = std::min(cw, static_cast<int>(std::ceil(selBox.left + selBox.width)));
+                int y1 = std::min(ch, static_cast<int>(std::ceil(selBox.top + selBox.height)));
+
+                for (int y = y0; y < y1; ++y) {
+                    int x = x0;
+                    while (x < x1) {
+                        if (wandMask[y * cw + x]) {
+                            int xStart = x;
+                            while (x < x1 && wandMask[y * cw + x]) x++;
+                            int xEnd = x;
+
+                            float fx0 = static_cast<float>(xStart);
+                            float fx1 = static_cast<float>(xEnd);
+                            float fy0 = static_cast<float>(y);
+                            float fy1 = static_cast<float>(y + 1);
+
+                            vs.mesh.append(sf::Vertex(sf::Vector2f(fx0, fy0), newColor));
+                            vs.mesh.append(sf::Vertex(sf::Vector2f(fx1, fy0), newColor));
+                            vs.mesh.append(sf::Vertex(sf::Vector2f(fx1, fy1), newColor));
+
+                            vs.mesh.append(sf::Vertex(sf::Vector2f(fx0, fy0), newColor));
+                            vs.mesh.append(sf::Vertex(sf::Vector2f(fx1, fy1), newColor));
+                            vs.mesh.append(sf::Vertex(sf::Vector2f(fx0, fy1), newColor));
+                        }
+                        else {
+                            x++;
+                        }
+                    }
+                }
+
+                if (vs.mesh.getVertexCount() > 0) {
+                    auto insertPos = m_vectorStrokes.end();
+                    for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ++it) {
+                        if (it->frame == curFrame && it->layer == activeLayer) {
+                            insertPos = it;
+                            break;
+                        }
+                    }
+                    m_vectorStrokes.insert(insertPos, std::move(vs));
+                }
+            }
+
+            isDirty = true;
+            return;
+        }
+    }
+
     std::vector<bool> wandMask;
     bool isWand = selection.isMagicWandStyle() && !selection.getMagicWandPixels().empty();
     if (isWand) {
@@ -2352,18 +2467,6 @@ void Canvas::recolorActiveSelection(sf::Color newColor) {
         }
         return selection.isPointInsideSelection(sf::Vector2f(x, y));
         };
-
-    for (auto& vs : m_vectorStrokes) {
-        if (vs.frame == curFrame && vs.layer == activeLayer && !vs.isErase) {
-            if (getStrokeBounds(vs).intersects(selBox)) {
-                for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
-                    if (isInside(vs.mesh[v].position.x, vs.mesh[v].position.y)) {
-                        vs.mesh[v].color = newColor;
-                    }
-                }
-            }
-        }
-    }
 
     for (auto& ci : m_canvasImages) {
         if (ci.frame == curFrame && ci.layer == activeLayer && ci.texture) {

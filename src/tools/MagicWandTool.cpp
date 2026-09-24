@@ -278,11 +278,44 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
 
     if (m_canvas.getDrawArea().contains(viewPos)) {
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            if (!m_canvas.getPixelMode()) {
+                m_canvas.commitSelection(m_timeline.getCurrentFrame());
+                m_canvas.autoSelectObject(viewPos, m_timeline.getCurrentFrame());
+                if (m_canvas.getSelectionManager().isActive()) {
+                    return;
+                }
+            }
+
             m_canvas.saveUndoState();
 
             auto mask = extractSelectionMask(logicalPos);
             int w = m_canvas.getCanvasSize().x;
             int h = m_canvas.getCanvasSize().y;
+
+            if (!m_canvas.getPixelMode()) {
+                std::vector<bool> dilated = mask;
+                const int d8x[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+                const int d8y[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+                for (int pass = 0; pass < 2; ++pass) {
+                    std::vector<bool> temp = dilated;
+                    for (int y = 0; y < h; ++y) {
+                        for (int x = 0; x < w; ++x) {
+                            if (temp[y * w + x]) {
+                                for (int d = 0; d < 8; ++d) {
+                                    int nx = x + d8x[d];
+                                    int ny = y + d8y[d];
+                                    if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                                        dilated[ny * w + nx] = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                mask = dilated;
+            }
+            w = m_canvas.getCanvasSize().x;
+            h = m_canvas.getCanvasSize().y;
 
             std::vector<sf::Vector2i> exactPixels;
             for (int y = 0; y < h; ++y) {
