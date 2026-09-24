@@ -1568,12 +1568,40 @@ void Canvas::deleteSelection(int currentFrame) {
 
     saveUndoState();
 
+    int cw = static_cast<int>(canvasLogicalSize.x);
+    int ch = static_cast<int>(canvasLogicalSize.y);
+    sf::FloatRect selBox = selection.getBoundingBox();
+
+    std::vector<bool> wandMask;
+    bool isWand = selection.isMagicWandStyle() && !selection.getMagicWandPixels().empty();
+    if (isWand) {
+        wandMask.assign(cw * ch, false);
+        for (const auto& pt : selection.getMagicWandPixels()) {
+            if (pt.x >= 0 && pt.y >= 0 && pt.x < cw && pt.y < ch) {
+                wandMask[pt.y * cw + pt.x] = true;
+            }
+        }
+    }
+
+    auto isInside = [&](float x, float y) -> bool {
+        if (isWand) {
+            int ix = static_cast<int>(std::floor(x));
+            int iy = static_cast<int>(std::floor(y));
+            if (ix >= 0 && iy >= 0 && ix < cw && iy < ch) {
+                return wandMask[iy * cw + ix];
+            }
+            return false;
+        }
+        return selection.isPointInsideSelection(sf::Vector2f(x, y));
+        };
+
     std::sort(m_selectedStrokes.rbegin(), m_selectedStrokes.rend());
     for (int idx : m_selectedStrokes) {
         if (idx >= 0 && idx < static_cast<int>(m_vectorStrokes.size())) {
             m_vectorStrokes.erase(m_vectorStrokes.begin() + idx);
         }
     }
+    m_selectedStrokes.clear();
 
     std::sort(m_selectedImages.rbegin(), m_selectedImages.rend());
     for (int idx : m_selectedImages) {
@@ -1581,21 +1609,90 @@ void Canvas::deleteSelection(int currentFrame) {
             m_canvasImages.erase(m_canvasImages.begin() + idx);
         }
     }
+    m_selectedImages.clear();
+
+    for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
+        if (it->frame == currentFrame && it->layer == activeLayer && !it->isErase) {
+            if (getStrokeBounds(*it).intersects(selBox)) {
+                sf::VertexArray kept(sf::Triangles);
+                for (size_t v = 0; v + 2 < it->mesh.getVertexCount(); v += 3) {
+                    sf::Vector2f centroid = (it->mesh[v].position + it->mesh[v + 1].position + it->mesh[v + 2].position) / 3.0f;
+                    if (!isInside(centroid.x, centroid.y) &&
+                        !isInside(it->mesh[v].position.x, it->mesh[v].position.y) &&
+                        !isInside(it->mesh[v + 1].position.x, it->mesh[v + 1].position.y) &&
+                        !isInside(it->mesh[v + 2].position.x, it->mesh[v + 2].position.y)) {
+                        kept.append(it->mesh[v]);
+                        kept.append(it->mesh[v + 1]);
+                        kept.append(it->mesh[v + 2]);
+                    }
+                }
+                if (kept.getVertexCount() == 0) {
+                    it = m_vectorStrokes.erase(it);
+                    continue;
+                }
+                else {
+                    it->mesh = kept;
+                }
+            }
+        }
+        ++it;
+    }
+
+    for (auto it = m_canvasImages.begin(); it != m_canvasImages.end(); ) {
+        if (it->frame == currentFrame && it->layer == activeLayer && it->texture) {
+            if (it->bounds.intersects(selBox)) {
+                sf::Image img = it->texture->copyToImage();
+                int iw = static_cast<int>(img.getSize().x);
+                int ih = static_cast<int>(img.getSize().y);
+                int bx = static_cast<int>(std::round(it->bounds.left));
+                int by = static_cast<int>(std::round(it->bounds.top));
+                bool modified = false;
+                int remainingAlpha = 0;
+
+                for (int ly = 0; ly < ih; ++ly) {
+                    for (int lx = 0; lx < iw; ++lx) {
+                        if (isInside(static_cast<float>(bx + lx) + 0.5f, static_cast<float>(by + ly) + 0.5f)) {
+                            if (img.getPixel(lx, ly).a > 0) {
+                                img.setPixel(lx, ly, sf::Color::Transparent);
+                                modified = true;
+                            }
+                        }
+                        else if (img.getPixel(lx, ly).a > 0) {
+                            remainingAlpha++;
+                        }
+                    }
+                }
+                if (modified) {
+                    if (remainingAlpha == 0) {
+                        it = m_canvasImages.erase(it);
+                        continue;
+                    }
+                    else {
+                        auto newTex = std::make_shared<sf::Texture>();
+                        newTex->setSmooth(!isPixelMode);
+                        newTex->loadFromImage(img);
+                        it->texture = newTex;
+                        it->image = std::move(img);
+                    }
+                }
+            }
+        }
+        ++it;
+    }
 
     if (currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
         if (targetTex) {
             sf::Image img = targetTex->getTexture().copyToImage();
-            sf::FloatRect bb = selection.getBoundingBox();
-            int x0 = std::max(0, static_cast<int>(std::floor(bb.left)));
-            int y0 = std::max(0, static_cast<int>(std::floor(bb.top)));
-            int x1 = std::min(static_cast<int>(canvasLogicalSize.x), static_cast<int>(std::ceil(bb.left + bb.width)));
-            int y1 = std::min(static_cast<int>(canvasLogicalSize.y), static_cast<int>(std::ceil(bb.top + bb.height)));
+            int x0 = std::max(0, static_cast<int>(std::floor(selBox.left)));
+            int y0 = std::max(0, static_cast<int>(std::floor(selBox.top)));
+            int x1 = std::min(cw, static_cast<int>(std::ceil(selBox.left + selBox.width)));
+            int y1 = std::min(ch, static_cast<int>(std::ceil(selBox.top + selBox.height)));
 
             bool mod = false;
             for (int y = y0; y < y1; ++y) {
                 for (int x = x0; x < x1; ++x) {
-                    if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f))) {
+                    if (isInside(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f)) {
                         if (img.getPixel(x, y).a > 0) {
                             img.setPixel(x, y, sf::Color::Transparent);
                             mod = true;
@@ -1614,6 +1711,7 @@ void Canvas::deleteSelection(int currentFrame) {
     }
 
     clearObjectSelection();
+    selection.clearSelection();
     isDirty = true;
 }
 
@@ -2228,112 +2326,38 @@ void Canvas::recolorActiveSelection(sf::Color newColor) {
     }
 
     int curFrame = std::clamp(m_currentFrame, 0, static_cast<int>(frames.size()) - 1);
+    int cw = static_cast<int>(canvasLogicalSize.x);
+    int ch = static_cast<int>(canvasLogicalSize.y);
+    sf::FloatRect selBox = selection.getBoundingBox();
 
-    if (isPixelMode) {
-        sf::RenderTexture* targetTex = frames[curFrame].layers[activeLayer].texture.get();
-        if (targetTex) {
-            sf::Image img = targetTex->getTexture().copyToImage();
-            int iw = static_cast<int>(img.getSize().x);
-            int ih = static_cast<int>(img.getSize().y);
-            bool texMod = false;
-
-            if (selection.isMagicWandStyle() && !selection.getMagicWandPixels().empty()) {
-                for (const auto& pt : selection.getMagicWandPixels()) {
-                    if (pt.x >= 0 && pt.y >= 0 && pt.x < iw && pt.y < ih) {
-                        sf::Color c = img.getPixel(pt.x, pt.y);
-                        if (c.a > 0) {
-                            sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
-                            img.setPixel(pt.x, pt.y, sf::Color(newColor.r, newColor.g, newColor.b, a));
-                            texMod = true;
-                        }
-                    }
-                }
-            }
-            else {
-                sf::FloatRect bb = selection.getBoundingBox();
-                int x0 = std::max(0, static_cast<int>(std::floor(bb.left)));
-                int y0 = std::max(0, static_cast<int>(std::floor(bb.top)));
-                int x1 = std::min(iw, static_cast<int>(std::ceil(bb.left + bb.width)));
-                int y1 = std::min(ih, static_cast<int>(std::ceil(bb.top + bb.height)));
-
-                for (int y = y0; y < y1; ++y) {
-                    for (int x = x0; x < x1; ++x) {
-                        if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f))) {
-                            sf::Color c = img.getPixel(x, y);
-                            if (c.a > 0) {
-                                sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
-                                img.setPixel(x, y, sf::Color(newColor.r, newColor.g, newColor.b, a));
-                                texMod = true;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (texMod) {
-                sf::Texture newTex;
-                newTex.loadFromImage(img);
-                targetTex->clear(sf::Color::Transparent);
-                targetTex->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
-                targetTex->display();
+    std::vector<bool> wandMask;
+    bool isWand = selection.isMagicWandStyle() && !selection.getMagicWandPixels().empty();
+    if (isWand) {
+        wandMask.assign(cw * ch, false);
+        for (const auto& pt : selection.getMagicWandPixels()) {
+            if (pt.x >= 0 && pt.y >= 0 && pt.x < cw && pt.y < ch) {
+                wandMask[pt.y * cw + pt.x] = true;
             }
         }
-
-        for (auto& ci : m_canvasImages) {
-            if (ci.frame == curFrame && ci.layer == activeLayer && ci.texture) {
-                sf::Image img = ci.texture->copyToImage();
-                int iw = static_cast<int>(img.getSize().x);
-                int ih = static_cast<int>(img.getSize().y);
-                int bx = static_cast<int>(std::round(ci.bounds.left));
-                int by = static_cast<int>(std::round(ci.bounds.top));
-                bool imgMod = false;
-
-                if (selection.isMagicWandStyle() && !selection.getMagicWandPixels().empty()) {
-                    for (const auto& pt : selection.getMagicWandPixels()) {
-                        int lx = pt.x - bx;
-                        int ly = pt.y - by;
-                        if (lx >= 0 && ly >= 0 && lx < iw && ly < ih) {
-                            sf::Color c = img.getPixel(lx, ly);
-                            if (c.a > 0) {
-                                sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
-                                img.setPixel(lx, ly, sf::Color(newColor.r, newColor.g, newColor.b, a));
-                                imgMod = true;
-                            }
-                        }
-                    }
-                }
-                else {
-                    for (int ly = 0; ly < ih; ++ly) {
-                        for (int lx = 0; lx < iw; ++lx) {
-                            if (selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(bx + lx) + 0.5f, static_cast<float>(by + ly) + 0.5f))) {
-                                sf::Color c = img.getPixel(lx, ly);
-                                if (c.a > 0) {
-                                    sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
-                                    img.setPixel(lx, ly, sf::Color(newColor.r, newColor.g, newColor.b, a));
-                                    imgMod = true;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (imgMod) {
-                    auto newTex = std::make_shared<sf::Texture>();
-                    newTex->setSmooth(!isPixelMode);
-                    newTex->loadFromImage(img);
-                    ci.texture = newTex;
-                }
-            }
-        }
-        isDirty = true;
-        return;
     }
-    else {
-        for (int sIdx : m_selectedStrokes) {
-            if (sIdx >= 0 && sIdx < static_cast<int>(m_vectorStrokes.size())) {
-                auto& vs = m_vectorStrokes[sIdx];
-                if (!vs.isErase) {
-                    for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+
+    auto isInside = [&](float x, float y) -> bool {
+        if (isWand) {
+            int ix = static_cast<int>(std::floor(x));
+            int iy = static_cast<int>(std::floor(y));
+            if (ix >= 0 && iy >= 0 && ix < cw && iy < ch) {
+                return wandMask[iy * cw + ix];
+            }
+            return false;
+        }
+        return selection.isPointInsideSelection(sf::Vector2f(x, y));
+        };
+
+    for (auto& vs : m_vectorStrokes) {
+        if (vs.frame == curFrame && vs.layer == activeLayer && !vs.isErase) {
+            if (getStrokeBounds(vs).intersects(selBox)) {
+                for (size_t v = 0; v < vs.mesh.getVertexCount(); ++v) {
+                    if (isInside(vs.mesh[v].position.x, vs.mesh[v].position.y)) {
                         vs.mesh[v].color = newColor;
                     }
                 }
@@ -2341,13 +2365,69 @@ void Canvas::recolorActiveSelection(sf::Color newColor) {
         }
     }
 
-    if (selection.getState() == SelectionState::Floating) {
-        for (auto& fvs : m_floatingVectorStrokes) {
-            if (!fvs.isErase) {
-                for (size_t v = 0; v < fvs.mesh.getVertexCount(); ++v) {
-                    fvs.mesh[v].color = newColor;
+    for (auto& ci : m_canvasImages) {
+        if (ci.frame == curFrame && ci.layer == activeLayer && ci.texture) {
+            if (!ci.bounds.intersects(selBox)) continue;
+
+            sf::Image& img = getCanvasImageCPU(ci);
+            int iw = static_cast<int>(img.getSize().x);
+            int ih = static_cast<int>(img.getSize().y);
+            int bx = static_cast<int>(std::round(ci.bounds.left));
+            int by = static_cast<int>(std::round(ci.bounds.top));
+            bool imgMod = false;
+
+            int x0 = std::max(0, static_cast<int>(std::floor(selBox.left)) - bx);
+            int y0 = std::max(0, static_cast<int>(std::floor(selBox.top)) - by);
+            int x1 = std::min(iw, static_cast<int>(std::ceil(selBox.left + selBox.width)) - bx);
+            int y1 = std::min(ih, static_cast<int>(std::ceil(selBox.top + selBox.height)) - by);
+
+            for (int ly = y0; ly < y1; ++ly) {
+                for (int lx = x0; lx < x1; ++lx) {
+                    if (isInside(static_cast<float>(bx + lx) + 0.5f, static_cast<float>(by + ly) + 0.5f)) {
+                        sf::Color c = img.getPixel(lx, ly);
+                        if (c.a > 0) {
+                            sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
+                            img.setPixel(lx, ly, sf::Color(newColor.r, newColor.g, newColor.b, a));
+                            imgMod = true;
+                        }
+                    }
                 }
             }
+
+            if (imgMod) {
+                ci.texture->update(img);
+            }
+        }
+    }
+
+    sf::RenderTexture* targetTex = frames[curFrame].layers[activeLayer].texture.get();
+    if (targetTex) {
+        sf::Image img = targetTex->getTexture().copyToImage();
+        int x0 = std::max(0, static_cast<int>(std::floor(selBox.left)));
+        int y0 = std::max(0, static_cast<int>(std::floor(selBox.top)));
+        int x1 = std::min(cw, static_cast<int>(std::ceil(selBox.left + selBox.width)));
+        int y1 = std::min(ch, static_cast<int>(std::ceil(selBox.top + selBox.height)));
+
+        bool texMod = false;
+        for (int y = y0; y < y1; ++y) {
+            for (int x = x0; x < x1; ++x) {
+                if (isInside(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f)) {
+                    sf::Color c = img.getPixel(x, y);
+                    if (c.a > 0) {
+                        sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
+                        img.setPixel(x, y, sf::Color(newColor.r, newColor.g, newColor.b, a));
+                        texMod = true;
+                    }
+                }
+            }
+        }
+
+        if (texMod) {
+            sf::Texture newTex;
+            newTex.loadFromImage(img);
+            targetTex->clear(sf::Color::Transparent);
+            targetTex->draw(sf::Sprite(newTex), sf::RenderStates(sf::BlendNone));
+            targetTex->display();
         }
     }
 

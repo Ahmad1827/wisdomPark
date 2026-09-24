@@ -1504,7 +1504,13 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     showMessage("Deselected", sf::Color::Cyan);
                 }
                 else if (action == "crop") canvas.cropSelection(curFrame);
-                else if (action == "delete") canvas.deleteSelection(curFrame);
+                else if (action == "delete") {
+                    canvas.saveUndoState();
+                    canvas.deleteSelection(curFrame);
+                    canvas.commitSelection(curFrame);
+                    canvas.clearObjectSelection();
+                    showMessage("Deleted Selection", sf::Color::Cyan);
+                }
             },
             [&]() {
                 canvas.makeOutline(timeline.getCurrentFrame(), g_outlineColor);
@@ -2015,8 +2021,16 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (event.key.code == sf::Keyboard::B && event.key.control) {
                     if (assetBrowser) assetBrowser->toggle();
                 }
-                if (keybindManager.isActionTriggered("edit_del_sel", event)) {
-                    if (canvas.getActiveTool() == ToolType::Select) canvas.deleteSelection(timeline.getCurrentFrame());
+                if (keybindManager.isActionTriggered("edit_del_sel", event) ||
+                    (event.type == sf::Event::KeyPressed && (event.key.code == sf::Keyboard::Delete || event.key.code == sf::Keyboard::BackSpace))) {
+                    if (canvas.getActiveTool() == ToolType::Select || canvas.getActiveTool() == ToolType::MagicWand) {
+                        int cur = timeline.getCurrentFrame();
+                        canvas.saveUndoState();
+                        canvas.deleteSelection(cur);
+                        canvas.commitSelection(cur);
+                        canvas.clearObjectSelection();
+                        showMessage("Deleted Selection", sf::Color::Cyan);
+                    }
                 }
                 if (keybindManager.isActionTriggered("edit_deselect", event)) {
                     canvas.commitSelection(timeline.getCurrentFrame());

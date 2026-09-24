@@ -61,58 +61,57 @@ std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
 
     sf::Color targetCol = img.getPixel(startPos.x, startPos.y);
 
-    if (targetCol.a <= 20) {
-        bool foundNearby = false;
-        for (int dy = -1; dy <= 1 && !foundNearby; ++dy) {
-            for (int dx = -1; dx <= 1 && !foundNearby; ++dx) {
-                int nx = startPos.x + dx;
-                int ny = startPos.y + dy;
-                if (nx >= 0 && nx < static_cast<int>(img.getSize().x) && ny >= 0 && ny < static_cast<int>(img.getSize().y)) {
-                    sf::Color c = img.getPixel(nx, ny);
-                    if (c.a > 20) {
-                        startPos = sf::Vector2i(nx, ny);
-                        targetCol = c;
-                        foundNearby = true;
-                    }
-                }
-            }
-        }
-        if (!foundNearby) {
-            return mask;
-        }
-    }
+    auto unPreMult = [](const sf::Color& c) -> sf::Color {
+        if (c.a == 0) return sf::Color(0, 0, 0, 0);
+        int r = std::min(255, (static_cast<int>(c.r) * 255) / static_cast<int>(c.a));
+        int g = std::min(255, (static_cast<int>(c.g) * 255) / static_cast<int>(c.a));
+        int b = std::min(255, (static_cast<int>(c.b) * 255) / static_cast<int>(c.a));
+        return sf::Color(r, g, b, c.a);
+        };
 
-    const sf::Uint8* pixels = img.getPixelsPtr();
+    bool targetIsTransparent = (targetCol.a <= 15);
+    sf::Color normTarget = unPreMult(targetCol);
 
     auto matchesTarget = [&](const sf::Color& c) -> bool {
-        if (c.a <= 20) return false;
-        float r = std::abs(static_cast<float>(c.r) - static_cast<float>(targetCol.r));
-        float g = std::abs(static_cast<float>(c.g) - static_cast<float>(targetCol.g));
-        float b = std::abs(static_cast<float>(c.b) - static_cast<float>(targetCol.b));
+        if (targetIsTransparent) {
+            return c.a <= 15 + m_tolerance;
+        }
+        if (c.a <= 15) return false;
+        sf::Color normC = unPreMult(c);
+        float r = std::abs(static_cast<float>(normC.r) - static_cast<float>(normTarget.r));
+        float g = std::abs(static_cast<float>(normC.g) - static_cast<float>(normTarget.g));
+        float b = std::abs(static_cast<float>(normC.b) - static_cast<float>(normTarget.b));
         return std::max({ r, g, b }) <= static_cast<float>(m_tolerance);
         };
 
+    const sf::Uint8* pixels = img.getPixelsPtr();
+
     if (m_contiguous) {
-        std::queue<sf::Vector2i> q;
-        q.push(startPos);
+        std::vector<int> q;
+        q.reserve(65536);
+        q.push_back(startPos.y * w + startPos.x);
         mask[startPos.y * w + startPos.x] = true;
 
-        while (!q.empty()) {
-            sf::Vector2i p = q.front();
-            q.pop();
+        size_t head = 0;
+        while (head < q.size()) {
+            int curr = q[head++];
+            int cx = curr % w;
+            int cy = curr / w;
 
-            sf::Vector2i neighbors[4] = {
-                {p.x - 1, p.y}, {p.x + 1, p.y}, {p.x, p.y - 1}, {p.x, p.y + 1}
-            };
+            int nx[4] = { cx - 1, cx + 1, cx, cx };
+            int ny[4] = { cy, cy, cy - 1, cy + 1 };
 
-            for (auto& n : neighbors) {
-                if (n.x >= 0 && n.x < w && n.y >= 0 && n.y < h) {
-                    if (!mask[n.y * w + n.x]) {
-                        size_t idx = (n.y * w + n.x) * 4;
-                        sf::Color c(pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3]);
+            for (int i = 0; i < 4; ++i) {
+                int x = nx[i];
+                int y = ny[i];
+                if (x >= 0 && x < w && y >= 0 && y < h) {
+                    int nIdx = y * w + x;
+                    if (!mask[nIdx]) {
+                        size_t pByte = static_cast<size_t>(nIdx) * 4;
+                        sf::Color c(pixels[pByte], pixels[pByte + 1], pixels[pByte + 2], pixels[pByte + 3]);
                         if (matchesTarget(c)) {
-                            mask[n.y * w + n.x] = true;
-                            q.push(n);
+                            mask[nIdx] = true;
+                            q.push_back(nIdx);
                         }
                     }
                 }
@@ -122,7 +121,7 @@ std::vector<bool> MagicWandTool::extractSelectionMask(sf::Vector2i startPos) {
     else {
         for (int y = 0; y < h; ++y) {
             for (int x = 0; x < w; ++x) {
-                size_t idx = (y * w + x) * 4;
+                size_t idx = (static_cast<size_t>(y) * w + x) * 4;
                 sf::Color c(pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3]);
                 if (matchesTarget(c)) {
                     mask[y * w + x] = true;
@@ -190,9 +189,9 @@ std::vector<sf::Vector2f> MagicWandTool::traceBoundary(const std::vector<bool>& 
 }
 
 void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& window) {
-    if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Delete) {
+    if (event.type == sf::Event::KeyPressed && (event.key.code == sf::Keyboard::Delete || event.key.code == sf::Keyboard::BackSpace)) {
         if (m_canvas.getSelectionManager().isActive()) {
-            m_canvas.fillSelection(sf::Color::Transparent, m_timeline.getCurrentFrame());
+            m_canvas.deleteSelection(m_timeline.getCurrentFrame());
         }
         return;
     }
@@ -300,47 +299,19 @@ void MagicWandTool::HandleEvent(const sf::Event& event, const sf::RenderWindow& 
                 return;
             }
 
-            std::vector<std::vector<sf::Vector2i>> islands;
-            std::vector<bool> visited(w * h, false);
-
-            for (int y = 0; y < h; ++y) {
-                for (int x = 0; x < w; ++x) {
-                    if (mask[y * w + x] && !visited[y * w + x]) {
-                        std::vector<sf::Vector2i> comp;
-                        std::queue<sf::Vector2i> q;
-                        q.push({ x, y });
-                        visited[y * w + x] = true;
-
-                        while (!q.empty()) {
-                            sf::Vector2i p = q.front(); q.pop();
-                            comp.push_back(p);
-                            sf::Vector2i n[4] = { {p.x + 1, p.y}, {p.x - 1, p.y}, {p.x, p.y + 1}, {p.x, p.y - 1} };
-                            for (auto& i : n) {
-                                if (i.x >= 0 && i.x < w && i.y >= 0 && i.y < h) {
-                                    if (mask[i.y * w + i.x] && !visited[i.y * w + i.x]) {
-                                        visited[i.y * w + i.x] = true;
-                                        q.push(i);
-                                    }
-                                }
-                            }
-                        }
-                        if (!comp.empty()) islands.push_back(std::move(comp));
-                    }
-                }
+            int minX = w, maxX = 0, minY = h, maxY = 0;
+            for (const auto& pt : exactPixels) {
+                minX = std::min(minX, pt.x);
+                maxX = std::max(maxX, pt.x);
+                minY = std::min(minY, pt.y);
+                maxY = std::max(maxY, pt.y);
             }
 
             std::vector<sf::FloatRect> subBoxes;
-            for (const auto& comp : islands) {
-                int minX = comp[0].x, maxX = comp[0].x, minY = comp[0].y, maxY = comp[0].y;
-                for (const auto& pt : comp) {
-                    minX = std::min(minX, pt.x); maxX = std::max(maxX, pt.x);
-                    minY = std::min(minY, pt.y); maxY = std::max(maxY, pt.y);
-                }
-                subBoxes.push_back(sf::FloatRect(
-                    static_cast<float>(minX), static_cast<float>(minY),
-                    static_cast<float>(maxX - minX + 1), static_cast<float>(maxY - minY + 1)
-                ));
-            }
+            subBoxes.push_back(sf::FloatRect(
+                static_cast<float>(minX), static_cast<float>(minY),
+                static_cast<float>(maxX - minX + 1), static_cast<float>(maxY - minY + 1)
+            ));
 
             m_canvas.commitSelection(m_timeline.getCurrentFrame());
             m_canvas.getSelectionManager().setPixelSelection(exactPixels, m_canvas.getCanvasSize(), subBoxes);
