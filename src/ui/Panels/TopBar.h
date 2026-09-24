@@ -80,6 +80,10 @@ namespace WisdomUI {
         float m_pullMaxScroll{ 0.0f };
         std::vector<GitImgCommit> m_commits;
         std::vector<std::pair<sf::FloatRect, std::string>> m_commitRowBounds;
+        std::unordered_map<std::string, sf::Texture> m_commitThumbnails;
+        std::unordered_map<std::string, bool> m_thumbnailRequested;
+        std::mutex m_thumbMutex;
+        std::vector<std::pair<std::string, sf::Image>> m_pendingThumbnails;
         std::function<void(const std::string&)> m_onCheckoutCommit;
 
         sf::FloatRect getDropdownItemBounds(int menuIndex, int actionIndex) const;

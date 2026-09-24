@@ -183,13 +183,21 @@ namespace WisdomUI {
         float pullTarget = m_isPullOpen ? 1.0f : 0.0f;
         m_pullOpenProgress += (pullTarget - m_pullOpenProgress) * 18.0f * deltaTime;
         m_pullOpenProgress = std::clamp(m_pullOpenProgress, 0.0f, 1.0f);
+
+        {
+            std::lock_guard<std::mutex> lock(m_thumbMutex);
+            for (auto& item : m_pendingThumbnails) {
+                m_commitThumbnails[item.first].loadFromImage(item.second);
+            }
+            m_pendingThumbnails.clear();
+        }
     }
 
     void TopBar::renderPullDropdown(sf::RenderWindow& window, sf::Vector2f mousePos) {
         if (m_pullOpenProgress < 0.02f) return;
 
-        float dropW = 350.0f;
-        float totalH = 380.0f;
+        float dropW = 480.0f;
+        float totalH = 460.0f;
         float currentH = totalH * m_pullOpenProgress;
         float dropX = std::floor(m_pullBtnBounds.left);
         float dropY = std::floor(m_bounds.top + m_bounds.height + 3.0f);
@@ -200,19 +208,19 @@ namespace WisdomUI {
 
         if (m_pullOpenProgress < 0.4f) return;
 
-        float headerH = 28.0f;
+        float headerH = 34.0f;
         sf::RectangleShape header(sf::Vector2f(dropW - 12.0f, headerH));
         header.setPosition(dropX + 6.0f, dropY + 6.0f);
         header.setFillColor(Theme::SunsetDeepDark);
         window.draw(header);
 
-        Theme::DrawCrispText(window, m_font, "VERSION HISTORY", 12, dropX + 14.0f, dropY + 14.0f, Theme::SunsetAmber, sf::Color::Transparent, false, true);
+        Theme::DrawCrispText(window, m_font, "VERSION HISTORY (CLICK TO PULL)", 15, dropX + 16.0f, dropY + 17.0f, Theme::SunsetAmber, sf::Color::Transparent, false, true);
 
         float listY = dropY + headerH + 8.0f;
         float listH = currentH - headerH - 16.0f;
         if (listH <= 20.0f) return;
 
-        float rowH = 48.0f;
+        float rowH = 76.0f;
         float totalContentH = static_cast<float>(m_commits.size()) * rowH;
         m_pullMaxScroll = std::max(0.0f, totalContentH - listH);
         m_pullScrollOffset = std::clamp(m_pullScrollOffset, 0.0f, m_pullMaxScroll);
@@ -220,7 +228,7 @@ namespace WisdomUI {
         m_commitRowBounds.clear();
 
         if (m_commits.empty()) {
-            Theme::DrawCrispText(window, m_font, "No commits found in repository.", 13, dropX + dropW / 2.0f, dropY + currentH / 2.0f, Theme::SunsetPlum, sf::Color::Transparent, true, true);
+            Theme::DrawCrispText(window, m_font, "No commits found in repository.", 16, dropX + dropW / 2.0f, dropY + currentH / 2.0f, Theme::SunsetPlum, sf::Color::Transparent, true, true);
             return;
         }
 
@@ -245,26 +253,71 @@ namespace WisdomUI {
 
         float curY = listY - m_pullScrollOffset;
         for (size_t i = 0; i < m_commits.size(); ++i) {
-            sf::FloatRect rowRect(dropX + 6.0f, curY, dropW - 18.0f, rowH - 4.0f);
+            sf::FloatRect rowRect(dropX + 6.0f, curY, dropW - 18.0f, rowH - 6.0f);
 
             if (curY + rowH >= listY && curY <= listY + listH) {
                 bool isHov = rowRect.contains(mousePos) && m_pullDropdownBounds.contains(mousePos);
 
                 sf::RectangleShape rowBg(sf::Vector2f(rowRect.width, rowRect.height));
                 rowBg.setPosition(rowRect.left, rowRect.top);
-                rowBg.setFillColor(isHov ? sf::Color(46, 30, 58, 230) : sf::Color(26, 18, 34, 180));
-                rowBg.setOutlineThickness(1.0f);
-                rowBg.setOutlineColor(isHov ? Theme::SunsetAmber : sf::Color(50, 36, 64));
+                rowBg.setFillColor(isHov ? sf::Color(52, 34, 68, 240) : sf::Color(26, 18, 34, 210));
+                rowBg.setOutlineThickness(isHov ? 2.0f : 1.0f);
+                rowBg.setOutlineColor(isHov ? Theme::SunsetGold : sf::Color(50, 36, 64));
                 window.draw(rowBg);
 
-                Theme::DrawCrispText(window, m_font, m_commits[i].shortHash, 12, rowRect.left + 8.0f, rowRect.top + 6.0f, Theme::SunsetGold);
-                Theme::DrawCrispText(window, m_font, m_commits[i].dateFormatted, 12, rowRect.left + 76.0f, rowRect.top + 6.0f, Theme::SunsetPeach);
+                float thumbSz = 56.0f;
+                sf::FloatRect thumbBox(rowRect.left + 7.0f, rowRect.top + 7.0f, thumbSz, thumbSz);
+                sf::RectangleShape thumbBg(sf::Vector2f(thumbBox.width, thumbBox.height));
+                thumbBg.setPosition(thumbBox.left, thumbBox.top);
+                thumbBg.setFillColor(sf::Color(14, 10, 18));
+                thumbBg.setOutlineThickness(1.0f);
+                thumbBg.setOutlineColor(isHov ? Theme::SunsetGold : Theme::SunsetPlum);
+                window.draw(thumbBg);
+
+                float checkSz = thumbSz / 4.0f;
+                for (int cy = 0; cy < 4; ++cy) {
+                    for (int cx = 0; cx < 4; ++cx) {
+                        if ((cx + cy) % 2 == 1) {
+                            sf::RectangleShape chk(sf::Vector2f(checkSz, checkSz));
+                            chk.setPosition(thumbBox.left + cx * checkSz, thumbBox.top + cy * checkSz);
+                            chk.setFillColor(sf::Color(28, 20, 36));
+                            window.draw(chk);
+                        }
+                    }
+                }
+
+                std::string h = m_commits[i].hash;
+                if (m_commitThumbnails.find(h) != m_commitThumbnails.end()) {
+                    sf::Sprite thumbSpr(m_commitThumbnails[h]);
+                    float sx = thumbSz / static_cast<float>(m_commitThumbnails[h].getSize().x);
+                    float sy = thumbSz / static_cast<float>(m_commitThumbnails[h].getSize().y);
+                    float s = std::min(sx, sy);
+                    thumbSpr.setScale(s, s);
+                    float ox = thumbBox.left + (thumbSz - m_commitThumbnails[h].getSize().x * s) * 0.5f;
+                    float oy = thumbBox.top + (thumbSz - m_commitThumbnails[h].getSize().y * s) * 0.5f;
+                    thumbSpr.setPosition(ox, oy);
+                    window.draw(thumbSpr);
+                }
+                else if (!m_thumbnailRequested[h]) {
+                    m_thumbnailRequested[h] = true;
+                    std::thread([this, h]() {
+                        sf::Image img;
+                        if (GitImgClient::downloadCommitImage(h, img, true) || GitImgClient::downloadCommitImage(h, img, false)) {
+                            std::lock_guard<std::mutex> lock(m_thumbMutex);
+                            m_pendingThumbnails.push_back({ h, img });
+                        }
+                        }).detach();
+                }
+
+                float infoX = rowRect.left + thumbSz + 18.0f;
+                Theme::DrawCrispText(window, m_font, m_commits[i].shortHash, 16, infoX, rowRect.top + 8.0f, Theme::SunsetGold);
+                Theme::DrawCrispText(window, m_font, m_commits[i].dateFormatted, 13, infoX + 90.0f, rowRect.top + 10.0f, Theme::SunsetPeach);
 
                 std::string msg = m_commits[i].message;
-                if (msg.length() > 34) {
-                    msg = msg.substr(0, 32) + "..";
+                if (msg.length() > 36) {
+                    msg = msg.substr(0, 34) + "..";
                 }
-                Theme::DrawCrispText(window, m_font, msg, 13, rowRect.left + 8.0f, rowRect.top + 24.0f, sf::Color::White);
+                Theme::DrawCrispText(window, m_font, msg, 16, infoX, rowRect.top + 34.0f, sf::Color::White);
 
                 m_commitRowBounds.push_back({ rowRect, m_commits[i].hash });
             }
@@ -276,14 +329,14 @@ namespace WisdomUI {
 
         if (m_pullMaxScroll > 0.0f) {
             float trackX = dropX + dropW - 8.0f;
-            sf::RectangleShape track(sf::Vector2f(3.0f, listH));
+            sf::RectangleShape track(sf::Vector2f(4.0f, listH));
             track.setPosition(trackX, listY);
             track.setFillColor(sf::Color(10, 6, 14));
             window.draw(track);
 
-            float thumbH = std::max(20.0f, (listH / totalContentH) * listH);
+            float thumbH = std::max(24.0f, (listH / totalContentH) * listH);
             float thumbY = listY + (m_pullScrollOffset / m_pullMaxScroll) * (listH - thumbH);
-            sf::RectangleShape thumb(sf::Vector2f(3.0f, thumbH));
+            sf::RectangleShape thumb(sf::Vector2f(4.0f, thumbH));
             thumb.setPosition(trackX, thumbY);
             thumb.setFillColor(Theme::SunsetGold);
             window.draw(thumb);

@@ -389,7 +389,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         [this]() { m_fullscreenToggleRequested = true; },
         [this]() { s_exitToMenuRequested = true; }
     );
-    m_gitImgClient.setBaseUrl("http://100.102.109.119:8080");
+    m_gitImgClient.setBaseUrl(GitImgClient::loadConfigUrl());
 
     m_topBar.SetPushGitImgCallback([this, baseCanvas](bool opaqueBg) {
         pushToGitImg(*baseCanvas, 0, opaqueBg);
@@ -1465,18 +1465,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 std::string hash = m_pendingCheckoutHash;
                 m_pendingCheckoutHash.clear();
 
-                if (GitImgClient::checkoutCommit(hash)) {
-                    if (projManager) {
-                        std::string path = activeProjectPath.empty() ? "project.wpk" : activeProjectPath;
-                        int loadedFps = 12;
-                        bool loadedPixelMode = false;
-                        canvas.clearCanvasImages();
-                        canvas.clearObjectSelection();
-                        projManager->loadProject(path, canvas, loadedFps, loadedPixelMode);
-                        canvas.clearHistory();
-                    }
-                    canvas.clearIsDirty();
-                }
+                pullCommitToCanvas(hash, canvas, timeline);
             }
             return;
         }
@@ -2461,6 +2450,57 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     }
     else if (currentState == AppState::Painting) {
         timeline.update(dt);
+
+        {
+            std::lock_guard<std::mutex> lock(m_pullMutex);
+            if (m_hasPendingPulledImage) {
+                m_hasPendingPulledImage = false;
+                const sf::Image& img = m_pendingPulledImage;
+
+                int cW = canvas.getCanvasSize().x;
+                int cH = canvas.getCanvasSize().y;
+                int iW = static_cast<int>(img.getSize().x);
+                int iH = static_cast<int>(img.getSize().y);
+
+                bool isAnim = (iW > cW && (iW % cW == 0) && iH == cH);
+                if (!isAnim && (iW >= 2 * iH && (iW % iH == 0))) {
+                    isAnim = true;
+                    cW = iH;
+                    cH = iH;
+                }
+
+                if (isAnim) {
+                    int frameCount = iW / cW;
+                    while (static_cast<int>(canvas.getFrameCount()) < frameCount) {
+                        canvas.addFrame(-1);
+                        timeline.addFrameAfter(timeline.getFrameCount() - 1);
+                    }
+                    while (static_cast<int>(canvas.getFrameCount()) > frameCount) {
+                        int last = static_cast<int>(canvas.getFrameCount()) - 1;
+                        canvas.deleteFrame(last);
+                        timeline.deleteFrame(last);
+                    }
+
+                    for (int f = 0; f < frameCount; ++f) {
+                        sf::Image frameImg;
+                        frameImg.create(cW, cH);
+                        frameImg.copy(img, 0, 0, sf::IntRect(f * cW, 0, cW, cH));
+                        canvas.replaceFrameImage(f, frameImg);
+                    }
+                    timeline.setFrame(0);
+                    canvas.clearIsDirty();
+                    canvas.clearHistory();
+                    showMessage("Pulled Animation (" + std::to_string(frameCount) + " frames) from GitImg!", sf::Color::Green);
+                }
+                else {
+                    int cur = timeline.getCurrentFrame();
+                    canvas.replaceFrameImage(cur, img);
+                    canvas.clearIsDirty();
+                    canvas.clearHistory();
+                    showMessage("Pulled Frame into Frame " + std::to_string(cur + 1) + "!", sf::Color::Green);
+                }
+            }
+        }
 
         bool rightDockOpen = (m_activeRightTab != RightTabMode::None);
         auto regions = m_workspaceLayout.Update(rightDockOpen, m_showTimeline);
@@ -4567,6 +4607,27 @@ void UIManager::pushSpriteSheetToGitImg(Canvas& canvas, bool opaqueBg) {
     else {
         doPush();
     }
+}
+
+void UIManager::pullCommitToCanvas(const std::string& commitHash, Canvas& canvas, Timeline& timeline) {
+    showMessage("Pulling commit from GitImg...", sf::Color::Yellow);
+
+    std::thread([this, commitHash]() {
+        sf::Image img;
+        bool ok = GitImgClient::downloadCommitImage(commitHash, img, false);
+        if (!ok) {
+            ok = GitImgClient::downloadCommitImage(commitHash, img, true);
+        }
+
+        if (ok && img.getSize().x > 0 && img.getSize().y > 0) {
+            std::lock_guard<std::mutex> lock(m_pullMutex);
+            m_pendingPulledImage = img;
+            m_hasPendingPulledImage = true;
+        }
+        else {
+            showMessage("Failed to pull artwork from GitImg", sf::Color::Red);
+        }
+        }).detach();
 }
 
 void UIManager::pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg) {

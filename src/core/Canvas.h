@@ -441,6 +441,7 @@ public:
     void drawLayerThumbnail(sf::RenderTarget& target, int frameIndex, int layerIndex, sf::FloatRect bounds);
 
     void importImageToActiveLayer(const std::string& filepath, int currentFrame);
+    void replaceFrameImage(int frameIndex, const sf::Image& img);
 
     void enterTransformMode(int currentFrame);
     void applyTransform(int currentFrame);

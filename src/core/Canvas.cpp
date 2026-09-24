@@ -6164,3 +6164,43 @@ void Canvas::importImageToActiveLayer(const std::string& filepath, int currentFr
         pasteImage(img, currentFrame, false);
     }
 }
+
+void Canvas::replaceFrameImage(int frameIndex, const sf::Image& img) {
+    if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return;
+    Frame* f = getFrame(frameIndex);
+    if (!f || f->layers.empty()) return;
+
+    clearObjectSelection();
+    clearCanvasImages();
+
+    for (size_t i = 0; i < f->layers.size(); ++i) {
+        if (f->layers[i].texture) {
+            f->layers[i].texture->clear(sf::Color::Transparent);
+            f->layers[i].texture->display();
+        }
+    }
+
+    int targetLayer = (f->layers.size() > 1) ? 1 : 0;
+    setActiveLayer(targetLayer, frameIndex);
+
+    if (f->layers[targetLayer].texture) {
+        sf::Texture tex;
+        if (tex.loadFromImage(img)) {
+            tex.setSmooth(false);
+            sf::Sprite spr(tex);
+
+            float cW = static_cast<float>(getCanvasSize().x);
+            float cH = static_cast<float>(getCanvasSize().y);
+            float iW = static_cast<float>(img.getSize().x);
+            float iH = static_cast<float>(img.getSize().y);
+
+            if (iW != cW || iH != cH) {
+                spr.setScale(cW / iW, cH / iH);
+            }
+
+            f->layers[targetLayer].texture->clear(sf::Color::Transparent);
+            f->layers[targetLayer].texture->draw(spr);
+            f->layers[targetLayer].texture->display();
+        }
+    }
+}

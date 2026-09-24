@@ -34,6 +34,38 @@ static std::string execCommand(const std::string& cmd) {
     return result;
 }
 
+std::string GitImgClient::loadConfigUrl() {
+    std::ifstream file(".env");
+    if (file.is_open()) {
+        std::string line;
+        while (std::getline(file, line)) {
+            while (!line.empty() && (line.back() == '\r' || line.back() == '\n' || line.back() == ' ')) {
+                line.pop_back();
+            }
+            std::string val;
+            if (line.rfind("GITIMG_URL=", 0) == 0) {
+                val = line.substr(11);
+        }
+            else if (line.rfind("GITIMG_BASE_URL=", 0) == 0) {
+                val = line.substr(16);
+            }
+            if (!val.empty()) {
+                if (val.front() == '"' && val.back() == '"' && val.length() >= 2) {
+                    val = val.substr(1, val.length() - 2);
+                }
+                return val;
+            }
+    }
+}
+    return "http://127.0.0.1:8080";
+}
+
+static std::string s_activeBaseUrl = GitImgClient::loadConfigUrl();
+static std::string s_activeToken = "";
+static std::string s_activeRepo = "";
+
+static bool parseUrl(const std::string& url, std::wstring& outHost, INTERNET_PORT& outPort, bool& outIsHttps);
+
 static std::string formatEpoch(time_t rawTime) {
     struct tm timeinfo;
 #if defined(_WIN32)
@@ -46,41 +78,151 @@ static std::string formatEpoch(time_t rawTime) {
     return std::string(buf);
 }
 
-std::vector<GitImgCommit> GitImgClient::getCommitHistory() {
+std::vector<GitImgCommit> GitImgClient::getCommitHistory(std::string repo) {
     std::vector<GitImgCommit> commits;
-    std::string output = execCommand("gitimg log");
-    if (output.empty()) return commits;
 
-    std::istringstream stream(output);
-    std::string line;
-    while (std::getline(stream, line)) {
-        while (!line.empty() && (line.back() == '\r' || line.back() == '\n' || line.back() == ' ')) {
-            line.pop_back();
-        }
-        if (line.empty()) continue;
+    std::string user, pass;
+    loadSavedCredentials(user, pass);
+    if (user.empty()) user = "ahmad";
 
-        std::stringstream lineStream(line);
-        std::string hash, timeStr, message;
-        if (std::getline(lineStream, hash, '|') &&
-            std::getline(lineStream, timeStr, '|') &&
-            std::getline(lineStream, message)) {
+    if (repo.empty()) {
+        repo = s_activeRepo;
+    }
 
-            GitImgCommit c;
-            c.hash = hash;
-            c.shortHash = hash.substr(0, std::min<size_t>(7, hash.length()));
-
-            try {
-                time_t t = static_cast<time_t>(std::stoll(timeStr));
-                c.dateFormatted = formatEpoch(t);
+    if (repo.empty()) {
+        std::ifstream sessionFile("projects/last_session.txt");
+        if (sessionFile.is_open()) {
+            std::string sPath, sName;
+            std::getline(sessionFile, sPath);
+            if (std::getline(sessionFile, sName) && !sName.empty()) {
+                repo = sName;
             }
-            catch (...) {
-                c.dateFormatted = timeStr;
-            }
-
-            c.message = message;
-            commits.push_back(c);
         }
     }
+
+    size_t lastSlash = repo.find_last_of("/\\");
+    if (lastSlash != std::string::npos) {
+        repo = repo.substr(lastSlash + 1);
+    }
+    if (repo.length() > 4 && repo.substr(repo.length() - 4) == ".wpk") {
+        repo = repo.substr(0, repo.length() - 4);
+    }
+
+    if (repo.empty()) return commits;
+
+    std::string baseUrl = s_activeBaseUrl;
+    std::wstring host;
+    INTERNET_PORT port = 80;
+    bool isHttps = false;
+    if (!parseUrl(baseUrl, host, port, isHttps)) return commits;
+
+    HINTERNET hSession = WinHttpOpen(L"WisdomPark/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession) return commits;
+
+    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
+    if (!hConnect) {
+        WinHttpCloseHandle(hSession);
+        return commits;
+    }
+
+    std::string pathStr = "/api/commits/" + user + "/" + repo;
+    std::wstring wPath(pathStr.begin(), pathStr.end());
+    DWORD flags = isHttps ? WINHTTP_FLAG_SECURE : 0;
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", wPath.c_str(),
+        NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return commits;
+    }
+
+    std::string token = s_activeToken;
+    std::wstring wHeaders = L"";
+    if (!token.empty()) {
+        std::string authHdr = "Authorization: Bearer " + token + "\r\n";
+        wHeaders = std::wstring(authHdr.begin(), authHdr.end());
+    }
+
+    BOOL sent = WinHttpSendRequest(hRequest,
+        wHeaders.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : wHeaders.c_str(),
+        static_cast<DWORD>(wHeaders.length()),
+        WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+
+    if (sent && WinHttpReceiveResponse(hRequest, NULL)) {
+        DWORD statusCode = 0;
+        DWORD size = sizeof(statusCode);
+        WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &size, WINHTTP_NO_HEADER_INDEX);
+
+        if (statusCode >= 200 && statusCode < 300) {
+            std::string responseStr;
+            DWORD bytesAvailable = 0;
+            while (WinHttpQueryDataAvailable(hRequest, &bytesAvailable) && bytesAvailable > 0) {
+                std::vector<char> buffer(bytesAvailable + 1, 0);
+                DWORD bytesRead = 0;
+                if (WinHttpReadData(hRequest, buffer.data(), bytesAvailable, &bytesRead)) {
+                    responseStr.append(buffer.data(), bytesRead);
+                }
+            }
+
+            auto extractField = [](const std::string& src, const std::string& key) -> std::string {
+                std::string pattern = "\"" + key + "\"";
+                size_t p = src.find(pattern);
+                if (p == std::string::npos) return "";
+                p = src.find(':', p);
+                if (p == std::string::npos) return "";
+                while (p < src.length() && (src[p] == ':' || src[p] == ' ' || src[p] == '\t')) p++;
+                if (p >= src.length()) return "";
+                if (src[p] == '"') {
+                    p++;
+                    size_t endP = src.find('"', p);
+                    if (endP == std::string::npos) return "";
+                    return src.substr(p, endP - p);
+                }
+                size_t endP = src.find_first_of(",}\n\r", p);
+                if (endP == std::string::npos) endP = src.length();
+                return src.substr(p, endP - p);
+                };
+
+            size_t pos = 0;
+            while ((pos = responseStr.find('{', pos)) != std::string::npos) {
+                size_t endObj = responseStr.find('}', pos);
+                if (endObj == std::string::npos) break;
+
+                std::string objStr = responseStr.substr(pos, endObj - pos + 1);
+                std::string hash = extractField(objStr, "hash");
+                std::string timeStr = extractField(objStr, "time");
+                if (timeStr.empty()) timeStr = extractField(objStr, "timestamp");
+                std::string msg = extractField(objStr, "msg");
+                if (msg.empty()) msg = extractField(objStr, "message");
+
+                if (!hash.empty()) {
+                    for (char& ch : msg) {
+                        if (ch == '+') ch = ' ';
+                    }
+
+                    GitImgCommit c;
+                    c.hash = hash;
+                    c.shortHash = hash.substr(0, std::min<size_t>(7, hash.length()));
+                    c.message = msg;
+                    try {
+                        time_t t = static_cast<time_t>(std::stoll(timeStr));
+                        c.dateFormatted = formatEpoch(t);
+                    }
+                    catch (...) {
+                        c.dateFormatted = timeStr;
+                    }
+                    commits.push_back(c);
+                }
+                pos = endObj + 1;
+            }
+        }
+    }
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
     return commits;
 }
 
@@ -89,6 +231,78 @@ bool GitImgClient::checkoutCommit(const std::string& commitHash) {
     std::string cmd = "gitimg checkout " + commitHash;
     int code = std::system(cmd.c_str());
     return code == 0;
+}
+
+bool GitImgClient::downloadCommitImage(const std::string& commitHash, sf::Image& outImage, bool isThumb) {
+    if (commitHash.empty()) return false;
+
+    std::string baseUrl = s_activeBaseUrl;
+    std::wstring host;
+    INTERNET_PORT port = 80;
+    bool isHttps = false;
+    if (!parseUrl(baseUrl, host, port, isHttps)) return false;
+
+    HINTERNET hSession = WinHttpOpen(L"WisdomPark/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession) return false;
+
+    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
+    if (!hConnect) {
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    std::string pathStr = (isThumb ? "/thumb/" : "/image/") + commitHash;
+    std::wstring wPath(pathStr.begin(), pathStr.end());
+    DWORD flags = isHttps ? WINHTTP_FLAG_SECURE : 0;
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", wPath.c_str(),
+        NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    std::string token = s_activeToken;
+    std::wstring wHeaders = L"";
+    if (!token.empty()) {
+        std::string authHdr = "Authorization: Bearer " + token + "\r\n";
+        wHeaders = std::wstring(authHdr.begin(), authHdr.end());
+    }
+
+    BOOL sent = WinHttpSendRequest(hRequest,
+        wHeaders.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : wHeaders.c_str(),
+        static_cast<DWORD>(wHeaders.length()),
+        WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+
+    bool ok = false;
+    if (sent && WinHttpReceiveResponse(hRequest, NULL)) {
+        DWORD statusCode = 0;
+        DWORD size = sizeof(statusCode);
+        WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &size, WINHTTP_NO_HEADER_INDEX);
+
+        if (statusCode >= 200 && statusCode < 300) {
+            std::vector<sf::Uint8> bufferData;
+            DWORD bytesAvailable = 0;
+            while (WinHttpQueryDataAvailable(hRequest, &bytesAvailable) && bytesAvailable > 0) {
+                size_t oldSize = bufferData.size();
+                bufferData.resize(oldSize + bytesAvailable);
+                DWORD bytesRead = 0;
+                if (WinHttpReadData(hRequest, bufferData.data() + oldSize, bytesAvailable, &bytesRead)) {
+                    bufferData.resize(oldSize + bytesRead);
+                }
+            }
+            if (!bufferData.empty()) {
+                ok = outImage.loadFromMemory(bufferData.data(), bufferData.size());
+            }
+        }
+    }
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+    return ok;
 }
 
 static bool parseUrl(const std::string& url, std::wstring& outHost, INTERNET_PORT& outPort, bool& outIsHttps) {
@@ -360,6 +574,7 @@ void GitImgClient::setBaseUrl(const std::string& baseUrl) {
     while (!m_baseUrl.empty() && m_baseUrl.back() == '/') {
         m_baseUrl.pop_back();
     }
+    s_activeBaseUrl = m_baseUrl;
 }
 
 std::string GitImgClient::getBaseUrl() const {
@@ -369,6 +584,7 @@ std::string GitImgClient::getBaseUrl() const {
 void GitImgClient::setToken(const std::string& token) {
     std::lock_guard<std::mutex> lock(m_tokenMutex);
     m_token = token;
+    s_activeToken = token;
 }
 
 std::string GitImgClient::getToken() const {
@@ -449,6 +665,7 @@ void GitImgClient::pushAsync(const sf::Image& image,
     const std::string& filename,
     const std::string& commitMsg,
     std::function<void(bool)> callback) {
+    s_activeRepo = repo;
     std::vector<sf::Uint8> pngBytes;
     if (!image.saveToMemory(pngBytes, "png")) {
         if (callback) callback(false);

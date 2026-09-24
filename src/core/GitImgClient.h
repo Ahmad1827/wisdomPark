@@ -26,6 +26,7 @@ public:
     bool isAuthenticated() const;
 
     bool login(const std::string& username, const std::string& password);
+    static std::string loadConfigUrl();
     static bool loadSavedCredentials(std::string& outUser, std::string& outPass);
     static void saveCredentials(const std::string& user, const std::string& pass);
     static void clearSavedCredentials();
@@ -37,8 +38,9 @@ public:
         const std::string& commitMsg,
         std::function<void(bool)> callback);
 
-    static std::vector<GitImgCommit> getCommitHistory();
+    static std::vector<GitImgCommit> getCommitHistory(std::string repo = "");
     static bool checkoutCommit(const std::string& commitHash);
+    static bool downloadCommitImage(const std::string& commitHash, sf::Image& outImage, bool isThumb = false);
 
 private:
     std::string m_baseUrl;

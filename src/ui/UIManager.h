@@ -262,7 +262,11 @@ private:
 
     void drawHandCamWidget(sf::RenderWindow& window);
     bool handleHandCamWidgetEvents(const sf::Event& event);
-    void pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg);
+    void pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg = false);
+    void pullCommitToCanvas(const std::string& commitHash, Canvas& canvas, Timeline& timeline);
+    std::mutex m_pullMutex;
+    bool m_hasPendingPulledImage = false;
+    sf::Image m_pendingPulledImage;
     void pushSpriteSheetToGitImg(Canvas& canvas, bool opaqueBg);
     bool isTypingPrompt;
     bool showingText;
