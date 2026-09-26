@@ -121,10 +121,34 @@ void Timeline::pasteFrame(int index, const TimelineFrame& clipboard) {
     }
 }
 
+void Timeline::syncWithCanvas(int canvasFrameCount) {
+    if (canvasFrameCount <= 0) canvasFrameCount = 1;
+    while (static_cast<int>(frames.size()) < canvasFrameCount) {
+        TimelineFrame newFrame;
+        newFrame.thumbnail.create(64, 64, sf::Color(40, 40, 40));
+        frames.push_back(newFrame);
+    }
+    while (static_cast<int>(frames.size()) > canvasFrameCount && frames.size() > 1) {
+        frames.pop_back();
+    }
+    playbackEnd = static_cast<int>(frames.size()) - 1;
+    loopEnd = std::min(loopEnd, playbackEnd);
+    if (currentFrameIndex >= static_cast<int>(frames.size())) {
+        currentFrameIndex = static_cast<int>(frames.size()) - 1;
+    }
+}
+
 void Timeline::setFrame(int index) {
-    if (index >= 0 && index < static_cast<int>(frames.size())) {
+    if (index >= 0) {
+        while (static_cast<int>(frames.size()) <= index) {
+            TimelineFrame newFrame;
+            newFrame.thumbnail.create(64, 64, sf::Color(40, 40, 40));
+            frames.push_back(newFrame);
+        }
         currentFrameIndex = index;
         frameTimer = 0.0f;
+        playbackEnd = static_cast<int>(frames.size()) - 1;
+        loopEnd = playbackEnd;
     }
 }
 

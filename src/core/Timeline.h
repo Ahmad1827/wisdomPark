@@ -42,6 +42,7 @@ public:
     void pasteFrame(int index, const TimelineFrame& clipboard);
 
     void setFrame(int index);
+    void syncWithCanvas(int canvasFrameCount);
     int getCurrentFrame() const;
     int getFrameCount() const;
 

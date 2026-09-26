@@ -33,6 +33,12 @@ static int g_resW = 1920;
 static int g_resH = 1080;
 static bool g_resDropdownOpen = false;
 static bool s_exitToMenuRequested = false;
+static bool g_timelineLeftHeld = false;
+static bool g_timelineRightHeld = false;
+static bool g_warnLeftPending = false;
+static bool g_warnRightPending = false;
+static sf::Clock g_warnLeftClock;
+static sf::Clock g_warnRightClock;
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -1693,16 +1699,14 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                         float startX = 20.0f;
                         float cardY = timelineY + 42.0f;
                         int totalFrames = static_cast<int>(canvas.getFrameCount());
+                        timeline.syncWithCanvas(totalFrames);
 
                         for (int i = 0; i < totalFrames; ++i) {
                             sf::FloatRect cardBounds(startX, cardY, cardW, cardH);
                             if (cardBounds.contains(mousePos)) {
-                                int cur = timeline.getCurrentFrame();
-                                if (cur != i) {
-                                    canvas.commitSelection(cur);
-                                    canvas.clearObjectSelection();
-                                    timeline.setFrame(i);
-                                }
+                                canvas.commitSelection(timeline.getCurrentFrame());
+                                canvas.clearObjectSelection();
+                                timeline.setFrame(i);
                                 return;
                             }
                             startX += cardW + 12.0f;
@@ -1818,6 +1822,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 currentPrompt += static_cast<char>(event.text.unicode);
             }
             promptDisplay.setString("> " + currentPrompt + "_");
+        }
+
+        if (event.type == sf::Event::KeyReleased) {
+            if (event.key.code == sf::Keyboard::Left) g_timelineLeftHeld = false;
+            if (event.key.code == sf::Keyboard::Right) g_timelineRightHeld = false;
         }
 
         if (event.type == sf::Event::KeyPressed) {
@@ -1974,28 +1983,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
                 if (keybindManager.isActionTriggered("proj_new", event)) newProjectModal.open();
 
-                if (keybindManager.isActionTriggered("time_next", event)) {
-                    if (timeline.getCurrentFrame() < timeline.getFrameCount() - 1) {
-                        timeline.nextFrame();
-                    }
-                    else {
-                        canvas.addFrame(timeline.getCurrentFrame());
-                        timeline.addFrameAfter(timeline.getCurrentFrame());
-                        timeline.nextFrame();
-                    }
-                }
-
-                if (keybindManager.isActionTriggered("time_prev", event)) {
-                    if (timeline.getCurrentFrame() > 0) {
-                        timeline.prevFrame();
-                    }
-                    else {
-                        canvas.addFrame(-1);
-                        timeline.addFrameAfter(-1);
-                        timeline.setFrame(0);
-                    }
-                }
-
                 if (keybindManager.isActionTriggered("time_play", event)) timeline.togglePlayback();
                 if (keybindManager.isActionTriggered("time_start", event)) {
                     canvas.commitSelection(timeline.getCurrentFrame());
@@ -2006,79 +1993,124 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
                 }
 
-                if (keybindManager.isActionTriggered("time_prev", event) ||
-                    (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Left)) {
-                    if (timeline.getCurrentFrame() > 0) {
-                        canvas.commitSelection(timeline.getCurrentFrame());
-                        timeline.prevFrame();
-                    }
-                    else {
+                bool isLeft = (event.key.code == sf::Keyboard::Left) || keybindManager.isActionTriggered("time_prev", event);
+                bool isRight = (event.key.code == sf::Keyboard::Right) || keybindManager.isActionTriggered("time_next", event);
+
+                if (isLeft) {
+                    if (!g_timelineLeftHeld) {
+                        g_timelineLeftHeld = true;
+
+                        int total = static_cast<int>(canvas.getFrameCount());
+                        timeline.syncWithCanvas(total);
                         int cur = timeline.getCurrentFrame();
-                        static sf::Clock s_warnClockLeft;
-                        static bool s_warnActiveLeft = false;
 
-                        if (canvas.isFrameEmpty(cur)) {
-                            if (!s_warnActiveLeft || s_warnClockLeft.getElapsedTime().asSeconds() > 3.0f) {
-                                s_warnActiveLeft = true;
-                                s_warnClockLeft.restart();
-                                showMessage("Current frame is empty. Press Left Arrow again to add frame.", sf::Color::Yellow);
-                                return;
-                            }
-                            s_warnActiveLeft = false;
+                        if (cur > 0) {
+                            g_warnLeftPending = false;
+                            g_warnRightPending = false;
+                            canvas.commitSelection(cur);
+                            canvas.clearObjectSelection();
+                            timeline.setFrame(cur - 1);
                         }
-
-                        canvas.commitSelection(cur);
-                        canvas.addFrameAt(0);
-                        timeline.addFrameAt(0);
-                        timeline.setFrame(0);
-                        showMessage("Added Frame 1 at start", sf::Color::Green);
+                        else {
+                            if (canvas.isFrameEmpty(0)) {
+                                if (g_warnLeftPending && g_warnLeftClock.getElapsedTime().asSeconds() <= 3.5f) {
+                                    g_warnLeftPending = false;
+                                    canvas.commitSelection(0);
+                                    canvas.clearObjectSelection();
+                                    canvas.addFrameAt(0);
+                                    timeline.addFrameAt(0);
+                                    timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+                                    timeline.setFrame(0);
+                                    showMessage("Added Frame 1 at start", sf::Color::Green);
+                                }
+                                else {
+                                    g_warnLeftPending = true;
+                                    g_warnLeftClock.restart();
+                                    showMessage("Current frame is empty. Press Left Arrow again to add frame.", sf::Color::Yellow);
+                                }
+                            }
+                            else {
+                                g_warnLeftPending = false;
+                                canvas.commitSelection(0);
+                                canvas.clearObjectSelection();
+                                canvas.addFrameAt(0);
+                                timeline.addFrameAt(0);
+                                timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+                                timeline.setFrame(0);
+                                showMessage("Added Frame 1 at start", sf::Color::Green);
+                            }
+                        }
                     }
                 }
+                else if (isRight) {
+                    if (!g_timelineRightHeld) {
+                        g_timelineRightHeld = true;
 
-                if (keybindManager.isActionTriggered("time_next", event) ||
-                    (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Right)) {
-                    int cur = timeline.getCurrentFrame();
-                    int total = static_cast<int>(canvas.getFrameCount());
+                        int total = static_cast<int>(canvas.getFrameCount());
+                        timeline.syncWithCanvas(total);
+                        int cur = timeline.getCurrentFrame();
 
-                    if (cur < total - 1) {
-                        canvas.commitSelection(cur);
-                        timeline.nextFrame();
-                    }
-                    else {
-                        static sf::Clock s_warnClockRight;
-                        static bool s_warnActiveRight = false;
-
-                        if (canvas.isFrameEmpty(cur)) {
-                            if (!s_warnActiveRight || s_warnClockRight.getElapsedTime().asSeconds() > 3.0f) {
-                                s_warnActiveRight = true;
-                                s_warnClockRight.restart();
-                                showMessage("Current frame is empty. Press Right Arrow again to add frame.", sf::Color::Yellow);
-                                return;
-                            }
-                            s_warnActiveRight = false;
+                        if (cur < total - 1) {
+                            g_warnLeftPending = false;
+                            g_warnRightPending = false;
+                            canvas.commitSelection(cur);
+                            canvas.clearObjectSelection();
+                            timeline.setFrame(cur + 1);
                         }
-
-                        canvas.commitSelection(cur);
-                        canvas.addFrame(cur);
-                        timeline.addFrameAfter(cur);
-                        timeline.setFrame(cur + 1);
-                        showMessage("Added Frame " + std::to_string(cur + 2), sf::Color::Green);
+                        else {
+                            if (canvas.isFrameEmpty(cur)) {
+                                if (g_warnRightPending && g_warnRightClock.getElapsedTime().asSeconds() <= 3.5f) {
+                                    g_warnRightPending = false;
+                                    canvas.commitSelection(cur);
+                                    canvas.clearObjectSelection();
+                                    canvas.addFrame(cur);
+                                    timeline.addFrameAfter(cur);
+                                    timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+                                    timeline.setFrame(cur + 1);
+                                    showMessage("Added Frame " + std::to_string(cur + 2), sf::Color::Green);
+                                }
+                                else {
+                                    g_warnRightPending = true;
+                                    g_warnRightClock.restart();
+                                    showMessage("Current frame is empty. Press Right Arrow again to add frame.", sf::Color::Yellow);
+                                }
+                            }
+                            else {
+                                g_warnRightPending = false;
+                                canvas.commitSelection(cur);
+                                canvas.clearObjectSelection();
+                                canvas.addFrame(cur);
+                                timeline.addFrameAfter(cur);
+                                timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+                                timeline.setFrame(cur + 1);
+                                showMessage("Added Frame " + std::to_string(cur + 2), sf::Color::Green);
+                            }
+                        }
                     }
                 }
 
                 if (keybindManager.isActionTriggered("time_add", event)) {
-                    canvas.addFrame(timeline.getCurrentFrame());
-                    timeline.addFrameAfter(timeline.getCurrentFrame());
-                    timeline.nextFrame();
+                    int cur = timeline.getCurrentFrame();
+                    canvas.commitSelection(cur);
+                    canvas.clearObjectSelection();
+                    canvas.addFrame(cur);
+                    timeline.addFrameAfter(cur);
+                    timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+                    timeline.setFrame(cur + 1);
+                    showMessage("Added Frame " + std::to_string(cur + 2), sf::Color::Green);
                 }
                 if (keybindManager.isActionTriggered("time_del", event)) {
                     if (canvas.getFrameCount() > 1) {
                         int cur = timeline.getCurrentFrame();
+                        canvas.commitSelection(cur);
+                        canvas.clearObjectSelection();
                         canvas.deleteFrame(cur);
                         timeline.deleteFrame(cur);
+                        timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
                         if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) {
                             timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
                         }
+                        showMessage("Deleted Frame " + std::to_string(cur + 1), sf::Color::Cyan);
                     }
                 }
 
@@ -2716,6 +2748,13 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         if (m_showTimeline) {
             sf::FloatRect headerBounds(0.0f, regions.timeline.top, 1920.0f, 28.0f);
             m_timelineHeader.SetBounds(headerBounds);
+            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
+                g_timelineLeftHeld = false;
+            }
+            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
+                g_timelineRightHeld = false;
+            }
+
             m_timelineHeader.SyncState(timeline.isPlaying(), timeline.getCurrentFrame(), static_cast<int>(canvas.getFrameCount()), timeline.getFps(), canvas.isOnionSkinEnabled());
             m_timelineHeader.Update(dt, mousePos);
             bottomTimeline.update(dt, focusMode);
