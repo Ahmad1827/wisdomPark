@@ -39,6 +39,11 @@ static bool g_warnLeftPending = false;
 static bool g_warnRightPending = false;
 static sf::Clock g_warnLeftClock;
 static sf::Clock g_warnRightClock;
+static float g_timelineScrollX = 0.0f;
+static bool g_isDraggingTimeline = false;
+static float g_timelineDragStartMouseX = 0.0f;
+static float g_timelineDragStartScrollX = 0.0f;
+static bool g_timelineDragMoved = false;
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -1002,6 +1007,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     if (event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::MouseButtonReleased) {
         pixelPos = sf::Vector2i(event.mouseButton.x, event.mouseButton.y);
     }
+    else if (event.type == sf::Event::MouseMoved) {
+        pixelPos = sf::Vector2i(event.mouseMove.x, event.mouseMove.y);
+    }
     sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
     sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
 
@@ -1548,6 +1556,138 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         )) return;
 
+        if (m_showTimeline) {
+            float timelineY = 1080.0f - WisdomUI::Theme::StatusBarHeight - WisdomUI::Theme::TimelineHeight;
+            sf::FloatRect timelinePanelBounds(0.0f, timelineY, 1920.0f, WisdomUI::Theme::TimelineHeight + WisdomUI::Theme::StatusBarHeight);
+
+            float cardW = 90.0f;
+            float cardSpacing = 12.0f;
+            int totalFrames = static_cast<int>(canvas.getFrameCount());
+            float trayW = 1920.0f - 24.0f;
+            float maxScroll = std::max(0.0f, (24.0f + totalFrames * (cardW + cardSpacing)) - trayW);
+
+            if (g_isDraggingTimeline) {
+                if (event.type == sf::Event::MouseMoved) {
+                    float deltaX = mousePos.x - g_timelineDragStartMouseX;
+                    if (std::abs(deltaX) > 4.0f) {
+                        g_timelineDragMoved = true;
+                    }
+                    g_timelineScrollX = std::clamp(g_timelineDragStartScrollX - deltaX, 0.0f, maxScroll);
+                    return;
+                }
+                if (event.type == sf::Event::MouseButtonReleased) {
+                    g_isDraggingTimeline = false;
+                    if (!g_timelineDragMoved && event.mouseButton.button == sf::Mouse::Left) {
+                        sf::FloatRect trayBounds(12.0f, timelineY + 32.0f, 1920.0f - 24.0f, WisdomUI::Theme::TimelineHeight - 40.0f);
+                        if (trayBounds.contains(mousePos)) {
+                            float startX = trayBounds.left + 12.0f - g_timelineScrollX;
+                            float cardY = timelineY + 42.0f;
+                            float cardH = 120.0f;
+                            timeline.syncWithCanvas(totalFrames);
+
+                            for (int i = 0; i < totalFrames; ++i) {
+                                sf::FloatRect cardBounds(startX, cardY, cardW, cardH);
+                                if (cardBounds.contains(mousePos)) {
+                                    canvas.commitSelection(timeline.getCurrentFrame());
+                                    canvas.clearObjectSelection();
+                                    timeline.setFrame(i);
+                                    return;
+                                }
+                                startX += cardW + cardSpacing;
+                            }
+                        }
+                    }
+                    return;
+                }
+            }
+
+            if (timelinePanelBounds.contains(mousePos)) {
+                if (event.type == sf::Event::MouseWheelScrolled) {
+                    g_timelineScrollX = std::clamp(g_timelineScrollX - event.mouseWheelScroll.delta * 50.0f, 0.0f, maxScroll);
+                    return;
+                }
+
+                if (event.type == sf::Event::MouseButtonPressed) {
+                    if (event.mouseButton.button == sf::Mouse::Middle) {
+                        g_isDraggingTimeline = true;
+                        g_timelineDragStartMouseX = mousePos.x;
+                        g_timelineDragStartScrollX = g_timelineScrollX;
+                        g_timelineDragMoved = false;
+                        return;
+                    }
+
+                    if (event.mouseButton.button == sf::Mouse::Left) {
+                        sf::FloatRect headerBounds(0.0f, timelineY, 1920.0f, 28.0f);
+                        sf::FloatRect playBtn(120.0f, headerBounds.top + 3.0f, 65.0f, 22.0f);
+                        sf::FloatRect addBtn(192.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
+                        sf::FloatRect dupBtn(252.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
+                        sf::FloatRect delBtn(312.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
+                        sf::FloatRect onionBtn(372.0f, headerBounds.top + 3.0f, 75.0f, 22.0f);
+                        sf::FloatRect closeBtn(1920.0f - 32.0f, headerBounds.top + 3.0f, 22.0f, 22.0f);
+
+                        if (playBtn.contains(mousePos)) { timeline.togglePlayback(); return; }
+                        if (addBtn.contains(mousePos)) {
+                            int cur = timeline.getCurrentFrame();
+                            canvas.commitSelection(cur);
+                            canvas.clearObjectSelection();
+                            canvas.addFrame(cur);
+                            timeline.addFrameAfter(cur);
+                            timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+                            timeline.setFrame(cur + 1);
+                            return;
+                        }
+                        if (dupBtn.contains(mousePos)) {
+                            int cur = timeline.getCurrentFrame();
+                            canvas.commitSelection(cur);
+                            canvas.clearObjectSelection();
+                            canvas.duplicateFrame(cur);
+                            timeline.duplicateFrame(cur);
+                            timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+                            timeline.setFrame(cur + 1);
+                            return;
+                        }
+                        if (delBtn.contains(mousePos)) {
+                            if (canvas.getFrameCount() > 1) {
+                                int cur = timeline.getCurrentFrame();
+                                canvas.commitSelection(cur);
+                                canvas.clearObjectSelection();
+                                canvas.deleteFrame(cur);
+                                timeline.deleteFrame(cur);
+                                timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+                                if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) {
+                                    timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
+                                }
+                            }
+                            return;
+                        }
+                        if (onionBtn.contains(mousePos)) {
+                            canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
+                            return;
+                        }
+                        if (closeBtn.contains(mousePos)) {
+                            m_showTimeline = false;
+                            return;
+                        }
+
+                        sf::FloatRect trayBounds(12.0f, timelineY + 32.0f, 1920.0f - 24.0f, WisdomUI::Theme::TimelineHeight - 40.0f);
+                        if (trayBounds.contains(mousePos)) {
+                            g_isDraggingTimeline = true;
+                            g_timelineDragStartMouseX = mousePos.x;
+                            g_timelineDragStartScrollX = g_timelineScrollX;
+                            g_timelineDragMoved = false;
+                            return;
+                        }
+                    }
+                    return;
+                }
+
+                if (event.type == sf::Event::MouseButtonReleased) {
+                    g_isDraggingTimeline = false;
+                    return;
+                }
+            }
+        }
+
         if (m_activeRightTab == RightTabMode::Layers) {
             if (layerPanel.handleEvent(event, mousePos, canvas, timeline.getCurrentFrame())) return;
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
@@ -1644,78 +1784,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
 
-        if (m_showTimeline) {
-            float timelineY = 1080.0f - WisdomUI::Theme::StatusBarHeight - WisdomUI::Theme::TimelineHeight;
-            sf::FloatRect timelinePanelBounds(0.0f, timelineY, 1920.0f, WisdomUI::Theme::TimelineHeight + WisdomUI::Theme::StatusBarHeight);
-
-            if (event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::MouseButtonReleased) {
-                if (timelinePanelBounds.contains(mousePos)) {
-                    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                        sf::FloatRect headerBounds(0.0f, timelineY, 1920.0f, 28.0f);
-                        sf::FloatRect playBtn(120.0f, headerBounds.top + 3.0f, 65.0f, 22.0f);
-                        sf::FloatRect addBtn(192.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
-                        sf::FloatRect dupBtn(252.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
-                        sf::FloatRect delBtn(312.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
-                        sf::FloatRect onionBtn(372.0f, headerBounds.top + 3.0f, 75.0f, 22.0f);
-                        sf::FloatRect closeBtn(1920.0f - 32.0f, headerBounds.top + 3.0f, 22.0f, 22.0f);
-
-                        if (playBtn.contains(mousePos)) { timeline.togglePlayback(); return; }
-                        if (addBtn.contains(mousePos)) {
-                            int cur = timeline.getCurrentFrame();
-                            canvas.addFrame(cur);
-                            timeline.addFrameAfter(cur);
-                            timeline.setFrame(cur + 1);
-                            return;
-                        }
-                        if (dupBtn.contains(mousePos)) {
-                            int cur = timeline.getCurrentFrame();
-                            canvas.duplicateFrame(cur);
-                            timeline.duplicateFrame(cur);
-                            timeline.setFrame(cur + 1);
-                            return;
-                        }
-                        if (delBtn.contains(mousePos)) {
-                            if (canvas.getFrameCount() > 1) {
-                                int cur = timeline.getCurrentFrame();
-                                canvas.deleteFrame(cur);
-                                timeline.deleteFrame(cur);
-                                if (timeline.getCurrentFrame() >= static_cast<int>(canvas.getFrameCount())) {
-                                    timeline.setFrame(static_cast<int>(canvas.getFrameCount()) - 1);
-                                }
-                            }
-                            return;
-                        }
-                        if (onionBtn.contains(mousePos)) {
-                            canvas.setOnionSkin(!canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevOpacity(), canvas.getOnionSkinNextOpacity());
-                            return;
-                        }
-                        if (closeBtn.contains(mousePos)) {
-                            m_showTimeline = false;
-                            return;
-                        }
-
-                        float cardW = 90.0f;
-                        float cardH = 120.0f;
-                        float startX = 20.0f;
-                        float cardY = timelineY + 42.0f;
-                        int totalFrames = static_cast<int>(canvas.getFrameCount());
-                        timeline.syncWithCanvas(totalFrames);
-
-                        for (int i = 0; i < totalFrames; ++i) {
-                            sf::FloatRect cardBounds(startX, cardY, cardW, cardH);
-                            if (cardBounds.contains(mousePos)) {
-                                canvas.commitSelection(timeline.getCurrentFrame());
-                                canvas.clearObjectSelection();
-                                timeline.setFrame(i);
-                                return;
-                            }
-                            startX += cardW + 12.0f;
-                        }
-                    }
-                    return;
-                }
-            }
-        }
 
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F8) {
             m_debugUseSpriteStudio = !m_debugUseSpriteStudio;
@@ -2939,65 +3007,116 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
             float cardW = 90.0f;
             float cardH = 120.0f;
-            float startX = 24.0f;
-            float cardY = timelineY + 42.0f;
+            float cardSpacing = 12.0f;
             int totalFrames = static_cast<int>(canvas.getFrameCount());
             int curFrame = timeline.getCurrentFrame();
 
-            float canvasW = static_cast<float>(canvas.getCanvasSize().x);
-            float canvasH = static_cast<float>(canvas.getCanvasSize().y);
+            float maxScroll = std::max(0.0f, (24.0f + totalFrames * (cardW + cardSpacing)) - trayBounds.width);
+
+            static int s_lastTrackedFrame = -1;
+            if (s_lastTrackedFrame != curFrame && !g_isDraggingTimeline) {
+                s_lastTrackedFrame = curFrame;
+                float curCardLeft = 12.0f + curFrame * (cardW + cardSpacing) - g_timelineScrollX;
+                float curCardRight = curCardLeft + cardW;
+                if (curCardLeft < 12.0f) {
+                    g_timelineScrollX = curFrame * (cardW + cardSpacing);
+                }
+                else if (curCardRight > trayBounds.width - 12.0f) {
+                    g_timelineScrollX = (curFrame + 1) * (cardW + cardSpacing) + 24.0f - trayBounds.width;
+                }
+            }
+            g_timelineScrollX = std::clamp(g_timelineScrollX, 0.0f, maxScroll);
+
+            sf::View defaultView = window.getView();
+            sf::FloatRect vp = defaultView.getViewport();
+            sf::View trayView(sf::FloatRect(trayBounds.left, trayBounds.top, trayBounds.width, trayBounds.height));
+            trayView.setViewport(sf::FloatRect(
+                vp.left + (trayBounds.left / 1920.0f) * vp.width,
+                vp.top + (trayBounds.top / 1080.0f) * vp.height,
+                (trayBounds.width / 1920.0f) * vp.width,
+                (trayBounds.height / 1080.0f) * vp.height
+            ));
+            window.setView(trayView);
+
+            float startX = trayBounds.left + 12.0f - g_timelineScrollX;
+            float cardY = timelineY + 42.0f;
 
             for (int i = 0; i < totalFrames; ++i) {
-                bool isSelected = (i == curFrame);
+                if (startX + cardW >= trayBounds.left && startX <= trayBounds.left + trayBounds.width) {
+                    bool isSelected = (i == curFrame);
 
-                sf::FloatRect cardBounds(startX, cardY, cardW, cardH);
-                sf::RectangleShape card(sf::Vector2f(cardW, cardH));
-                card.setPosition(startX, cardY);
-                card.setFillColor(isSelected ? WisdomUI::Theme::SunsetSkyMid : WisdomUI::Theme::SunsetSkyTop);
-                card.setOutlineThickness(isSelected ? 2.0f : 1.0f);
-                card.setOutlineColor(isSelected ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum);
-                window.draw(card);
+                    sf::FloatRect cardBounds(startX, cardY, cardW, cardH);
+                    sf::RectangleShape card(sf::Vector2f(cardW, cardH));
+                    card.setPosition(startX, cardY);
+                    card.setFillColor(isSelected ? WisdomUI::Theme::SunsetSkyMid : WisdomUI::Theme::SunsetSkyTop);
+                    card.setOutlineThickness(isSelected ? 2.0f : 1.0f);
+                    card.setOutlineColor(isSelected ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum);
+                    window.draw(card);
 
-                float boxW = cardW - 14.0f;
-                float boxH = cardH - 36.0f;
-                float boxX = startX + 7.0f;
-                float boxY = cardY + 7.0f;
+                    float boxW = cardW - 14.0f;
+                    float boxH = cardH - 36.0f;
+                    float boxX = startX + 7.0f;
+                    float boxY = cardY + 7.0f;
 
-                sf::RectangleShape thumbBase(sf::Vector2f(boxW, boxH));
-                thumbBase.setPosition(boxX, boxY);
-                thumbBase.setFillColor(sf::Color(210, 210, 210));
-                thumbBase.setOutlineThickness(1.f);
-                thumbBase.setOutlineColor(WisdomUI::Theme::SunsetCoralDark);
-                window.draw(thumbBase);
+                    sf::RectangleShape thumbBase(sf::Vector2f(boxW, boxH));
+                    thumbBase.setPosition(boxX, boxY);
+                    thumbBase.setFillColor(sf::Color(210, 210, 210));
+                    thumbBase.setOutlineThickness(1.f);
+                    thumbBase.setOutlineColor(WisdomUI::Theme::SunsetCoralDark);
+                    window.draw(thumbBase);
 
-                int gridCols = 8;
-                int gridRows = 8;
-                float cellW = boxW / static_cast<float>(gridCols);
-                float cellH = boxH / static_cast<float>(gridRows);
+                    int gridCols = 8;
+                    int gridRows = 8;
+                    float cellW = boxW / static_cast<float>(gridCols);
+                    float cellH = boxH / static_cast<float>(gridRows);
 
-                for (int r = 0; r < gridRows; ++r) {
-                    for (int c = 0; c < gridCols; ++c) {
-                        if ((r + c) % 2 == 1) {
-                            sf::RectangleShape cell(sf::Vector2f(cellW, cellH));
-                            cell.setPosition(boxX + c * cellW, boxY + r * cellH);
-                            cell.setFillColor(sf::Color(180, 180, 180));
-                            window.draw(cell);
+                    for (int r = 0; r < gridRows; ++r) {
+                        for (int c = 0; c < gridCols; ++c) {
+                            if ((r + c) % 2 == 1) {
+                                sf::RectangleShape cell(sf::Vector2f(cellW, cellH));
+                                cell.setPosition(boxX + c * cellW, boxY + r * cellH);
+                                cell.setFillColor(sf::Color(180, 180, 180));
+                                window.draw(cell);
+                            }
                         }
+                    }
+
+                    canvas.drawFrameThumbnail(window, i, sf::FloatRect(boxX + 2.0f, boxY + 2.0f, boxW - 4.0f, boxH - 4.0f));
+
+                    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(i + 1), 12, startX + cardW / 2.0f, cardY + cardH - 14.0f, isSelected ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+
+                    if (isSelected) {
+                        sf::RectangleShape selTag(sf::Vector2f(cardW - 12.0f, 2.0f));
+                        selTag.setPosition(startX + 6.0f, cardY + 3.0f);
+                        selTag.setFillColor(WisdomUI::Theme::SunsetCoral);
+                        window.draw(selTag);
                     }
                 }
 
-                canvas.drawFrameThumbnail(window, i, sf::FloatRect(boxX + 2.0f, boxY + 2.0f, boxW - 4.0f, boxH - 4.0f));
+                startX += cardW + cardSpacing;
+            }
 
-                WisdomUI::Theme::DrawCrispText(window, font, std::to_string(i + 1), 12, startX + cardW / 2.0f, cardY + cardH - 14.0f, isSelected ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+            window.setView(defaultView);
 
-                if (isSelected) {
-                    sf::RectangleShape selTag(sf::Vector2f(cardW - 12.0f, 2.0f));
-                    selTag.setPosition(startX + 6.0f, cardY + 3.0f);
-                    selTag.setFillColor(WisdomUI::Theme::SunsetCoral);
-                    window.draw(selTag);
-                }
+            if (maxScroll > 0.0f) {
+                float trackH = 4.0f;
+                float trackY = trayBounds.top + trayBounds.height - 7.0f;
+                float trackW = trayBounds.width - 24.0f;
+                float trackX = trayBounds.left + 12.0f;
 
-                startX += cardW + 12.0f;
+                sf::RectangleShape track(sf::Vector2f(trackW, trackH));
+                track.setPosition(trackX, trackY);
+                track.setFillColor(sf::Color(15, 8, 20, 180));
+                window.draw(track);
+
+                float thumbRatio = trayBounds.width / (24.0f + totalFrames * (cardW + cardSpacing));
+                float thumbW = std::clamp(trackW * thumbRatio, 40.0f, trackW);
+                float thumbX = trackX + (g_timelineScrollX / maxScroll) * (trackW - thumbW);
+
+                sf::RectangleShape thumb(sf::Vector2f(thumbW, trackH));
+                thumb.setPosition(thumbX, trackY);
+                thumb.setFillColor(g_isDraggingTimeline ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber);
+                window.draw(thumb);
             }
 
             bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
