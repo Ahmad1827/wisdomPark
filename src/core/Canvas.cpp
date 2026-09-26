@@ -3007,8 +3007,6 @@ void Canvas::executeGlobalFill(sf::Color targetColor, sf::Color replacementColor
 void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf::Color replacementColor, sf::Image& image) {
     if (colorMatches(targetColor, replacementColor)) return;
 
-    if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(startPoint.x), static_cast<float>(startPoint.y)))) return;
-
     int w = static_cast<int>(std::min(image.getSize().x, canvasLogicalSize.x));
     int h = static_cast<int>(std::min(image.getSize().y, canvasLogicalSize.y));
 
@@ -3024,59 +3022,38 @@ void Canvas::executeQueueFill(sf::Vector2i startPoint, sf::Color targetColor, sf
 
     if (!colorMatches(getPx(startPoint.x, startPoint.y), targetColor)) return;
 
-    auto canFill = [&](int x, int y) {
-        if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)))) return false;
-        return colorMatches(getPx(x, y), targetColor);
-        };
+    std::vector<uint8_t> visited(static_cast<size_t>(w) * h, 0);
+    std::queue<sf::Vector2i> q;
+    q.push(startPoint);
+    visited[static_cast<size_t>(startPoint.y) * w + startPoint.x] = 1;
 
-    auto setPx = [&](int x, int y, sf::Color c) {
-        size_t idx = (static_cast<size_t>(y) * fullW + static_cast<size_t>(x)) * 4;
-        pixels[idx] = c.r; pixels[idx + 1] = c.g; pixels[idx + 2] = c.b; pixels[idx + 3] = c.a;
-        };
+    while (!q.empty()) {
+        sf::Vector2i pt = q.front();
+        q.pop();
 
-    std::vector<sf::Vector2i> stack;
-    stack.push_back(startPoint);
+        size_t idx = (static_cast<size_t>(pt.y) * fullW + static_cast<size_t>(pt.x)) * 4;
+        pixels[idx + 0] = replacementColor.r;
+        pixels[idx + 1] = replacementColor.g;
+        pixels[idx + 2] = replacementColor.b;
+        pixels[idx + 3] = replacementColor.a;
 
-    while (!stack.empty()) {
-        sf::Vector2i p = stack.back();
-        stack.pop_back();
+        const int dx[4] = { 1, -1, 0, 0 };
+        const int dy[4] = { 0, 0, 1, -1 };
 
-        int x = p.x;
-        int y = p.y;
+        for (int i = 0; i < 4; ++i) {
+            int nx = pt.x + dx[i];
+            int ny = pt.y + dy[i];
 
-        while (x >= 0 && canFill(x, y)) {
-            x--;
-        }
-        x++;
-
-        bool spanAbove = false;
-        bool spanBelow = false;
-
-        while (x < w && canFill(x, y)) {
-            setPx(x, y, replacementColor);
-
-            if (y > 0) {
-                bool match = canFill(x, y - 1);
-                if (!spanAbove && match) {
-                    stack.push_back(sf::Vector2i(x, y - 1));
-                    spanAbove = true;
-                }
-                else if (spanAbove && !match) {
-                    spanAbove = false;
+            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                size_t vIdx = static_cast<size_t>(ny) * w + nx;
+                if (!visited[vIdx]) {
+                    visited[vIdx] = 1;
+                    if (selection.isActive() && !selection.isPointInsideSelection(sf::Vector2f(static_cast<float>(nx), static_cast<float>(ny)))) continue;
+                    if (colorMatches(getPx(nx, ny), targetColor)) {
+                        q.push(sf::Vector2i(nx, ny));
+                    }
                 }
             }
-
-            if (y < h - 1) {
-                bool match = canFill(x, y + 1);
-                if (!spanBelow && match) {
-                    stack.push_back(sf::Vector2i(x, y + 1));
-                    spanBelow = true;
-                }
-                else if (spanBelow && !match) {
-                    spanBelow = false;
-                }
-            }
-            x++;
         }
     }
 }
@@ -3959,28 +3936,81 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
             if (activeTool == ToolType::Fill) {
                 if (isPixelMode) {
-                    fillTolerance = 0.0f;
-                    saveUndoState();
                     sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
                     if (!targetTex) return;
 
-                    sf::Image img = targetTex->getTexture().copyToImage();
-                    sf::Vector2i pixelPos(static_cast<int>(localPos.x), static_cast<int>(localPos.y));
+                    int cW = static_cast<int>(canvasLogicalSize.x);
+                    int cH = static_cast<int>(canvasLogicalSize.y);
+                    if (cW <= 0 || cH <= 0) return;
 
-                    if (pixelPos.x >= 0 && pixelPos.y >= 0 && pixelPos.x < static_cast<int>(img.getSize().x) && pixelPos.y < static_cast<int>(img.getSize().y)) {
-                        sf::Color targetCol = img.getPixel(pixelPos.x, pixelPos.y);
+                    int px = -1;
+                    int py = -1;
 
-                        if (fillContiguous) executeQueueFill(pixelPos, targetCol, drawCol, img);
-                        else executeGlobalFill(targetCol, drawCol, img);
-
-                        sf::Texture tex;
-                        tex.loadFromImage(img);
-                        sf::Sprite spr(tex);
-                        targetTex->clear(sf::Color::Transparent);
-                        targetTex->draw(spr, sf::RenderStates(sf::BlendNone));
-                        targetTex->display();
-                        isDirty = true;
+                    if (drawArea.width > 0.0f && drawArea.height > 0.0f &&
+                        localPos.x >= drawArea.left && localPos.x <= drawArea.left + drawArea.width &&
+                        localPos.y >= drawArea.top && localPos.y <= drawArea.top + drawArea.height) {
+                        float normX = (localPos.x - drawArea.left) / drawArea.width;
+                        float normY = (localPos.y - drawArea.top) / drawArea.height;
+                        px = std::clamp(static_cast<int>(std::floor(normX * cW)), 0, cW - 1);
+                        py = std::clamp(static_cast<int>(std::floor(normY * cH)), 0, cH - 1);
                     }
+                    else if (localPos.x >= 0.0f && localPos.x < cW && localPos.y >= 0.0f && localPos.y < cH) {
+                        px = static_cast<int>(localPos.x);
+                        py = static_cast<int>(localPos.y);
+                    }
+
+                    if (px < 0 || py < 0 || px >= cW || py >= cH) {
+                        return;
+                    }
+
+                    sf::RenderTexture bakeTex;
+                    if (!bakeTex.create(cW, cH)) return;
+                    bakeTex.clear(sf::Color::Transparent);
+
+                    sf::Sprite baseSpr(targetTex->getTexture());
+                    bakeTex.draw(baseSpr);
+
+                    for (const auto& cImg : m_canvasImages) {
+                        if (cImg.frame == currentFrame && cImg.layer == activeLayer && cImg.texture &&
+                            cImg.texture->getSize().x > 0 && cImg.texture->getSize().y > 0) {
+                            sf::Sprite s(*cImg.texture);
+                            s.setPosition(std::round(cImg.bounds.left), std::round(cImg.bounds.top));
+                            float sx = std::round(cImg.bounds.width) / static_cast<float>(cImg.texture->getSize().x);
+                            float sy = std::round(cImg.bounds.height) / static_cast<float>(cImg.texture->getSize().y);
+                            s.setScale(sx, sy);
+                            bakeTex.draw(s);
+                        }
+                    }
+                    bakeTex.display();
+
+                    sf::Image img = bakeTex.getTexture().copyToImage();
+                    sf::Color targetCol = img.getPixel(px, py);
+                    if (targetCol == drawCol) return;
+
+                    saveUndoState();
+                    fillTolerance = 0.0f;
+                    sf::Vector2i pixelPos(px, py);
+
+                    if (fillContiguous) executeQueueFill(pixelPos, targetCol, drawCol, img);
+                    else executeGlobalFill(targetCol, drawCol, img);
+
+                    for (auto it = m_canvasImages.begin(); it != m_canvasImages.end(); ) {
+                        if (it->frame == currentFrame && it->layer == activeLayer) {
+                            it = m_canvasImages.erase(it);
+                        }
+                        else {
+                            ++it;
+                        }
+                    }
+
+                    sf::Texture newTex;
+                    newTex.loadFromImage(img);
+                    sf::Sprite resultSpr(newTex);
+                    targetTex->clear(sf::Color::Transparent);
+                    targetTex->draw(resultSpr, sf::RenderStates(sf::BlendNone));
+                    targetTex->display();
+
+                    isDirty = true;
                     return;
                 }
                 else {
