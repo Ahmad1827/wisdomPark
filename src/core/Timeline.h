@@ -33,6 +33,7 @@ public:
 
     void addFrame();
     void addFrameAfter(int index);
+    void addFrameAt(int targetIndex);
     void deleteFrame(int index);
     void duplicateFrame(int index);
     void swapFrames(int indexA, int indexB);

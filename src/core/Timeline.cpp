@@ -40,10 +40,20 @@ void Timeline::addFrame() {
     loopEnd = playbackEnd;
 }
 
+void Timeline::addFrameAt(int targetIndex) {
+    TimelineFrame newFrame;
+    newFrame.thumbnail.create(64, 64, sf::Color(40, 40, 40));
+    targetIndex = std::clamp(targetIndex, 0, static_cast<int>(frames.size()));
+    frames.insert(frames.begin() + targetIndex, newFrame);
+    playbackEnd = static_cast<int>(frames.size()) - 1;
+    loopEnd = playbackEnd;
+}
+
 void Timeline::addFrameAfter(int index) {
     TimelineFrame newFrame;
     newFrame.thumbnail.create(64, 64, sf::Color(40, 40, 40));
-    frames.insert(frames.begin() + (index + 1), newFrame);
+    int target = (index >= 0 && index < static_cast<int>(frames.size())) ? (index + 1) : static_cast<int>(frames.size());
+    frames.insert(frames.begin() + target, newFrame);
     playbackEnd = static_cast<int>(frames.size()) - 1;
     loopEnd = playbackEnd;
 }

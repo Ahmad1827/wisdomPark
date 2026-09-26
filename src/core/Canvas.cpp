@@ -381,11 +381,6 @@ void Canvas::drawLayerContent(sf::RenderTarget& target, int frameIndex, int laye
 
             s_pixelComposite.clear(sf::Color::Transparent);
 
-            if (layer.texture) {
-                sf::Sprite base(layer.texture->getTexture());
-                s_pixelComposite.draw(base);
-            }
-
             for (const auto& cImg : m_canvasImages) {
                 if (cImg.frame == frameIndex && cImg.layer == layerIndex && cImg.texture &&
                     cImg.texture->getSize().x > 0 && cImg.texture->getSize().y > 0) {
@@ -396,6 +391,11 @@ void Canvas::drawLayerContent(sf::RenderTarget& target, int frameIndex, int laye
                     spr.setScale(sx, sy);
                     s_pixelComposite.draw(spr);
                 }
+            }
+
+            if (layer.texture) {
+                sf::Sprite base(layer.texture->getTexture());
+                s_pixelComposite.draw(base);
             }
 
             s_pixelComposite.display();
@@ -796,11 +796,39 @@ sf::Transform Canvas::getTransform() const {
 
 sf::Transform Canvas::getInverseTransform() const { return getTransform().getInverse(); }
 
-void Canvas::addFrame(int index) {
+bool Canvas::isFrameEmpty(int frameIndex) const {
+    if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return true;
+
+    for (const auto& ci : m_canvasImages) {
+        if (ci.frame == frameIndex) return false;
+    }
+
+    for (const auto& vs : m_vectorStrokes) {
+        if (vs.frame == frameIndex && !vs.isErase) return false;
+    }
+
+    const Frame& f = frames[frameIndex];
+    for (size_t li = 0; li < f.layers.size(); ++li) {
+        if (f.layers[li].persistent) continue;
+        if (f.layers[li].texture) {
+            sf::Image img = f.layers[li].texture->getTexture().copyToImage();
+            const sf::Uint8* ptr = img.getPixelsPtr();
+            size_t total = static_cast<size_t>(img.getSize().x) * img.getSize().y;
+            for (size_t p = 0; p < total; ++p) {
+                if (ptr[p * 4 + 3] > 10) return false;
+            }
+        }
+    }
+    return true;
+}
+
+void Canvas::addFrameAt(int targetIndex) {
     saveUndoState();
     Frame newFrame;
     newFrame.layers.clear();
-    int srcIndex = (index >= 0 && index < static_cast<int>(frames.size())) ? index : 0;
+
+    targetIndex = std::clamp(targetIndex, 0, static_cast<int>(frames.size()));
+    int srcIndex = (targetIndex < static_cast<int>(frames.size())) ? targetIndex : std::max(0, static_cast<int>(frames.size()) - 1);
 
     for (const auto& l : frames[srcIndex].layers) {
         Layer newL(l.name);
@@ -827,11 +855,61 @@ void Canvas::addFrame(int index) {
 
     if (!isPixelMode) {
         for (auto& vs : m_vectorStrokes) {
-            if (vs.frame > index) vs.frame++;
+            if (vs.frame >= targetIndex) vs.frame++;
+        }
+    }
+    else {
+        for (auto& ci : m_canvasImages) {
+            if (ci.frame >= targetIndex) ci.frame++;
         }
     }
 
-    frames.insert(frames.begin() + (index + 1), newFrame);
+    frames.insert(frames.begin() + targetIndex, newFrame);
+}
+
+void Canvas::addFrame(int index) {
+    saveUndoState();
+    Frame newFrame;
+    newFrame.layers.clear();
+
+    int targetInsert = (index >= 0 && index < static_cast<int>(frames.size())) ? (index + 1) : static_cast<int>(frames.size());
+    int srcIndex = (index >= 0 && index < static_cast<int>(frames.size())) ? index : std::max(0, static_cast<int>(frames.size()) - 1);
+
+    for (const auto& l : frames[srcIndex].layers) {
+        Layer newL(l.name);
+        newL.visible = l.visible;
+        newL.locked = l.locked;
+        newL.opacity = l.opacity;
+        newL.blendMode = l.blendMode;
+        newL.persistent = l.persistent;
+        newL.colorTag = l.colorTag;
+        if (l.persistent) {
+            newL.texture = l.texture;
+        }
+        else {
+            sf::ContextSettings ctx;
+            ctx.antialiasingLevel = isPixelMode ? 0 : 8;
+            if (!newL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y, ctx)) {
+                newL.texture->create(canvasLogicalSize.x, canvasLogicalSize.y);
+            }
+            newL.texture->clear(sf::Color::Transparent);
+            newL.texture->setSmooth(!isPixelMode);
+        }
+        newFrame.layers.push_back(newL);
+    }
+
+    if (!isPixelMode) {
+        for (auto& vs : m_vectorStrokes) {
+            if (vs.frame >= targetInsert) vs.frame++;
+        }
+    }
+    else {
+        for (auto& ci : m_canvasImages) {
+            if (ci.frame >= targetInsert) ci.frame++;
+        }
+    }
+
+    frames.insert(frames.begin() + targetInsert, newFrame);
 }
 
 void Canvas::duplicateFrame(int index) {
@@ -851,6 +929,27 @@ void Canvas::duplicateFrame(int index) {
             }
             for (auto& c : copies) m_vectorStrokes.push_back(std::move(c));
         }
+        else {
+            std::vector<CanvasImage> copies;
+            for (const auto& ci : m_canvasImages) {
+                if (ci.frame == index) {
+                    CanvasImage c = ci;
+                    c.id = ++m_nextImageId;
+                    c.frame = index + 1;
+                    if (ci.texture) {
+                        auto nTex = std::make_shared<sf::Texture>();
+                        nTex->setSmooth(false);
+                        nTex->loadFromImage(ci.texture->copyToImage());
+                        c.texture = nTex;
+                    }
+                    copies.push_back(std::move(c));
+                }
+            }
+            for (auto& ci : m_canvasImages) {
+                if (ci.frame > index) ci.frame++;
+            }
+            for (auto& c : copies) m_canvasImages.push_back(std::move(c));
+        }
         frames.insert(frames.begin() + (index + 1), Frame(frames[index]));
     }
 }
@@ -863,6 +962,17 @@ void Canvas::deleteFrame(int index) {
             for (auto it = m_vectorStrokes.begin(); it != m_vectorStrokes.end(); ) {
                 if (it->frame == index) {
                     it = m_vectorStrokes.erase(it);
+                }
+                else {
+                    if (it->frame > index) it->frame--;
+                    ++it;
+                }
+            }
+        }
+        else {
+            for (auto it = m_canvasImages.begin(); it != m_canvasImages.end(); ) {
+                if (it->frame == index) {
+                    it = m_canvasImages.erase(it);
                 }
                 else {
                     if (it->frame > index) it->frame--;
@@ -3395,6 +3505,9 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
     }
 
     if (drawArea.contains(logicalPos)) {
+        if (activeLayer < 0 || activeLayer >= static_cast<int>(frames[currentFrame].layers.size())) {
+            activeLayer = (frames[currentFrame].layers.size() > 1) ? 1 : 0;
+        }
         if (!frames[currentFrame].layers[activeLayer].locked && frames[currentFrame].layers[activeLayer].visible) {
 
             sf::Color drawCol = primaryColor;
@@ -4979,6 +5092,13 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
         sf::Color drawCol = (activeTool == ToolType::Eraser) ? sf::Color::Transparent : primaryColor;
 
         sf::Vector2f targetPos = localPos;
+
+        if (isPixelMode && (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser)) {
+            if (static_cast<int>(lastPos.x) == static_cast<int>(targetPos.x) &&
+                static_cast<int>(lastPos.y) == static_cast<int>(targetPos.y)) {
+                return;
+            }
+        }
         if (m_perspectiveManager && m_perspectiveManager->getActiveConfig() && m_perspectiveManager->getActiveConfig()->guideSettings.brushSnap) {
             if (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser) {
                 int activeVPIndex;
@@ -5203,6 +5323,37 @@ void Canvas::drawLayerThumbnail(sf::RenderTarget& target, int frameIndex, int la
     }
 }
 
+void Canvas::drawFrameThumbnail(sf::RenderTarget& target, int frameIndex, sf::FloatRect bounds) {
+    if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return;
+    float cw = static_cast<float>(canvasLogicalSize.x);
+    float ch = static_cast<float>(canvasLogicalSize.y);
+    if (cw <= 0.f || ch <= 0.f) return;
+
+    float s = std::min(bounds.width / cw, bounds.height / ch);
+    float previewW = cw * s;
+    float previewH = ch * s;
+    float ox = std::round(bounds.left + (bounds.width - previewW) * 0.5f);
+    float oy = std::round(bounds.top + (bounds.height - previewH) * 0.5f);
+
+    sf::RenderStates states;
+    states.transform.translate(ox, oy);
+    states.transform.scale(s, s);
+
+    for (size_t li = 0; li < frames[frameIndex].layers.size(); ++li) {
+        const auto& layer = frames[frameIndex].layers[li];
+        if (!layer.visible) continue;
+
+        sf::RenderStates lStates = states;
+        lStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
+
+        drawLayerContent(target, frameIndex, static_cast<int>(li), lStates, false);
+
+        if (m_textManager) {
+            m_textManager->render(target, frameIndex, static_cast<int>(li), isPixelMode, lStates, canvasLogicalSize);
+        }
+    }
+}
+
 void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, const sf::RenderStates& states) {
     g_activeWindow = &window;
     m_currentFrame = currentFrame;
@@ -5289,11 +5440,27 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                     const auto& layer = frames[prevIdx].layers[li];
                     if (!layer.visible) continue;
 
-                    sf::Sprite onionSpr(layer.texture->getTexture());
-                    onionSpr.setColor(sf::Color(255, 100, 100, static_cast<sf::Uint8>(fadeOpac)));
                     sf::RenderStates oStates = innerStates;
                     oStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
-                    window.draw(onionSpr, oStates);
+
+                    if (layer.texture) {
+                        sf::Sprite onionSpr(layer.texture->getTexture());
+                        onionSpr.setColor(sf::Color(255, 100, 100, static_cast<sf::Uint8>(fadeOpac)));
+                        window.draw(onionSpr, oStates);
+                    }
+
+                    for (const auto& cImg : m_canvasImages) {
+                        if (cImg.frame == prevIdx && cImg.layer == static_cast<int>(li) && cImg.texture &&
+                            cImg.texture->getSize().x > 0 && cImg.texture->getSize().y > 0) {
+                            sf::Sprite spr(*cImg.texture);
+                            spr.setPosition(std::round(cImg.bounds.left), std::round(cImg.bounds.top));
+                            float sx = std::round(cImg.bounds.width) / static_cast<float>(cImg.texture->getSize().x);
+                            float sy = std::round(cImg.bounds.height) / static_cast<float>(cImg.texture->getSize().y);
+                            spr.setScale(sx, sy);
+                            spr.setColor(sf::Color(255, 100, 100, static_cast<sf::Uint8>(fadeOpac)));
+                            window.draw(spr, oStates);
+                        }
+                    }
 
                     if (!isPixelMode) {
                         for (const auto& vs : m_vectorStrokes) {
@@ -5317,11 +5484,27 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                     const auto& layer = frames[nextIdx].layers[li];
                     if (!layer.visible) continue;
 
-                    sf::Sprite onionSpr(layer.texture->getTexture());
-                    onionSpr.setColor(sf::Color(100, 255, 100, static_cast<sf::Uint8>(fadeOpac)));
                     sf::RenderStates oStates = innerStates;
                     oStates.blendMode = getSFMLBlendMode(layer.blendMode).blendMode;
-                    window.draw(onionSpr, oStates);
+
+                    if (layer.texture) {
+                        sf::Sprite onionSpr(layer.texture->getTexture());
+                        onionSpr.setColor(sf::Color(100, 255, 100, static_cast<sf::Uint8>(fadeOpac)));
+                        window.draw(onionSpr, oStates);
+                    }
+
+                    for (const auto& cImg : m_canvasImages) {
+                        if (cImg.frame == nextIdx && cImg.layer == static_cast<int>(li) && cImg.texture &&
+                            cImg.texture->getSize().x > 0 && cImg.texture->getSize().y > 0) {
+                            sf::Sprite spr(*cImg.texture);
+                            spr.setPosition(std::round(cImg.bounds.left), std::round(cImg.bounds.top));
+                            float sx = std::round(cImg.bounds.width) / static_cast<float>(cImg.texture->getSize().x);
+                            float sy = std::round(cImg.bounds.height) / static_cast<float>(cImg.texture->getSize().y);
+                            spr.setScale(sx, sy);
+                            spr.setColor(sf::Color(100, 255, 100, static_cast<sf::Uint8>(fadeOpac)));
+                            window.draw(spr, oStates);
+                        }
+                    }
 
                     if (!isPixelMode) {
                         for (const auto& vs : m_vectorStrokes) {

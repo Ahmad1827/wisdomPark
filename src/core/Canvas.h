@@ -316,9 +316,11 @@ public:
     void resetView();
 
 
-    void addFrame(int index = -1);
+    void addFrame(int index);
+    void addFrameAt(int targetIndex);
     void duplicateFrame(int index);
     void deleteFrame(int index);
+    bool isFrameEmpty(int frameIndex) const;
     void clearAllFrames();
     size_t getFrameCount() const;
     Frame* getFrame(int index);
@@ -439,6 +441,7 @@ public:
     }
 
     void drawLayerThumbnail(sf::RenderTarget& target, int frameIndex, int layerIndex, sf::FloatRect bounds);
+    void drawFrameThumbnail(sf::RenderTarget& target, int frameIndex, sf::FloatRect bounds);
 
     void importImageToActiveLayer(const std::string& filepath, int currentFrame);
     void replaceFrameImage(int frameIndex, const sf::Image& img);
