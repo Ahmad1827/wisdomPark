@@ -16,6 +16,67 @@ static std::vector<VectorStroke> s_globalClipboardVectorStrokes;
 static bool s_hasGlobalVectorClipboard = false;
 static sf::Vector2f s_globalVectorClipboardOrigin;
 
+static sf::Vector2f s_stabVel(0.f, 0.f);
+static sf::Clock s_stabClock;
+static bool s_stabDraining = false;
+
+static void stabilizerAdvance(sf::Vector2f& pos, sf::Vector2f& vel, sf::Vector2f cursor,
+    float stab, float dt, bool drain, std::vector<sf::Vector2f>& out) {
+    stab = std::clamp(stab, 0.f, 1.f);
+    const float h = 1.f / 480.f;
+
+    float rope = drain ? 0.f : 1.5f + stab * 16.f;      // slack before the tip gets pulled
+    float k = 520.f + (38.f - 520.f) * stab;            // spring stiffness (lower = heavier)
+    if (drain) k *= 1.8f;
+    float omega = std::sqrt(k);
+    float damp = 2.f * omega * 0.92f;
+
+    sf::Vector2f lastEmit = pos;
+    auto emit = [&](bool force) {
+        float d = std::hypot(pos.x - lastEmit.x, pos.y - lastEmit.y);
+        if (d >= 0.6f || (force && d > 0.05f)) {
+            out.push_back(pos);
+            lastEmit = pos;
+        }
+        };
+
+    auto step = [&]() {
+        sf::Vector2f toCur = cursor - pos;
+        float dist = std::hypot(toCur.x, toCur.y);
+        sf::Vector2f acc(0.f, 0.f);
+        if (dist > rope) {
+            sf::Vector2f anchor = cursor - toCur / dist * rope;
+            acc += (anchor - pos) * k;
+            acc -= vel * damp;
+        }
+        else {
+            // Inside the slack: no pull, the tip coasts on its own momentum and bleeds speed
+            acc -= vel * (damp * 1.6f);
+            if (vel.x * toCur.x + vel.y * toCur.y < 0.f) acc -= vel * (damp * 2.f);
+        }
+        vel += acc * h;
+        pos += vel * h;
+        };
+
+    if (drain) {
+        for (int i = 0; i < 720; ++i) {
+            step();
+            emit(false);
+            if (std::hypot(cursor.x - pos.x, cursor.y - pos.y) < 0.3f &&
+                std::hypot(vel.x, vel.y) < 4.f) break;
+        }
+        emit(true);
+        return;
+    }
+
+    dt = std::clamp(dt, 0.f, 0.1f);
+    int n = static_cast<int>(std::ceil(dt / h));
+    for (int i = 0; i < n; ++i) {
+        step();
+        emit(false);
+    }
+}
+
 static sf::BlendMode eraseBlendMode() {
     return sf::BlendMode(
         sf::BlendMode::Zero, sf::BlendMode::OneMinusSrcAlpha, sf::BlendMode::Add,
@@ -4245,6 +4306,8 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
             m_isVectorStrokeActive = true;
             m_activeStrokeIsErase = (activeTool == ToolType::Eraser);
             m_stabilizedPos = localPos;
+            s_stabVel = sf::Vector2f(0.f, 0.f);
+            s_stabClock.restart();
             m_vPrevPoint = localPos;
             m_vPrevMidPoint = localPos;
             m_activeVectorMesh.clear();
@@ -4791,6 +4854,12 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
         return;
     }
 
+    if (!isPixelMode && m_isVectorStrokeActive && isDrawing && getStabilizer() > 0.005f) {
+        s_stabDraining = true;
+        handleMouseMoved(logicalPos, rawMousePos, currentFrame);
+        s_stabDraining = false;
+    }
+
     if (!isPixelMode && m_isVectorStrokeActive) {
         if (m_pencil.isActive()) {
             if (std::hypot(localPos.x - m_vPrevPoint.x, localPos.y - m_vPrevPoint.y) > 0.5f) {
@@ -5210,28 +5279,31 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
             if ((activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser)
                 && m_isVectorStrokeActive) {
                 float stab = getStabilizer();
-                sf::Vector2f targetPos = localPos;
+                std::vector<sf::Vector2f> samples;
 
                 if (stab > 0.005f) {
-                    float weight = std::clamp(1.0f - stab * 0.88f, 0.04f, 1.0f);
-                    m_stabilizedPos += (localPos - m_stabilizedPos) * weight;
-                    targetPos = m_stabilizedPos;
+                    float dt = s_stabClock.restart().asSeconds();
+                    stabilizerAdvance(m_stabilizedPos, s_stabVel, localPos, stab, dt, s_stabDraining, samples);
                 }
                 else {
                     m_stabilizedPos = localPos;
+                    s_stabVel = sf::Vector2f(0.f, 0.f);
+                    samples.push_back(localPos);
                 }
 
-                if (m_pencil.isActive()) {
-                    m_pencil.addPoint(targetPos);
-                    rebuildPencilMesh(m_pencil, m_activeVectorMesh, symmetryManager, nullptr);
-                    m_vPrevPoint = targetPos;
-                    m_vPrevMidPoint = targetPos;
-                    isDirty = true;
-                }
-                else {
+                for (const sf::Vector2f& targetPos : samples) {
+                    if (m_pencil.isActive()) {
+                        m_pencil.addPoint(targetPos);
+                        m_vPrevPoint = targetPos;
+                        m_vPrevMidPoint = targetPos;
+                        isDirty = true;
+                        continue;
+                    }
+
                     float dx = targetPos.x - m_vPrevPoint.x;
-                float dy = targetPos.y - m_vPrevPoint.y;
-                if (dx * dx + dy * dy > 0.0001f) {
+                    float dy = targetPos.y - m_vPrevPoint.y;
+                    if (dx * dx + dy * dy <= 0.0001f) continue;
+
                     float radius = std::max(0.75f, brushEngine.getActivePreset().size * 0.5f);
                     sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : primaryColor;
 
@@ -5301,6 +5373,9 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                     m_vPrevMidPoint = targetPos;
                     isDirty = true;
                 }
+
+                if (m_pencil.isActive() && !samples.empty()) {
+                    rebuildPencilMesh(m_pencil, m_activeVectorMesh, symmetryManager, nullptr);
                 }
             }
         }
@@ -5592,6 +5667,8 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 // ink never trails the cursor while waiting for the next MouseMoved event.
     std::size_t liveTailRestoreCount = 0;
     bool liveTailAdded = false;
+    bool showStabRope = false;
+    sf::Vector2f stabRopeCursor(0.f, 0.f);
     if (!isPixelMode && !isPlaying && isDrawing && m_isVectorStrokeActive &&
         sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
         sf::Vector2f mRaw = window.mapPixelToCoords(sf::Mouse::getPosition(window));
@@ -5602,7 +5679,13 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         live.x = std::clamp(live.x, 0.f, static_cast<float>(canvasLogicalSize.x));
         live.y = std::clamp(live.y, 0.f, static_cast<float>(canvasLogicalSize.y));
 
-        if (std::hypot(live.x - m_vPrevPoint.x, live.y - m_vPrevPoint.y) > 0.5f) {
+        if (getStabilizer() > 0.005f) {
+            // Keep the weighted tip moving every frame, even while the mouse stands still
+            handleMouseMoved(mLog, mRaw, currentFrame);
+            showStabRope = true;
+            stabRopeCursor = live;
+        }
+        else if (std::hypot(live.x - m_vPrevPoint.x, live.y - m_vPrevPoint.y) > 0.5f) {
             if (m_pencil.isActive()) {
                 rebuildPencilMesh(m_pencil, m_activeVectorMesh, symmetryManager, &live);
             }
@@ -5654,6 +5737,14 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
 
     if (liveTailAdded) {
         m_activeVectorMesh.resize(liveTailRestoreCount);
+    }
+
+    if (showStabRope) {
+        sf::Vertex rope[2] = {
+            sf::Vertex(m_stabilizedPos, sf::Color(40, 40, 50, 110)),
+            sf::Vertex(stabRopeCursor, sf::Color(40, 40, 50, 40))
+        };
+        window.draw(rope, 2, sf::Lines, innerStates);
     }
 
     if (activeTool == ToolType::Curve && isDeforming && isPixelMode) {
