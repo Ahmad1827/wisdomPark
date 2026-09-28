@@ -67,6 +67,19 @@ static void appendVectorCap(sf::VertexArray& va, sf::Vector2f center, float radi
     }
 }
 
+static void rebuildPencilMesh(const PencilStroke& pen, sf::VertexArray& out,
+    SymmetryManager& sym, const sf::Vector2f* preview) {
+    out.clear();
+    out.setPrimitiveType(sf::Triangles);
+    pen.appendMesh(out, preview);
+    if (sym.enabled) {
+        pen.appendMesh(out, preview, [&sym](sf::Vector2f p) {
+            auto pts = sym.getSymmetricPoints(p);
+            return pts.size() > 1 ? pts[1] : p;
+            });
+    }
+}
+
 static sf::VertexArray meshWithOpacity(const sf::VertexArray& src, float opacity) {
     sf::VertexArray out(src.getPrimitiveType(), src.getVertexCount());
     for (std::size_t i = 0; i < src.getVertexCount(); ++i) {
@@ -2687,6 +2700,9 @@ void Canvas::setActiveTool(ToolType tool, int currentFrame) {
     }
     else if (tool == ToolType::Brush) {
         brushEngine.selectPreset("Paint");
+        if (brushEngine.getActivePreset().name != "Paint") {
+            brushEngine.selectPreset("Brush");
+        }
     }
     else if (tool == ToolType::Eraser) {
         brushEngine.selectPreset("Eraser");
@@ -4196,6 +4212,7 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
                 m_isVectorStrokeActive = false;
                 m_activeVectorMesh.clear();
             }
+            m_pencil.clear();
 
             saveUndoState();
             isDrawing = true;
@@ -4217,61 +4234,65 @@ void Canvas::handleMousePressed(sf::Vector2f logicalPos, bool rightClick, int cu
 
                 drawPixelExact(static_cast<int>(localPos.x), static_cast<int>(localPos.y), pC, currentFrame);
                 frames[currentFrame].layers[activeLayer].texture->display();
+                return;
+            }
+
+            if (activeTool != ToolType::Brush && activeTool != ToolType::Pencil && activeTool != ToolType::Eraser) {
+                brushEngine.resetStroke(localPos);
+                return;
+            }
+
+            m_isVectorStrokeActive = true;
+            m_activeStrokeIsErase = (activeTool == ToolType::Eraser);
+            m_stabilizedPos = localPos;
+            m_vPrevPoint = localPos;
+            m_vPrevMidPoint = localPos;
+            m_activeVectorMesh.clear();
+            m_activeVectorMesh.setPrimitiveType(sf::Triangles);
+
+            float radius = std::max(0.75f, brushEngine.getActivePreset().size * 0.5f);
+            sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : drawCol;
+
+            auto mirrorOf = [&](sf::Vector2f p, sf::Vector2f& outP) -> bool {
+                if (!symmetryManager.enabled) return false;
+                auto pts = symmetryManager.getSymmetricPoints(p);
+                if (pts.size() < 2) return false;
+                outP = pts[1];
+                return outP.x >= 0.f && outP.y >= 0.f &&
+                    outP.x <= static_cast<float>(canvasLogicalSize.x) &&
+                    outP.y <= static_cast<float>(canvasLogicalSize.y);
+                };
+
+            if (activeTool == ToolType::Pencil) {
+                m_pencil.begin(localPos, radius, meshCol);
+                rebuildPencilMesh(m_pencil, m_activeVectorMesh, symmetryManager, nullptr);
             }
             else {
-                if (activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser) {
-                    m_isVectorStrokeActive = true;
-                    m_activeStrokeIsErase = (activeTool == ToolType::Eraser);
-                    m_stabilizedPos = localPos;
-                    m_vPrevPoint = localPos;
-                    m_vPrevMidPoint = localPos;
-                    m_activeVectorMesh.clear();
-                    m_activeVectorMesh.setPrimitiveType(sf::Triangles);
+                appendVectorCap(m_activeVectorMesh, localPos, radius, meshCol);
+                sf::Vector2f s1;
+                if (mirrorOf(localPos, s1)) appendVectorCap(m_activeVectorMesh, s1, radius, meshCol);
+            }
 
-                    float radius = brushEngine.getActivePreset().size * 0.5f;
-                    sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : drawCol;
-                    appendVectorCap(m_activeVectorMesh, localPos, radius, meshCol);
+            if (m_activeStrokeIsErase) {
+                sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
+                if (targetTex) {
+                    sf::RenderStates rs(sf::BlendNone);
+                    sf::CircleShape circle(radius);
+                    circle.setOrigin(radius, radius);
+                    circle.setFillColor(sf::Color::Transparent);
+                    circle.setPosition(localPos);
+                    targetTex->draw(circle, rs);
 
-                    if (symmetryManager.enabled) {
-                        auto symPts = symmetryManager.getSymmetricPoints(localPos);
-                        if (symPts.size() > 1) {
-                            sf::Vector2f sp = symPts[1];
-                            if (sp.x >= 0.f && sp.x <= static_cast<float>(canvasLogicalSize.x) &&
-                                sp.y >= 0.f && sp.y <= static_cast<float>(canvasLogicalSize.y)) {
-                                appendVectorCap(m_activeVectorMesh, sp, radius, meshCol);
-                            }
-                        }
+                    sf::Vector2f s1;
+                    if (mirrorOf(localPos, s1)) {
+                        circle.setPosition(s1);
+                        targetTex->draw(circle, rs);
                     }
-
-                    if (m_activeStrokeIsErase) {
-                        sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
-                        if (targetTex) {
-                            sf::RenderStates rs(sf::BlendNone);
-                            sf::CircleShape circle(radius);
-                            circle.setOrigin(radius, radius);
-                            circle.setPosition(localPos);
-                            circle.setFillColor(sf::Color::Transparent);
-                            targetTex->draw(circle, rs);
-
-                            if (symmetryManager.enabled) {
-                                auto symPts = symmetryManager.getSymmetricPoints(localPos);
-                                if (symPts.size() > 1) {
-                                    sf::Vector2f sp = symPts[1];
-                                    if (sp.x >= 0.f && sp.x <= static_cast<float>(canvasLogicalSize.x) &&
-                                        sp.y >= 0.f && sp.y <= static_cast<float>(canvasLogicalSize.y)) {
-                                        circle.setPosition(sp);
-                                        targetTex->draw(circle, rs);
-                                    }
-                                }
-                            }
-                            targetTex->display();
-                        }
-                    }
-                }
-                else {
-                    brushEngine.resetStroke(localPos);
+                    targetTex->display();
                 }
             }
+
+            isDirty = true;
         }
     }
 }
@@ -4771,46 +4792,56 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
     }
 
     if (!isPixelMode && m_isVectorStrokeActive) {
-        float radius = brushEngine.getActivePreset().size * 0.5f;
-        sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : primaryColor;
+        if (m_pencil.isActive()) {
+            if (std::hypot(localPos.x - m_vPrevPoint.x, localPos.y - m_vPrevPoint.y) > 0.5f) {
+                m_pencil.addPoint(localPos);
+            }
+            m_pencil.finish();
+            rebuildPencilMesh(m_pencil, m_activeVectorMesh, symmetryManager, nullptr);
+            m_pencil.clear();
+        }
+        else {
+            float radius = brushEngine.getActivePreset().size * 0.5f;
+            sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : primaryColor;
 
-        float dEnd = std::hypot(localPos.x - m_vPrevPoint.x, localPos.y - m_vPrevPoint.y);
-        if (dEnd > 1.0f) {
-            appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, meshCol);
-            appendVectorSegment(m_activeVectorMesh, m_vPrevPoint, localPos, radius, meshCol);
-            appendVectorCap(m_activeVectorMesh, localPos, radius, meshCol);
+            float dEnd = std::hypot(localPos.x - m_vPrevPoint.x, localPos.y - m_vPrevPoint.y);
+            if (dEnd > 1.0f) {
+                appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, meshCol);
+                appendVectorSegment(m_activeVectorMesh, m_vPrevPoint, localPos, radius, meshCol);
+                appendVectorCap(m_activeVectorMesh, localPos, radius, meshCol);
 
-            if (symmetryManager.enabled) {
-                auto p1 = symmetryManager.getSymmetricPoints(m_vPrevMidPoint);
-                auto p2 = symmetryManager.getSymmetricPoints(m_vPrevPoint);
-                auto p3 = symmetryManager.getSymmetricPoints(localPos);
-                if (p1.size() > 1 && p2.size() > 1 && p3.size() > 1) {
-                    float cw = static_cast<float>(canvasLogicalSize.x);
-                    float ch = static_cast<float>(canvasLogicalSize.y);
-                    if (p1[1].x >= 0.f && p1[1].x <= cw && p1[1].y >= 0.f && p1[1].y <= ch &&
-                        p2[1].x >= 0.f && p2[1].x <= cw && p2[1].y >= 0.f && p2[1].y <= ch &&
-                        p3[1].x >= 0.f && p3[1].x <= cw && p3[1].y >= 0.f && p3[1].y <= ch) {
-                        appendVectorSegment(m_activeVectorMesh, p1[1], p2[1], radius, meshCol);
-                        appendVectorSegment(m_activeVectorMesh, p2[1], p3[1], radius, meshCol);
-                        appendVectorCap(m_activeVectorMesh, p3[1], radius, meshCol);
+                if (symmetryManager.enabled) {
+                    auto p1 = symmetryManager.getSymmetricPoints(m_vPrevMidPoint);
+                    auto p2 = symmetryManager.getSymmetricPoints(m_vPrevPoint);
+                    auto p3 = symmetryManager.getSymmetricPoints(localPos);
+                    if (p1.size() > 1 && p2.size() > 1 && p3.size() > 1) {
+                        float cw = static_cast<float>(canvasLogicalSize.x);
+                        float ch = static_cast<float>(canvasLogicalSize.y);
+                        if (p1[1].x >= 0.f && p1[1].x <= cw && p1[1].y >= 0.f && p1[1].y <= ch &&
+                            p2[1].x >= 0.f && p2[1].x <= cw && p2[1].y >= 0.f && p2[1].y <= ch &&
+                            p3[1].x >= 0.f && p3[1].x <= cw && p3[1].y >= 0.f && p3[1].y <= ch) {
+                            appendVectorSegment(m_activeVectorMesh, p1[1], p2[1], radius, meshCol);
+                            appendVectorSegment(m_activeVectorMesh, p2[1], p3[1], radius, meshCol);
+                            appendVectorCap(m_activeVectorMesh, p3[1], radius, meshCol);
+                        }
                     }
                 }
             }
-        }
-        else {
-            appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, meshCol);
-            appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, meshCol);
+            else {
+                appendVectorSegment(m_activeVectorMesh, m_vPrevMidPoint, m_vPrevPoint, radius, meshCol);
+                appendVectorCap(m_activeVectorMesh, m_vPrevPoint, radius, meshCol);
 
-            if (symmetryManager.enabled) {
-                auto p1 = symmetryManager.getSymmetricPoints(m_vPrevMidPoint);
-                auto p2 = symmetryManager.getSymmetricPoints(m_vPrevPoint);
-                if (p1.size() > 1 && p2.size() > 1) {
-                    float cw = static_cast<float>(canvasLogicalSize.x);
-                    float ch = static_cast<float>(canvasLogicalSize.y);
-                    if (p1[1].x >= 0.f && p1[1].x <= cw && p1[1].y >= 0.f && p1[1].y <= ch &&
-                        p2[1].x >= 0.f && p2[1].x <= cw && p2[1].y >= 0.f && p2[1].y <= ch) {
-                        appendVectorSegment(m_activeVectorMesh, p1[1], p2[1], radius, meshCol);
-                        appendVectorCap(m_activeVectorMesh, p2[1], radius, meshCol);
+                if (symmetryManager.enabled) {
+                    auto p1 = symmetryManager.getSymmetricPoints(m_vPrevMidPoint);
+                    auto p2 = symmetryManager.getSymmetricPoints(m_vPrevPoint);
+                    if (p1.size() > 1 && p2.size() > 1) {
+                        float cw = static_cast<float>(canvasLogicalSize.x);
+                        float ch = static_cast<float>(canvasLogicalSize.y);
+                        if (p1[1].x >= 0.f && p1[1].x <= cw && p1[1].y >= 0.f && p1[1].y <= ch &&
+                            p2[1].x >= 0.f && p2[1].x <= cw && p2[1].y >= 0.f && p2[1].y <= ch) {
+                            appendVectorSegment(m_activeVectorMesh, p1[1], p2[1], radius, meshCol);
+                            appendVectorCap(m_activeVectorMesh, p2[1], radius, meshCol);
+                        }
                     }
                 }
             }
@@ -4823,6 +4854,7 @@ void Canvas::handleMouseReleased(sf::Vector2f logicalPos, int currentFrame) {
             vs.frame = currentFrame;
             vs.isErase = m_activeStrokeIsErase;
             m_vectorStrokes.push_back(std::move(vs));
+            isDirty = true;
         }
         m_isVectorStrokeActive = false;
         m_activeVectorMesh.clear();
@@ -5177,58 +5209,61 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
         else {
             if ((activeTool == ToolType::Brush || activeTool == ToolType::Pencil || activeTool == ToolType::Eraser)
                 && m_isVectorStrokeActive) {
-                float stab = brushEngine.getActivePreset().stabilization;
-                if (stab > 0.0f) {
-                    float weight = std::clamp(1.0f - stab, 0.05f, 1.0f);
-                    m_stabilizedPos += (targetPos - m_stabilizedPos) * weight;
+                float stab = getStabilizer();
+                sf::Vector2f targetPos = localPos;
+
+                if (stab > 0.005f) {
+                    float weight = std::clamp(1.0f - stab * 0.88f, 0.04f, 1.0f);
+                    m_stabilizedPos += (localPos - m_stabilizedPos) * weight;
                     targetPos = m_stabilizedPos;
                 }
                 else {
-                    m_stabilizedPos = targetPos;
+                    m_stabilizedPos = localPos;
                 }
 
-                float dx = targetPos.x - m_vPrevPoint.x;
+                if (m_pencil.isActive()) {
+                    m_pencil.addPoint(targetPos);
+                    rebuildPencilMesh(m_pencil, m_activeVectorMesh, symmetryManager, nullptr);
+                    m_vPrevPoint = targetPos;
+                    m_vPrevMidPoint = targetPos;
+                    isDirty = true;
+                }
+                else {
+                    float dx = targetPos.x - m_vPrevPoint.x;
                 float dy = targetPos.y - m_vPrevPoint.y;
-                if (dx * dx + dy * dy >= 0.8f) {
-                    sf::Vector2f midPoint = (m_vPrevPoint + targetPos) * 0.5f;
-                    float radius = brushEngine.getActivePreset().size * 0.5f;
+                if (dx * dx + dy * dy > 0.0001f) {
+                    float radius = std::max(0.75f, brushEngine.getActivePreset().size * 0.5f);
                     sf::Color meshCol = m_activeStrokeIsErase ? sf::Color::White : primaryColor;
-                    const int segments = 6;
-                    sf::Vector2f lastP = m_vPrevMidPoint;
 
-                    for (int i = 1; i <= segments; ++i) {
-                        float t = static_cast<float>(i) / static_cast<float>(segments);
-                        float invT = 1.0f - t;
-                        sf::Vector2f curveP = (invT * invT * m_vPrevMidPoint) + (2.0f * invT * t * m_vPrevPoint) + (t * t * midPoint);
-                        appendVectorSegment(m_activeVectorMesh, lastP, curveP, radius, meshCol);
-                        if (symmetryManager.enabled) {
-                            auto p1Sym = symmetryManager.getSymmetricPoints(lastP);
-                            auto p2Sym = symmetryManager.getSymmetricPoints(curveP);
-                            if (p1Sym.size() > 1 && p2Sym.size() > 1) {
-                                sf::Vector2f s1 = p1Sym[1];
-                                sf::Vector2f s2 = p2Sym[1];
-                                float cw = static_cast<float>(canvasLogicalSize.x);
-                                float ch = static_cast<float>(canvasLogicalSize.y);
-                                if (s1.x >= 0.f && s1.x <= cw && s1.y >= 0.f && s1.y <= ch &&
-                                    s2.x >= 0.f && s2.x <= cw && s2.y >= 0.f && s2.y <= ch) {
-                                    appendVectorSegment(m_activeVectorMesh, s1, s2, radius, meshCol);
-                                }
+                    appendVectorSegment(m_activeVectorMesh, m_vPrevPoint, targetPos, radius, meshCol);
+                    appendVectorCap(m_activeVectorMesh, targetPos, radius, meshCol);
+
+                    if (symmetryManager.enabled) {
+                        auto p1Sym = symmetryManager.getSymmetricPoints(m_vPrevPoint);
+                        auto p2Sym = symmetryManager.getSymmetricPoints(targetPos);
+                        if (p1Sym.size() > 1 && p2Sym.size() > 1) {
+                            float cw = static_cast<float>(canvasLogicalSize.x);
+                            float ch = static_cast<float>(canvasLogicalSize.y);
+                            sf::Vector2f s1 = p1Sym[1];
+                            sf::Vector2f s2 = p2Sym[1];
+                            if (s1.x >= 0.f && s1.x <= cw && s1.y >= 0.f && s1.y <= ch &&
+                                s2.x >= 0.f && s2.x <= cw && s2.y >= 0.f && s2.y <= ch) {
+                                appendVectorSegment(m_activeVectorMesh, s1, s2, radius, meshCol);
+                                appendVectorCap(m_activeVectorMesh, s2, radius, meshCol);
                             }
                         }
-                        lastP = curveP;
                     }
 
-                    // Erase line segment directly on layer texture for text/raster content
                     if (m_activeStrokeIsErase) {
                         sf::RenderTexture* targetTex = frames[currentFrame].layers[activeLayer].texture.get();
                         if (targetTex) {
                             sf::RenderStates rs(sf::BlendNone);
-                            float length = std::hypot(targetPos.x - lastPos.x, targetPos.y - lastPos.y);
+                            float length = std::hypot(dx, dy);
                             if (length > 0.001f) {
                                 sf::RectangleShape line(sf::Vector2f(length, radius * 2.0f));
                                 line.setOrigin(0.0f, radius);
-                                line.setPosition(lastPos);
-                                line.setRotation(std::atan2(targetPos.y - lastPos.y, targetPos.x - lastPos.x) * 180.f / 3.14159265f);
+                                line.setPosition(m_vPrevPoint);
+                                line.setRotation(std::atan2(dy, dx) * 180.f / 3.14159265f);
                                 line.setFillColor(sf::Color::Transparent);
 
                                 sf::CircleShape circle(radius);
@@ -5240,7 +5275,7 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                                 targetTex->draw(circle, rs);
 
                                 if (symmetryManager.enabled) {
-                                    auto fromSym = symmetryManager.getSymmetricPoints(lastPos);
+                                    auto fromSym = symmetryManager.getSymmetricPoints(m_vPrevPoint);
                                     auto toSym = symmetryManager.getSymmetricPoints(targetPos);
                                     if (fromSym.size() > 1 && toSym.size() > 1) {
                                         sf::Vector2f s1 = fromSym[1];
@@ -5263,7 +5298,9 @@ void Canvas::handleMouseMoved(sf::Vector2f logicalPos, sf::Vector2f rawPos, int 
                     }
 
                     m_vPrevPoint = targetPos;
-                    m_vPrevMidPoint = midPoint;
+                    m_vPrevMidPoint = targetPos;
+                    isDirty = true;
+                }
                 }
             }
         }
@@ -5551,6 +5588,35 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         }
     }
 
+    // Live tail: extend the in-progress stroke to the cursor THIS frame, so the
+// ink never trails the cursor while waiting for the next MouseMoved event.
+    std::size_t liveTailRestoreCount = 0;
+    bool liveTailAdded = false;
+    if (!isPixelMode && !isPlaying && isDrawing && m_isVectorStrokeActive &&
+        sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
+        sf::Vector2f mRaw = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+        sf::Vector2f mLog = getInverseTransform().transformPoint(mRaw);
+        sf::Vector2f live(
+            (mLog.x - drawArea.left) * static_cast<float>(canvasLogicalSize.x) / drawArea.width,
+            (mLog.y - drawArea.top) * static_cast<float>(canvasLogicalSize.y) / drawArea.height);
+        live.x = std::clamp(live.x, 0.f, static_cast<float>(canvasLogicalSize.x));
+        live.y = std::clamp(live.y, 0.f, static_cast<float>(canvasLogicalSize.y));
+
+        if (std::hypot(live.x - m_vPrevPoint.x, live.y - m_vPrevPoint.y) > 0.5f) {
+            if (m_pencil.isActive()) {
+                rebuildPencilMesh(m_pencil, m_activeVectorMesh, symmetryManager, &live);
+            }
+            else {
+                liveTailRestoreCount = m_activeVectorMesh.getVertexCount();
+                float radius = std::max(0.75f, brushEngine.getActivePreset().size * 0.5f);
+                sf::Color col = m_activeStrokeIsErase ? sf::Color::White : primaryColor;
+                appendVectorSegment(m_activeVectorMesh, m_vPrevPoint, live, radius, col);
+                appendVectorCap(m_activeVectorMesh, live, radius, col);
+                liveTailAdded = true;
+            }
+        }
+    }
+
     if (currentFrame >= 0 && currentFrame < static_cast<int>(frames.size())) {
         for (size_t i = 0; i < frames[currentFrame].layers.size(); ++i) {
             const auto& layer = frames[currentFrame].layers[i];
@@ -5584,6 +5650,10 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
                 m_textManager->render(window, currentFrame, static_cast<int>(i), isPixelMode, layerStates, canvasLogicalSize);
             }
         }
+    }
+
+    if (liveTailAdded) {
+        m_activeVectorMesh.resize(liveTailRestoreCount);
     }
 
     if (activeTool == ToolType::Curve && isDeforming && isPixelMode) {

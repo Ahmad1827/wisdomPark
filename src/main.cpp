@@ -63,7 +63,7 @@ int main() {
 
     DragDropHandler::Attach(window);
     window.setVerticalSyncEnabled(true);
-    window.setFramerateLimit(60);
+    
 
     ProjectManager pm;
     Canvas canvas;

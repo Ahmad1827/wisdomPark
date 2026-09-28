@@ -9,6 +9,7 @@
 #include "SymmetryManager.h"
 #include "DitherManager.h"
 #include "../core/PerspectiveSystem.h"
+#include "PencilStroke.h"
 
 enum class ToolType { None, Brush, Pencil, Eraser, Fill, Select, Symmetry, Shapes, MagicWand, Perspective, Text, Gradient, Curve, FilledContour, Grid };
 enum class BlendMode { Normal, Multiply, Additive, Screen, Overlay };
@@ -191,6 +192,7 @@ private:
     sf::Vector2f m_floatingLocalSize{ 0.f, 0.f };
 
     sf::VertexArray m_activeVectorMesh;
+    PencilStroke m_pencil;
     sf::Vector2f m_vPrevPoint;
     sf::Vector2f m_vPrevMidPoint;
     sf::Vector2f m_stabilizedPos;
