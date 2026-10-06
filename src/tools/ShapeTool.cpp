@@ -5,12 +5,12 @@
 
 ShapeTool::ShapeTool(Canvas& canvas, Timeline& timeline)
     : m_canvas(canvas), m_timeline(timeline), m_isDragging(false), m_isPanning(false),
-    m_currentShapeId(ShapeId::Rectangle), m_panelPos(64.f, 78.f), m_panelSize(310.f, 330.f),
+    m_currentShapeId(ShapeId::Rectangle), m_panelPos(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY), m_panelSize(310.f, 330.f),
     m_isDraggingPanel(false) {}
 
 void ShapeTool::Initialize() {
     m_font.loadFromFile("assets/font.otf");
-    m_panelPos = sf::Vector2f(64.f, 78.f);
+    m_panelPos = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
     m_panelSize = sf::Vector2f(310.f, 330.f);
 }
 

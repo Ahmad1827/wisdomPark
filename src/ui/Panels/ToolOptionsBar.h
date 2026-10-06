@@ -83,7 +83,17 @@ namespace WisdomUI {
         float m_stabSliderThumbScale{ 1.0f };
         float m_globalTime{ 0.0f };
 
-        void updateSelectionButtonLayout();
+        float m_contentX{ 0.0f };
+        float m_sizeLabelX{ 0.0f };
+        float m_sizeValueX{ 0.0f };
+        float m_stabLabelX{ 0.0f };
+        float m_stabValueX{ 0.0f };
+        std::vector<float> m_separators;
+
+        bool isSelectTool() const;
+        bool showStabilizer() const;
+        void updateLayout();
+        void drawSlider(sf::RenderWindow& window, const sf::FloatRect& track, float ratio, sf::Color fillColor, sf::Color thumbColor, float thumbScale);
     };
 
 }

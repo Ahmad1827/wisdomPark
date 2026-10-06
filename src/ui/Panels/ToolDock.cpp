@@ -8,6 +8,11 @@ namespace WisdomUI {
 
     ToolDock::ToolDock() = default;
 
+    // First tool of each group: draw | select | shape & fill | guides | AI.
+    static bool startsGroup(const std::string& id) {
+        return id == "select" || id == "curve" || id == "symmetry" || id == "ai_gen";
+    }
+
     void ToolDock::Initialize(const sf::Font& font) {
         m_font = font;
     }
@@ -16,14 +21,21 @@ namespace WisdomUI {
         m_bounds = bounds;
 
         float availableHeight = bounds.height - 20.0f;
-        float btnSize = 40.0f;
+        float btnSize = 44.0f;
         float gap = 6.0f;
 
+        float groupGap = 10.0f;
+        float groupCount = 0.0f;
+        for (size_t i = 1; i < m_tools.size(); ++i) {
+            if (startsGroup(m_tools[i].id)) groupCount += 1.0f;
+        }
+
         if (!m_tools.empty()) {
-            float totalNeeded = static_cast<float>(m_tools.size()) * btnSize + static_cast<float>(m_tools.size() - 1) * gap;
+            float totalNeeded = static_cast<float>(m_tools.size()) * btnSize + static_cast<float>(m_tools.size() - 1) * gap + groupCount * groupGap;
             if (totalNeeded > availableHeight && availableHeight > 100.0f) {
-                btnSize = std::floor((availableHeight - static_cast<float>(m_tools.size() - 1) * 3.0f) / static_cast<float>(m_tools.size()));
-                btnSize = std::clamp(btnSize, 26.0f, 40.0f);
+                groupGap = 6.0f;
+                btnSize = std::floor((availableHeight - static_cast<float>(m_tools.size() - 1) * 3.0f - groupCount * groupGap) / static_cast<float>(m_tools.size()));
+                btnSize = std::clamp(btnSize, 26.0f, 44.0f);
                 gap = 3.0f;
             }
         }
@@ -31,7 +43,13 @@ namespace WisdomUI {
         float startY = bounds.top + 10.0f;
         float startX = bounds.left + (bounds.width - btnSize) / 2.0f;
 
-        for (auto& tool : m_tools) {
+        m_groupDividerYs.clear();
+        for (size_t i = 0; i < m_tools.size(); ++i) {
+            auto& tool = m_tools[i];
+            if (i > 0 && startsGroup(tool.id)) {
+                m_groupDividerYs.push_back(std::floor(startY - gap * 0.5f + groupGap * 0.5f));
+                startY += groupGap;
+            }
             tool.bounds = sf::FloatRect(std::floor(startX), std::floor(startY), btnSize, btnSize);
             if (tool.id == m_activeToolId) {
                 m_selectionSliderY = startY;
@@ -111,6 +129,13 @@ namespace WisdomUI {
     void ToolDock::Render(sf::RenderWindow& window) {
         Theme::DrawSunsetPanel(window, m_bounds, 1.0f);
 
+        for (float dividerY : m_groupDividerYs) {
+            sf::RectangleShape divider(sf::Vector2f(m_bounds.width - 20.0f, 1.0f));
+            divider.setPosition(std::floor(m_bounds.left + 10.0f), dividerY);
+            divider.setFillColor(Theme::SunsetPlum);
+            window.draw(divider);
+        }
+
         if (!m_tools.empty() && !m_activeToolId.empty()) {
             float btnSize = m_tools.front().bounds.width;
             float startX = m_bounds.left + (m_bounds.width - btnSize) / 2.0f;
@@ -133,7 +158,7 @@ namespace WisdomUI {
                 Theme::DrawSunsetButton(window, tool.bounds, "", m_font, 11, false, tool.hoverAlpha > 0.5f, false, tool.scale);
             }
 
-            float iconSize = std::clamp(tool.bounds.width - 16.0f, 16.0f, 24.0f);
+            float iconSize = std::clamp(tool.bounds.width - 18.0f, 16.0f, 26.0f);
             float iconX = std::floor(tool.bounds.left + (tool.bounds.width - iconSize) / 2.0f);
             float iconY = std::floor(tool.bounds.top + (tool.bounds.height - iconSize) / 2.0f);
 

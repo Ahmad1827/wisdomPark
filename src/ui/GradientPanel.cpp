@@ -4,13 +4,13 @@
 #include <cmath>
 
 GradientPanel::GradientPanel()
-    : m_config(nullptr), m_position(64.f, 78.f), m_size(300.f, 540.f),
+    : m_config(nullptr), m_position(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY), m_size(300.f, 540.f),
     m_draggedStopIndex(-1), m_selectedStopIndex(-1) {}
 
 void GradientPanel::init(GradientConfig* config) {
     m_config = config;
     m_font.loadFromFile("assets/font.otf");
-    m_position = sf::Vector2f(64.f, 78.f);
+    m_position = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
 }
 
 void GradientPanel::update(float dt) {}

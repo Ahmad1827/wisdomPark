@@ -3,12 +3,12 @@
 #include <algorithm>
 #include <cmath>
 
-PerspectivePanel::PerspectivePanel() : m_pm(nullptr), m_position(64.f, 78.f), m_size(280.f, 560.f), m_presetsOpen(false) {}
+PerspectivePanel::PerspectivePanel() : m_pm(nullptr), m_position(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY), m_size(280.f, 560.f), m_presetsOpen(false) {}
 
 void PerspectivePanel::init(PerspectiveManager* pm) {
     m_pm = pm;
     m_font.loadFromFile("assets/font.otf");
-    m_position = sf::Vector2f(64.f, 78.f);
+    m_position = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
 }
 
 void PerspectivePanel::update(float dt) {}

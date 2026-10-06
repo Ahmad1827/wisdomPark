@@ -264,7 +264,7 @@ void ColorPalettePanel::update(float dt, bool focusMode, Canvas& canvas, bool is
     else {
         width = 310.f;
         if (focusMode || !isOpen) targetX = 1920.f;
-        else targetX = 1920.f - 44.f - width;
+        else targetX = 1920.f - WisdomUI::Theme::ToolDockWidth - width;
 
         currentX += (targetX - currentX) * 16.0f * dt;
     }

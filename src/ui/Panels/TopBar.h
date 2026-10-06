@@ -69,6 +69,7 @@ namespace WisdomUI {
         sf::FloatRect m_pushSheetBtnBounds;
         sf::FloatRect m_opaqueCheckboxBounds;
         sf::FloatRect m_trackerBtnBounds;
+        std::vector<float> m_groupSeparators;
         bool m_opaqueBg{ true };
         bool m_trackerActive{ false };
 

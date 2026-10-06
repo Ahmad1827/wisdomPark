@@ -15,7 +15,8 @@ namespace WisdomUI {
         m_bounds = bounds;
         float btnH = 24.0f;
         float btnY = bounds.top + (bounds.height - btnH) * 0.5f;
-        m_timelineToggleBtn = sf::FloatRect(bounds.left + bounds.width - 136.0f, btnY, 124.0f, btnH);
+        float btnW = Theme::MeasureText(m_font, "[ v ] TIMELINE", 13) + 24.0f;
+        m_timelineToggleBtn = sf::FloatRect(std::floor(bounds.left + bounds.width - btnW - 12.0f), btnY, btnW, btnH);
     }
 
     void StatusBar::UpdateData(sf::Vector2u canvasSize, sf::Vector2f cursorCoords, float zoom, int currentLayer, int currentFrame, bool isTimelineOpen) {
@@ -66,10 +67,10 @@ namespace WisdomUI {
             "   |   Layer: " + std::to_string(m_layer + 1) +
             "   |   Frame: " + std::to_string(m_frame + 1);
 
-        Theme::DrawCrispText(window, m_font, text, 13, m_bounds.left + 30.0f, centerY, Theme::TextSecondary, sf::Color(14, 6, 20), false, true);
+        Theme::DrawCrispText(window, m_font, text, 14, m_bounds.left + 30.0f, centerY, Theme::TextSecondary, sf::Color(14, 6, 20), false, true);
 
         std::string btnStr = m_isTimelineOpen ? "[ v ] TIMELINE" : "[ ^ ] TIMELINE";
-        Theme::DrawSunsetButton(window, m_timelineToggleBtn, btnStr, m_font, 12, m_isTimelineOpen, m_toggleHoverAlpha > 0.5f, m_isTimelineOpen, 1.0f);
+        Theme::DrawSunsetButton(window, m_timelineToggleBtn, btnStr, m_font, 13,m_isTimelineOpen, m_toggleHoverAlpha > 0.5f, m_isTimelineOpen, 1.0f);
     }
 
 }

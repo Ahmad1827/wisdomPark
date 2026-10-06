@@ -23,14 +23,11 @@
 #include "Screens/ExportModal.h"
 #include "Screens/NewProjectModal.h"
 #include "KeybindSettingsPanel.h"
-#include "LeftToolbar.h"
-#include "BottomTimeline.h"
 #include "LayerPanel.h"
 #include "ColorPalettePanel.h"
 #include "RightProperties.h"
 #include "AudioPanel.h"
 #include "../core/ITool.h"
-#include "../ui/TopMenuBar.h"
 #include "../ui/GradientPanel.h"
 #include "../tools/GradientTool.h"
 #include "../core/GradientSystem.h"
@@ -135,23 +132,6 @@ enum class RightTabMode {
     Audio
 };
 
-struct StartParticle {
-    float x = 0.0f;
-    float y = 0.0f;
-    float vx = 0.0f;
-    float vy = 0.0f;
-    float size = 0.0f;
-    float life = 0.0f;
-    float maxLife = 0.0f;
-    sf::Color baseColor = sf::Color::White;
-};
-
-struct LightRay {
-    sf::ConvexShape shape;
-    float speed = 0.0f;
-    float offset = 0.0f;
-};
-
 class UIManager {
 private:
     bool m_showKeybinds = false;
@@ -228,7 +208,6 @@ private:
     std::unique_ptr<AssetBrowserPanel> assetBrowser;
     GradientConfig m_gradientConfig;
     GradientPanel m_gradientPanel;
-    TopMenuBar m_topMenuBar;
     TextManager m_textManager;
     TextPanel m_textPanel;
     std::unique_ptr<ITool> m_activeTool;
@@ -236,11 +215,6 @@ private:
     int lastLeftState = 0;
     int lastRightState = 0;
     int lastZoomState = 0;
-    std::chrono::steady_clock::time_point lastLeftDown;
-    std::chrono::steady_clock::time_point lastRightDown;
-    int doubleClickThreshold = 250;
-    bool isScrolling = false;
-    float dragOriginY = 0.0f;
     float zoomOriginY = 0.0f;
     sf::UdpSocket handTrackerSocket;
     GitImgClient m_gitImgClient;
@@ -272,7 +246,6 @@ private:
     bool showingText;
     float textAlpha;
     bool isLightingMode;
-    int promptQuantity;
     bool focusMode;
 
     PerspectiveManager m_perspectiveManager;
@@ -293,8 +266,6 @@ private:
     ExportModal exportModal;
     NewProjectModal newProjectModal;
 
-    LeftToolbar leftToolbar;
-    BottomTimeline bottomTimeline;
     AudioPanel audioPanel;
 
     LayerPanel layerPanel;
@@ -308,32 +279,10 @@ private:
     sf::Text promptDisplay;
     std::string currentPrompt;
 
-    sf::RectangleShape toolBg;
-    sf::RectangleShape sizeSliderBg;
-    sf::RectangleShape sizeSliderHandle;
-    sf::Text sizeLabelText;
-    sf::Text sizeValueText;
-    bool isDraggingSizeSlider;
-
-    sf::RectangleShape pixelPerfBtn;
-    sf::Text pixelPerfText;
-
     bool showUnsavedWarning;
-
-    sf::RectangleShape warnOverlay;
-    sf::RectangleShape warnBox;
-    sf::Text warnTitle;
-    sf::RectangleShape warnSaveBtn;
-    sf::Text warnSaveText;
-    sf::RectangleShape warnDiscardBtn;
-    sf::Text warnDiscardText;
-    sf::RectangleShape warnCancelBtn;
-    sf::Text warnCancelText;
 
     MenuState currentMenuState;
     std::map<std::string, float> hoverMap;
-    std::vector<StartParticle> particles;
-    std::vector<LightRay> lightRays;
     float startupTime;
 
     int activeTutorialIndex;
@@ -358,9 +307,7 @@ private:
     WisdomUI::TimelineHeader m_timelineHeader;
     WisdomUI::StatusBar m_statusBar;
 
-    void initStartMenu();
     void updateStartMenu(float dt, sf::Vector2f mousePos);
-    void drawStartMenu(sf::RenderWindow& window);
 
     void updateHoverValue(const std::string& key, bool isHovering, float dt, float speed = 10.0f);
     float getHover(const std::string& key);
@@ -370,9 +317,6 @@ private:
     void drawTutorialsMenu(sf::RenderWindow& window);
     void drawCreditsMenu(sf::RenderWindow& window);
     void drawBackButton(sf::RenderWindow& window, const std::string& hoverKey, float x, float y);
-
-    void drawPremiumText(sf::RenderWindow& window, const std::string& str, float x, float y, int size, sf::Color mainCol, sf::Color outlineCol, sf::Color shadowCol);
-    void drawGlassPanel(sf::RenderWindow& window, sf::FloatRect bounds, float hoverScale = 1.0f);
 
     bool triggerSave(Canvas& canvas, Timeline& timeline);
 

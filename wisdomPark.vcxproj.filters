@@ -33,16 +33,7 @@
     <ClCompile Include="src\core\Timeline.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\ui\Screens\WelcomeScreen.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\LeftToolbar.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\ui\RightProperties.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\TopMenuBar.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\ui\UIManager.cpp">
@@ -52,9 +43,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\BottomTimeline.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\core\ProjectManager.cpp">
@@ -70,9 +58,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\ui\LayerPanel.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\RightPanelManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\core\KeybindManager.cpp">
@@ -306,13 +291,7 @@
     <ClCompile Include="src\ui\AssetBrowserPanel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\ui\UITheme.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\ui\WorkspaceLayout.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\Widgets\IconButton.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\ui\Panels\ToolDock.cpp">
@@ -380,25 +359,13 @@
     <ClInclude Include="src\core\Timeline.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\ui\Screens\WelcomeScreen.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ui\LeftToolbar.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\ui\RightProperties.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ui\TopMenuBar.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\UIManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\Application.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ui\BottomTimeline.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\ProjectManager.h">
@@ -414,9 +381,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\LayerPanel.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ui\RightPanelManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\KeybindManager.h">
@@ -702,9 +666,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\WorkspaceLayout.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ui\Widgets\IconButton.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\Panels\ToolDock.h">

@@ -8,6 +8,8 @@ namespace WisdomUI {
 
     static sf::FloatRect s_projBadgeBounds;
 
+    static const unsigned int kTextSize = 14;
+
     TopBar::TopBar() = default;
 
     void TopBar::Initialize(const sf::Font& font,
@@ -79,15 +81,14 @@ namespace WisdomUI {
         m_bounds = bounds;
 
         float barH = bounds.height;
-        float btnH = 30.0f;
+        float btnH = 32.0f;
         float btnY = std::floor(bounds.top + (barH - btnH) * 0.5f);
 
         sf::Text logoMeasure("WISDOM PARK", m_font, 14);
         float logoW = logoMeasure.getLocalBounds().width;
         float badgeStartX = std::floor(bounds.left + 34.0f + logoW + 18.0f);
 
-        sf::Text projMeasure(m_projectName + (m_isDirty ? " *" : ""), m_font, 13);
-        float projW = projMeasure.getLocalBounds().width;
+        float projW = Theme::MeasureText(m_font, m_projectName + (m_isDirty ? " *" : ""), kTextSize);
         float projBadgeW = std::clamp(projW + 28.0f, 100.0f, 360.0f);
 
         s_projBadgeBounds = sf::FloatRect(badgeStartX, btnY, projBadgeW, btnH);
@@ -95,35 +96,47 @@ namespace WisdomUI {
         float curX = s_projBadgeBounds.left + s_projBadgeBounds.width + 14.0f;
 
         for (auto& menu : m_menus) {
-            sf::Text t(menu.title, m_font, 13);
-            float w = t.getLocalBounds().width + 24.0f;
+            float w = Theme::MeasureText(m_font, menu.title, kTextSize) + 24.0f;
             menu.bounds = sf::FloatRect(std::floor(curX), btnY, std::floor(w), btnH);
             curX += w + 6.0f;
+
+            float widest = 0.0f;
+            for (const auto& act : menu.actions) {
+                widest = std::max(widest, Theme::MeasureText(m_font, act.label, kTextSize));
+            }
+            menu.dropdownWidth = std::max(180.0f, widest + 44.0f);
         }
 
-        curX += 6.0f;
+        m_groupSeparators.clear();
+        auto placeButton = [&](sf::FloatRect& target, const std::string& widestLabel, float gapAfter) {
+            float w = Theme::MeasureText(m_font, widestLabel, kTextSize) + 24.0f;
+            target = sf::FloatRect(std::floor(curX), btnY, std::floor(w), btnH);
+            curX += w + gapAfter;
+            };
+        auto nextGroup = [&]() {
+            curX += 6.0f;
+            m_groupSeparators.push_back(std::floor(curX));
+            curX += 13.0f;
+            };
 
-        m_pushGitImgBtnBounds = sf::FloatRect(std::floor(curX), btnY, 92.0f, btnH);
-        curX += 92.0f + 6.0f;
+        nextGroup();
+        placeButton(m_pushGitImgBtnBounds, "Push Frame", 6.0f);
+        placeButton(m_pushSheetBtnBounds, "Push Anim", 6.0f);
+        placeButton(m_pullBtnBounds, "Pull", 10.0f);
 
-        m_pushSheetBtnBounds = sf::FloatRect(std::floor(curX), btnY, 92.0f, btnH);
-        curX += 92.0f + 6.0f;
+        float opaqueW = 22.0f + Theme::MeasureText(m_font, "Opaque", kTextSize) + 8.0f;
+        m_opaqueCheckboxBounds = sf::FloatRect(std::floor(curX), btnY, opaqueW, btnH);
+        curX += opaqueW;
 
-        m_pullBtnBounds = sf::FloatRect(std::floor(curX), btnY, 70.0f, btnH);
-        curX += 70.0f + 8.0f;
+        nextGroup();
+        placeButton(m_trackerBtnBounds, "Hand OFF", 0.0f);
 
-        m_opaqueCheckboxBounds = sf::FloatRect(std::floor(curX), btnY, 86.0f, btnH);
-        curX += 86.0f + 8.0f;
-
-        m_trackerBtnBounds = sf::FloatRect(std::floor(curX), btnY, 86.0f, btnH);
-        curX += 86.0f + 8.0f;
-
-        float btnSize = 30.0f;
+        float btnSize = 34.0f;
         float totalQuickW = m_quickBtns.size() * (btnSize + 5.0f) - 5.0f;
         float qX = bounds.left + bounds.width - totalQuickW - 14.0f;
 
         for (auto& qb : m_quickBtns) {
-            qb.bounds = sf::FloatRect(std::floor(qX), btnY, btnSize, btnSize);
+            qb.bounds = sf::FloatRect(std::floor(qX), std::floor(bounds.top + (barH - btnSize) * 0.5f), btnSize, btnSize);
             qX += btnSize + 5.0f;
         }
 
@@ -132,15 +145,17 @@ namespace WisdomUI {
     
 
         if (m_gridControlsVisible) {
-            float totalGridW = 90.f + 5.f + 30.f + 5.f + 30.f + 5.f + 64.f + 5.f + 30.f;
+            float toggleW = Theme::MeasureText(m_font, "Grid: OFF", kTextSize) + 24.0f;
+            float totalGridW = toggleW + 5.f + 30.f + 5.f + 30.f + 5.f + 64.f + 5.f + 30.f;
             rightAnchor -= totalGridW + 6.0f;
             float startX = std::floor(rightAnchor);
 
-            m_gridToggleBtnBounds = sf::FloatRect(startX, btnY, 90.0f, btnH);
-            m_gridColorBtnBounds = sf::FloatRect(startX + 95.0f, btnY, 30.0f, btnH);
-            m_gridMinusBtnBounds = sf::FloatRect(startX + 130.0f, btnY, 30.0f, btnH);
-            m_gridSizeBox = sf::FloatRect(startX + 165.0f, btnY, 64.0f, btnH);
-            m_gridPlusBtnBounds = sf::FloatRect(startX + 234.0f, btnY, 30.0f, btnH);
+            m_gridToggleBtnBounds = sf::FloatRect(startX, btnY, toggleW, btnH);
+            startX += toggleW + 5.0f;
+            m_gridColorBtnBounds = sf::FloatRect(startX, btnY, 30.0f, btnH);
+            m_gridMinusBtnBounds = sf::FloatRect(startX + 35.0f, btnY, 30.0f, btnH);
+            m_gridSizeBox = sf::FloatRect(startX + 70.0f, btnY, 64.0f, btnH);
+            m_gridPlusBtnBounds = sf::FloatRect(startX + 139.0f, btnY, 30.0f, btnH);
         }
         else {
             m_gridToggleBtnBounds = sf::FloatRect(0.f, 0.f, 0.f, 0.f);
@@ -386,7 +401,6 @@ namespace WisdomUI {
                 return true;
             }
 
-            
             if (m_opaqueCheckboxBounds.contains(mousePos)) {
                 m_opaqueBg = !m_opaqueBg;
                 return true;
@@ -551,7 +565,7 @@ namespace WisdomUI {
         badge.setOutlineColor(m_isDirty ? Theme::SunsetCoral : Theme::SunsetPlum);
         window.draw(badge);
 
-        Theme::DrawCrispText(window, m_font, m_projectName + (m_isDirty ? " *" : ""), 13, s_projBadgeBounds.left + s_projBadgeBounds.width / 2.0f, s_projBadgeBounds.top + s_projBadgeBounds.height / 2.0f, m_isDirty ? Theme::SunsetGold : Theme::TextSecondary, sf::Color::Transparent, true, true);
+        Theme::DrawCrispText(window, m_font, m_projectName + (m_isDirty ? " *" : ""), kTextSize, s_projBadgeBounds.left + s_projBadgeBounds.width / 2.0f, s_projBadgeBounds.top + s_projBadgeBounds.height / 2.0f, m_isDirty ? Theme::SunsetGold : Theme::TextSecondary, sf::Color::Transparent, true, true);
 
         sf::Vector2i mPosI = sf::Mouse::getPosition(window);
         sf::Vector2f mPos = window.mapPixelToCoords(mPosI);
@@ -561,38 +575,36 @@ namespace WisdomUI {
             bool isOpen = (m_openMenuIndex == static_cast<int>(i));
             bool hovered = menu.bounds.contains(mPos);
 
-            Theme::DrawSunsetButton(window, menu.bounds, menu.title, m_font, 13, isOpen, hovered, false, 1.0f);
+            Theme::DrawSunsetButton(window, menu.bounds, menu.title, m_font, kTextSize, isOpen, hovered, false, 1.0f);
         }
 
-        bool hovPush = m_pushGitImgBtnBounds.contains(mPos);
-        Theme::DrawSunsetButton(window, m_pushGitImgBtnBounds, "Push Frame", m_font, 12, false, hovPush, false, 1.0f);
+        for (float separatorX : m_groupSeparators) {
+            Theme::DrawSeparator(window, separatorX, centerY, 22.0f);
+        }
 
-        bool hovSheet = m_pushSheetBtnBounds.contains(mPos);
-        Theme::DrawSunsetButton(window, m_pushSheetBtnBounds, "Push Anim", m_font, 12, false, hovSheet, false, 1.0f);
+        Theme::DrawSunsetButton(window, m_pushGitImgBtnBounds, "Push Frame", m_font, kTextSize, false, m_pushGitImgBtnBounds.contains(mPos), false, 1.0f);
+        Theme::DrawSunsetButton(window, m_pushSheetBtnBounds, "Push Anim", m_font, kTextSize, false, m_pushSheetBtnBounds.contains(mPos), false, 1.0f);
+        Theme::DrawSunsetButton(window, m_pullBtnBounds, "Pull", m_font, kTextSize, m_isPullOpen, m_pullBtnBounds.contains(mPos), m_isPullOpen, 1.0f);
 
-        bool hovPull = m_pullBtnBounds.contains(mPos);
-        Theme::DrawSunsetButton(window, m_pullBtnBounds, "Pull", m_font, 12, m_isPullOpen, hovPull, m_isPullOpen, 1.0f);
-
-        float chkBoxSize = 15.0f;
-        float chkBoxY = std::floor(m_opaqueCheckboxBounds.top + (m_opaqueCheckboxBounds.height - chkBoxSize) * 0.5f);
+        bool hovOpaque = m_opaqueCheckboxBounds.contains(mPos);
+        float chkBoxSize = 16.0f;
         sf::RectangleShape box(sf::Vector2f(chkBoxSize, chkBoxSize));
-        box.setPosition(m_opaqueCheckboxBounds.left + 4.0f, chkBoxY);
-        box.setFillColor(m_opaqueBg ? sf::Color(70, 130, 180) : sf::Color(30, 30, 35));
-        box.setOutlineColor(sf::Color(120, 120, 130));
+        box.setPosition(m_opaqueCheckboxBounds.left, std::floor(centerY - chkBoxSize * 0.5f));
+        box.setFillColor(m_opaqueBg ? Theme::SunsetAmber : Theme::PanelInset);
         box.setOutlineThickness(1.0f);
+        box.setOutlineColor(hovOpaque ? Theme::SunsetGold : Theme::Border);
         window.draw(box);
 
         if (m_opaqueBg) {
-            sf::RectangleShape check(sf::Vector2f(7.0f, 7.0f));
-            check.setPosition(m_opaqueCheckboxBounds.left + 8.0f, chkBoxY + 4.0f);
-            check.setFillColor(sf::Color::White);
+            sf::RectangleShape check(sf::Vector2f(8.0f, 8.0f));
+            check.setPosition(box.getPosition().x + 4.0f, box.getPosition().y + 4.0f);
+            check.setFillColor(Theme::SunsetDeepDark);
             window.draw(check);
         }
 
-        Theme::DrawCrispText(window, m_font, "Opaque", 12, m_opaqueCheckboxBounds.left + 24.0f, centerY, sf::Color(200, 200, 200), sf::Color::Transparent, false, true);
+        Theme::DrawCrispText(window, m_font, "Opaque", kTextSize, m_opaqueCheckboxBounds.left + 22.0f, centerY, hovOpaque ? Theme::TextGold : Theme::TextSecondary, sf::Color(14, 6, 20), false, true);
 
-        bool hovTrk = m_trackerBtnBounds.contains(mPos);
-        Theme::DrawSunsetButton(window, m_trackerBtnBounds, m_trackerActive ? "Hand ON" : "Hand OFF", m_font, 12, m_trackerActive, hovTrk, false, 1.0f);
+        Theme::DrawSunsetButton(window, m_trackerBtnBounds, m_trackerActive ? "Hand ON" : "Hand OFF", m_font, kTextSize, m_trackerActive, m_trackerBtnBounds.contains(mPos), false, 1.0f);
 
         if (m_gridControlsVisible) {
             bool hovToggle = m_gridToggleBtnBounds.contains(mPos);
@@ -601,7 +613,7 @@ namespace WisdomUI {
             bool hovBox = m_gridSizeBox.contains(mPos);
             bool hovPlus = m_gridPlusBtnBounds.contains(mPos);
 
-            Theme::DrawSunsetButton(window, m_gridToggleBtnBounds, m_gridActive ? "Grid: ON" : "Grid: OFF", m_font, 12, m_gridActive, hovToggle, m_gridActive, 1.0f);
+            Theme::DrawSunsetButton(window, m_gridToggleBtnBounds, m_gridActive ? "Grid: ON" : "Grid: OFF", m_font, kTextSize,m_gridActive, hovToggle, m_gridActive, 1.0f);
 
             sf::RectangleShape colorBtn(sf::Vector2f(m_gridColorBtnBounds.width, m_gridColorBtnBounds.height));
             colorBtn.setPosition(m_gridColorBtnBounds.left, m_gridColorBtnBounds.top);
@@ -620,7 +632,7 @@ namespace WisdomUI {
             window.draw(valBg);
 
             std::string displayTxt = m_isEditingGridSize ? (m_gridSizeInput + "_") : (std::to_string(m_gridSize) + "px");
-            Theme::DrawCrispText(window, m_font, displayTxt, 12,
+            Theme::DrawCrispText(window, m_font, displayTxt, kTextSize,
                 m_gridSizeBox.left + m_gridSizeBox.width * 0.5f,
                 m_gridSizeBox.top + m_gridSizeBox.height * 0.5f,
                 m_isEditingGridSize ? Theme::SunsetGold : Theme::SunsetPeach, sf::Color::Transparent, true, true);
@@ -633,8 +645,8 @@ namespace WisdomUI {
         for (const auto& qb : m_quickBtns) {
             Theme::DrawSunsetButton(window, qb.bounds, "", m_font, 12, false, qb.hoverAlpha > 0.5f, false, qb.scale);
 
-            sf::Vector2f iconPos(qb.bounds.left + 5.0f, qb.bounds.top + 5.0f);
-            Icons::Draw(window, qb.id, iconPos, 20.0f, qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
+            sf::Vector2f iconPos(qb.bounds.left + 6.0f, qb.bounds.top + 6.0f);
+            Icons::Draw(window, qb.id, iconPos, 22.0f,qb.hoverAlpha > 0.5f ? Theme::SunsetAmber : Theme::TextSecondary);
         }
 
         for (size_t i = 0; i < m_menus.size(); ++i) {
@@ -662,7 +674,7 @@ namespace WisdomUI {
                         }
 
                         sf::Color txtColor = (act.hoverAlpha > 0.5f) ? Theme::SunsetGold : Theme::TextPrimary;
-                        Theme::DrawCrispText(window, m_font, act.label, 13, itemRect.left + 10.0f, itemRect.top + 7.0f, txtColor, sf::Color(14, 6, 20));
+                        Theme::DrawCrispText(window, m_font, act.label, kTextSize, itemRect.left + 10.0f, itemRect.top + itemRect.height * 0.5f, txtColor, sf::Color(14, 6, 20), false, true);
                     }
                 }
             }

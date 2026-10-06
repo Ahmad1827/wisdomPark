@@ -70,7 +70,7 @@ void LayerPanel::update(float dt, bool focusMode, bool isOpen) {
     width = 350.f;
     float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
     float statusBarH = WisdomUI::Theme::StatusBarHeight;
-    float tabDockW = 52.f;
+    float tabDockW = WisdomUI::Theme::ToolDockWidth;
 
     if (focusMode || !isOpen) targetX = 1920.f;
     else targetX = 1920.f - tabDockW - width;

@@ -232,7 +232,6 @@
     <ClCompile Include="src\ui\KeybindSettingsPanel.cpp" />
     <ClCompile Include="src\core\Timeline.cpp" />
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\ui\LeftToolbar.cpp" />
     <ClCompile Include="src\ui\Panels\RightDockTabs.cpp" />
     <ClCompile Include="src\ui\Panels\StatusBar.cpp" />
     <ClCompile Include="src\ui\Panels\TimelineHeader.cpp" />
@@ -243,21 +242,15 @@
     <ClCompile Include="src\ui\Screens\ProjectBrowser.cpp" />
     <ClCompile Include="src\ui\Screens\ExportModal.cpp" />
     <ClCompile Include="src\ui\Screens\NewProjectModal.cpp" />
-    <ClCompile Include="src\ui\Screens\WelcomeScreen.cpp" />
-    <ClCompile Include="src\ui\BottomTimeline.cpp" />
     <ClCompile Include="src\ui\ColorPalettePanel.cpp" />
     <ClCompile Include="src\ui\LayerPanel.cpp" />
-    <ClCompile Include="src\ui\RightPanelManager.cpp" />
     <ClCompile Include="src\ui\AudioPanel.cpp" />
     <ClCompile Include="src\ui\AIPanel.cpp" />
     <ClCompile Include="src\ui\AIReviewModal.cpp" />
     <ClCompile Include="src\ui\PerspectivePanel.cpp" />
     <ClCompile Include="src\ui\GradientPanel.cpp" />
     <ClCompile Include="src\ui\TextPanel.cpp" />
-    <ClCompile Include="src\ui\TopMenuBar.cpp" />
     <ClCompile Include="src\ui\UIManager.cpp" />
-    <ClCompile Include="src\ui\UITheme.cpp" />
-    <ClCompile Include="src\ui\Widgets\IconButton.cpp" />
     <ClCompile Include="src\ui\WorkspaceLayout.cpp" />
     <ClCompile Include="src\SpriteEngine\Core\Source\Commands\FlipHorizontalCommand.cpp" />
     <ClCompile Include="src\SpriteEngine\Core\Source\Commands\MergeSpritesCommand.cpp" />
@@ -378,22 +371,16 @@
     <ClInclude Include="src\core\ProjectManager.h" />
     <ClInclude Include="src\core\SettingsManager.h" />
     <ClInclude Include="src\core\Timeline.h" />
-    <ClInclude Include="src\ui\BottomTimeline.h" />
     <ClInclude Include="src\ui\ColorPalettePanel.h" />
-    <ClInclude Include="src\ui\RightPanelManager.h" />
     <ClInclude Include="src\ui\LayerPanel.h" />
-    <ClInclude Include="src\ui\LeftToolbar.h" />
     <ClInclude Include="src\ui\RightProperties.h" />
     <ClInclude Include="src\ui\Screens\ExportModal.h" />
     <ClInclude Include="src\ui\Screens\NewProjectModal.h" />
     <ClInclude Include="src\ui\Screens\ProjectBrowser.h" />
-    <ClInclude Include="src\ui\Screens\WelcomeScreen.h" />
-    <ClInclude Include="src\ui\TopMenuBar.h" />
     <ClInclude Include="src\ui\UIAnimation.h" />
     <ClInclude Include="src\ui\UIIcons.h" />
     <ClInclude Include="src\ui\UIManager.h" />
     <ClInclude Include="src\ui\UITheme.h" />
-    <ClInclude Include="src\ui\Widgets\IconButton.h" />
     <ClInclude Include="src\ui\WorkspaceLayout.h" />
   </ItemGroup>
   <ItemGroup>

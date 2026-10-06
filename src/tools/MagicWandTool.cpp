@@ -7,14 +7,14 @@
 MagicWandTool::MagicWandTool(Canvas& canvas, Timeline& timeline)
     : m_canvas(canvas), m_timeline(timeline), m_tolerance(10),
     m_contiguous(true), m_sampleAllLayers(false), m_isPanning(false),
-    m_panelPos(64.f, 78.f), m_panelSize(290.f, 280.f), m_isDraggingPanel(false),
+    m_panelPos(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY), m_panelSize(290.f, 280.f), m_isDraggingPanel(false),
     m_requestColorPanelOpen(false) {
     m_lastPrimaryColor = canvas.getPrimaryColor();
 }
 
 void MagicWandTool::Initialize() {
     m_font.loadFromFile("assets/font.otf");
-    m_panelPos = sf::Vector2f(64.f, 78.f);
+    m_panelPos = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
 }
 
 void MagicWandTool::SetBounds(const sf::FloatRect& bounds) {

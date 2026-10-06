@@ -23,6 +23,13 @@ namespace WisdomUI {
         void Update(float deltaTime, const sf::Vector2f& mousePos);
         void Render(sf::RenderWindow& window);
 
+        const sf::FloatRect& GetPlayBounds() const { return m_playBtnBounds; }
+        const sf::FloatRect& GetAddBounds() const { return m_addBtnBounds; }
+        const sf::FloatRect& GetDuplicateBounds() const { return m_dupBtnBounds; }
+        const sf::FloatRect& GetDeleteBounds() const { return m_delBtnBounds; }
+        const sf::FloatRect& GetOnionBounds() const { return m_onionBtnBounds; }
+        const sf::FloatRect& GetCloseBounds() const { return m_closeBtnBounds; }
+
     private:
         sf::FloatRect m_bounds;
         sf::Font m_font;

@@ -19,7 +19,7 @@
 #endif
 
 AIPanel::AIPanel()
-    : position(64.f, 78.f),
+    : position(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY),
     size(360.f, 350.f),
     isVisible(false),
     isDraggingPanel(false),
@@ -31,7 +31,7 @@ AIPanel::AIPanel()
 
 void AIPanel::init() {
     font.loadFromFile("assets/font.otf");
-    position = sf::Vector2f(64.f, 78.f);
+    position = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
     loadPalettes();
 }
 

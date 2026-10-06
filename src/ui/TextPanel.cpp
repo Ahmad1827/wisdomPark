@@ -5,12 +5,12 @@
 #include <algorithm>
 #include <cmath>
 
-TextPanel::TextPanel() : m_tm(nullptr), m_position(64.f, 78.f), m_size(280.f, 510.f), m_fontDropdownOpen(false) {}
+TextPanel::TextPanel() : m_tm(nullptr), m_position(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY), m_size(280.f, 510.f), m_fontDropdownOpen(false) {}
 
 void TextPanel::init(TextManager* tm) {
     m_tm = tm;
     m_font.loadFromFile("assets/font.otf");
-    m_position = sf::Vector2f(64.f, 78.f);
+    m_position = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
 }
 
 void TextPanel::update(float dt) {}

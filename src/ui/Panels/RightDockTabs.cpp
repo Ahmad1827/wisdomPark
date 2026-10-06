@@ -26,8 +26,8 @@ namespace WisdomUI {
 
     void RightDockTabs::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        float startY = bounds.top + 6.0f;
-        float btnSize = 40.0f;
+        float startY = bounds.top + 10.0f;
+        float btnSize = 44.0f;
         float startX = bounds.left + (bounds.width - btnSize) / 2.0f;
 
         for (auto& tab : m_tabs) {
@@ -88,7 +88,7 @@ namespace WisdomUI {
         for (const auto& tab : m_tabs) {
             Theme::DrawSunsetButton(window, tab.bounds, "", m_font, 11, tab.isToggled, tab.hoverAlpha > 0.5f, tab.isToggled, tab.scale);
 
-            float iconSize = 22.0f;
+            float iconSize = 26.0f;
             float iconX = std::floor(tab.bounds.left + (tab.bounds.width - iconSize) / 2.0f);
             float iconY = std::floor(tab.bounds.top + (tab.bounds.height - iconSize) / 2.0f);
 

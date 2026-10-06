@@ -4,6 +4,9 @@
 
 namespace WisdomUI {
 
+    static const unsigned int kTitleSize = 14;
+    static const unsigned int kButtonTextSize = 13;
+
     TimelineHeader::TimelineHeader() = default;
 
     void TimelineHeader::Initialize(const sf::Font& font,
@@ -24,13 +27,23 @@ namespace WisdomUI {
 
     void TimelineHeader::SetBounds(const sf::FloatRect& bounds) {
         m_bounds = bounds;
-        float y = bounds.top + 3.0f;
-        m_playBtnBounds = sf::FloatRect(bounds.left + 120.0f, y, 65.0f, 22.0f);
-        m_addBtnBounds = sf::FloatRect(bounds.left + 192.0f, y, 55.0f, 22.0f);
-        m_dupBtnBounds = sf::FloatRect(bounds.left + 252.0f, y, 55.0f, 22.0f);
-        m_delBtnBounds = sf::FloatRect(bounds.left + 312.0f, y, 55.0f, 22.0f);
-        m_onionBtnBounds = sf::FloatRect(bounds.left + 372.0f, y, 75.0f, 22.0f);
-        m_closeBtnBounds = sf::FloatRect(bounds.left + bounds.width - 32.0f, y, 22.0f, 22.0f);
+        const float btnH = 26.0f;
+        float y = std::floor(bounds.top + (bounds.height - btnH) * 0.5f);
+        float x = std::floor(bounds.left + 16.0f + Theme::MeasureText(m_font, "TIMELINE", kTitleSize) + 20.0f);
+
+        auto place = [&](sf::FloatRect& target, const std::string& widestLabel, float gapAfter) {
+            float w = Theme::MeasureText(m_font, widestLabel, kButtonTextSize) + 24.0f;
+            target = sf::FloatRect(x, y, w, btnH);
+            x += w + gapAfter;
+            };
+
+        place(m_playBtnBounds, "Pause", 14.0f);
+        place(m_addBtnBounds, "+ Add", 6.0f);
+        place(m_dupBtnBounds, "Duplicate", 6.0f);
+        place(m_delBtnBounds, "Delete", 14.0f);
+        place(m_onionBtnBounds, "Onion Skin", 0.0f);
+
+        m_closeBtnBounds = sf::FloatRect(std::floor(bounds.left + bounds.width - btnH - 12.0f), y, btnH, btnH);
     }
 
     void TimelineHeader::SyncState(bool isPlaying, int currentFrame, int totalFrames, float fps, bool onionEnabled) {
@@ -73,24 +86,22 @@ namespace WisdomUI {
     void TimelineHeader::Render(sf::RenderWindow& window) {
         Theme::DrawCarvedWoodPlank(window, m_bounds, false, 1.0f);
 
-        sf::Text label("TIMELINE", m_font, 12);
-        label.setFillColor(Theme::Gold);
-        label.setPosition(m_bounds.left + 16.0f, m_bounds.top + 6.0f);
-        window.draw(label);
+        float centerY = std::floor(m_bounds.top + m_bounds.height * 0.5f);
+        const sf::Color textShadow(14, 6, 20);
 
-        Theme::DrawThemedButton(window, m_playBtnBounds, m_isPlaying ? "Pause" : "Play", m_font, 11, m_isPlaying, m_playHover > 0.5f, m_isPlaying, 1.0f);
-        Theme::DrawThemedButton(window, m_addBtnBounds, "+ Add", m_font, 11, false, m_addHover > 0.5f, false, 1.0f);
-        Theme::DrawThemedButton(window, m_dupBtnBounds, "Duplicate", m_font, 11, false, m_dupHover > 0.5f, false, 1.0f);
-        Theme::DrawThemedButton(window, m_delBtnBounds, "Delete", m_font, 11, false, m_delHover > 0.5f, false, 1.0f);
-        Theme::DrawThemedButton(window, m_onionBtnBounds, "Onion Skin", m_font, 11, m_onionEnabled, m_onionHover > 0.5f, false, 1.0f);
-        Theme::DrawThemedButton(window, m_closeBtnBounds, "v", m_font, 11, false, m_closeHover > 0.5f, false, 1.0f);
+        Theme::DrawCrispText(window, m_font, "TIMELINE", kTitleSize, m_bounds.left + 16.0f, centerY, Theme::Gold, textShadow, false, true);
 
-        std::string infoStr = "Frame: " + std::to_string(m_currentFrame + 1) + " / " + std::to_string(m_totalFrames) +
-            "  (" + std::to_string(static_cast<int>(m_fps)) + " FPS)";
-        sf::Text info(infoStr, m_font, 11);
-        info.setFillColor(Theme::TextSecondary);
-        info.setPosition(m_bounds.left + m_bounds.width - info.getLocalBounds().width - 45.0f, m_bounds.top + 6.0f);
-        window.draw(info);
+        Theme::DrawThemedButton(window, m_playBtnBounds, m_isPlaying ? "Pause" : "Play", m_font, kButtonTextSize, m_isPlaying, m_playHover > 0.5f, m_isPlaying, 1.0f);
+        Theme::DrawThemedButton(window, m_addBtnBounds, "+ Add", m_font, kButtonTextSize, false, m_addHover > 0.5f, false, 1.0f);
+        Theme::DrawThemedButton(window, m_dupBtnBounds, "Duplicate", m_font, kButtonTextSize, false, m_dupHover > 0.5f, false, 1.0f);
+        Theme::DrawThemedButton(window, m_delBtnBounds, "Delete", m_font, kButtonTextSize, false, m_delHover > 0.5f, true, 1.0f);
+        Theme::DrawThemedButton(window, m_onionBtnBounds, "Onion Skin", m_font, kButtonTextSize, m_onionEnabled, m_onionHover > 0.5f, false, 1.0f);
+        Theme::DrawThemedButton(window, m_closeBtnBounds, "v", m_font, kButtonTextSize, false, m_closeHover > 0.5f, false, 1.0f);
+
+        std::string infoStr = "Frame " + std::to_string(m_currentFrame + 1) + " / " + std::to_string(m_totalFrames) +
+            "   |   " + std::to_string(static_cast<int>(m_fps)) + " FPS";
+        float infoW = Theme::MeasureText(m_font, infoStr, kButtonTextSize);
+        Theme::DrawCrispText(window, m_font, infoStr, kButtonTextSize, m_closeBtnBounds.left - infoW - 16.0f, centerY, Theme::TextSecondary, textShadow, false, true);
     }
 
 }

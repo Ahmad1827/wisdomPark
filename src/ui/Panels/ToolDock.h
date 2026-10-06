@@ -34,6 +34,7 @@ namespace WisdomUI {
         sf::FloatRect m_bounds;
         sf::Font m_font;
         std::vector<ToolItem> m_tools;
+        std::vector<float> m_groupDividerYs;
         std::string m_activeToolId{ "brush" };
         std::function<void()> m_onDeselect;
 

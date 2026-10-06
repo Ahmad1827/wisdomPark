@@ -218,7 +218,7 @@ static bool g_selectingOutlineColor = false;
 static sf::Color g_outlineColor = sf::Color::Black;
 static bool g_selectingGridColor = false;
 
-UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), promptQuantity(1), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), isDraggingSizeSlider(false), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(true), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(100), easterEggClicks(0), m_debugUseSpriteStudio(false) {}
+UIManager::UIManager() : isTypingPrompt(false), showingText(false), textAlpha(255.0f), isLightingMode(false), focusMode(false), projManager(nullptr), activeProjectName("Untitled_Project"), activeProjectPath(""), showUnsavedWarning(false), currentMenuState(MenuState::Main), startupTime(0.0f), activeTutorialIndex(-1), uiFullscreen(true), uiBorderless(false), uiVsync(true), uiAutoBackup(true), uiHwAccel(true), uiFpsLimit(60), uiAnimFps(12), uiHistorySize(100), easterEggClicks(0), m_debugUseSpriteStudio(false) {}
 
 void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     projManager = pm;
@@ -234,11 +234,9 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     exportModal.init();
     newProjectModal.init();
 
-    leftToolbar.init();
     layerPanel.init();
     colorPalettePanel.init();
     rightProperties.init();
-    bottomTimeline.init();
     audioPanel.init();
     initMinigame();
 
@@ -261,88 +259,57 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     promptBox.setSize(sf::Vector2f(600.f, 50.f));
     promptBox.setPosition(1920.f / 2.f - 300.f, 1080.f - 300.f);
-    promptBox.setFillColor(sf::Color(15, 15, 18, 220));
-    promptBox.setOutlineThickness(1.0f);
-    promptBox.setOutlineColor(sf::Color(255, 255, 255, 30));
+    promptBox.setFillColor(sf::Color(WisdomUI::Theme::Panel.r, WisdomUI::Theme::Panel.g, WisdomUI::Theme::Panel.b, 240));
+    promptBox.setOutlineThickness(1.5f);
+    promptBox.setOutlineColor(WisdomUI::Theme::Border);
 
     promptDisplay.setFont(font);
     promptDisplay.setCharacterSize(20);
-    promptDisplay.setFillColor(sf::Color::White);
+    promptDisplay.setFillColor(WisdomUI::Theme::TextPrimary);
     promptDisplay.setPosition(1920.f / 2.f - 290.f, 1080.f - 288.f);
-
-    toolBg.setSize(sf::Vector2f(44.f, 180.f));
-    toolBg.setFillColor(sf::Color(25, 25, 30, 240));
-    toolBg.setOutlineThickness(1.f);
-    toolBg.setOutlineColor(sf::Color(100, 100, 110));
-
-    sizeSliderBg.setSize(sf::Vector2f(10.f, 100.f));
-    sizeSliderBg.setFillColor(sf::Color(15, 15, 20));
-    sizeSliderBg.setOutlineThickness(1.f);
-    sizeSliderBg.setOutlineColor(sf::Color(60, 60, 70));
-
-    sizeSliderHandle.setSize(sf::Vector2f(20.f, 10.f));
-    sizeSliderHandle.setFillColor(sf::Color(0, 191, 255));
-
-    sizeLabelText.setFont(font);
-    sizeLabelText.setString("SIZE");
-    sizeLabelText.setCharacterSize(10);
-    sizeLabelText.setFillColor(sf::Color(180, 180, 180));
-
-    sizeValueText.setFont(font);
-    sizeValueText.setCharacterSize(12);
-    sizeValueText.setFillColor(sf::Color::White);
-
-    pixelPerfBtn.setSize(sf::Vector2f(30.f, 20.f));
-    pixelPerfBtn.setFillColor(sf::Color(40, 40, 50));
-    pixelPerfText.setFont(font);
-    pixelPerfText.setString("PERF");
-    pixelPerfText.setCharacterSize(10);
-    pixelPerfText.setFillColor(sf::Color::White);
-
-    warnOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
-    warnOverlay.setFillColor(sf::Color(0, 0, 0, 180));
 
     assetBrowser = std::make_unique<AssetBrowserPanel>(assetManager, font);
     assetBrowser->setProject("CurrentProject");
-    assetBrowser->setBounds(sf::FloatRect(1440.f, 78.f, 390.f, 540.f));
+    assetBrowser->setBounds(sf::FloatRect(1440.f, WisdomUI::Theme::FloatingPanelY, 390.f, 540.f));
 
     loadingOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
-    loadingOverlay.setFillColor(sf::Color(10, 10, 15, 200));
+    loadingOverlay.setFillColor(sf::Color(10, 4, 16, 200));
 
     loadingBox.setSize(sf::Vector2f(450.f, 220.f));
     loadingBox.setOrigin(225.f, 110.f);
     loadingBox.setPosition(960.f, 540.f);
-    loadingBox.setFillColor(sf::Color(25, 25, 35));
-    loadingBox.setOutlineThickness(2.f);
-    loadingBox.setOutlineColor(sf::Color(100, 150, 255));
+    loadingBox.setFillColor(WisdomUI::Theme::Panel);
+    loadingBox.setOutlineThickness(1.5f);
+    loadingBox.setOutlineColor(WisdomUI::Theme::Border);
 
     loadingText.setFont(font);
     loadingText.setString("Wisdom Park AI is thinking...");
     loadingText.setCharacterSize(16);
-    loadingText.setFillColor(sf::Color::White);
+    loadingText.setFillColor(WisdomUI::Theme::TextGold);
     loadingText.setOrigin(loadingText.getLocalBounds().width / 2.f, loadingText.getLocalBounds().height / 2.f);
     loadingText.setPosition(960.f, 480.f);
 
     loadingSpinner.setRadius(25.f);
     loadingSpinner.setPointCount(3);
-    loadingSpinner.setFillColor(sf::Color(255, 200, 100));
+    loadingSpinner.setFillColor(WisdomUI::Theme::SunsetAmber);
     loadingSpinner.setOrigin(25.f, 25.f);
     loadingSpinner.setPosition(960.f, 540.f);
 
     loadingCancelBtn.setSize(sf::Vector2f(120.f, 35.f));
     loadingCancelBtn.setOrigin(60.f, 17.5f);
     loadingCancelBtn.setPosition(960.f, 610.f);
-    loadingCancelBtn.setFillColor(sf::Color(180, 60, 60));
+    loadingCancelBtn.setFillColor(WisdomUI::Theme::RubyDark);
+    loadingCancelBtn.setOutlineThickness(1.f);
+    loadingCancelBtn.setOutlineColor(WisdomUI::Theme::RubyHighlight);
 
     loadingCancelText.setFont(font);
-    loadingCancelText.setString("[ Cancel X ]");
+    loadingCancelText.setString("Cancel");
     loadingCancelText.setCharacterSize(14);
-    loadingCancelText.setFillColor(sf::Color::White);
+    loadingCancelText.setFillColor(WisdomUI::Theme::TextPrimary);
     loadingCancelText.setOrigin(loadingCancelText.getLocalBounds().width / 2.f, loadingCancelText.getLocalBounds().height / 2.f);
     loadingCancelText.setPosition(960.f, 607.f);
 
     m_gradientPanel.init(&m_gradientConfig);
-    m_topMenuBar.init();
     m_perspectiveManager.init();
     m_perspectivePanel.init(&m_perspectiveManager);
     m_textManager.init();
@@ -563,50 +530,6 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         }
         colorsFile.close();
     }
-
-    initStartMenu();
-}
-
-void UIManager::initStartMenu() {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> disX(0.0f, 1920.0f);
-    std::uniform_real_distribution<float> disY(0.0f, 1080.0f);
-    std::uniform_real_distribution<float> disV(-10.0f, 10.0f);
-    std::uniform_real_distribution<float> disLife(0.5f, 5.0f);
-    std::uniform_real_distribution<float> disSize(1.0f, 4.0f);
-
-    for (int i = 0; i < 150; ++i) {
-        StartParticle p;
-        p.x = disX(gen);
-        p.y = disY(gen);
-        p.vx = disV(gen);
-        p.vy = -std::abs(disV(gen)) - 5.0f;
-        p.maxLife = disLife(gen);
-        p.life = static_cast<float>(i % 100) / 100.0f * p.maxLife;
-        p.size = disSize(gen);
-        int cR = 200 + rand() % 55;
-        int cG = 150 + rand() % 100;
-        int cB = 50 + rand() % 50;
-        p.baseColor = sf::Color(static_cast<sf::Uint8>(cR), static_cast<sf::Uint8>(cG), static_cast<sf::Uint8>(cB));
-        particles.push_back(p);
-    }
-
-    for (int i = 0; i < 4; ++i) {
-        LightRay lr;
-        lr.shape.setPointCount(4);
-        float wTop = 150.f + static_cast<float>(rand() % 200);
-        float wBot = 400.f + static_cast<float>(rand() % 400);
-        float sx = 800.f + (static_cast<float>(i) * 300.f);
-        lr.shape.setPoint(0, sf::Vector2f(sx, -100.f));
-        lr.shape.setPoint(1, sf::Vector2f(sx + wTop, -100.f));
-        lr.shape.setPoint(2, sf::Vector2f(sx - 500.f + wBot, 1200.f));
-        lr.shape.setPoint(3, sf::Vector2f(sx - 500.f, 1200.f));
-        lr.shape.setFillColor(sf::Color(255, 230, 180, 8));
-        lr.speed = 10.f + static_cast<float>(rand() % 20);
-        lr.offset = static_cast<float>(rand() % 1000);
-        lightRays.push_back(lr);
-    }
 }
 
 void UIManager::showMessage(const std::string& msg, sf::Color color) {
@@ -630,100 +553,8 @@ float UIManager::getHover(const std::string& key) {
     return hoverMap.count(key) ? hoverMap[key] : 0.0f;
 }
 
-void UIManager::drawGlassPanel(sf::RenderWindow& window, sf::FloatRect bounds, float hoverScale) {
-    sf::RectangleShape panel(sf::Vector2f(bounds.width, bounds.height));
-    panel.setOrigin(bounds.width / 2.f, bounds.height / 2.f);
-    panel.setPosition(bounds.left + bounds.width / 2.f, bounds.top + bounds.height / 2.f);
-
-    float s = 1.0f + 0.02f * hoverScale;
-    panel.setScale(s, s);
-
-    panel.setFillColor(sf::Color(25, 28, 35, 190));
-    panel.setOutlineThickness(1.5f);
-    sf::Color outline = sf::Color(
-        static_cast<sf::Uint8>(100.0f + hoverScale * 155.0f),
-        static_cast<sf::Uint8>(100.0f + hoverScale * 100.0f),
-        120,
-        static_cast<sf::Uint8>(150.0f + hoverScale * 105.0f)
-    );
-    panel.setOutlineColor(outline);
-
-    window.draw(panel);
-}
-
-void UIManager::drawPremiumText(sf::RenderWindow& window, const std::string& str, float x, float y, int size, sf::Color mainCol, sf::Color outlineCol, sf::Color shadowCol) {
-    sf::Text t(str, font, size);
-    sf::FloatRect b = t.getLocalBounds();
-    t.setOrigin(b.left + b.width / 2.f, b.top + b.height / 2.f);
-
-    t.setPosition(x + 6.f, y + 6.f);
-    t.setFillColor(shadowCol);
-    window.draw(t);
-
-    t.setFillColor(outlineCol);
-    const float offsets[8][2] = { {-2,-2}, {0,-2}, {2,-2}, {-2,0}, {2,0}, {-2,2}, {0,2}, {2,2} };
-    for (int i = 0; i < 8; ++i) {
-        t.setPosition(x + offsets[i][0], y + offsets[i][1]);
-        window.draw(t);
-    }
-
-    t.setPosition(x, y);
-    t.setFillColor(mainCol);
-    window.draw(t);
-
-    float shineOffset = static_cast<float>(std::fmod(startupTime * 400.0f, static_cast<double>(b.width) * 3.0)) - static_cast<float>(b.width);
-    sf::RectangleShape shine(sf::Vector2f(10.f, static_cast<float>(size) * 1.5f));
-    shine.setOrigin(5.f, static_cast<float>(size) * 0.75f);
-    shine.setPosition(x - b.width / 2.f + shineOffset, y);
-    shine.setRotation(25.f);
-    shine.setFillColor(sf::Color(255, 255, 255, 60));
-    window.draw(shine);
-}
-
 void UIManager::updateStartMenu(float dt, sf::Vector2f mousePos) {
     startupTime += dt;
-    for (auto& p : particles) {
-        p.life += dt;
-        if (p.life > p.maxLife) {
-            p.life = 0.0f;
-            p.x = static_cast<float>(rand() % 1920);
-            p.y = 1080.0f + static_cast<float>(rand() % 100);
-        }
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.vx += std::sin(startupTime + p.y * 0.01f) * 2.0f * dt;
-    }
-}
-
-void UIManager::drawStartMenu(sf::RenderWindow& window) {
-    sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
-    overlay.setFillColor(sf::Color(10, 15, 25, 140));
-    window.draw(overlay);
-
-    for (const auto& lr : lightRays) {
-        sf::ConvexShape r = lr.shape;
-        float shift = std::sin(startupTime * 0.5f + lr.offset) * 50.f;
-        r.move(shift, 0.f);
-        window.draw(r, sf::RenderStates(sf::BlendAdd));
-    }
-
-    for (const auto& p : particles) {
-        sf::CircleShape circ(p.size);
-        circ.setOrigin(p.size, p.size);
-        circ.setPosition(p.x, p.y);
-        float fade = 1.0f;
-        if (p.life < 0.5f) fade = p.life / 0.5f;
-        else if (p.maxLife - p.life < 0.5f) fade = (p.maxLife - p.life) / 0.5f;
-        sf::Color c = p.baseColor;
-        c.a = static_cast<sf::Uint8>(std::clamp(180.0f * fade, 0.0f, 255.0f));
-        circ.setFillColor(c);
-        window.draw(circ, sf::RenderStates(sf::BlendAdd));
-    }
-
-    if (currentMenuState == MenuState::Main) drawMainMenu(window);
-    else if (currentMenuState == MenuState::Settings) drawSettingsMenu(window);
-    else if (currentMenuState == MenuState::Tutorials) drawTutorialsMenu(window);
-    else if (currentMenuState == MenuState::Credits) drawCreditsMenu(window);
 }
 
 void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
@@ -1578,10 +1409,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (event.type == sf::Event::MouseButtonReleased) {
                     g_isDraggingTimeline = false;
                     if (!g_timelineDragMoved && event.mouseButton.button == sf::Mouse::Left) {
-                        sf::FloatRect trayBounds(12.0f, timelineY + 32.0f, 1920.0f - 24.0f, WisdomUI::Theme::TimelineHeight - 40.0f);
+                        sf::FloatRect trayBounds(12.0f, timelineY + WisdomUI::Theme::TimelineHeaderHeight + 4.0f, 1920.0f - 24.0f, WisdomUI::Theme::TimelineHeight - WisdomUI::Theme::TimelineHeaderHeight - 12.0f);
                         if (trayBounds.contains(mousePos)) {
                             float startX = trayBounds.left + 12.0f - g_timelineScrollX;
-                            float cardY = timelineY + 42.0f;
+                            float cardY = timelineY + WisdomUI::Theme::TimelineHeaderHeight + 14.0f;
                             float cardH = 120.0f;
                             timeline.syncWithCanvas(totalFrames);
 
@@ -1617,13 +1448,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
 
                     if (event.mouseButton.button == sf::Mouse::Left) {
-                        sf::FloatRect headerBounds(0.0f, timelineY, 1920.0f, 28.0f);
-                        sf::FloatRect playBtn(120.0f, headerBounds.top + 3.0f, 65.0f, 22.0f);
-                        sf::FloatRect addBtn(192.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
-                        sf::FloatRect dupBtn(252.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
-                        sf::FloatRect delBtn(312.0f, headerBounds.top + 3.0f, 55.0f, 22.0f);
-                        sf::FloatRect onionBtn(372.0f, headerBounds.top + 3.0f, 75.0f, 22.0f);
-                        sf::FloatRect closeBtn(1920.0f - 32.0f, headerBounds.top + 3.0f, 22.0f, 22.0f);
+                        sf::FloatRect playBtn = m_timelineHeader.GetPlayBounds();
+                        sf::FloatRect addBtn = m_timelineHeader.GetAddBounds();
+                        sf::FloatRect dupBtn = m_timelineHeader.GetDuplicateBounds();
+                        sf::FloatRect delBtn = m_timelineHeader.GetDeleteBounds();
+                        sf::FloatRect onionBtn = m_timelineHeader.GetOnionBounds();
+                        sf::FloatRect closeBtn = m_timelineHeader.GetCloseBounds();
 
                         if (playBtn.contains(mousePos)) { timeline.togglePlayback(); return; }
                         if (addBtn.contains(mousePos)) {
@@ -1669,7 +1499,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             return;
                         }
 
-                        sf::FloatRect trayBounds(12.0f, timelineY + 32.0f, 1920.0f - 24.0f, WisdomUI::Theme::TimelineHeight - 40.0f);
+                        sf::FloatRect trayBounds(12.0f, timelineY + WisdomUI::Theme::TimelineHeaderHeight + 4.0f, 1920.0f - 24.0f, WisdomUI::Theme::TimelineHeight - WisdomUI::Theme::TimelineHeaderHeight - 12.0f);
                         if (trayBounds.contains(mousePos)) {
                             g_isDraggingTimeline = true;
                             g_timelineDragStartMouseX = mousePos.x;
@@ -2394,6 +2224,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 }
 
 void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
+    WisdomUI::Theme::BeginFrame(dt);
+
     static bool s_syncedInitialSettings = false;
     if (!s_syncedInitialSettings) {
         uiFullscreen = settings.fullscreen;
@@ -2421,7 +2253,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             bool isProject = (ext == ".wpk");
 
             if (currentState == AppState::Painting) {
-                sf::FloatRect assetBrowserRect(1440.f, 78.f, 390.f, 540.f);
+                sf::FloatRect assetBrowserRect(1440.f, WisdomUI::Theme::FloatingPanelY, 390.f, 540.f);
                 bool droppedInAssetBrowser = (assetBrowser && assetBrowser->getIsVisible() && assetBrowserRect.contains(dropPos));
 
                 if (droppedInAssetBrowser) {
@@ -2559,7 +2391,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
     sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
 
-    m_topMenuBar.update(mousePos, static_cast<float>(window.getSize().x));
     if (keybindPanel.isVisible()) keybindPanel.updateHover(mousePos);
     if (exportModal.getIsOpen()) exportModal.updateHover(mousePos);
     if (newProjectModal.getIsOpen()) newProjectModal.updateHover(mousePos);
@@ -2814,7 +2645,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         }
 
         if (m_showTimeline) {
-            sf::FloatRect headerBounds(0.0f, regions.timeline.top, 1920.0f, 28.0f);
+            sf::FloatRect headerBounds(0.0f, regions.timeline.top, 1920.0f, WisdomUI::Theme::TimelineHeaderHeight);
             m_timelineHeader.SetBounds(headerBounds);
             if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
                 g_timelineLeftHeld = false;
@@ -2825,7 +2656,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
             m_timelineHeader.SyncState(timeline.isPlaying(), timeline.getCurrentFrame(), static_cast<int>(canvas.getFrameCount()), timeline.getFps(), canvas.isOnionSkinEnabled());
             m_timelineHeader.Update(dt, mousePos);
-            bottomTimeline.update(dt, focusMode);
         }
 
         m_statusBar.SetBounds(regions.statusBar);
@@ -2914,17 +2744,6 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             sf::Color oc = uiText.getOutlineColor(); oc.a = static_cast<sf::Uint8>(textAlpha);
             uiText.setFillColor(fc); uiText.setOutlineColor(oc);
         }
-
-        if (showUnsavedWarning) {
-            if (warnSaveBtn.getGlobalBounds().contains(mousePos)) warnSaveBtn.setFillColor(sf::Color(70, 200, 70));
-            else warnSaveBtn.setFillColor(sf::Color(50, 180, 50));
-
-            if (warnDiscardBtn.getGlobalBounds().contains(mousePos)) warnDiscardBtn.setFillColor(sf::Color(200, 70, 70));
-            else warnDiscardBtn.setFillColor(sf::Color(180, 50, 50));
-
-            if (warnCancelBtn.getGlobalBounds().contains(mousePos)) warnCancelBtn.setFillColor(sf::Color(100, 100, 110));
-            else warnCancelBtn.setFillColor(sf::Color(80, 80, 90));
-        }
     }
 }
 
@@ -2995,7 +2814,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
             WisdomUI::Theme::DrawSunsetPanel(window, timelineBounds, 1.0f);
 
-            sf::FloatRect trayBounds(12.0f, timelineY + 32.0f, 1920.0f - 24.0f, WisdomUI::Theme::TimelineHeight - 40.0f);
+            sf::FloatRect trayBounds(12.0f, timelineY + WisdomUI::Theme::TimelineHeaderHeight + 4.0f, 1920.0f - 24.0f, WisdomUI::Theme::TimelineHeight - WisdomUI::Theme::TimelineHeaderHeight - 12.0f);
             sf::RectangleShape trayBg(sf::Vector2f(trayBounds.width, trayBounds.height));
             trayBg.setPosition(trayBounds.left, trayBounds.top);
             trayBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
@@ -3039,7 +2858,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             window.setView(trayView);
 
             float startX = trayBounds.left + 12.0f - g_timelineScrollX;
-            float cardY = timelineY + 42.0f;
+            float cardY = timelineY + WisdomUI::Theme::TimelineHeaderHeight + 14.0f;
 
             for (int i = 0; i < totalFrames; ++i) {
                 if (startX + cardW >= trayBounds.left && startX <= trayBounds.left + trayBounds.width) {
@@ -3083,7 +2902,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
 
                     canvas.drawFrameThumbnail(window, i, sf::FloatRect(boxX + 2.0f, boxY + 2.0f, boxW - 4.0f, boxH - 4.0f));
 
-                    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(i + 1), 12, startX + cardW / 2.0f, cardY + cardH - 14.0f, isSelected ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+                    WisdomUI::Theme::DrawCrispText(window, font, std::to_string(i + 1), 13, startX + cardW / 2.0f, cardY + cardH - 14.0f, isSelected ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
 
                     if (isSelected) {
                         sf::RectangleShape selTag(sf::Vector2f(cardW - 12.0f, 2.0f));
@@ -3118,8 +2937,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
                 thumb.setFillColor(g_isDraggingTimeline ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber);
                 window.draw(thumb);
             }
-
-            bottomTimeline.syncOnionState(canvas.isOnionSkinEnabled(), canvas.getOnionSkinPrevCount(), canvas.getOnionSkinNextCount());
         }
 
         m_toolOptionsBar.Render(window);

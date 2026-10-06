@@ -40,10 +40,10 @@ namespace WisdomUI {
 
         float midHeight = bottomBarY - currentY - timelineH;
 
-        const float toolDockW = 52.0f;
+        const float toolDockW = Theme::ToolDockWidth;
         m_currentLayout.toolDock = sf::FloatRect(0, currentY, toolDockW, midHeight);
 
-        const float rightTabsW = 52.0f;
+        const float rightTabsW = Theme::ToolDockWidth;
         m_currentLayout.rightDockTabs = sf::FloatRect(W - rightTabsW, currentY, rightTabsW, midHeight);
 
         float rightDockW = showRightDock ? Theme::RightDockWidth : 0.0f;

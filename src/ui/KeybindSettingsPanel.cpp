@@ -1,4 +1,5 @@
 #include "KeybindSettingsPanel.h"
+#include "UITheme.h"
 #include <algorithm>
 
 KeybindSettingsPanel::KeybindSettingsPanel() : isOpen(false), scrollY(0.f), kbm(nullptr) {}
@@ -10,37 +11,15 @@ void KeybindSettingsPanel::init(KeybindManager* keyManager) {
     overlay.setSize(sf::Vector2f(1920.f, 1080.f));
     overlay.setFillColor(sf::Color(0, 0, 0, 180));
 
+    // These shapes only hold the hit boxes; draw() renders them with the shared theme.
     background.setSize(sf::Vector2f(820.f, 820.f));
     background.setPosition(1920.f / 2.f - 410.f, 1080.f / 2.f - 410.f);
-    background.setFillColor(sf::Color(20, 20, 24, 255));
-    background.setOutlineThickness(1.f);
-    background.setOutlineColor(sf::Color(100, 100, 110, 100));
-
-    titleText.setFont(font);
-    titleText.setString("Keybind Settings");
-    titleText.setCharacterSize(22);
-    titleText.setFillColor(sf::Color::White);
-    titleText.setPosition(background.getPosition().x + 32.f, background.getPosition().y + 26.f);
 
     closeBtn.setSize(sf::Vector2f(104.f, 32.f));
-    closeBtn.setFillColor(sf::Color(200, 50, 50));
     closeBtn.setPosition(background.getPosition().x + 684.f, background.getPosition().y + 24.f);
 
-    closeLabel.setFont(font);
-    closeLabel.setString("Close");
-    closeLabel.setCharacterSize(13);
-    closeLabel.setFillColor(sf::Color::White);
-    closeLabel.setPosition(closeBtn.getPosition().x + 32.f, closeBtn.getPosition().y + 7.f);
-
     restoreBtn.setSize(sf::Vector2f(160.f, 32.f));
-    restoreBtn.setFillColor(sf::Color(100, 100, 100));
     restoreBtn.setPosition(background.getPosition().x + 510.f, background.getPosition().y + 24.f);
-
-    restoreLabel.setFont(font);
-    restoreLabel.setString("Restore Defaults");
-    restoreLabel.setCharacterSize(13);
-    restoreLabel.setFillColor(sf::Color::White);
-    restoreLabel.setPosition(restoreBtn.getPosition().x + 18.f, restoreBtn.getPosition().y + 7.f);
 }
 
 void KeybindSettingsPanel::toggle() {
@@ -142,22 +121,22 @@ void KeybindSettingsPanel::updateHover(sf::Vector2f mousePos) {}
 void KeybindSettingsPanel::draw(sf::RenderWindow& window) {
     if (!isOpen) return;
 
+    using WisdomUI::Theme;
+    const sf::Color textShadow(14, 6, 20);
+    sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
     window.draw(overlay);
-    window.draw(background);
-    window.draw(titleText);
-    window.draw(closeBtn);
-    window.draw(closeLabel);
-    window.draw(restoreBtn);
-    window.draw(restoreLabel);
+    Theme::DrawSunsetPanel(window, background.getGlobalBounds(), 1.0f);
+
+    Theme::DrawCrispText(window, font, "KEYBIND SETTINGS", 22, background.getPosition().x + 32.f, background.getPosition().y + 40.f, Theme::SunsetAmber, textShadow, false, true);
+
+    sf::FloatRect restoreBounds = restoreBtn.getGlobalBounds();
+    sf::FloatRect closeBounds = closeBtn.getGlobalBounds();
+    Theme::DrawSunsetButton(window, restoreBounds, "Restore Defaults", font, 13, false, restoreBounds.contains(mousePos), false, 1.0f);
+    Theme::DrawSunsetButton(window, closeBounds, "Close", font, 13, false, closeBounds.contains(mousePos), true, 1.0f);
 
     if (!conflictMessage.empty()) {
-        sf::Text errText;
-        errText.setFont(font);
-        errText.setString(conflictMessage);
-        errText.setCharacterSize(13);
-        errText.setFillColor(sf::Color::Red);
-        errText.setPosition(background.getPosition().x + 32.f, background.getPosition().y + 68.f);
-        window.draw(errText);
+        Theme::DrawCrispText(window, font, conflictMessage, 14, background.getPosition().x + 32.f, background.getPosition().y + 76.f, Theme::SunsetCoral, textShadow, false, true);
     }
 
     float baseX = background.getPosition().x + 40.f;
@@ -172,40 +151,26 @@ void KeybindSettingsPanel::draw(sf::RenderWindow& window) {
         if (act.category != currentCat) {
             currentCat = act.category;
             if (y > clipRect.top - 42.f && y < clipRect.top + clipRect.height) {
-                sf::Text catText;
-                catText.setFont(font);
-                catText.setString(currentCat);
-                catText.setCharacterSize(15);
-                catText.setFillColor(sf::Color(150, 150, 200));
-                catText.setPosition(baseX, y + 2.f);
-                window.draw(catText);
+                Theme::DrawCrispText(window, font, currentCat, 15, baseX, y + 16.f, Theme::SunsetAmber, textShadow, false, true);
             }
             y += 42.f;
         }
 
         if (y > clipRect.top - 42.f && y < clipRect.top + clipRect.height) {
-            sf::Text nText;
-            nText.setFont(font);
-            nText.setString(act.name);
-            nText.setCharacterSize(13);
-            nText.setFillColor(sf::Color::White);
-            nText.setPosition(baseX + 20.f, y + 7.f);
-            window.draw(nText);
+            bool listening = (listeningId == id);
+            sf::FloatRect bindBounds(baseX + 470.f, y, 220.f, 32.f);
+            bool hovered = bindBounds.contains(mousePos);
 
-            sf::RectangleShape bindBox(sf::Vector2f(220.f, 32.f));
-            bindBox.setPosition(baseX + 470.f, y);
-            bindBox.setFillColor(listeningId == id ? sf::Color(0, 122, 204) : sf::Color(40, 40, 45));
+            Theme::DrawCrispText(window, font, act.name, 14, baseX + 20.f, y + 16.f, Theme::TextPrimary, textShadow, false, true);
+
+            sf::RectangleShape bindBox(sf::Vector2f(bindBounds.width, bindBounds.height));
+            bindBox.setPosition(bindBounds.left, bindBounds.top);
+            bindBox.setFillColor(listening ? Theme::SunsetCoralDark : Theme::PanelInset);
             bindBox.setOutlineThickness(1.f);
-            bindBox.setOutlineColor(sf::Color(100, 100, 100));
+            bindBox.setOutlineColor((listening || hovered) ? Theme::SunsetGold : Theme::SunsetPlum);
             window.draw(bindBox);
 
-            sf::Text bText;
-            bText.setFont(font);
-            bText.setCharacterSize(13);
-            bText.setFillColor(sf::Color::White);
-            bText.setString(listeningId == id ? "Press key..." : kbm->getActionString(id));
-            bText.setPosition(baseX + 480.f, y + 7.f);
-            window.draw(bText);
+            Theme::DrawCrispText(window, font, listening ? "Press key..." : kbm->getActionString(id), 14, bindBounds.left + 10.f, y + 16.f, listening ? Theme::TextPrimary : Theme::TextGold, sf::Color::Transparent, false, true);
         }
         y += 42.f;
     }
