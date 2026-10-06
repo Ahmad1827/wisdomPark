@@ -147,6 +147,13 @@ private:
     bool m_useMinigameWelcome = false;
     sf::FloatRect m_welcomeModeToggleBounds = sf::FloatRect(1600.f, 35.f, 240.f, 42.f);
     void drawStandardMainMenu(sf::RenderWindow& window);
+    void drawMainMenuBackdrop(sf::RenderWindow& window);
+    sf::FloatRect getMainMenuItemBounds(int index) const;
+    sf::FloatRect getRecentCardBounds(int index) const;
+    void refreshRecentProjects();
+    void loadProjectFromMenu(const ProjectMetadata& meta, AppState& currentState, Canvas& canvas, Timeline& timeline, ProjectManager& pm);
+    std::vector<ProjectMetadata> m_recentProjects;
+    bool m_wasOnMainMenu = false;
     bool m_isArcadePaused = false;
     ArcadePacHero m_arcadeHero;
     std::vector<ArcadeGhost> m_arcadeGhosts;

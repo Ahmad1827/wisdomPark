@@ -21,8 +21,8 @@ namespace WisdomUI {
         m_font = font;
     }
 
-    static const unsigned int kLabelSize = 14;
-    static const unsigned int kButtonTextSize = 13;
+    static const unsigned int kLabelSize = 15;
+    static const unsigned int kButtonTextSize = 14;
     static const float kToolLabelSlot = 190.0f;
     static const float kItemGap = 8.0f;
     static const float kGroupGap = 16.0f;
@@ -342,7 +342,7 @@ namespace WisdomUI {
 
         const sf::Color textShadow(14, 6, 20);
 
-        Theme::DrawCrispText(window, m_font, m_activeToolName, 15, std::floor(m_bounds.left + 24.0f), centerY, Theme::SunsetAmber, textShadow, false, true);
+        Theme::DrawCrispText(window, m_font, m_activeToolName, 17, std::floor(m_bounds.left + 24.0f), centerY, Theme::SunsetAmber, textShadow, false, true);
 
         bool selectTool = isSelectTool();
         // Without a selection only the hint is shown, so only the first divider applies.

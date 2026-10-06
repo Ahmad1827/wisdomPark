@@ -8,7 +8,7 @@ namespace WisdomUI {
 
     static sf::FloatRect s_projBadgeBounds;
 
-    static const unsigned int kTextSize = 14;
+    static const unsigned int kTextSize = 15;
 
     TopBar::TopBar() = default;
 

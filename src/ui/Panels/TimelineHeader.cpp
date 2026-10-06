@@ -4,8 +4,8 @@
 
 namespace WisdomUI {
 
-    static const unsigned int kTitleSize = 14;
-    static const unsigned int kButtonTextSize = 13;
+    static const unsigned int kTitleSize = 15;
+    static const unsigned int kButtonTextSize = 14;
 
     TimelineHeader::TimelineHeader() = default;
 

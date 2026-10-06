@@ -561,88 +561,323 @@ void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
     sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
     sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
 
-    float floatAnim = std::sin(startupTime * 2.0f) * 4.0f;
-    float titleY = 65.f + floatAnim;
+    using WisdomUI::Theme;
+    using WisdomUI::Animation;
 
-    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK", 62, 960.f, titleY, WisdomUI::Theme::SunsetGold, sf::Color(12, 4, 18), true, true);
-    WisdomUI::Theme::DrawCrispText(window, font, "ANIMATION STUDIO & PIXEL ART SUITE", 18, 960.f, titleY + 56.f, WisdomUI::Theme::SunsetPeach, sf::Color(12, 4, 18), true, true);
+    drawMainMenuBackdrop(window);
 
-    sf::FloatRect menuPod(440.f, 145.f, 1040.f, 790.f);
-    WisdomUI::Theme::DrawSunsetPanel(window, menuPod, 1.0f);
+    // Each element fades and slides in a moment after the one before it.
+    auto appear = [&](float delay) { return Animation::EaseOutCubic((startupTime - delay) / 0.45f); };
+    auto faded = [](sf::Color color, float a) {
+        color.a = static_cast<sf::Uint8>(static_cast<float>(color.a) * std::clamp(a, 0.0f, 1.0f));
+        return color;
+        };
+    const sf::Color shadow(10, 4, 18);
+    const float columnX = getMainMenuItemBounds(0).left;
 
-    sf::FloatRect bannerGrip(menuPod.left + 20.f, menuPod.top + 14.f, menuPod.width - 40.f, 40.f);
-    sf::RectangleShape bannerBg(sf::Vector2f(bannerGrip.width, bannerGrip.height));
-    bannerBg.setPosition(bannerGrip.left, bannerGrip.top);
-    bannerBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-    bannerBg.setOutlineThickness(1.5f);
-    bannerBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
-    window.draw(bannerBg);
+    // ---- Title ----
+    float titleA = appear(0.0f);
+    float titleX = columnX - 30.0f * (1.0f - titleA);
 
-    WisdomUI::Theme::DrawCrispText(window, font, ":: MAIN LAUNCHPAD ::", 16, bannerGrip.left + bannerGrip.width / 2.f, bannerGrip.top + bannerGrip.height / 2.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    Theme::DrawCrispText(window, font, "WISDOM PARK", 100, titleX + 5.0f, 177.0f, faded(sf::Color(10, 4, 18, 200), titleA), sf::Color::Transparent, false, true);
+    Theme::DrawCrispText(window, font, "WISDOM PARK", 100, titleX, 172.0f, faded(Theme::SunsetGold, titleA), faded(Theme::SunsetCoralDark, titleA), false, true);
 
-    std::vector<std::pair<std::string, std::string>> menuCards = {
-        {"NEW PROJECT", "CTRL+N"},
-        {"OPEN PROJECT", "CTRL+O"},
-        {"SETTINGS", "ESC"},
-        {"TUTORIALS", "F1"},
-        {"KEYBINDS", "K"},
-        {"CREDITS", "C"},
-        {"EXIT", "ALT+F4"}
+    float subA = appear(0.12f);
+    Theme::DrawCrispText(window, font, "ANIMATION STUDIO  &  PIXEL ART SUITE", 20, columnX + 2.0f, 232.0f, faded(Theme::SunsetPeach, subA), faded(shadow, subA), false, true);
+
+    sf::RectangleShape rule(sf::Vector2f(440.0f * appear(0.2f), 2.0f));
+    rule.setPosition(columnX, 270.0f);
+    rule.setFillColor(Theme::SunsetAmber);
+    window.draw(rule);
+
+    // ---- Menu ----
+    struct MenuEntry { const char* label; const char* hint; };
+    const MenuEntry entries[7] = {
+        { "NEW PROJECT", "CTRL+N" },
+        { "OPEN PROJECT", "CTRL+O" },
+        { "SETTINGS", "" },
+        { "TUTORIALS", "F1" },
+        { "KEYBINDS", "K" },
+        { "CREDITS", "" },
+        { "EXIT", "" }
     };
 
-    float startX = menuPod.left + 24.f;
-    float startY = menuPod.top + 66.f;
-    float btnW = menuPod.width - 48.f;
-    float btnH = 80.f;
-    float spacing = 14.f;
+    for (int i = 0; i < 7; ++i) {
+        sf::FloatRect bounds = getMainMenuItemBounds(i);
+        float a = appear(0.25f + 0.06f * static_cast<float>(i));
+        if (a <= 0.0f) continue;
 
-    for (size_t i = 0; i < menuCards.size(); ++i) {
-        sf::FloatRect cardRect(startX, startY + static_cast<float>(i) * (btnH + spacing), btnW, btnH);
-        bool isHovered = cardRect.contains(mousePos);
-        bool isAccent = (i == 0);
-        bool isExit = (i == menuCards.size() - 1);
+        bool hovered = bounds.contains(mousePos) && !newProjectModal.getIsOpen() && !m_showKeybinds;
+        float t = Theme::AnimateHover(bounds, hovered);
+        bool pressed = hovered && sf::Mouse::isButtonPressed(sf::Mouse::Left);
+        float x = bounds.left - 36.0f * (1.0f - a);
+        float y = bounds.top + (pressed ? 1.0f : 0.0f);
+        float centerY = y + bounds.height * 0.5f;
 
-        sf::RectangleShape card(sf::Vector2f(cardRect.width, cardRect.height));
-        card.setPosition(cardRect.left, cardRect.top);
+        if (i < 2) {
+            // The two main actions are full buttons: New is filled, Open is outlined.
+            bool primary = (i == 0);
 
-        if (isHovered) {
-            card.setFillColor(isExit ? sf::Color(150, 24, 44, 240) : WisdomUI::Theme::SunsetSkyMid);
-            card.setOutlineThickness(2.0f);
-            card.setOutlineColor(isAccent ? WisdomUI::Theme::SunsetGold : (isExit ? sf::Color(255, 70, 90) : WisdomUI::Theme::SunsetAmber));
+            if (t > 0.01f) {
+                sf::ConvexShape glow = Theme::ChamferedRect(x - 4.0f, y - 4.0f, bounds.width + 8.0f, bounds.height + 8.0f, 8.0f);
+                glow.setFillColor(faded(Theme::WithAlpha(primary ? Theme::SunsetGold : Theme::SunsetPeach, 60.0f * t), a));
+                window.draw(glow);
+            }
+
+            sf::ConvexShape dropShadow = Theme::ChamferedRect(x, y + 4.0f, bounds.width, bounds.height, 6.0f);
+            dropShadow.setFillColor(faded(sf::Color(6, 3, 12, 150), a));
+            window.draw(dropShadow);
+
+            sf::ConvexShape body = Theme::ChamferedRect(x, y, bounds.width, bounds.height, 6.0f);
+            sf::Color fill = primary
+                ? Theme::Mix(Theme::SunsetAmber, Theme::SunsetGold, t)
+                : Theme::Mix(sf::Color(24, 15, 40, 225), Theme::WithAlpha(Theme::SunsetSkyMid, 240.0f), t);
+            body.setFillColor(faded(fill, a));
+            body.setOutlineThickness(primary ? 1.0f : 1.5f);
+            body.setOutlineColor(faded(primary ? Theme::SunsetGlow : Theme::Mix(Theme::SunsetViolet, Theme::SunsetPeach, t), a));
+            window.draw(body);
+
+            sf::RectangleShape shine(sf::Vector2f(bounds.width - 12.0f, 1.0f));
+            shine.setPosition(x + 6.0f, y + 1.0f);
+            shine.setFillColor(faded(sf::Color(255, 255, 255, primary ? 160 : 50), a));
+            window.draw(shine);
+
+            sf::Color textCol = primary ? Theme::SunsetDeepDark : Theme::Mix(Theme::TextPrimary, Theme::SunsetGold, t);
+            Theme::DrawCrispText(window, font, entries[i].label, 28, x + 28.0f + 8.0f * t, centerY, faded(textCol, a), primary ? sf::Color::Transparent : faded(shadow, a), false, true);
+
+            sf::Color hintCol = primary ? sf::Color(92, 52, 20) : Theme::TextMuted;
+            float hintW = Theme::MeasureText(font, entries[i].hint, 15);
+            Theme::DrawCrispText(window, font, entries[i].hint, 15, x + bounds.width - hintW - 24.0f, centerY, faded(hintCol, a), sf::Color::Transparent, false, true);
         }
         else {
-            card.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-            card.setOutlineThickness(1.2f);
-            card.setOutlineColor(isAccent ? WisdomUI::Theme::SunsetCoral : WisdomUI::Theme::SunsetPlum);
-        }
-        window.draw(card);
+            // Secondary entries are plain rows that light up from the left on hover.
+            bool isExit = (i == 6);
+            sf::Color accent = isExit ? Theme::SunsetCoral : Theme::SunsetAmber;
 
-        if (isHovered) {
-            sf::RectangleShape accentStrip(sf::Vector2f(8.f, cardRect.height - 16.f));
-            accentStrip.setPosition(cardRect.left + 8.f, cardRect.top + 8.f);
-            accentStrip.setFillColor(isAccent ? WisdomUI::Theme::SunsetGold : (isExit ? sf::Color(255, 70, 90) : WisdomUI::Theme::SunsetAmber));
-            window.draw(accentStrip);
-        }
+            if (t > 0.01f) {
+                sf::VertexArray wash(sf::Quads, 4);
+                sf::Color washStart = Theme::WithAlpha(accent, 70.0f * t * a);
+                sf::Color washEnd = Theme::WithAlpha(accent, 0.0f);
+                wash[0] = sf::Vertex(sf::Vector2f(x, y), washStart);
+                wash[1] = sf::Vertex(sf::Vector2f(x + bounds.width, y), washEnd);
+                wash[2] = sf::Vertex(sf::Vector2f(x + bounds.width, y + bounds.height), washEnd);
+                wash[3] = sf::Vertex(sf::Vector2f(x, y + bounds.height), washStart);
+                window.draw(wash);
 
-        sf::Color titleColor = isHovered ? WisdomUI::Theme::SunsetGold : (isAccent ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::TextPrimary);
-        WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].first, 28, cardRect.left + 36.f, cardRect.top + cardRect.height / 2.f, titleColor, sf::Color(14, 6, 20), false, true);
+                float barH = (bounds.height - 12.0f) * t;
+                sf::RectangleShape bar(sf::Vector2f(4.0f, barH));
+                bar.setPosition(x, centerY - barH * 0.5f);
+                bar.setFillColor(faded(accent, a));
+                window.draw(bar);
+            }
 
-        if (!menuCards[i].second.empty()) {
-            sf::FloatRect badge(cardRect.left + cardRect.width - 150.f, cardRect.top + (cardRect.height - 46.f) / 2.f, 126.f, 46.f);
-            sf::RectangleShape badgeBg(sf::Vector2f(badge.width, badge.height));
-            badgeBg.setPosition(badge.left, badge.top);
-            badgeBg.setFillColor(sf::Color(10, 4, 18));
-            badgeBg.setOutlineThickness(1.5f);
-            badgeBg.setOutlineColor(isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
-            window.draw(badgeBg);
+            sf::Color textCol = Theme::Mix(Theme::TextPrimary, isExit ? Theme::SunsetPeach : Theme::SunsetGold, t);
+            Theme::DrawCrispText(window, font, entries[i].label, 24, x + 18.0f + 10.0f * t, centerY, faded(textCol, a), faded(shadow, a), false, true);
 
-            WisdomUI::Theme::DrawCrispText(window, font, menuCards[i].second, 18, badge.left + badge.width / 2.f, badge.top + badge.height / 2.f, isHovered ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
+            float hintW = Theme::MeasureText(font, entries[i].hint, 14);
+            Theme::DrawCrispText(window, font, entries[i].hint, 14, x + bounds.width - hintW - 16.0f, centerY, faded(Theme::TextMuted, a), sf::Color::Transparent, false, true);
         }
     }
 
-    sf::FloatRect tickerBounds(340.f, 950.f, 1240.f, 48.f);
-    WisdomUI::Theme::DrawSunsetPanel(window, tickerBounds, 1.0f);
-    WisdomUI::Theme::DrawCrispText(window, font, "WISDOM PARK STUDIO  |  DIRECT HARDWARE ACCELERATION READY", 16, tickerBounds.left + tickerBounds.width / 2.f, tickerBounds.top + tickerBounds.height / 2.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
+    // ---- Recent projects ----
+    if (!m_recentProjects.empty()) {
+        sf::FloatRect first = getRecentCardBounds(0);
+        float headA = appear(0.35f);
+        Theme::DrawCrispText(window, font, "JUMP BACK IN", 18, first.left, first.top - 30.0f, faded(Theme::SunsetAmber, headA), faded(shadow, headA), false, true);
+
+        float headW = Theme::MeasureText(font, "JUMP BACK IN", 18);
+        sf::RectangleShape headRule(sf::Vector2f((first.width - headW - 16.0f) * headA, 1.0f));
+        headRule.setPosition(first.left + headW + 16.0f, first.top - 30.0f);
+        headRule.setFillColor(Theme::WithAlpha(Theme::SunsetAmber, 120.0f));
+        window.draw(headRule);
+    }
+
+    for (size_t i = 0; i < m_recentProjects.size(); ++i) {
+        const ProjectMetadata& meta = m_recentProjects[i];
+        sf::FloatRect bounds = getRecentCardBounds(static_cast<int>(i));
+        float a = appear(0.45f + 0.1f * static_cast<float>(i));
+        if (a <= 0.0f) continue;
+
+        bool hovered = bounds.contains(mousePos) && !newProjectModal.getIsOpen() && !m_showKeybinds;
+        float t = Theme::AnimateHover(bounds, hovered);
+        float x = bounds.left + 40.0f * (1.0f - a);
+        float y = bounds.top - 4.0f * t;
+
+        if (t > 0.01f) {
+            sf::ConvexShape glow = Theme::ChamferedRect(x - 4.0f, y - 4.0f, bounds.width + 8.0f, bounds.height + 8.0f, 8.0f);
+            glow.setFillColor(Theme::WithAlpha(Theme::SunsetPeach, 55.0f * t * a));
+            window.draw(glow);
+        }
+
+        sf::ConvexShape dropShadow = Theme::ChamferedRect(x, y + 5.0f + 3.0f * t, bounds.width, bounds.height, 6.0f);
+        dropShadow.setFillColor(faded(sf::Color(6, 3, 12, 150), a));
+        window.draw(dropShadow);
+
+        sf::ConvexShape card = Theme::ChamferedRect(x, y, bounds.width, bounds.height, 6.0f);
+        card.setFillColor(faded(Theme::Mix(sf::Color(22, 14, 36, 232), sf::Color(44, 28, 66, 244), t), a));
+        card.setOutlineThickness(1.0f);
+        card.setOutlineColor(faded(Theme::Mix(Theme::Border, Theme::SunsetPeach, t), a));
+        window.draw(card);
+
+        // Thumbnail on a light checkerboard so transparent artwork stays readable.
+        const float thumbSize = bounds.height - 28.0f;
+        sf::FloatRect thumbBox(x + 14.0f, y + 14.0f, thumbSize, thumbSize);
+        sf::RectangleShape thumbBg(sf::Vector2f(thumbSize, thumbSize));
+        thumbBg.setPosition(thumbBox.left, thumbBox.top);
+        thumbBg.setFillColor(faded(sf::Color(214, 208, 220), a));
+        thumbBg.setOutlineThickness(1.0f);
+        thumbBg.setOutlineColor(faded(Theme::Mix(Theme::SunsetPlum, Theme::SunsetGold, t), a));
+        window.draw(thumbBg);
+
+        const int checks = 6;
+        float cell = thumbSize / static_cast<float>(checks);
+        for (int cy = 0; cy < checks; ++cy) {
+            for (int cx = 0; cx < checks; ++cx) {
+                if ((cx + cy) % 2 == 0) continue;
+                sf::RectangleShape chk(sf::Vector2f(cell, cell));
+                chk.setPosition(thumbBox.left + cx * cell, thumbBox.top + cy * cell);
+                chk.setFillColor(faded(sf::Color(184, 176, 194), a));
+                window.draw(chk);
+            }
+        }
+
+        sf::Vector2u texSize = meta.thumbnail.getSize();
+        if (texSize.x > 0 && texSize.y > 0) {
+            sf::Sprite thumb(meta.thumbnail);
+            float scale = std::min(thumbSize / static_cast<float>(texSize.x), thumbSize / static_cast<float>(texSize.y));
+            thumb.setScale(scale, scale);
+            thumb.setPosition(std::floor(thumbBox.left + (thumbSize - texSize.x * scale) * 0.5f), std::floor(thumbBox.top + (thumbSize - texSize.y * scale) * 0.5f));
+            thumb.setColor(faded(sf::Color::White, a));
+            window.draw(thumb);
+        }
+
+        float textX = thumbBox.left + thumbSize + 20.0f;
+        std::string name = meta.name;
+        std::replace(name.begin(), name.end(), '_', ' ');
+        if (name.length() > 20) name = name.substr(0, 18) + "..";
+        Theme::DrawCrispText(window, font, name, 22, textX, y + 34.0f, faded(Theme::Mix(Theme::TextPrimary, Theme::SunsetGold, t), a), faded(shadow, a), false, true);
+
+        std::string details = std::to_string(meta.width) + " x " + std::to_string(meta.height) + "   |   " +
+            std::to_string(meta.frameCount) + (meta.frameCount == 1 ? " frame" : " frames");
+        Theme::DrawCrispText(window, font, details, 16, textX, y + 68.0f, faded(Theme::TextSecondary, a), sf::Color::Transparent, false, true);
+
+        const char* kind = meta.isPixelMode ? "PIXEL ART" : "ILLUSTRATION";
+        float kindW = Theme::MeasureText(font, kind, 13) + 18.0f;
+        sf::RectangleShape tag(sf::Vector2f(kindW, 22.0f));
+        tag.setPosition(textX, y + bounds.height - 44.0f);
+        tag.setFillColor(sf::Color::Transparent);
+        tag.setOutlineThickness(1.0f);
+        tag.setOutlineColor(faded(meta.isPixelMode ? Theme::SunsetAmber : Theme::SunsetViolet, a));
+        window.draw(tag);
+        Theme::DrawCrispText(window, font, kind, 13, textX + kindW * 0.5f, y + bounds.height - 33.0f, faded(meta.isPixelMode ? Theme::SunsetAmber : Theme::TextSecondary, a), sf::Color::Transparent, true, true);
+
+        if (t > 0.05f) {
+            float openW = Theme::MeasureText(font, "OPEN  >", 15);
+            Theme::DrawCrispText(window, font, "OPEN  >", 15, x + bounds.width - openW - 20.0f + 6.0f * t, y + bounds.height - 33.0f, Theme::WithAlpha(Theme::SunsetGold, 255.0f * t * a), sf::Color::Transparent, false, true);
+        }
+    }
+
+    float footA = appear(0.8f);
+    Theme::DrawCrispText(window, font, "v0.1.0-alpha", 14, columnX, 1034.0f, faded(Theme::TextMuted, footA), faded(shadow, footA), false, true);
+}
+
+// Darkens the side of the artwork the menu sits on, and adds drifting fireflies.
+void UIManager::drawMainMenuBackdrop(sf::RenderWindow& window) {
+    const sf::Color dark(12, 6, 22);
+
+    auto gradient = [&](float x0, float x1, float alpha0, float alpha1) {
+        sf::VertexArray quad(sf::Quads, 4);
+        sf::Color c0 = WisdomUI::Theme::WithAlpha(dark, alpha0);
+        sf::Color c1 = WisdomUI::Theme::WithAlpha(dark, alpha1);
+        quad[0] = sf::Vertex(sf::Vector2f(x0, 0.0f), c0);
+        quad[1] = sf::Vertex(sf::Vector2f(x1, 0.0f), c1);
+        quad[2] = sf::Vertex(sf::Vector2f(x1, 1080.0f), c1);
+        quad[3] = sf::Vertex(sf::Vector2f(x0, 1080.0f), c0);
+        window.draw(quad);
+        };
+
+    gradient(0.0f, 420.0f, 235.0f, 215.0f);
+    gradient(420.0f, 1000.0f, 215.0f, 0.0f);
+    if (!m_recentProjects.empty()) {
+        gradient(1150.0f, 1920.0f, 0.0f, 150.0f);
+    }
+
+    for (int i = 0; i < 34; ++i) {
+        float seed = static_cast<float>(i);
+        float speed = 14.0f + std::fmod(seed * 7.3f, 22.0f);
+        float baseX = std::fmod(seed * 197.3f, 1920.0f);
+        float travel = std::fmod(startupTime * speed + seed * 131.0f, 1180.0f);
+        float px = baseX + std::sin(startupTime * 0.5f + seed * 1.9f) * 26.0f;
+        float py = 1100.0f - travel;
+        float twinkle = 0.45f + 0.55f * std::sin(startupTime * 2.2f + seed * 2.7f);
+        float size = (i % 3 == 0) ? 4.0f : 3.0f;
+
+        sf::RectangleShape halo(sf::Vector2f(size * 3.0f, size * 3.0f));
+        halo.setOrigin(size * 1.5f, size * 1.5f);
+        halo.setPosition(std::floor(px), std::floor(py));
+        halo.setFillColor(sf::Color(255, 196, 110, static_cast<sf::Uint8>(std::max(0.0f, 34.0f * twinkle))));
+        window.draw(halo, sf::RenderStates(sf::BlendAdd));
+
+        sf::RectangleShape core(sf::Vector2f(size, size));
+        core.setOrigin(size * 0.5f, size * 0.5f);
+        core.setPosition(std::floor(px), std::floor(py));
+        core.setFillColor(sf::Color(255, 232, 160, static_cast<sf::Uint8>(std::max(0.0f, 210.0f * twinkle))));
+        window.draw(core, sf::RenderStates(sf::BlendAdd));
+    }
+}
+
+sf::FloatRect UIManager::getMainMenuItemBounds(int index) const {
+    const float x = 110.0f;
+    const float width = 440.0f;
+    if (index == 0) return sf::FloatRect(x, 322.0f, width, 70.0f);
+    if (index == 1) return sf::FloatRect(x, 404.0f, width, 70.0f);
+    return sf::FloatRect(x, 506.0f + static_cast<float>(index - 2) * 60.0f, width, 52.0f);
+}
+
+sf::FloatRect UIManager::getRecentCardBounds(int index) const {
+    return sf::FloatRect(1300.0f, 322.0f + static_cast<float>(index) * 166.0f, 510.0f, 150.0f);
+}
+
+void UIManager::refreshRecentProjects() {
+    m_recentProjects.clear();
+    if (!projManager) return;
+
+    m_recentProjects = projManager->getRecentProjects();
+    if (m_recentProjects.size() > 3) m_recentProjects.resize(3);
+    for (auto& meta : m_recentProjects) {
+        meta.thumbnail.setSmooth(!meta.isPixelMode);
+    }
+}
+
+void UIManager::loadProjectFromMenu(const ProjectMetadata& meta, AppState& currentState, Canvas& canvas, Timeline& timeline, ProjectManager& pm) {
+    activeProjectName = meta.name;
+    activeProjectPath = meta.path;
+    int loadedFps = 12;
+    bool isPix = false;
+    canvas.clearCanvasImages();
+    canvas.clearObjectSelection();
+    if (pm.loadProject(meta.path, canvas, loadedFps, isPix)) {
+        timeline.setFrame(std::max(0, static_cast<int>(canvas.getFrameCount()) - 1));
+        canvas.setPixelMode(isPix);
+        canvas.clearIsDirty();
+        canvas.clearHistory();
+
+        // Ensure a writable artwork layer is selected
+        if (canvas.getFrameCount() > 0) {
+            int targetLayer = (canvas.getFrameReadOnly(0)->layers.size() > 1) ? 1 : 0;
+            canvas.setActiveLayer(targetLayer, 0);
+        }
+
+        canvas.setActiveTool(ToolType::Brush);
+        m_toolDock.SetActiveTool("brush");
+        m_activeTool.reset(); // Force workspace tool to rebuild fresh view transforms
+
+        currentState = AppState::Painting;
+        showMessage("Loaded Project: " + meta.name, sf::Color::Green);
+    }
+    else {
+        showMessage("Failed to load project files.", sf::Color::Red);
+    }
 }
 
 void UIManager::drawMainMenu(sf::RenderWindow& window) {
@@ -723,11 +958,11 @@ void UIManager::drawMainMenu(sf::RenderWindow& window) {
 
     bool isToggleHov = m_welcomeModeToggleBounds.contains(mousePos);
     std::string toggleLabel = m_useMinigameWelcome ? "Mode: Arcade Minigame" : "Mode: Standard Menu";
-    WisdomUI::Theme::DrawSunsetButton(window, m_welcomeModeToggleBounds, toggleLabel, font, 11, false, isToggleHov, m_useMinigameWelcome, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_welcomeModeToggleBounds, toggleLabel, font, 13, false, isToggleHov, m_useMinigameWelcome, 1.0f);
 
     bool isFsHov = m_startMenuFullscreenBtnBounds.contains(mousePos);
     std::string fsLabel = uiFullscreen ? "Fullscreen: ON" : "Fullscreen: OFF";
-    WisdomUI::Theme::DrawSunsetButton(window, m_startMenuFullscreenBtnBounds, fsLabel, font, 11, uiFullscreen, isFsHov, uiFullscreen, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, m_startMenuFullscreenBtnBounds, fsLabel, font, 13, false, isFsHov, false, 1.0f);
 }
 
 void UIManager::drawBackButton(sf::RenderWindow& window, const std::string& hoverKey, float x, float y) {
@@ -944,15 +1179,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                 }
                 else {
-                    float startX = 440.f + 24.f;
-                    float startY = 145.f + 66.f;
-                    float btnW = 1040.f - 48.f;
-                    float btnH = 80.f;
-                    float spacing = 14.f;
-
                     for (int i = 0; i < 7; ++i) {
-                        sf::FloatRect cardRect(startX, startY + static_cast<float>(i) * (btnH + spacing), btnW, btnH);
-                        if (cardRect.contains(mousePos)) {
+                        if (getMainMenuItemBounds(i).contains(mousePos)) {
                             if (i == 0) newProjectModal.open();
                             else if (i == 1) currentMenuState = MenuState::Projects;
                             else if (i == 2) currentMenuState = MenuState::Settings;
@@ -963,12 +1191,35 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             return;
                         }
                     }
+
+                    for (size_t i = 0; i < m_recentProjects.size(); ++i) {
+                        if (getRecentCardBounds(static_cast<int>(i)).contains(mousePos)) {
+                            ProjectMetadata meta = m_recentProjects[i];
+                            loadProjectFromMenu(meta, currentState, canvas, timeline, pm);
+                            return;
+                        }
+                    }
                 }
             }
             else if (event.type == sf::Event::KeyPressed) {
                 if (event.key.code == sf::Keyboard::K) {
                     m_showKeybinds = true;
                     return;
+                }
+                if (!m_useMinigameWelcome && !newProjectModal.getIsOpen()) {
+                    if (event.key.code == sf::Keyboard::N && event.key.control) {
+                        newProjectModal.open();
+                        return;
+                    }
+                    if (event.key.code == sf::Keyboard::O && event.key.control) {
+                        currentMenuState = MenuState::Projects;
+                        return;
+                    }
+                    if (event.key.code == sf::Keyboard::F1) {
+                        currentMenuState = MenuState::Tutorials;
+                        activeTutorialIndex = -1;
+                        return;
+                    }
                 }
                 if (m_useMinigameWelcome) {
                     if (event.key.code == sf::Keyboard::Space || (event.key.code == sf::Keyboard::N && event.key.control)) {
@@ -1006,35 +1257,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     newProjectModal.open();
                 }
                 else if (action == "load_project") {
-                    activeProjectName = meta.name;
-                    activeProjectPath = meta.path;
-                    int loadedFps = 12;
-                    bool isPix = false;
-                    canvas.clearCanvasImages();
-                    canvas.clearObjectSelection();
-                    if (pm.loadProject(meta.path, canvas, loadedFps, isPix)) {
-                        timeline.setFrame(std::max(0, static_cast<int>(canvas.getFrameCount()) - 1));
-                        canvas.setPixelMode(isPix);
-                        canvas.clearIsDirty();
-                        canvas.clearHistory();
-
-
-                        // Ensure a writable artwork layer is selected
-                        if (canvas.getFrameCount() > 0) {
-                            int targetLayer = (canvas.getFrameReadOnly(0)->layers.size() > 1) ? 1 : 0;
-                            canvas.setActiveLayer(targetLayer, 0);
-                        }
-
-                        canvas.setActiveTool(ToolType::Brush);
-                        m_toolDock.SetActiveTool("brush");
-                        m_activeTool.reset(); // Force workspace tool to rebuild fresh view transforms
-
-                        currentState = AppState::Painting;
-                        showMessage("Loaded Project: " + meta.name, sf::Color::Green);
-                    }
-                    else {
-                        showMessage("Failed to load project files.", sf::Color::Red);
-                    }
+                    loadProjectFromMenu(meta, currentState, canvas, timeline, pm);
                 }
                 else if (action == "open_native") {
                     std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
@@ -2399,6 +2622,8 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         loadingSpinner.rotate(150.f * dt);
     }
 
+    if (currentState != AppState::Welcome) m_wasOnMainMenu = false;
+
     if (currentState == AppState::Welcome) {
         if (!keybindPanel.isVisible()) {
             projectBrowser.updateHover(mousePos);
@@ -2407,22 +2632,12 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 updateMinigame(dt, mousePos, window);
             }
 
-            if (currentMenuState == MenuState::Main) {
-                std::vector<std::string> buttons = { "Projects", "Settings", "Tutorials", "Keybinds", "Credits", "Exit" };
-                float by = 420.f;
-                for (const auto& btn : buttons) {
-                    sf::FloatRect bBounds(150.f, by, 400.f, 60.f);
-                    updateHoverValue("mm_" + btn, bBounds.contains(mousePos), dt);
-                    by += 80.f;
-                }
-                float ry = 280.f;
-                for (int i = 0; i < 4; ++i) {
-                    sf::FloatRect rBounds(900.f, ry, 800.f, 100.f);
-                    updateHoverValue("rec_" + std::to_string(i), rBounds.contains(mousePos), dt);
-                    ry += 125.f;
-                }
-            }
-            else if (currentMenuState == MenuState::Settings) {
+            // Re-read the recent projects each time the main menu comes back into view.
+            bool onMainMenu = (currentMenuState == MenuState::Main);
+            if (onMainMenu && !m_wasOnMainMenu) refreshRecentProjects();
+            m_wasOnMainMenu = onMainMenu;
+
+            if (currentMenuState == MenuState::Settings) {
                 sf::FloatRect backBounds(100.f, 100.f, 120.f, 50.f);
                 updateHoverValue("btn_back", backBounds.contains(mousePos), dt);
 
