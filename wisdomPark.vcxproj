@@ -240,6 +240,7 @@
     <ClCompile Include="src\ui\Panels\TopBar.cpp" />
     <ClCompile Include="src\ui\RightProperties.cpp" />
     <ClCompile Include="src\ui\Screens\ProjectBrowser.cpp" />
+    <ClCompile Include="src\ui\Screens\MenuScreens.cpp" />
     <ClCompile Include="src\ui\Screens\ExportModal.cpp" />
     <ClCompile Include="src\ui\Screens\NewProjectModal.cpp" />
     <ClCompile Include="src\ui\ColorPalettePanel.cpp" />
@@ -377,6 +378,7 @@
     <ClInclude Include="src\ui\Screens\ExportModal.h" />
     <ClInclude Include="src\ui\Screens\NewProjectModal.h" />
     <ClInclude Include="src\ui\Screens\ProjectBrowser.h" />
+    <ClInclude Include="src\ui\Screens\MenuLayouts.h" />
     <ClInclude Include="src\ui\UIAnimation.h" />
     <ClInclude Include="src\ui\UIIcons.h" />
     <ClInclude Include="src\ui\UIManager.h" />

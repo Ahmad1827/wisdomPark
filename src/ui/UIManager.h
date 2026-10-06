@@ -154,6 +154,13 @@ private:
     void loadProjectFromMenu(const ProjectMetadata& meta, AppState& currentState, Canvas& canvas, Timeline& timeline, ProjectManager& pm);
     std::vector<ProjectMetadata> m_recentProjects;
     bool m_wasOnMainMenu = false;
+
+    void drawFireflies(sf::RenderWindow& window);
+    void drawSubScreenHeader(sf::RenderWindow& window, const std::string& title, const std::string& subtitle);
+    MenuState m_lastMenuState = MenuState::Main;
+    int m_lastTutorialIndex = -1;
+    float m_screenTime = 0.0f;
+    float m_tutorialTime = 0.0f;
     bool m_isArcadePaused = false;
     ArcadePacHero m_arcadeHero;
     std::vector<ArcadeGhost> m_arcadeGhosts;
