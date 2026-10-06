@@ -3,6 +3,7 @@
 #include "../UIManager.h"
 #include "../UITheme.h"
 #include "MenuLayouts.h"
+#include "MenuWidgets.h"
 #include "../../ai/AIManager.h"
 #include <algorithm>
 #include <cmath>
@@ -18,75 +19,9 @@ extern bool g_typingApiKey;
 using WisdomUI::Theme;
 using WisdomUI::Animation;
 
-namespace {
+using namespace MenuWidgets;
 
-    const sf::Color kTextShadow(10, 4, 18);
-
-    sf::Color faded(sf::Color color, float alpha) {
-        color.a = static_cast<sf::Uint8>(static_cast<float>(color.a) * std::clamp(alpha, 0.0f, 1.0f));
-        return color;
-    }
-
-    sf::FloatRect shifted(sf::FloatRect rect, float dx, float dy) {
-        rect.left += dx;
-        rect.top += dy;
-        return rect;
-    }
-
-    // Translucent card that brightens and gains a halo as hoverT goes from 0 to 1.
-    void drawCard(sf::RenderWindow& window, const sf::FloatRect& b, float hoverT, float alpha) {
-        if (hoverT > 0.01f) {
-            sf::ConvexShape glow = Theme::ChamferedRect(b.left - 4.0f, b.top - 4.0f, b.width + 8.0f, b.height + 8.0f, 8.0f);
-            glow.setFillColor(Theme::WithAlpha(Theme::SunsetPeach, 55.0f * hoverT * alpha));
-            window.draw(glow);
-        }
-
-        sf::ConvexShape dropShadow = Theme::ChamferedRect(b.left, b.top + 5.0f + 3.0f * hoverT, b.width, b.height, 6.0f);
-        dropShadow.setFillColor(faded(sf::Color(6, 3, 12, 150), alpha));
-        window.draw(dropShadow);
-
-        sf::ConvexShape card = Theme::ChamferedRect(b.left, b.top, b.width, b.height, 6.0f);
-        card.setFillColor(faded(Theme::Mix(sf::Color(22, 14, 36, 236), sf::Color(44, 28, 66, 246), hoverT), alpha));
-        card.setOutlineThickness(1.0f);
-        card.setOutlineColor(faded(Theme::Mix(Theme::Border, Theme::SunsetPeach, hoverT), alpha));
-        window.draw(card);
-
-        sf::RectangleShape shine(sf::Vector2f(b.width - 12.0f, 1.0f));
-        shine.setPosition(b.left + 6.0f, b.top + 1.0f);
-        shine.setFillColor(faded(sf::Color(255, 255, 255, 34), alpha));
-        window.draw(shine);
-    }
-
-    void drawDiamond(sf::RenderWindow& window, float cx, float cy, float radius, sf::Color color) {
-        sf::ConvexShape d(4);
-        d.setPoint(0, sf::Vector2f(0.0f, -radius));
-        d.setPoint(1, sf::Vector2f(radius, 0.0f));
-        d.setPoint(2, sf::Vector2f(0.0f, radius));
-        d.setPoint(3, sf::Vector2f(-radius, 0.0f));
-        d.setPosition(std::floor(cx), std::floor(cy));
-        d.setFillColor(color);
-        window.draw(d);
-    }
-
-    // Amber caption in the top-left of a card, with a thin rule running to its right edge.
-    void drawCardTitle(sf::RenderWindow& window, const sf::Font& font, const std::string& title, const sf::FloatRect& card, float alpha) {
-        const float y = card.top + 30.0f;
-        Theme::DrawCrispText(window, font, title, 16, card.left + 22.0f, y, faded(Theme::SunsetAmber, alpha), faded(kTextShadow, alpha), false, true);
-
-        float titleW = Theme::MeasureText(font, title, 16);
-        sf::RectangleShape rule(sf::Vector2f(std::max(0.0f, card.width - titleW - 58.0f), 1.0f));
-        rule.setPosition(card.left + 22.0f + titleW + 14.0f, y);
-        rule.setFillColor(Theme::WithAlpha(Theme::SunsetPlum, 255.0f * alpha));
-        window.draw(rule);
-    }
-
-    std::string twoDigits(int n) {
-        return (n < 10 ? "0" : "") + std::to_string(n);
-    }
-
-}
-
-void UIManager::drawSubScreenHeader(sf::RenderWindow& window, const std::string& title, const std::string& subtitle) {
+void UIManager::drawSubScreenHeader(sf::RenderWindow& window, const std::string& title, const std::string& subtitle, float time) {
     sf::VertexArray scrim(sf::Quads, 4);
     scrim[0] = sf::Vertex(sf::Vector2f(0.0f, 0.0f), sf::Color(12, 6, 22, 232));
     scrim[1] = sf::Vertex(sf::Vector2f(1920.0f, 0.0f), sf::Color(12, 6, 22, 232));
@@ -100,7 +35,7 @@ void UIManager::drawSubScreenHeader(sf::RenderWindow& window, const std::string&
     sf::FloatRect back = MenuLayout::BackButton();
     Theme::DrawSunsetButton(window, back, "<  BACK", font, 16, false, back.contains(mousePos), false, 1.0f);
 
-    float a = Animation::EaseOutCubic(m_screenTime / 0.4f);
+    float a = Animation::EaseOutCubic(time / 0.4f);
     float x = MenuLayout::kContentLeft - 24.0f * (1.0f - a);
 
     Theme::DrawCrispText(window, font, title, 60, x + 4.0f, 164.0f, faded(sf::Color(10, 4, 18, 200), a), sf::Color::Transparent, false, true);
@@ -112,7 +47,7 @@ void UIManager::drawSubScreenHeader(sf::RenderWindow& window, const std::string&
     rule.setFillColor(Theme::SunsetPlum);
     window.draw(rule);
 
-    sf::RectangleShape accent(sf::Vector2f(320.0f * Animation::EaseOutCubic((m_screenTime - 0.1f) / 0.4f), 2.0f));
+    sf::RectangleShape accent(sf::Vector2f(320.0f * Animation::EaseOutCubic((time - 0.1f) / 0.4f), 2.0f));
     accent.setPosition(MenuLayout::kContentLeft, 237.0f);
     accent.setFillColor(Theme::SunsetAmber);
     window.draw(accent);
@@ -122,7 +57,7 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
     using namespace MenuLayout;
 
     sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-    drawSubScreenHeader(window, "SETTINGS", "DISPLAY, STORAGE, PERFORMANCE AND AI");
+    drawSubScreenHeader(window, "SETTINGS", "DISPLAY, STORAGE, PERFORMANCE AND AI", m_screenTime);
 
     auto sectionAlpha = [&](int section) {
         return Animation::EaseOutCubic((m_screenTime - 0.08f - 0.07f * static_cast<float>(section)) / 0.4f);
@@ -340,7 +275,7 @@ void UIManager::drawTutorialsMenu(sf::RenderWindow& window) {
     };
 
     sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-    drawSubScreenHeader(window, "TUTORIALS", "NINE SHORT GUIDES TO THE STUDIO");
+    drawSubScreenHeader(window, "TUTORIALS", "NINE SHORT GUIDES TO THE STUDIO", m_screenTime);
 
     if (activeTutorialIndex < 0 || activeTutorialIndex >= kTutorialCount) {
         for (int i = 0; i < kTutorialCount; ++i) {
@@ -443,7 +378,7 @@ void UIManager::drawCreditsMenu(sf::RenderWindow& window) {
     using namespace MenuLayout;
 
     sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-    drawSubScreenHeader(window, "CREDITS", "WHO BUILT WISDOM PARK, AND WITH WHAT");
+    drawSubScreenHeader(window, "CREDITS", "WHO BUILT WISDOM PARK, AND WITH WHAT", m_screenTime);
 
     auto appear = [&](float delay) { return Animation::EaseOutCubic((m_screenTime - delay) / 0.4f); };
 

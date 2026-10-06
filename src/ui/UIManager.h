@@ -156,7 +156,9 @@ private:
     bool m_wasOnMainMenu = false;
 
     void drawFireflies(sf::RenderWindow& window);
-    void drawSubScreenHeader(sf::RenderWindow& window, const std::string& title, const std::string& subtitle);
+    void drawSubScreenHeader(sf::RenderWindow& window, const std::string& title, const std::string& subtitle, float time);
+    float m_keybindTime = 0.0f;
+    bool m_keybindsWereOpen = false;
     MenuState m_lastMenuState = MenuState::Main;
     int m_lastTutorialIndex = -1;
     float m_screenTime = 0.0f;

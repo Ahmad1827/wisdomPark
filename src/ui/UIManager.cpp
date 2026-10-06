@@ -2644,6 +2644,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
             // Sub-screens replay their entrance animation whenever they are opened.
             if (currentMenuState != m_lastMenuState) {
+                if (currentMenuState == MenuState::Projects) projectBrowser.refreshList();
                 m_lastMenuState = currentMenuState;
                 m_screenTime = 0.0f;
                 m_lastTutorialIndex = activeTutorialIndex;
@@ -2655,6 +2656,10 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             }
             m_screenTime += dt;
             m_tutorialTime += dt;
+
+            if (m_showKeybinds && !m_keybindsWereOpen) m_keybindTime = 0.0f;
+            m_keybindsWereOpen = m_showKeybinds;
+            m_keybindTime += dt;
         }
     }
     else if (currentState == AppState::Painting) {
@@ -2932,15 +2937,20 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
     window.draw(bgSprite);
 
     if (currentState == AppState::Welcome) {
-        if (currentMenuState == MenuState::Main) drawMainMenu(window);
-        else if (currentMenuState == MenuState::Projects) projectBrowser.draw(window);
-        else if (currentMenuState == MenuState::Settings) drawSettingsMenu(window);
-        else if (currentMenuState == MenuState::Tutorials) drawTutorialsMenu(window);
-        else if (currentMenuState == MenuState::Credits) drawCreditsMenu(window);
-
+        // The keybinds screen covers whatever menu it was opened from.
         if (m_showKeybinds) {
             drawKeybindModal(window);
         }
+        else if (currentMenuState == MenuState::Main) drawMainMenu(window);
+        else if (currentMenuState == MenuState::Projects) {
+            size_t count = projectBrowser.getProjectCount();
+            std::string subtitle = (count == 1) ? "1 PROJECT IN YOUR VAULT" : (std::to_string(count) + " PROJECTS IN YOUR VAULT");
+            drawSubScreenHeader(window, "PROJECTS", subtitle, m_screenTime);
+            projectBrowser.draw(window, m_screenTime);
+        }
+        else if (currentMenuState == MenuState::Settings) drawSettingsMenu(window);
+        else if (currentMenuState == MenuState::Tutorials) drawTutorialsMenu(window);
+        else if (currentMenuState == MenuState::Credits) drawCreditsMenu(window);
         if (newProjectModal.getIsOpen()) {
             newProjectModal.draw(window);
         }
@@ -3986,215 +3996,6 @@ void UIManager::drawArcadeBezelOverlay(sf::RenderWindow& window) {
         scanline.setPosition(80.f, y);
         window.draw(scanline);
     }
-}
-
-void UIManager::handleKeybindModalEvent(const sf::Event& event, sf::RenderWindow& window) {
-    if (!m_showKeybinds) return;
-
-    sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
-    sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
-
-    if (!m_listeningKeyActionId.empty()) {
-        if (event.type == sf::Event::KeyPressed) {
-            if (event.key.code == sf::Keyboard::Escape) {
-                m_listeningKeyActionId = "";
-                return;
-            }
-            bool ctrl = sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl);
-            bool shift = sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift);
-            bool alt = sf::Keyboard::isKeyPressed(sf::Keyboard::LAlt) || sf::Keyboard::isKeyPressed(sf::Keyboard::RAlt);
-
-            if (event.key.code != sf::Keyboard::LControl && event.key.code != sf::Keyboard::RControl &&
-                event.key.code != sf::Keyboard::LShift && event.key.code != sf::Keyboard::RShift &&
-                event.key.code != sf::Keyboard::LAlt && event.key.code != sf::Keyboard::RAlt) {
-
-                Keybind newKb{ event.key.code, ctrl, shift, alt };
-                keybindManager.setKeybind(m_listeningKeyActionId, newKb);
-                m_listeningKeyActionId = "";
-            }
-            return;
-        }
-    }
-
-    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        sf::FloatRect modalBounds(280.f, 70.f, 1360.f, 940.f);
-        sf::FloatRect closeBtn(modalBounds.left + modalBounds.width - 130.f, modalBounds.top + 20.f, 106.f, 44.f);
-        sf::FloatRect restoreBtn(modalBounds.left + modalBounds.width - 320.f, modalBounds.top + 20.f, 174.f, 44.f);
-        sf::FloatRect searchBox(modalBounds.left + 32.f, modalBounds.top + 84.f, 320.f, 44.f);
-
-        if (closeBtn.contains(mousePos)) {
-            m_showKeybinds = false;
-            m_listeningKeyActionId = "";
-            return;
-        }
-        if (restoreBtn.contains(mousePos)) {
-            keybindManager.restoreDefaults();
-            return;
-        }
-        if (searchBox.contains(mousePos)) {
-            m_isTypingKeybindSearch = true;
-            return;
-        }
-        else {
-            m_isTypingKeybindSearch = false;
-        }
-
-        std::vector<std::string> cats = { "All", "Tools", "Project", "Edit", "Selection", "Timeline", "Layers", "View", "UI" };
-        float tabX = modalBounds.left + 372.f;
-        for (const auto& cat : cats) {
-            sf::FloatRect tRect(tabX, modalBounds.top + 84.f, 98.f, 44.f);
-            if (tRect.contains(mousePos)) {
-                m_selectedKeybindCategory = cat;
-                m_keybindScrollOffset = 0.0f;
-                return;
-            }
-            tabX += 106.f;
-        }
-
-        sf::FloatRect listArea(modalBounds.left + 32.f, modalBounds.top + 156.f, modalBounds.width - 64.f, modalBounds.height - 188.f);
-        float rowY = listArea.top - m_keybindScrollOffset;
-        float rowH = 56.f;
-
-        for (const auto& id : keybindManager.getActionOrder()) {
-            const auto& act = keybindManager.getAction(id);
-            if (m_selectedKeybindCategory != "All" && act.category != m_selectedKeybindCategory) continue;
-
-            if (!m_keybindSearchQuery.empty()) {
-                std::string q = m_keybindSearchQuery;
-                std::string n = act.name;
-                std::transform(q.begin(), q.end(), q.begin(), ::tolower);
-                std::transform(n.begin(), n.end(), n.begin(), ::tolower);
-                if (n.find(q) == std::string::npos) continue;
-            }
-
-            if (rowY + rowH >= listArea.top && rowY <= listArea.top + listArea.height) {
-                sf::FloatRect bindBtn(listArea.left + listArea.width - 240.f, rowY + 8.f, 220.f, 40.f);
-                if (bindBtn.contains(mousePos)) {
-                    m_listeningKeyActionId = id;
-                    return;
-                }
-            }
-            rowY += rowH + 10.f;
-        }
-    }
-
-    if (event.type == sf::Event::MouseWheelScrolled) {
-        m_keybindScrollOffset = std::clamp(m_keybindScrollOffset - event.mouseWheelScroll.delta * 55.0f, 0.0f, m_keybindMaxScroll);
-    }
-
-    if (event.type == sf::Event::TextEntered && m_isTypingKeybindSearch) {
-        if (event.text.unicode == '\b') {
-            if (!m_keybindSearchQuery.empty()) m_keybindSearchQuery.pop_back();
-        }
-        else if (event.text.unicode >= 32 && event.text.unicode < 127 && m_keybindSearchQuery.length() < 24) {
-            m_keybindSearchQuery += static_cast<char>(event.text.unicode);
-        }
-    }
-}
-
-void UIManager::drawKeybindModal(sf::RenderWindow& window) {
-    if (!m_showKeybinds) return;
-
-    sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
-    sf::Vector2f mousePos = window.mapPixelToCoords(pixelPos);
-
-    sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
-    overlay.setFillColor(sf::Color(10, 4, 16, 225));
-    window.draw(overlay);
-
-    sf::FloatRect modalBounds(240.f, 60.f, 1440.f, 960.f);
-    WisdomUI::Theme::DrawSunsetPanel(window, modalBounds, 1.0f);
-
-    WisdomUI::Theme::DrawCrispText(window, font, "STUDIO KEYBINDS", 38, modalBounds.left + 36.f, modalBounds.top + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
-
-    sf::FloatRect closeBtn(modalBounds.left + modalBounds.width - 140.f, modalBounds.top + 24.f, 110.f, 48.f);
-    sf::FloatRect restoreBtn(modalBounds.left + modalBounds.width - 340.f, modalBounds.top + 24.f, 180.f, 48.f);
-
-    WisdomUI::Theme::DrawSunsetButton(window, restoreBtn, "Reset Defaults", font, 18, false, restoreBtn.contains(mousePos), false, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, closeBtn, "Close", font, 18, false, closeBtn.contains(mousePos), false, 1.0f);
-
-    sf::FloatRect searchBox(modalBounds.left + 36.f, modalBounds.top + 88.f, 320.f, 48.f);
-    sf::RectangleShape sBox(sf::Vector2f(searchBox.width, searchBox.height));
-    sBox.setPosition(searchBox.left, searchBox.top);
-    sBox.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-    sBox.setOutlineThickness(1.5f);
-    sBox.setOutlineColor(m_isTypingKeybindSearch ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
-    window.draw(sBox);
-
-    std::string searchDisplay = m_keybindSearchQuery.empty() ? (m_isTypingKeybindSearch ? "_" : "Search shortcuts...") : (m_keybindSearchQuery + (m_isTypingKeybindSearch ? "_" : ""));
-    sf::Color searchColor = m_keybindSearchQuery.empty() && !m_isTypingKeybindSearch ? WisdomUI::Theme::SunsetPlum : WisdomUI::Theme::TextPrimary;
-    WisdomUI::Theme::DrawCrispText(window, font, searchDisplay, 18, searchBox.left + 16.f, searchBox.top + 14.f, searchColor);
-
-    std::vector<std::string> cats = { "All", "Tools", "Project", "Edit", "Selection", "Timeline", "Layers", "View", "UI" };
-    float tabX = modalBounds.left + 380.f;
-    for (const auto& cat : cats) {
-        sf::FloatRect tRect(tabX, modalBounds.top + 88.f, 106.f, 48.f);
-        bool isSel = (m_selectedKeybindCategory == cat);
-        WisdomUI::Theme::DrawSunsetButton(window, tRect, cat, font, 16, isSel, tRect.contains(mousePos), isSel, 1.0f);
-        tabX += 114.f;
-    }
-
-    sf::RectangleShape div(sf::Vector2f(modalBounds.width - 72.f, 2.f));
-    div.setPosition(modalBounds.left + 36.f, modalBounds.top + 148.f);
-    div.setFillColor(WisdomUI::Theme::SunsetPlum);
-    window.draw(div);
-
-    sf::FloatRect listArea(modalBounds.left + 36.f, modalBounds.top + 162.f, modalBounds.width - 72.f, modalBounds.height - 188.f);
-
-    float rowY = listArea.top - m_keybindScrollOffset;
-    float rowH = 62.f;
-    float totalH = 0.0f;
-
-    for (const auto& id : keybindManager.getActionOrder()) {
-        const auto& act = keybindManager.getAction(id);
-
-        if (m_selectedKeybindCategory != "All" && act.category != m_selectedKeybindCategory) continue;
-
-        if (!m_keybindSearchQuery.empty()) {
-            std::string q = m_keybindSearchQuery;
-            std::string n = act.name;
-            std::transform(q.begin(), q.end(), q.begin(), ::tolower);
-            std::transform(n.begin(), n.end(), n.begin(), ::tolower);
-            if (n.find(q) == std::string::npos) continue;
-        }
-
-        totalH += rowH + 10.f;
-
-        if (rowY + rowH >= listArea.top && rowY <= listArea.top + listArea.height) {
-            sf::FloatRect rowRect(listArea.left, rowY, listArea.width, rowH);
-            bool isListening = (m_listeningKeyActionId == id);
-            bool isHov = rowRect.contains(mousePos);
-
-            sf::RectangleShape rBg(sf::Vector2f(rowRect.width, rowRect.height));
-            rBg.setPosition(rowRect.left, rowRect.top);
-            rBg.setFillColor(isListening ? WisdomUI::Theme::SunsetSkyMid : (isHov ? WisdomUI::Theme::SunsetSkyTop : WisdomUI::Theme::SunsetDeepDark));
-            rBg.setOutlineThickness(1.5f);
-            rBg.setOutlineColor(isListening ? WisdomUI::Theme::SunsetGold : (isHov ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum));
-            window.draw(rBg);
-
-            WisdomUI::Theme::DrawCrispText(window, font, act.name, 22, rowRect.left + 24.f, rowRect.top + 18.f, isListening ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::TextPrimary);
-
-            sf::FloatRect catTag(rowRect.left + 460.f, rowRect.top + 15.f, 130.f, 32.f);
-            sf::RectangleShape cBg(sf::Vector2f(catTag.width, catTag.height));
-            cBg.setPosition(catTag.left, catTag.top);
-            cBg.setFillColor(sf::Color(14, 6, 20));
-            cBg.setOutlineThickness(1.f);
-            cBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
-            window.draw(cBg);
-
-            WisdomUI::Theme::DrawCrispText(window, font, act.category, 15, catTag.left + catTag.width / 2.f, catTag.top + catTag.height / 2.f, WisdomUI::Theme::SunsetPeach, sf::Color::Transparent, true, true);
-
-            sf::FloatRect bindBtn(rowRect.left + rowRect.width - 260.f, rowRect.top + 8.f, 240.f, 46.f);
-            std::string keyStr = isListening ? "Press Key..." : keybindManager.getActionString(id);
-            if (keyStr.empty()) keyStr = "[Unbound]";
-
-            WisdomUI::Theme::DrawSunsetButton(window, bindBtn, keyStr, font, 18, isListening, bindBtn.contains(mousePos), isListening, 1.0f);
-        }
-
-        rowY += rowH + 10.f;
-    }
-
-    m_keybindMaxScroll = std::max(0.0f, totalH - listArea.height);
 }
 
 void UIManager::toggleFullscreen(sf::RenderWindow& window, AppSettings& settings) {

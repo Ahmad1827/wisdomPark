@@ -1,6 +1,42 @@
 #include "ProjectBrowser.h"
 #include "../UITheme.h"
+#include "MenuLayouts.h"
+#include "MenuWidgets.h"
 #include <algorithm>
+#include <cmath>
+
+using WisdomUI::Theme;
+using WisdomUI::Animation;
+using namespace MenuWidgets;
+
+namespace {
+
+    const int kColumns = 4;
+    const float kCardGap = 20.0f;
+    const float kCardHeight = 340.0f;
+
+    float cardWidth() {
+        return (MenuLayout::kContentWidth - kCardGap * static_cast<float>(kColumns - 1)) / static_cast<float>(kColumns);
+    }
+
+    // Padded so card glows and shadows are not cut off by the clip.
+    sf::FloatRect listArea() {
+        return sf::FloatRect(MenuLayout::kContentLeft - 8.0f, MenuLayout::kContentTop - 8.0f,
+            MenuLayout::kContentWidth + 16.0f, MenuLayout::kContentBottom - MenuLayout::kContentTop + 16.0f);
+    }
+
+    sf::FloatRect cardBounds(size_t index, float scroll) {
+        float col = static_cast<float>(index % kColumns);
+        float row = static_cast<float>(index / kColumns);
+        return sf::FloatRect(MenuLayout::kContentLeft + col * (cardWidth() + kCardGap),
+            MenuLayout::kContentTop + row * (kCardHeight + kCardGap) - scroll, cardWidth(), kCardHeight);
+    }
+
+    sf::FloatRect deleteButton(const sf::FloatRect& card) {
+        return sf::FloatRect(card.left + card.width - 50.0f, card.top + 14.0f, 36.0f, 36.0f);
+    }
+
+}
 
 ProjectBrowser::ProjectBrowser()
     : pm(nullptr), showDeleteConfirm(false), scrollOffset(0.0f), maxScroll(0.0f) {}
@@ -9,11 +45,10 @@ void ProjectBrowser::init(ProjectManager* projectManager) {
     pm = projectManager;
     font.loadFromFile("assets/font.otf");
 
-    containerBounds = sf::FloatRect(160.f, 50.f, 1600.f, 980.f);
-    backBtnBounds = sf::FloatRect(containerBounds.left + 32.f, containerBounds.top + 24.f, 150.f, 48.f);
-
-    openFileBtnBounds = sf::FloatRect(containerBounds.left + containerBounds.width - 410.f, containerBounds.top + 24.f, 180.f, 48.f);
-    newProjectBtnBounds = sf::FloatRect(containerBounds.left + containerBounds.width - 210.f, containerBounds.top + 24.f, 180.f, 48.f);
+    const float right = MenuLayout::kContentLeft + MenuLayout::kContentWidth;
+    backBtnBounds = MenuLayout::BackButton();
+    newProjectBtnBounds = sf::FloatRect(right - 210.0f, 54.0f, 210.0f, 46.0f);
+    openFileBtnBounds = sf::FloatRect(right - 210.0f - 14.0f - 190.0f, 54.0f, 190.0f, 46.0f);
 
     deleteModalBounds = sf::FloatRect(1920.f / 2.f - 280.f, 1080.f / 2.f - 150.f, 560.f, 300.f);
     confirmBtnBounds = sf::FloatRect(deleteModalBounds.left + 36.f, deleteModalBounds.top + 200.f, 230.f, 56.f);
@@ -24,12 +59,16 @@ void ProjectBrowser::init(ProjectManager* projectManager) {
 
 void ProjectBrowser::refreshList() {
     if (pm) projects = pm->getRecentProjects();
+    for (auto& project : projects) {
+        project.thumbnail.setSmooth(!project.isPixelMode);
+    }
+    scrollOffset = 0.0f;
 }
 
 void ProjectBrowser::updateHover(sf::Vector2f mousePos) {}
 
 void ProjectBrowser::handleScroll(float delta) {
-    scrollOffset = std::clamp(scrollOffset - delta * 60.0f, 0.0f, maxScroll);
+    scrollOffset = std::clamp(scrollOffset - delta * 70.0f, 0.0f, maxScroll);
 }
 
 std::string ProjectBrowser::handleClick(sf::Vector2f mousePos, ProjectMetadata& outMeta) {
@@ -53,151 +92,148 @@ std::string ProjectBrowser::handleClick(sf::Vector2f mousePos, ProjectMetadata& 
     if (newProjectBtnBounds.contains(mousePos)) return "new_project";
     if (openFileBtnBounds.contains(mousePos)) return "open_native";
 
-    for (size_t i = 0; i < deleteBtnsList.size(); ++i) {
-        if (deleteBtnsList[i].contains(mousePos) && i < projects.size()) {
+    // Cards scrolled out of the list area are not clickable.
+    if (!listArea().contains(mousePos)) return "";
+
+    for (size_t i = 0; i < projects.size(); ++i) {
+        sf::FloatRect card = cardBounds(i, scrollOffset);
+        if (!card.contains(mousePos)) continue;
+
+        if (deleteButton(card).contains(mousePos)) {
             projectToDelete = projects[i].name;
             showDeleteConfirm = true;
             return "";
         }
-    }
-
-    for (size_t i = 0; i < cardBoundsList.size(); ++i) {
-        if (cardBoundsList[i].contains(mousePos) && i < projects.size()) {
-            outMeta = projects[i];
-            return "load_project";
-        }
+        outMeta = projects[i];
+        return "load_project";
     }
 
     return "";
 }
 
-void ProjectBrowser::draw(sf::RenderWindow& window) {
+void ProjectBrowser::draw(sf::RenderWindow& window, float time) {
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+    bool modalOpen = showDeleteConfirm;
 
-    WisdomUI::Theme::DrawSunsetPanel(window, containerBounds, 1.0f);
+    Theme::DrawSunsetButton(window, openFileBtnBounds, "BROWSE DISK", font, 15, false, !modalOpen && openFileBtnBounds.contains(mPos), false, 1.0f);
 
-    WisdomUI::Theme::DrawSunsetButton(window, backBtnBounds, "< BACK", font, 18, false, backBtnBounds.contains(mPos), false, 1.0f);
-
-    WisdomUI::Theme::DrawCrispText(window, font, "ARCHIVE VAULT", 38, containerBounds.left + 210.f, containerBounds.top + 24.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20));
-
-    WisdomUI::Theme::DrawSunsetButton(window, openFileBtnBounds, "Browse Disk", font, 18, false, openFileBtnBounds.contains(mPos), false, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, newProjectBtnBounds, "+ New Canvas", font, 18, false, newProjectBtnBounds.contains(mPos), true, 1.0f);
-
-    sf::RectangleShape divider(sf::Vector2f(containerBounds.width - 64.f, 2.f));
-    divider.setPosition(containerBounds.left + 32.f, containerBounds.top + 84.f);
-    divider.setFillColor(WisdomUI::Theme::SunsetPlum);
-    window.draw(divider);
-
-    cardBoundsList.clear();
-    deleteBtnsList.clear();
-
-    float startX = containerBounds.left + 36.f;
-    float startY = containerBounds.top + 104.f - scrollOffset;
-    float cardWidth = (containerBounds.width - 92.f) / 2.f;
-    float cardHeight = 136.f;
-
-    for (size_t i = 0; i < projects.size(); ++i) {
-        float col = static_cast<float>(i % 2);
-        float row = static_cast<float>(i / 2);
-        float cx = startX + col * (cardWidth + 20.f);
-        float cy = startY + row * (cardHeight + 18.f);
-
-        sf::FloatRect cardRect(cx, cy, cardWidth, cardHeight);
-        cardBoundsList.push_back(cardRect);
-
-        if (cy + cardHeight < containerBounds.top + 88.f || cy > containerBounds.top + containerBounds.height - 20.f) {
-            deleteBtnsList.push_back(sf::FloatRect(0, 0, 0, 0));
-            continue;
+    // New Project is the main action here, so it gets the filled amber treatment.
+    {
+        const sf::FloatRect& b = newProjectBtnBounds;
+        float t = Theme::AnimateHover(b, !modalOpen && b.contains(mPos));
+        if (t > 0.01f) {
+            sf::ConvexShape glow = Theme::ChamferedRect(b.left - 3.0f, b.top - 3.0f, b.width + 6.0f, b.height + 6.0f, 6.0f);
+            glow.setFillColor(Theme::WithAlpha(Theme::SunsetGold, 60.0f * t));
+            window.draw(glow);
         }
+        sf::ConvexShape body = Theme::ChamferedRect(b.left, b.top, b.width, b.height, 4.0f);
+        body.setFillColor(Theme::Mix(Theme::SunsetAmber, Theme::SunsetGold, t));
+        body.setOutlineThickness(1.0f);
+        body.setOutlineColor(Theme::SunsetGlow);
+        window.draw(body);
+        Theme::DrawCrispText(window, font, "+  NEW PROJECT", 15, b.left + b.width * 0.5f, b.top + b.height * 0.5f, Theme::SunsetDeepDark, sf::Color::Transparent, true, true);
+    }
 
-        bool isHov = cardRect.contains(mPos);
+    sf::FloatRect list = listArea();
 
-        sf::RectangleShape cardBg(sf::Vector2f(cardRect.width, cardRect.height));
-        cardBg.setPosition(cardRect.left, cardRect.top);
-        cardBg.setFillColor(isHov ? WisdomUI::Theme::SunsetSkyMid : WisdomUI::Theme::SunsetDeepDark);
-        cardBg.setOutlineThickness(1.5f);
-        cardBg.setOutlineColor(isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
-        window.draw(cardBg);
+    if (projects.empty()) {
+        float a = Animation::EaseOutCubic((time - 0.1f) / 0.4f);
+        float cx = MenuLayout::kContentLeft + MenuLayout::kContentWidth * 0.5f;
+        Theme::DrawCrispText(window, font, "NO PROJECTS YET", 30, cx, 520.0f, faded(Theme::SunsetAmber, a), faded(kTextShadow, a), true, true);
+        Theme::DrawCrispText(window, font, "Create one with New Project, or open a .wpk file with Browse Disk.", 17, cx, 570.0f, faded(Theme::TextSecondary, a), sf::Color::Transparent, true, true);
+        maxScroll = 0.0f;
+    }
+    else {
+        float rows = std::ceil(static_cast<float>(projects.size()) / static_cast<float>(kColumns));
+        float contentH = rows * (kCardHeight + kCardGap) - kCardGap + 16.0f;
+        maxScroll = std::max(0.0f, contentH - list.height);
+        scrollOffset = std::clamp(scrollOffset, 0.0f, maxScroll);
 
-        sf::FloatRect thumbRect(cx + 14.f, cy + 14.f, 156.f, 108.f);
-        sf::RectangleShape thumbFrame(sf::Vector2f(thumbRect.width, thumbRect.height));
-        thumbFrame.setPosition(thumbRect.left, thumbRect.top);
-        thumbFrame.setFillColor(sf::Color(18, 8, 28));
-        thumbFrame.setOutlineThickness(1.f);
-        thumbFrame.setOutlineColor(isHov ? WisdomUI::Theme::SunsetAmber : WisdomUI::Theme::SunsetPlum);
-        window.draw(thumbFrame);
+        bool mouseInList = !modalOpen && list.contains(mPos);
+        sf::View savedView = window.getView();
+        window.setView(clipView(window, list));
 
-        float chkSize = 8.f;
-        sf::RectangleShape chk1(sf::Vector2f(chkSize, chkSize)); chk1.setFillColor(sf::Color(28, 14, 40));
-        sf::RectangleShape chk2(sf::Vector2f(chkSize, chkSize)); chk2.setFillColor(sf::Color(38, 20, 52));
-        for (float ty = thumbRect.top; ty < thumbRect.top + thumbRect.height; ty += chkSize) {
-            for (float tx = thumbRect.left; tx < thumbRect.left + thumbRect.width; tx += chkSize) {
-                float tw = std::min(chkSize, thumbRect.left + thumbRect.width - tx);
-                float th = std::min(chkSize, thumbRect.top + thumbRect.height - ty);
-                bool alt = (static_cast<int>((tx - thumbRect.left) / chkSize) + static_cast<int>((ty - thumbRect.top) / chkSize)) % 2 == 0;
-                sf::RectangleShape& r = alt ? chk1 : chk2;
-                r.setSize(sf::Vector2f(tw, th));
-                r.setPosition(tx, ty);
-                window.draw(r);
+        for (size_t i = 0; i < projects.size(); ++i) {
+            sf::FloatRect bounds = cardBounds(i, scrollOffset);
+            if (bounds.top + bounds.height < list.top || bounds.top > list.top + list.height) continue;
+
+            float a = Animation::EaseOutCubic((time - 0.06f - 0.04f * static_cast<float>(std::min<size_t>(i, 12))) / 0.4f);
+            if (a <= 0.0f) continue;
+
+            const ProjectMetadata& project = projects[i];
+            sf::FloatRect delBounds = deleteButton(bounds);
+            bool overDelete = mouseInList && delBounds.contains(mPos);
+            float t = Theme::AnimateHover(bounds, mouseInList && bounds.contains(mPos));
+
+            sf::FloatRect card = shifted(bounds, 0.0f, 18.0f * (1.0f - a) - 4.0f * t);
+            drawCard(window, card, t, a);
+
+            // Thumbnail
+            sf::FloatRect thumbArea(card.left + 12.0f, card.top + 12.0f, card.width - 24.0f, 214.0f);
+            drawCheckerboard(window, thumbArea, 16.0f, a);
+
+            sf::Vector2u texSize = project.thumbnail.getSize();
+            if (texSize.x > 0 && texSize.y > 0) {
+                sf::Sprite thumb(project.thumbnail);
+                float scale = std::min(thumbArea.width / static_cast<float>(texSize.x), thumbArea.height / static_cast<float>(texSize.y));
+                thumb.setScale(scale, scale);
+                thumb.setPosition(std::floor(thumbArea.left + (thumbArea.width - texSize.x * scale) * 0.5f),
+                    std::floor(thumbArea.top + (thumbArea.height - texSize.y * scale) * 0.5f));
+                thumb.setColor(faded(sf::Color::White, a));
+                window.draw(thumb);
+            }
+            else {
+                Theme::DrawCrispText(window, font, "NO PREVIEW", 14, thumbArea.left + thumbArea.width * 0.5f, thumbArea.top + thumbArea.height * 0.5f, faded(sf::Color(110, 96, 124), a), sf::Color::Transparent, true, true);
+            }
+
+            sf::RectangleShape thumbFrame(sf::Vector2f(thumbArea.width, thumbArea.height));
+            thumbFrame.setPosition(thumbArea.left, thumbArea.top);
+            thumbFrame.setFillColor(sf::Color::Transparent);
+            thumbFrame.setOutlineThickness(1.0f);
+            thumbFrame.setOutlineColor(faded(Theme::Mix(Theme::SunsetPlum, Theme::SunsetGold, t), a));
+            window.draw(thumbFrame);
+
+            // Details
+            std::string name = project.name;
+            std::replace(name.begin(), name.end(), '_', ' ');
+            if (name.length() > 24) name = name.substr(0, 22) + "..";
+            Theme::DrawCrispText(window, font, name, 20, card.left + 16.0f, card.top + 254.0f, faded(Theme::Mix(Theme::TextPrimary, Theme::SunsetGold, t), a), faded(kTextShadow, a), false, true);
+
+            const char* kind = project.isPixelMode ? "PIXEL ART" : "ILLUSTRATION";
+            Theme::DrawCrispText(window, font, kind, 14, card.left + 16.0f, card.top + 286.0f, faded(project.isPixelMode ? Theme::SunsetAmber : Theme::SunsetPeach, a), sf::Color::Transparent, false, true);
+
+            std::string size = std::to_string(project.width) + " x " + std::to_string(project.height);
+            float kindW = Theme::MeasureText(font, kind, 14);
+            Theme::DrawCrispText(window, font, size, 14, card.left + 16.0f + kindW + 18.0f, card.top + 286.0f, faded(Theme::TextSecondary, a), sf::Color::Transparent, false, true);
+
+            Theme::DrawCrispText(window, font, project.lastModified, 13, card.left + 16.0f, card.top + 314.0f, faded(Theme::TextMuted, a), sf::Color::Transparent, false, true);
+
+            // Delete stays quiet until the card is hovered.
+            if (a > 0.6f && (t > 0.05f || overDelete)) {
+                sf::FloatRect del = shifted(delBounds, 0.0f, card.top - bounds.top);
+                Theme::DrawSunsetButton(window, del, "X", font, 15, false, overDelete, true, 1.0f);
             }
         }
 
-        if (projects[i].thumbnail.getSize().x > 0 && projects[i].thumbnail.getSize().y > 0) {
-            sf::Sprite thumbSprite;
-            thumbSprite.setTexture(projects[i].thumbnail, true);
+        window.setView(savedView);
 
-            float scaleX = (thumbRect.width - 8.f) / static_cast<float>(projects[i].thumbnail.getSize().x);
-            float scaleY = (thumbRect.height - 8.f) / static_cast<float>(projects[i].thumbnail.getSize().y);
-            float scale = std::min(scaleX, scaleY);
-
-            thumbSprite.setScale(scale, scale);
-            thumbSprite.setColor(sf::Color::White);
-
-            float sprW = static_cast<float>(projects[i].thumbnail.getSize().x) * scale;
-            float sprH = static_cast<float>(projects[i].thumbnail.getSize().y) * scale;
-            float posX = thumbRect.left + (thumbRect.width - sprW) / 2.f;
-            float posY = thumbRect.top + (thumbRect.height - sprH) / 2.f;
-
-            thumbSprite.setPosition(std::floor(posX), std::floor(posY));
-            window.draw(thumbSprite);
-        }
-        else {
-            WisdomUI::Theme::DrawCrispText(window, font, "NO PREVIEW", 14, thumbRect.left + thumbRect.width / 2.f, thumbRect.top + thumbRect.height / 2.f, WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
-        }
-
-        sf::Color titleColor = isHov ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetAmber;
-        WisdomUI::Theme::DrawCrispText(window, font, projects[i].name, 22, cx + 186.f, cy + 18.f, titleColor, sf::Color(14, 6, 20));
-
-        std::string modeBadge = projects[i].isPixelMode ? "PIXEL ART" : "RGBA CANV";
-        WisdomUI::Theme::DrawCrispText(window, font, modeBadge, 16, cx + 186.f, cy + 54.f, WisdomUI::Theme::SunsetPeach);
-
-        std::string resStr = std::to_string(projects[i].width) + " x " + std::to_string(projects[i].height) + " px";
-        WisdomUI::Theme::DrawCrispText(window, font, resStr, 16, cx + 306.f, cy + 54.f, WisdomUI::Theme::TextPrimary);
-
-        WisdomUI::Theme::DrawCrispText(window, font, "MODIFIED: " + projects[i].lastModified, 15, cx + 186.f, cy + 92.f, WisdomUI::Theme::TextSecondary);
-
-        sf::FloatRect delRect(cx + cardWidth - 58.f, cy + 14.f, 44.f, 44.f);
-        deleteBtnsList.push_back(delRect);
-        bool delHov = delRect.contains(mPos);
-
-        WisdomUI::Theme::DrawSunsetButton(window, delRect, "X", font, 18, false, delHov, true, 1.0f);
+        drawScrollbar(window, sf::FloatRect(MenuLayout::kContentLeft + MenuLayout::kContentWidth + 10.0f, MenuLayout::kContentTop, 6.0f, MenuLayout::kContentBottom - MenuLayout::kContentTop),
+            scrollOffset, maxScroll, list.height / contentH);
     }
-
-    float totalContentH = (std::ceil(static_cast<float>(projects.size()) / 2.f) * (cardHeight + 18.f));
-    maxScroll = std::max(0.0f, totalContentH - (containerBounds.height - 120.f));
 
     if (showDeleteConfirm) {
         sf::RectangleShape modalOverlay(sf::Vector2f(1920.f, 1080.f));
-        modalOverlay.setFillColor(sf::Color(10, 4, 16, 225));
+        modalOverlay.setFillColor(sf::Color(10, 4, 16, 215));
         window.draw(modalOverlay);
 
-        WisdomUI::Theme::DrawSunsetPanel(window, deleteModalBounds, 1.0f);
+        Theme::DrawSunsetPanel(window, deleteModalBounds, 1.0f);
 
-        WisdomUI::Theme::DrawCrispText(window, font, "DELETE PROJECT", 24, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 34.f, WisdomUI::Theme::SunsetCoral, sf::Color(14, 6, 20), true, true);
-        WisdomUI::Theme::DrawCrispText(window, font, "Delete '" + projectToDelete + "'?", 18, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 88.f, WisdomUI::Theme::TextPrimary, sf::Color(14, 6, 20), true, true);
-        WisdomUI::Theme::DrawCrispText(window, font, "This will permanently remove the archive.", 15, deleteModalBounds.left + deleteModalBounds.width / 2.f, deleteModalBounds.top + 124.f, WisdomUI::Theme::TextSecondary, sf::Color(14, 6, 20), true, true);
+        float cx = deleteModalBounds.left + deleteModalBounds.width / 2.f;
+        Theme::DrawCrispText(window, font, "DELETE PROJECT", 26, cx, deleteModalBounds.top + 44.f, Theme::SunsetCoral, kTextShadow, true, true);
+        Theme::DrawCrispText(window, font, "Delete '" + projectToDelete + "'?", 18, cx, deleteModalBounds.top + 98.f, Theme::TextPrimary, kTextShadow, true, true);
+        Theme::DrawCrispText(window, font, "This permanently removes the project from disk.", 15, cx, deleteModalBounds.top + 136.f, Theme::TextSecondary, kTextShadow, true, true);
 
-        WisdomUI::Theme::DrawSunsetButton(window, confirmBtnBounds, "Delete Forever", font, 18, false, confirmBtnBounds.contains(mPos), true, 1.0f);
-        WisdomUI::Theme::DrawSunsetButton(window, cancelBtnBounds, "Cancel", font, 18, false, cancelBtnBounds.contains(mPos), false, 1.0f);
+        Theme::DrawSunsetButton(window, confirmBtnBounds, "Delete Forever", font, 17, false, confirmBtnBounds.contains(mPos), true, 1.0f);
+        Theme::DrawSunsetButton(window, cancelBtnBounds, "Cancel", font, 17, false, cancelBtnBounds.contains(mPos), false, 1.0f);
     }
 }

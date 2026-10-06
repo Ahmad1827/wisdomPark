@@ -54,6 +54,9 @@
     <ClCompile Include="src\ui\Screens\MenuScreens.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\ui\Screens\KeybindsScreen.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\ui\ColorPalettePanel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -378,6 +381,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\Screens\MenuLayouts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ui\Screens\MenuWidgets.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\ColorPalettePanel.h">

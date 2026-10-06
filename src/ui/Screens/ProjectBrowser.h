@@ -12,7 +12,6 @@ private:
     bool showDeleteConfirm;
     std::string projectToDelete;
 
-    sf::FloatRect containerBounds;
     sf::FloatRect backBtnBounds;
     sf::FloatRect newProjectBtnBounds;
     sf::FloatRect openFileBtnBounds;
@@ -20,19 +19,17 @@ private:
     sf::FloatRect cancelBtnBounds;
     sf::FloatRect deleteModalBounds;
 
-    std::vector<sf::FloatRect> cardBoundsList;
-    std::vector<sf::FloatRect> deleteBtnsList;
-
     float scrollOffset;
     float maxScroll;
-
-    void refreshList();
 
 public:
     ProjectBrowser();
     void init(ProjectManager* projectManager);
+    void refreshList();
+    size_t getProjectCount() const { return projects.size(); }
     void updateHover(sf::Vector2f mousePos);
     std::string handleClick(sf::Vector2f mousePos, ProjectMetadata& outMeta);
     void handleScroll(float delta);
-    void draw(sf::RenderWindow& window);
+    // Draws the buttons and project grid; `time` is seconds since the screen opened.
+    void draw(sf::RenderWindow& window, float time);
 };
