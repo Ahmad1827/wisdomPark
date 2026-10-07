@@ -164,7 +164,12 @@ namespace WisdomUI {
             float drawY = std::floor(y);
 
             if (centerH) drawX = std::floor(x - (tb.left + tb.width / 2.0f));
-            if (centerV) drawY = std::floor(y - (tb.top + tb.height / 2.0f));
+            if (centerV) {
+                // Centre on the capital height, not this string's own bounds, so labels with
+                // and without descenders share a baseline.
+                const sf::Glyph& cap = font.getGlyph('H', size, false);
+                drawY = std::floor(y - (static_cast<float>(size) + cap.bounds.top + cap.bounds.height / 2.0f));
+            }
 
             if (shadowColor != sf::Color::Transparent) {
                 txt.setPosition(drawX + 1.0f, drawY + 1.0f);

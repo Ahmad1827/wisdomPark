@@ -7,7 +7,7 @@
 RightProperties::RightProperties() : width(290.f), currentX(1920.f), targetX(1920.f), state(RightPanelState::Hidden), hovered(false), pinned(false) {}
 
 void RightProperties::init() {
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
 
     background.setFillColor(WisdomUI::Theme::Panel);
     background.setOutlineThickness(1.f);

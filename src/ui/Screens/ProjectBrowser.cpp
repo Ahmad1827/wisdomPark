@@ -43,7 +43,7 @@ ProjectBrowser::ProjectBrowser()
 
 void ProjectBrowser::init(ProjectManager* projectManager) {
     pm = projectManager;
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
 
     const float right = MenuLayout::kContentLeft + MenuLayout::kContentWidth;
     backBtnBounds = MenuLayout::BackButton();

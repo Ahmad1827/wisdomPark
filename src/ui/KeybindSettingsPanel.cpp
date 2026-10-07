@@ -6,7 +6,7 @@ KeybindSettingsPanel::KeybindSettingsPanel() : isOpen(false), scrollY(0.f), kbm(
 
 void KeybindSettingsPanel::init(KeybindManager* keyManager) {
     kbm = keyManager;
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
 
     overlay.setSize(sf::Vector2f(1920.f, 1080.f));
     overlay.setFillColor(sf::Color(0, 0, 0, 180));

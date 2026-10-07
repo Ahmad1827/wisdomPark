@@ -105,7 +105,7 @@ ExportModal::ExportModal()
     isOpen(false), transparentBg(true), autoCrop(false), linkedCanvas(nullptr), activeFrame(0), openTime(0.0f) {}
 
 void ExportModal::init() {
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
 
     modalBounds = sf::FloatRect(1920.f / 2.f - 520.f, 1080.f / 2.f - 340.f, 1040.f, 680.f);
 

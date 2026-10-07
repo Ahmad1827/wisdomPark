@@ -22,7 +22,7 @@ ColorPalettePanel::ColorPalettePanel()
 
 void ColorPalettePanel::init() {
     colorManager.init();
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
 
     background.setFillColor(WisdomUI::Theme::Panel);
     background.setOutlineThickness(1.f);

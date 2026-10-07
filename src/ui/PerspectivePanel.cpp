@@ -7,7 +7,7 @@ PerspectivePanel::PerspectivePanel() : m_pm(nullptr), m_position(WisdomUI::Theme
 
 void PerspectivePanel::init(PerspectiveManager* pm) {
     m_pm = pm;
-    m_font.loadFromFile("assets/font.otf");
+    m_font.loadFromFile("assets/Jersey10-Regular.ttf");
     m_position = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
 }
 

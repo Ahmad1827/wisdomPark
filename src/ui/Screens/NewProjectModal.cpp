@@ -46,17 +46,6 @@ namespace {
         return pixelMode ? kRetroPresets : kDynamicPresets;
     }
 
-    std::string aspectLabel(int width, int height) {
-        int divisor = std::gcd(width, height);
-        int rw = width / divisor;
-        int rh = height / divisor;
-        if (rw <= 64 && rh <= 64) return std::to_string(rw) + ":" + std::to_string(rh);
-
-        char buf[24];
-        std::snprintf(buf, sizeof(buf), "%.2f:1", static_cast<float>(width) / static_cast<float>(height));
-        return buf;
-    }
-
     std::string pixelCountLabel(int width, int height) {
         long long pixels = static_cast<long long>(width) * static_cast<long long>(height);
         if (pixels < 1000000) return std::to_string(pixels) + " PX";
@@ -115,7 +104,7 @@ NewProjectModal::NewProjectModal()
     openTime(0.0f), shownWidth(1280.0f), shownHeight(720.0f) {}
 
 void NewProjectModal::init() {
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
 
     modalBounds = sf::FloatRect(1920.f / 2.f - 520.f, 1080.f / 2.f - 330.f, 1040.f, 660.f);
 

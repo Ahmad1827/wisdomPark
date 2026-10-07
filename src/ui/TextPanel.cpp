@@ -9,7 +9,7 @@ TextPanel::TextPanel() : m_tm(nullptr), m_position(WisdomUI::Theme::FloatingPane
 
 void TextPanel::init(TextManager* tm) {
     m_tm = tm;
-    m_font.loadFromFile("assets/font.otf");
+    m_font.loadFromFile("assets/Jersey10-Regular.ttf");
     m_position = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
 }
 

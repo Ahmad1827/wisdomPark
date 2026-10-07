@@ -13,7 +13,7 @@ MagicWandTool::MagicWandTool(Canvas& canvas, Timeline& timeline)
 }
 
 void MagicWandTool::Initialize() {
-    m_font.loadFromFile("assets/font.otf");
+    m_font.loadFromFile("assets/Jersey10-Regular.ttf");
     m_panelPos = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
 }
 

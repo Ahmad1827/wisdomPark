@@ -9,7 +9,7 @@ ShapeTool::ShapeTool(Canvas& canvas, Timeline& timeline)
     m_isDraggingPanel(false) {}
 
 void ShapeTool::Initialize() {
-    m_font.loadFromFile("assets/font.otf");
+    m_font.loadFromFile("assets/Jersey10-Regular.ttf");
     m_panelPos = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
     m_panelSize = sf::Vector2f(310.f, 330.f);
 }

@@ -4,7 +4,7 @@
 AIReviewModal::AIReviewModal() : isOpen(false) {}
 
 void AIReviewModal::init() {
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
 
     overlay.setSize(sf::Vector2f(1920.f, 1080.f));
     overlay.setFillColor(sf::Color(10, 4, 16, 210));

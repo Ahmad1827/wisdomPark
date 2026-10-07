@@ -9,7 +9,7 @@ AudioPanel::AudioPanel() : position(1240.f, 75.f), size(630.f, 360.f), isVisible
 AudioPanel::~AudioPanel() {}
 
 void AudioPanel::init() {
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
     position = sf::Vector2f(1240.f, 75.f);
 
     tracks.clear();

@@ -228,7 +228,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     bgTexture.loadFromFile("assets/landofwisdompark2.jfif");
     bgSprite.setTexture(bgTexture);
 
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
 
     projectBrowser.init(pm);
     keybindPanel.init(&keybindManager);
@@ -3186,7 +3186,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         }
 
         if (m_showResizeModal) {
-            drawResizeModal(window);
+            drawResizeModal(window, canvas);
         }
 
         if (m_showPasteResolutionModal) {
@@ -3197,149 +3197,6 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
     }
     drawHandCamWidget(window);
 }
-
-void UIManager::drawResizeModal(sf::RenderWindow& window) {
-    sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
-    overlay.setFillColor(sf::Color(10, 4, 16, 210));
-    window.draw(overlay);
-
-    float modalW = 500.f;
-    float modalH = 290.f;
-    float mx = (1920.f - modalW) * 0.5f;
-    float my = (1080.f - modalH) * 0.5f;
-    m_resizeModalBounds = sf::FloatRect(mx, my, modalW, modalH);
-
-    WisdomUI::Theme::DrawSunsetPanel(window, m_resizeModalBounds, 1.0f);
-    WisdomUI::Theme::DrawCrispText(window, font, "RESIZE CANVAS", 24, mx + modalW / 2.f, my + 26.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
-    WisdomUI::Theme::DrawCrispText(window, font, "CANVAS RESOLUTION", 14, mx + modalW / 2.f, my + 54.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 6, 20), true, true);
-
-    float inputW = 190.f;
-    float inputH = 46.f;
-    m_resizeWBox = sf::FloatRect(mx + 40.f, my + 104.f, inputW, inputH);
-    m_resizeHBox = sf::FloatRect(mx + modalW - 40.f - inputW, my + 104.f, inputW, inputH);
-
-    WisdomUI::Theme::DrawCrispText(window, font, "Width (px)", 15, m_resizeWBox.left, m_resizeWBox.top - 22.f, WisdomUI::Theme::TextSecondary);
-    WisdomUI::Theme::DrawCrispText(window, font, "Height (px)", 15, m_resizeHBox.left, m_resizeHBox.top - 22.f, WisdomUI::Theme::TextSecondary);
-
-    sf::RectangleShape wBox(sf::Vector2f(m_resizeWBox.width, m_resizeWBox.height));
-    wBox.setPosition(m_resizeWBox.left, m_resizeWBox.top);
-    wBox.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-    wBox.setOutlineThickness(1.5f);
-    wBox.setOutlineColor(m_activeResizeField == 0 ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
-    window.draw(wBox);
-
-    std::string wDisp = m_resizeWBuf + (m_activeResizeField == 0 ? "_" : "");
-    WisdomUI::Theme::DrawCrispText(window, font, wDisp, 20, m_resizeWBox.left + 16.f, m_resizeWBox.top + 11.f, WisdomUI::Theme::SunsetGold);
-
-    sf::RectangleShape hBox(sf::Vector2f(m_resizeHBox.width, m_resizeHBox.height));
-    hBox.setPosition(m_resizeHBox.left, m_resizeHBox.top);
-    hBox.setFillColor(WisdomUI::Theme::SunsetDeepDark);
-    hBox.setOutlineThickness(1.5f);
-    hBox.setOutlineColor(m_activeResizeField == 1 ? WisdomUI::Theme::SunsetGold : WisdomUI::Theme::SunsetPlum);
-    window.draw(hBox);
-
-    std::string hDisp = m_resizeHBuf + (m_activeResizeField == 1 ? "_" : "");
-    WisdomUI::Theme::DrawCrispText(window, font, hDisp, 20, m_resizeHBox.left + 16.f, m_resizeHBox.top + 11.f, WisdomUI::Theme::SunsetGold);
-
-    float btnW = 190.f;
-    float btnH = 50.f;
-    m_resizeApplyBtn = sf::FloatRect(mx + 40.f, my + 195.f, btnW, btnH);
-    m_resizeCancelBtn = sf::FloatRect(mx + modalW - 40.f - btnW, my + 195.f, btnW, btnH);
-
-    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-    WisdomUI::Theme::DrawSunsetButton(window, m_resizeApplyBtn, "Apply", font, 18, false, m_resizeApplyBtn.contains(mPos), true, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, m_resizeCancelBtn, "Cancel", font, 18, false, m_resizeCancelBtn.contains(mPos), false, 1.0f);
-}
-
-bool UIManager::handleResizeModalEvent(const sf::Event& event, sf::RenderWindow& window, Canvas& canvas, Timeline& timeline) {
-    if (!m_showResizeModal) return false;
-
-    sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-
-    if (event.type == sf::Event::TextEntered) {
-        if (event.text.unicode == '\b') {
-            if (m_activeResizeField == 0 && !m_resizeWBuf.empty()) m_resizeWBuf.pop_back();
-            else if (m_activeResizeField == 1 && !m_resizeHBuf.empty()) m_resizeHBuf.pop_back();
-        }
-        else if (event.text.unicode >= '0' && event.text.unicode <= '9') {
-            if (m_activeResizeField == 0 && m_resizeWBuf.length() < 5) m_resizeWBuf += static_cast<char>(event.text.unicode);
-            else if (m_activeResizeField == 1 && m_resizeHBuf.length() < 5) m_resizeHBuf += static_cast<char>(event.text.unicode);
-        }
-        return true;
-    }
-
-    if (event.type == sf::Event::KeyPressed) {
-        if (event.key.code == sf::Keyboard::Escape) {
-            m_showResizeModal = false;
-            return true;
-        }
-        if (event.key.code == sf::Keyboard::Tab) {
-            m_activeResizeField = (m_activeResizeField == 0) ? 1 : 0;
-            return true;
-        }
-        if (event.key.code == sf::Keyboard::Enter) {
-            try {
-                int nw = std::stoi(m_resizeWBuf);
-                int nh = std::stoi(m_resizeHBuf);
-                if (nw >= 8 && nh >= 8 && nw <= 8192 && nh <= 8192) {
-                    canvas.resizeCanvas(nw, nh);
-                    if (projManager && !activeProjectPath.empty()) {
-                        projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode());
-                    }
-                    showMessage("Canvas Resized to " + std::to_string(nw) + "x" + std::to_string(nh), sf::Color::Green);
-                    m_showResizeModal = false;
-                }
-                else {
-                    showMessage("Size must be between 8 and 8192 px", sf::Color::Red);
-                }
-            }
-            catch (...) {
-                showMessage("Invalid dimensions entered", sf::Color::Red);
-            }
-            return true;
-        }
-    }
-
-    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        if (m_resizeWBox.contains(mousePos)) {
-            m_activeResizeField = 0;
-            return true;
-        }
-        if (m_resizeHBox.contains(mousePos)) {
-            m_activeResizeField = 1;
-            return true;
-        }
-        if (m_resizeApplyBtn.contains(mousePos)) {
-            try {
-                int nw = std::stoi(m_resizeWBuf);
-                int nh = std::stoi(m_resizeHBuf);
-                if (nw >= 8 && nh >= 8 && nw <= 8192 && nh <= 8192) {
-                    canvas.resizeCanvas(nw, nh);
-                    if (projManager && !activeProjectPath.empty()) {
-                        projManager->saveProjectAs(activeProjectPath, activeProjectName, canvas, static_cast<int>(timeline.getFps()), canvas.getPixelMode());
-                    }
-                    showMessage("Canvas Resized to " + std::to_string(nw) + "x" + std::to_string(nh), sf::Color::Green);
-                    m_showResizeModal = false;
-                }
-                else {
-                    showMessage("Size must be between 8 and 8192 px", sf::Color::Red);
-                }
-            }
-            catch (...) {
-                showMessage("Invalid dimensions entered", sf::Color::Red);
-            }
-            return true;
-        }
-        if (m_resizeCancelBtn.contains(mousePos)) {
-            m_showResizeModal = false;
-            return true;
-        }
-        return true;
-    }
-
-    return true;
-}
-
 
 bool loadStudioFont(sf::Font& font) {
     if (font.loadFromFile("Resources/font.ttf")) return true;

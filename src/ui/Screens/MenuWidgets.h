@@ -3,6 +3,8 @@
 #include "../UITheme.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <numeric>
 #include <string>
 
 // Small drawing helpers shared by the start-menu screens.
@@ -123,6 +125,18 @@ namespace MenuWidgets {
         thumb.setPosition(track.left, track.top + (scroll / maxScroll) * (track.height - thumbH));
         thumb.setFillColor(Theme::SunsetAmber);
         window.draw(thumb);
+    }
+
+    // "16:9" for sizes that reduce to small whole numbers, otherwise "1.78:1".
+    inline std::string aspectLabel(int width, int height) {
+        int divisor = std::max(1, std::gcd(width, height));
+        int rw = width / divisor;
+        int rh = height / divisor;
+        if (rw <= 64 && rh <= 64) return std::to_string(rw) + ":" + std::to_string(rh);
+
+        char buf[24];
+        std::snprintf(buf, sizeof(buf), "%.2f:1", static_cast<float>(width) / static_cast<float>(std::max(1, height)));
+        return buf;
     }
 
     inline std::string twoDigits(int n) {

@@ -5561,7 +5561,7 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
         window.draw(bannerBg, states);
 
         static sf::Font promptFont;
-        static bool pfLoaded = promptFont.loadFromFile("assets/font.otf");
+        static bool pfLoaded = promptFont.loadFromFile("assets/Jersey10-Regular.ttf");
         if (pfLoaded) {
             sf::Text msg("Click & drag to draw symmetry line", promptFont, 11);
             sf::FloatRect mb = msg.getLocalBounds();

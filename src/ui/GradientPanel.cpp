@@ -9,7 +9,7 @@ GradientPanel::GradientPanel()
 
 void GradientPanel::init(GradientConfig* config) {
     m_config = config;
-    m_font.loadFromFile("assets/font.otf");
+    m_font.loadFromFile("assets/Jersey10-Regular.ttf");
     m_position = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
 }
 

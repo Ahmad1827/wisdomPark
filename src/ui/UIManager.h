@@ -191,13 +191,8 @@ private:
     std::string m_resizeWBuf = "";
     std::string m_resizeHBuf = "";
     int m_activeResizeField = 0;
-    sf::FloatRect m_resizeModalBounds;
-    sf::FloatRect m_resizeWBox;
-    sf::FloatRect m_resizeHBox;
-    sf::FloatRect m_resizeApplyBtn;
-    sf::FloatRect m_resizeCancelBtn;
 
-    void drawResizeModal(sf::RenderWindow& window);
+    void drawResizeModal(sf::RenderWindow& window, Canvas& canvas);
     bool handleResizeModalEvent(const sf::Event& event, sf::RenderWindow& window, Canvas& canvas, Timeline& timeline);
 
     bool m_showPasteResolutionModal = false;

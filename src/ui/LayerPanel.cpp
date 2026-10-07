@@ -10,7 +10,7 @@ LayerPanel::LayerPanel()
     currentX(1920.f), targetX(1920.f), width(350.f), state(LayerPanelState::Hidden) {}
 
 void LayerPanel::init() {
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
 
     background.setFillColor(WisdomUI::Theme::Panel);
     background.setOutlineThickness(1.f);

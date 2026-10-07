@@ -30,7 +30,7 @@ AIPanel::AIPanel()
     lastPickedColor(sf::Color::White) {}
 
 void AIPanel::init() {
-    font.loadFromFile("assets/font.otf");
+    font.loadFromFile("assets/Jersey10-Regular.ttf");
     position = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
     loadPalettes();
 }
