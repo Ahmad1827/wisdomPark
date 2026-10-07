@@ -197,11 +197,15 @@ private:
 
     bool m_showPasteResolutionModal = false;
     sf::Image m_pendingPasteImage;
-    sf::FloatRect m_btnPasteDownscaleBounds;
-    sf::FloatRect m_btnPasteOriginalBounds;
-    sf::FloatRect m_btnPasteCancelBounds;
 
-    void drawPasteResolutionModal(sf::RenderWindow& window);
+    void drawPasteResolutionModal(sf::RenderWindow& window, Canvas& canvas);
+
+    // What to carry on with once the unsaved-changes warning is answered.
+    enum class UnsavedThen { MainMenu, NewProject };
+    UnsavedThen m_unsavedThen = UnsavedThen::MainMenu;
+    void requestNewProject(Canvas& canvas);
+    void drawUnsavedWarning(sf::RenderWindow& window);
+    void handleUnsavedWarningEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, Canvas& canvas, Timeline& timeline);
     bool handlePasteResolutionModalEvent(const sf::Event& event, sf::RenderWindow& window, Canvas& canvas, Timeline& timeline);
 
     void initMinigame();

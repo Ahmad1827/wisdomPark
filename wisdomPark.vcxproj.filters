@@ -57,6 +57,12 @@
     <ClCompile Include="src\ui\Screens\EscapeMenu.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\ui\Screens\UnsavedModal.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ui\Screens\PasteModal.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\ui\Screens\ResizeModal.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

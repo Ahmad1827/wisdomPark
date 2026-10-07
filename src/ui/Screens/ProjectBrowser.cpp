@@ -222,18 +222,26 @@ void ProjectBrowser::draw(sf::RenderWindow& window, float time) {
     }
 
     if (showDeleteConfirm) {
-        sf::RectangleShape modalOverlay(sf::Vector2f(1920.f, 1080.f));
-        modalOverlay.setFillColor(sf::Color(10, 4, 16, 215));
-        window.draw(modalOverlay);
+        static ModalClock clock;
+        float elapsed = clock.tick();
+        float appear = modalAppear(elapsed);
+        sf::View savedView = beginModal(window, appear);
+        sf::Vector2f modalMouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
-        Theme::DrawSunsetPanel(window, deleteModalBounds, 1.0f);
+        Theme::DrawSunsetPanel(window, deleteModalBounds, appear);
+        drawDialogHeader(window, font, deleteModalBounds, "DELETE PROJECT", Theme::SunsetCoral, elapsed);
+
+        std::string name = projectToDelete;
+        std::replace(name.begin(), name.end(), '_', ' ');
+        if (name.length() > 28) name = name.substr(0, 26) + "..";
 
         float cx = deleteModalBounds.left + deleteModalBounds.width / 2.f;
-        Theme::DrawCrispText(window, font, "DELETE PROJECT", 26, cx, deleteModalBounds.top + 44.f, Theme::SunsetCoral, kTextShadow, true, true);
-        Theme::DrawCrispText(window, font, "Delete '" + projectToDelete + "'?", 18, cx, deleteModalBounds.top + 98.f, Theme::TextPrimary, kTextShadow, true, true);
-        Theme::DrawCrispText(window, font, "This permanently removes the project from disk.", 15, cx, deleteModalBounds.top + 136.f, Theme::TextSecondary, kTextShadow, true, true);
+        Theme::DrawCrispText(window, font, "Delete '" + name + "'?", 19, cx, deleteModalBounds.top + 120.f, Theme::TextPrimary, kTextShadow, true, true);
+        Theme::DrawCrispText(window, font, "This permanently removes the project from disk.", 16, cx, deleteModalBounds.top + 154.f, Theme::TextSecondary, kTextShadow, true, true);
 
-        Theme::DrawSunsetButton(window, confirmBtnBounds, "Delete Forever", font, 17, false, confirmBtnBounds.contains(mPos), true, 1.0f);
-        Theme::DrawSunsetButton(window, cancelBtnBounds, "Cancel", font, 17, false, cancelBtnBounds.contains(mPos), false, 1.0f);
+        Theme::DrawSunsetButton(window, confirmBtnBounds, "DELETE FOREVER", font, 17, false, confirmBtnBounds.contains(modalMouse), true, 1.0f);
+        Theme::DrawSunsetButton(window, cancelBtnBounds, "CANCEL", font, 17, false, cancelBtnBounds.contains(modalMouse), false, 1.0f);
+
+        window.setView(savedView);
     }
 }

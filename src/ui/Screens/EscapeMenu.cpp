@@ -69,20 +69,7 @@ void UIManager::drawEscapeMenu(sf::RenderWindow& window, Canvas& canvas, Timelin
     float elapsed = Theme::s_time - s_openTime;
     float appear = Animation::EaseOutCubic(elapsed / 0.22f);
 
-    sf::VertexArray scrim(sf::Quads, 4);
-    sf::Color scrimTop = faded(sf::Color(12, 6, 22, 236), appear);
-    sf::Color scrimBottom = faded(sf::Color(12, 6, 22, 210), appear);
-    scrim[0] = sf::Vertex(sf::Vector2f(0.0f, 0.0f), scrimTop);
-    scrim[1] = sf::Vertex(sf::Vector2f(1920.0f, 0.0f), scrimTop);
-    scrim[2] = sf::Vertex(sf::Vector2f(1920.0f, 1080.0f), scrimBottom);
-    scrim[3] = sf::Vertex(sf::Vector2f(0.0f, 1080.0f), scrimBottom);
-    window.draw(scrim);
-
-    // The whole panel rises into place; shifting the view keeps every bound below unchanged.
-    sf::View savedView = window.getView();
-    sf::View risingView = savedView;
-    risingView.move(0.0f, -std::floor(22.0f * (1.0f - appear)));
-    window.setView(risingView);
+    sf::View savedView = beginModal(window, appear);
 
     sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
     bool mouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Left);

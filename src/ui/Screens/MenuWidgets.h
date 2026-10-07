@@ -127,6 +127,96 @@ namespace MenuWidgets {
         window.draw(thumb);
     }
 
+    // ---- Modals -------------------------------------------------------------------------
+
+    // Modals drawn straight from a flag have no open() call, so their entrance is timed from
+    // the first frame they are drawn again. Returns the seconds since the modal appeared.
+    struct ModalClock {
+        unsigned int lastDrawnFrame = 0;
+        float openTime = 0.0f;
+
+        float tick() {
+            using WisdomUI::Theme;
+            if (Theme::s_frame - lastDrawnFrame > 1) openTime = Theme::s_time;
+            lastDrawnFrame = Theme::s_frame;
+            return Theme::s_time - openTime;
+        }
+    };
+
+    inline float modalAppear(float elapsed) {
+        return WisdomUI::Animation::EaseOutCubic(elapsed / 0.22f);
+    }
+
+    // Dims the screen and starts the rise-into-place entrance by shifting the view, which
+    // keeps every bound unchanged. Returns the view to restore once the modal is drawn.
+    inline sf::View beginModal(sf::RenderWindow& window, float appear) {
+        sf::VertexArray scrim(sf::Quads, 4);
+        sf::Color scrimTop = faded(sf::Color(12, 6, 22, 236), appear);
+        sf::Color scrimBottom = faded(sf::Color(12, 6, 22, 210), appear);
+        scrim[0] = sf::Vertex(sf::Vector2f(0.0f, 0.0f), scrimTop);
+        scrim[1] = sf::Vertex(sf::Vector2f(1920.0f, 0.0f), scrimTop);
+        scrim[2] = sf::Vertex(sf::Vector2f(1920.0f, 1080.0f), scrimBottom);
+        scrim[3] = sf::Vertex(sf::Vector2f(0.0f, 1080.0f), scrimBottom);
+        window.draw(scrim);
+
+        sf::View savedView = window.getView();
+        sf::View risingView = savedView;
+        risingView.move(0.0f, -std::floor(22.0f * (1.0f - appear)));
+        window.setView(risingView);
+        return savedView;
+    }
+
+    // Centred title over a rule, for small confirmation dialogs.
+    inline void drawDialogHeader(sf::RenderWindow& window, const sf::Font& font, const sf::FloatRect& panel, const std::string& title, sf::Color titleColor, float elapsed) {
+        using WisdomUI::Theme;
+        using WisdomUI::Animation;
+
+        float cx = panel.left + panel.width * 0.5f;
+        Theme::DrawCrispText(window, font, title, 30, cx, panel.top + 46.0f, titleColor, Theme::SunsetCoralDark, true, true);
+
+        sf::RectangleShape rule(sf::Vector2f(panel.width - 72.0f, 1.0f));
+        rule.setPosition(panel.left + 36.0f, panel.top + 80.0f);
+        rule.setFillColor(Theme::SunsetPlum);
+        window.draw(rule);
+
+        float accentW = 180.0f * Animation::EaseOutCubic((elapsed - 0.08f) / 0.4f);
+        sf::RectangleShape accent(sf::Vector2f(accentW, 2.0f));
+        accent.setPosition(std::floor(cx - accentW * 0.5f), panel.top + 79.0f);
+        accent.setFillColor(titleColor);
+        window.draw(accent);
+    }
+
+    // Filled amber button for the main action of a screen. It dims while disabled.
+    inline void drawPrimaryButton(sf::RenderWindow& window, const sf::Font& font, const sf::FloatRect& bounds, const std::string& label, unsigned int charSize, bool hovered, bool enabled = true) {
+        using WisdomUI::Theme;
+
+        float t = Theme::AnimateHover(bounds, hovered) * (enabled ? 1.0f : 0.0f);
+        bool pressed = enabled && hovered && sf::Mouse::isButtonPressed(sf::Mouse::Left);
+        sf::FloatRect b = shifted(bounds, 0.0f, pressed ? 1.0f : 0.0f);
+
+        if (enabled) {
+            sf::ConvexShape glow = Theme::ChamferedRect(b.left - 4.0f, b.top - 4.0f, b.width + 8.0f, b.height + 8.0f, 7.0f);
+            glow.setFillColor(Theme::WithAlpha(Theme::SunsetGold, 26.0f + 12.0f * std::sin(Theme::s_time * 3.0f) + 46.0f * t));
+            window.draw(glow);
+        }
+
+        sf::Color face = Theme::Mix(Theme::SunsetAmber, Theme::SunsetGold, t);
+        sf::ConvexShape body = Theme::ChamferedRect(b.left, b.top, b.width, b.height, 4.0f);
+        body.setFillColor(enabled ? face : Theme::Mix(face, Theme::SunsetDeepDark, 0.62f));
+        body.setOutlineThickness(1.0f);
+        body.setOutlineColor(enabled ? Theme::SunsetGlow : Theme::SunsetPlum);
+        window.draw(body);
+
+        if (enabled) {
+            sf::RectangleShape lower(sf::Vector2f(b.width, b.height * 0.5f - 4.0f));
+            lower.setPosition(b.left, b.top + b.height * 0.5f);
+            lower.setFillColor(sf::Color(120, 50, 10, 34));
+            window.draw(lower);
+        }
+
+        Theme::DrawCrispText(window, font, label, charSize, b.left + b.width * 0.5f, b.top + b.height * 0.5f, enabled ? Theme::SunsetDeepDark : Theme::TextMuted, sf::Color::Transparent, true, true);
+    }
+
     // "16:9" for sizes that reduce to small whole numbers, otherwise "1.78:1".
     inline std::string aspectLabel(int width, int height) {
         int divisor = std::max(1, std::gcd(width, height));

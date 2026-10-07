@@ -320,7 +320,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     m_topBar.Initialize(
         font,
-        [this]() { newProjectModal.open(); },
+        [this, baseCanvas]() { requestNewProject(*baseCanvas); },
         [this, baseCanvas]() {
             std::string file = NativeDialogs::openFileDialog("Wisdom Park Projects\0*.wpk\0All Files\0*.*\0");
             if (!file.empty() && projManager) {
@@ -1085,35 +1085,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     sf::Vector2f logicalMousePos = canvas.getInverseTransform().transformPoint(mousePos);
 
     if (showUnsavedWarning) {
-        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            float boxWidth = 450.f;
-            float boxHeight = 200.f;
-            float cx = (1920.f - boxWidth) / 2.f;
-            float cy = (1080.f - boxHeight) / 2.f;
-
-            sf::FloatRect saveBounds(cx + 30.f, cy + 120.f, 110.f, 40.f);
-            sf::FloatRect discardBounds(cx + 170.f, cy + 120.f, 110.f, 40.f);
-            sf::FloatRect cancelBounds(cx + 310.f, cy + 120.f, 110.f, 40.f);
-
-            if (saveBounds.contains(mousePos)) {
-                if (triggerSave(canvas, timeline)) {
-                    showUnsavedWarning = false;
-                    currentState = AppState::Welcome;
-                    currentMenuState = MenuState::Main;
-                }
-                else {
-                    showMessage("Error Saving Project!", sf::Color::Red);
-                }
-            }
-            else if (discardBounds.contains(mousePos)) {
-                showUnsavedWarning = false;
-                currentState = AppState::Welcome;
-                currentMenuState = MenuState::Main;
-            }
-            else if (cancelBounds.contains(mousePos)) {
-                showUnsavedWarning = false;
-            }
-        }
+        handleUnsavedWarningEvent(event, window, currentState, canvas, timeline);
         return;
     }
 
@@ -2107,7 +2079,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                 }
 
-                if (keybindManager.isActionTriggered("proj_new", event)) newProjectModal.open();
+                if (keybindManager.isActionTriggered("proj_new", event)) requestNewProject(canvas);
 
                 if (keybindManager.isActionTriggered("time_play", event)) timeline.togglePlayback();
                 if (keybindManager.isActionTriggered("time_start", event)) {
@@ -3154,31 +3126,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         }
 
         if (showUnsavedWarning) {
-            sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
-            overlay.setFillColor(sf::Color(0, 0, 0, 160));
-            window.draw(overlay);
-
-            float boxWidth = 450.f;
-            float boxHeight = 200.f;
-            float cx = (1920.f - boxWidth) / 2.f;
-            float cy = (1080.f - boxHeight) / 2.f;
-
-            sf::FloatRect warnBounds(cx, cy, boxWidth, boxHeight);
-            WisdomUI::Theme::DrawSunsetPanel(window, warnBounds, 1.0f);
-
-            WisdomUI::Theme::DrawCrispText(window, font, "UNSAVED CHANGES", 20, cx + boxWidth / 2.0f, cy + 30.f, WisdomUI::Theme::SunsetAmber, sf::Color(10, 4, 16), true, true);
-            WisdomUI::Theme::DrawCrispText(window, font, "Would you like to save before leaving?", 14, cx + boxWidth / 2.0f, cy + 70.f, WisdomUI::Theme::TextSecondary, sf::Color(10, 4, 16), true, true);
-
-            sf::Vector2i mousePosI = sf::Mouse::getPosition(window);
-            sf::Vector2f mousePos = window.mapPixelToCoords(mousePosI);
-
-            sf::FloatRect saveBounds(cx + 30.f, cy + 120.f, 110.f, 40.f);
-            sf::FloatRect discardBounds(cx + 170.f, cy + 120.f, 110.f, 40.f);
-            sf::FloatRect cancelBounds(cx + 310.f, cy + 120.f, 110.f, 40.f);
-
-            WisdomUI::Theme::DrawThemedButton(window, saveBounds, "Save", font, 14, false, saveBounds.contains(mousePos), false, 1.0f);
-            WisdomUI::Theme::DrawThemedButton(window, discardBounds, "Discard", font, 14, false, discardBounds.contains(mousePos), true, 1.0f);
-            WisdomUI::Theme::DrawThemedButton(window, cancelBounds, "Cancel", font, 14, false, cancelBounds.contains(mousePos), false, 1.0f);
+            drawUnsavedWarning(window);
         }
 
         if (m_showEscapeMenu) {
@@ -3190,7 +3138,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         }
 
         if (m_showPasteResolutionModal) {
-            drawPasteResolutionModal(window);
+            drawPasteResolutionModal(window, canvas);
         }
 
         m_toolDock.RenderTooltip(window);
@@ -4170,67 +4118,3 @@ void UIManager::drawHandCamWidget(sf::RenderWindow& window) {
     window.draw(grip);
 }
 
-void UIManager::drawPasteResolutionModal(sf::RenderWindow& window) {
-    sf::RectangleShape overlay(sf::Vector2f(1920.f, 1080.f));
-    overlay.setFillColor(sf::Color(10, 4, 16, 215));
-    window.draw(overlay);
-
-    float modalW = 540.f;
-    float modalH = 265.f;
-    float mx = (1920.f - modalW) * 0.5f;
-    float my = (1080.f - modalH) * 0.5f;
-    sf::FloatRect bounds(mx, my, modalW, modalH);
-
-    WisdomUI::Theme::DrawSunsetPanel(window, bounds, 1.0f);
-    WisdomUI::Theme::DrawCrispText(window, font, "PASTE IMAGE RESOLUTION", 24, mx + modalW / 2.f, my + 26.f, WisdomUI::Theme::SunsetGold, sf::Color(14, 6, 20), true, true);
-    WisdomUI::Theme::DrawCrispText(window, font, "Choose import sizing for this pixel canvas:", 14, mx + modalW / 2.f, my + 56.f, WisdomUI::Theme::SunsetPeach, sf::Color(14, 6, 20), true, true);
-
-    float btnW = 460.f;
-    float btnH = 46.f;
-    m_btnPasteDownscaleBounds = sf::FloatRect(mx + 40.f, my + 92.f, btnW, btnH);
-    m_btnPasteOriginalBounds = sf::FloatRect(mx + 40.f, my + 148.f, btnW, btnH);
-    m_btnPasteCancelBounds = sf::FloatRect(mx + modalW - 40.f - 120.f, my + 208.f, 120.f, 38.f);
-
-    sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-    WisdomUI::Theme::DrawSunsetButton(window, m_btnPasteDownscaleBounds, "Downscale to Fit Canvas", font, 16, false, m_btnPasteDownscaleBounds.contains(mPos), true, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, m_btnPasteOriginalBounds, "Keep 1:1 Original Resolution", font, 16, false, m_btnPasteOriginalBounds.contains(mPos), false, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, m_btnPasteCancelBounds, "Cancel", font, 14, false, m_btnPasteCancelBounds.contains(mPos), false, 1.0f);
-}
-
-bool UIManager::handlePasteResolutionModalEvent(const sf::Event& event, sf::RenderWindow& window, Canvas& canvas, Timeline& timeline) {
-    if (!m_showPasteResolutionModal) return false;
-
-    if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
-        m_showPasteResolutionModal = false;
-        return true;
-    }
-
-    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-
-        if (m_btnPasteDownscaleBounds.contains(mousePos)) {
-            canvas.pasteImage(m_pendingPasteImage, timeline.getCurrentFrame(), false);
-            m_toolDock.SetActiveTool("select");
-            showMessage("Pasted Image (Downscaled)", sf::Color::Green);
-            m_showPasteResolutionModal = false;
-            return true;
-        }
-
-        if (m_btnPasteOriginalBounds.contains(mousePos)) {
-            canvas.pasteImage(m_pendingPasteImage, timeline.getCurrentFrame(), true);
-            m_toolDock.SetActiveTool("select");
-            showMessage("Pasted Image (Original 1:1)", sf::Color::Green);
-            m_showPasteResolutionModal = false;
-            return true;
-        }
-
-        if (m_btnPasteCancelBounds.contains(mousePos)) {
-            m_showPasteResolutionModal = false;
-            return true;
-        }
-
-        return true;
-    }
-
-    return true;
-}
