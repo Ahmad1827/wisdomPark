@@ -54,6 +54,9 @@
     <ClCompile Include="src\ui\Screens\MenuScreens.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\ui\Screens\EscapeMenu.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\ui\Screens\KeybindsScreen.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

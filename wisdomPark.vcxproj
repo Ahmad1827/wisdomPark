@@ -242,6 +242,7 @@
     <ClCompile Include="src\ui\Screens\ProjectBrowser.cpp" />
     <ClCompile Include="src\ui\Screens\MenuScreens.cpp" />
     <ClCompile Include="src\ui\Screens\KeybindsScreen.cpp" />
+    <ClCompile Include="src\ui\Screens\EscapeMenu.cpp" />
     <ClCompile Include="src\ui\Screens\ExportModal.cpp" />
     <ClCompile Include="src\ui\Screens\NewProjectModal.cpp" />
     <ClCompile Include="src\ui\ColorPalettePanel.cpp" />

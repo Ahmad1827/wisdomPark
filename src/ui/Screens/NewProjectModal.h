@@ -5,7 +5,6 @@
 
 class NewProjectModal {
 private:
-    sf::RectangleShape overlay;
     sf::FloatRect modalBounds;
     sf::Font font;
 
@@ -33,7 +32,15 @@ private:
 
     std::string projectName;
 
+    // Drawing-only state: when the modal opened, and the size the preview is easing towards.
+    float openTime;
+    float shownWidth;
+    float shownHeight;
+
     void buildPresets();
+    void applyPreset(int index);
+    void syncPresetToSize();
+    std::string confirm();
 
 public:
     NewProjectModal();

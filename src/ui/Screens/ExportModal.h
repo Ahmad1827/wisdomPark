@@ -6,7 +6,6 @@
 
 class ExportModal {
 private:
-    sf::RectangleShape overlay;
     sf::FloatRect modalBounds;
     sf::Font font;
 
@@ -19,7 +18,11 @@ private:
 
     sf::Sprite previewSprite;
     sf::Texture previewTex;
-    std::string infoString;
+
+    // Filled in by updatePreview() for the details card.
+    sf::Vector2u exportSize;
+    float previewScale;
+    float frameMegabytes;
 
     bool isOpen;
     bool transparentBg;
@@ -28,7 +31,12 @@ private:
     Canvas* linkedCanvas;
     int activeFrame;
 
+    // Drawing-only state: when the modal opened.
+    float openTime;
+
     void updatePreview();
+    void exportFrames();
+    void exportSheet();
 
 public:
     ExportModal();
