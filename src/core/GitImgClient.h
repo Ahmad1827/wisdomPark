@@ -25,7 +25,8 @@ public:
     std::string getToken() const;
     bool isAuthenticated() const;
 
-    bool login(const std::string& username, const std::string& password);
+    // outServerUp: false when the server never answered, as opposed to rejecting the login
+    bool login(const std::string& username, const std::string& password, bool* outServerUp = nullptr);
     static std::string loadConfigUrl();
     static bool loadSavedCredentials(std::string& outUser, std::string& outPass);
     static void saveCredentials(const std::string& user, const std::string& pass);
@@ -36,7 +37,7 @@ public:
         const std::string& repo,
         const std::string& filename,
         const std::string& commitMsg,
-        std::function<void(bool)> callback);
+        std::function<void(bool success, bool serverUp)> callback);
 
     // outServerUp: whether the server answered at all (an empty list alone can't tell you)
     static std::vector<GitImgCommit> getCommitHistory(std::string repo = "", bool* outServerUp = nullptr);

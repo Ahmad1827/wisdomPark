@@ -608,7 +608,8 @@ bool GitImgClient::isAuthenticated() const {
     return !m_token.empty();
 }
 
-bool GitImgClient::login(const std::string& username, const std::string& password) {
+bool GitImgClient::login(const std::string& username, const std::string& password, bool* outServerUp) {
+    if (outServerUp) *outServerUp = false;
     std::wstring host;
     INTERNET_PORT port = 80;
     bool isHttps = false;
@@ -617,6 +618,7 @@ bool GitImgClient::login(const std::string& username, const std::string& passwor
     HINTERNET hSession = WinHttpOpen(L"WisdomPark/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSession) return false;
+    applyTimeouts(hSession);
 
     HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
     if (!hConnect) {
@@ -642,6 +644,7 @@ bool GitImgClient::login(const std::string& username, const std::string& passwor
 
     bool success = false;
     if (sent && WinHttpReceiveResponse(hRequest, NULL)) {
+        if (outServerUp) *outServerUp = true;
         DWORD statusCode = 0;
         DWORD size = sizeof(statusCode);
         WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
@@ -675,11 +678,11 @@ void GitImgClient::pushAsync(const sf::Image& image,
     const std::string& repo,
     const std::string& filename,
     const std::string& commitMsg,
-    std::function<void(bool)> callback) {
+    std::function<void(bool, bool)> callback) {
     s_activeRepo = repo;
     std::vector<sf::Uint8> pngBytes;
     if (!image.saveToMemory(pngBytes, "png")) {
-        if (callback) callback(false);
+        if (callback) callback(false, true);
         return;
     }
 
@@ -691,21 +694,22 @@ void GitImgClient::pushAsync(const sf::Image& image,
         INTERNET_PORT port = 80;
         bool isHttps = false;
         if (!parseUrl(baseUrl, host, port, isHttps)) {
-            if (callback) callback(false);
+            if (callback) callback(false, true);
             return;
         }
 
         HINTERNET hSession = WinHttpOpen(L"WisdomPark/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
             WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
         if (!hSession) {
-            if (callback) callback(false);
+            if (callback) callback(false, true);
             return;
         }
+        applyTimeouts(hSession);
 
         HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
         if (!hConnect) {
             WinHttpCloseHandle(hSession);
-            if (callback) callback(false);
+            if (callback) callback(false, true);
             return;
         }
 
@@ -718,7 +722,7 @@ void GitImgClient::pushAsync(const sf::Image& image,
         if (!hRequest) {
             WinHttpCloseHandle(hConnect);
             WinHttpCloseHandle(hSession);
-            if (callback) callback(false);
+            if (callback) callback(false, true);
             return;
         }
 
@@ -730,7 +734,9 @@ void GitImgClient::pushAsync(const sf::Image& image,
             static_cast<DWORD>(pngBytes.size()), 0);
 
         bool success = false;
+        bool serverUp = false;
         if (sent && WinHttpReceiveResponse(hRequest, NULL)) {
+            serverUp = true;
             DWORD statusCode = 0;
             DWORD size = sizeof(statusCode);
             WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
@@ -743,7 +749,7 @@ void GitImgClient::pushAsync(const sf::Image& image,
         WinHttpCloseHandle(hSession);
 
         if (callback) {
-            callback(success);
+            callback(success, serverUp);
         }
         }).detach();
 }

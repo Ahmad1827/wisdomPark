@@ -3856,10 +3856,13 @@ void UIManager::pushSpriteSheetToGitImg(Canvas& canvas, bool opaqueBg) {
     std::string filename = "Animation_" + activeProjectName + ".png";
 
     auto doPush = [this, stripImg, repo, filename, commitMsg]() {
-        m_gitImgClient.pushAsync(stripImg, repo, filename, commitMsg, [this](bool success) {
+        m_gitImgClient.pushAsync(stripImg, repo, filename, commitMsg, [this](bool success, bool serverUp) {
             m_isPushingGitImg = false;
             if (success) {
                 showMessage("Successfully pushed animation strip to GitImg!", sf::Color::Green);
+            }
+            else if (!serverUp) {
+                showMessage("GitImg server is down", sf::Color::Red);
             }
             else {
                 showMessage("Failed to push animation strip to GitImg", sf::Color::Red);
@@ -3869,9 +3872,15 @@ void UIManager::pushSpriteSheetToGitImg(Canvas& canvas, bool opaqueBg) {
 
     if (!m_gitImgClient.isAuthenticated()) {
         std::thread([this, user, pass, doPush]() {
-            if (m_gitImgClient.login(user, pass)) {
+            bool serverUp = false;
+            if (m_gitImgClient.login(user, pass, &serverUp)) {
                 GitImgClient::saveCredentials(user, pass);
                 doPush();
+            }
+            else if (!serverUp) {
+                // Not a rejected login: keep the saved credentials
+                m_isPushingGitImg = false;
+                showMessage("GitImg server is down", sf::Color::Red);
             }
             else {
                 GitImgClient::clearSavedCredentials();
@@ -3934,10 +3943,13 @@ void UIManager::pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg) {
     std::string filename = activeProjectName + ".png";
 
     auto doPush = [this, img, repo, filename, commitMsg]() {
-        m_gitImgClient.pushAsync(img, repo, filename, commitMsg, [this](bool success) {
+        m_gitImgClient.pushAsync(img, repo, filename, commitMsg, [this](bool success, bool serverUp) {
             m_isPushingGitImg = false;
             if (success) {
                 showMessage("Successfully pushed to GitImg!", sf::Color::Green);
+            }
+            else if (!serverUp) {
+                showMessage("GitImg server is down", sf::Color::Red);
             }
             else {
                 showMessage("Failed to push to GitImg", sf::Color::Red);
@@ -3947,9 +3959,15 @@ void UIManager::pushToGitImg(Canvas& canvas, int frameIndex, bool opaqueBg) {
 
     if (!m_gitImgClient.isAuthenticated()) {
         std::thread([this, user, pass, doPush]() {
-            if (m_gitImgClient.login(user, pass)) {
+            bool serverUp = false;
+            if (m_gitImgClient.login(user, pass, &serverUp)) {
                 GitImgClient::saveCredentials(user, pass);
                 doPush();
+            }
+            else if (!serverUp) {
+                // Not a rejected login: keep the saved credentials
+                m_isPushingGitImg = false;
+                showMessage("GitImg server is down", sf::Color::Red);
             }
             else {
                 GitImgClient::clearSavedCredentials();
