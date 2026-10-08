@@ -80,6 +80,13 @@ namespace WisdomUI {
         float m_pullScrollOffset{ 0.0f };
         float m_pullMaxScroll{ 0.0f };
         std::vector<GitImgCommit> m_commits;
+        enum class PullState { Loading, Ready, ServerDown };
+        PullState m_pullState{ PullState::Ready };
+        int m_pullRequestId{ 0 };
+        bool m_hasPendingCommits{ false };
+        int m_pendingCommitsRequestId{ 0 };
+        bool m_pendingServerUp{ false };
+        std::vector<GitImgCommit> m_pendingCommits;
         std::vector<std::pair<sf::FloatRect, std::string>> m_commitRowBounds;
         std::unordered_map<std::string, sf::Texture> m_commitThumbnails;
         std::unordered_map<std::string, bool> m_thumbnailRequested;

@@ -205,6 +205,15 @@ namespace WisdomUI {
                 m_commitThumbnails[item.first].loadFromImage(item.second);
             }
             m_pendingThumbnails.clear();
+
+            if (m_hasPendingCommits) {
+                m_hasPendingCommits = false;
+                if (m_pendingCommitsRequestId == m_pullRequestId) {
+                    m_commits = std::move(m_pendingCommits);
+                    m_pullState = m_pendingServerUp ? PullState::Ready : PullState::ServerDown;
+                }
+                m_pendingCommits.clear();
+            }
         }
     }
 
@@ -242,8 +251,19 @@ namespace WisdomUI {
 
         m_commitRowBounds.clear();
 
+        float midX = dropX + dropW / 2.0f;
+        float midY = dropY + currentH / 2.0f;
+        if (m_pullState == PullState::Loading) {
+            Theme::DrawCrispText(window, m_font, "Contacting GitImg server...", 16, midX, midY, Theme::SunsetPeach, sf::Color::Transparent, true, true);
+            return;
+        }
+        if (m_pullState == PullState::ServerDown) {
+            Theme::DrawCrispText(window, m_font, "GitImg server is down.", 18, midX, midY - 12.0f, Theme::SunsetAmber, sf::Color::Transparent, true, true);
+            Theme::DrawCrispText(window, m_font, "Start the server, then press Pull again.", 14, midX, midY + 14.0f, Theme::SunsetPlum, sf::Color::Transparent, true, true);
+            return;
+        }
         if (m_commits.empty()) {
-            Theme::DrawCrispText(window, m_font, "No commits found in repository.", 16, dropX + dropW / 2.0f, dropY + currentH / 2.0f, Theme::SunsetPlum, sf::Color::Transparent, true, true);
+            Theme::DrawCrispText(window, m_font, "No commits found in repository.", 16, midX, midY, Theme::SunsetPlum, sf::Color::Transparent, true, true);
             return;
         }
 
@@ -394,7 +414,20 @@ namespace WisdomUI {
             if (m_pullBtnBounds.contains(mousePos)) {
                 m_isPullOpen = !m_isPullOpen;
                 if (m_isPullOpen) {
-                    m_commits = GitImgClient::getCommitHistory();
+                    // Fetched off the UI thread: a server that never answers used to freeze the app here
+                    m_commits.clear();
+                    m_commitRowBounds.clear();
+                    m_pullState = PullState::Loading;
+                    int requestId = ++m_pullRequestId;
+                    std::thread([this, requestId]() {
+                        bool serverUp = false;
+                        std::vector<GitImgCommit> commits = GitImgClient::getCommitHistory("", &serverUp);
+                        std::lock_guard<std::mutex> lock(m_thumbMutex);
+                        m_pendingCommits = std::move(commits);
+                        m_pendingServerUp = serverUp;
+                        m_pendingCommitsRequestId = requestId;
+                        m_hasPendingCommits = true;
+                        }).detach();
                     m_pullScrollOffset = 0.0f;
                     m_openMenuIndex = -1;
                 }

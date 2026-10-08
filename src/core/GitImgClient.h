@@ -38,7 +38,8 @@ public:
         const std::string& commitMsg,
         std::function<void(bool)> callback);
 
-    static std::vector<GitImgCommit> getCommitHistory(std::string repo = "");
+    // outServerUp: whether the server answered at all (an empty list alone can't tell you)
+    static std::vector<GitImgCommit> getCommitHistory(std::string repo = "", bool* outServerUp = nullptr);
     static bool checkoutCommit(const std::string& commitHash);
     static bool downloadCommitImage(const std::string& commitHash, sf::Image& outImage, bool isThumb = false);
 

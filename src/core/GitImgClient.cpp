@@ -66,20 +66,28 @@ static std::string s_activeRepo = "";
 
 static bool parseUrl(const std::string& url, std::wstring& outHost, INTERNET_PORT& outPort, bool& outIsHttps);
 
+// Keeps a dead or stalled server from blocking the caller for WinHTTP's default 30-60s.
+static void applyTimeouts(HINTERNET hSession) {
+    WinHttpSetTimeouts(hSession, 3000, 3000, 5000, 8000);
+}
+
 static std::string formatEpoch(time_t rawTime) {
+    if (rawTime > 99999999999LL) rawTime /= 1000;       // milliseconds
     struct tm timeinfo;
 #if defined(_WIN32)
-    localtime_s(&timeinfo, &rawTime);
+    // strftime aborts the process on the garbage tm an out-of-range time leaves behind
+    if (rawTime < 0 || localtime_s(&timeinfo, &rawTime) != 0) return "";
 #else
-    localtime_r(&rawTime, &timeinfo);
+    if (!localtime_r(&rawTime, &timeinfo)) return "";
 #endif
     char buf[64];
     std::strftime(buf, sizeof(buf), "%b %d, %H:%M", &timeinfo);
     return std::string(buf);
 }
 
-std::vector<GitImgCommit> GitImgClient::getCommitHistory(std::string repo) {
+std::vector<GitImgCommit> GitImgClient::getCommitHistory(std::string repo, bool* outServerUp) {
     std::vector<GitImgCommit> commits;
+    if (outServerUp) *outServerUp = false;
 
     std::string user, pass;
     loadSavedCredentials(user, pass);
@@ -119,6 +127,7 @@ std::vector<GitImgCommit> GitImgClient::getCommitHistory(std::string repo) {
     HINTERNET hSession = WinHttpOpen(L"WisdomPark/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSession) return commits;
+    applyTimeouts(hSession);
 
     HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
     if (!hConnect) {
@@ -150,6 +159,7 @@ std::vector<GitImgCommit> GitImgClient::getCommitHistory(std::string repo) {
         WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
 
     if (sent && WinHttpReceiveResponse(hRequest, NULL)) {
+        if (outServerUp) *outServerUp = true;
         DWORD statusCode = 0;
         DWORD size = sizeof(statusCode);
         WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
@@ -245,6 +255,7 @@ bool GitImgClient::downloadCommitImage(const std::string& commitHash, sf::Image&
     HINTERNET hSession = WinHttpOpen(L"WisdomPark/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSession) return false;
+    applyTimeouts(hSession);
 
     HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
     if (!hConnect) {
