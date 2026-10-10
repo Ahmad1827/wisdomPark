@@ -84,7 +84,7 @@ void AIReviewModal::draw(sf::RenderWindow& window) {
     sf::FloatRect modalBounds(modalBg.getPosition().x - 680.f, modalBg.getPosition().y - 380.f, 1360.f, 760.f);
     WisdomUI::Theme::DrawSunsetPanel(window, modalBounds, 1.0f);
 
-    WisdomUI::Theme::DrawCrispText(window, font, ":: AI GENERATION REVIEW ::", 18, 960.f, modalBounds.top + 28.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, ":: REVIEW SUGGESTION ::", 18, 960.f, modalBounds.top + 28.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
     sf::RectangleShape viewBg(originalView.getSize());
     viewBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);

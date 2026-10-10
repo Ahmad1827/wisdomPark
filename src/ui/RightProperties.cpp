@@ -226,9 +226,9 @@ void RightProperties::draw(sf::RenderWindow& window) {
                     else if (item.id == "onion_op_up") hoveredTooltip = "Increase onion skin overlay opacity";
                     else if (item.id == "onion_op_down") hoveredTooltip = "Decrease onion skin overlay opacity";
                     else if (item.id == "theme_all") hoveredTooltip = "Show all object themes and assets";
-                    else if (item.id == "theme_struct") hoveredTooltip = "Filter AI generation to structures only";
-                    else if (item.id == "theme_clutter") hoveredTooltip = "Filter AI generation to clutter and props";
-                    else if (item.id == "theme_custom") hoveredTooltip = "Filter AI generation to custom artwork";
+                    else if (item.id == "theme_struct") hoveredTooltip = "Filter generation to structures only";
+                    else if (item.id == "theme_clutter") hoveredTooltip = "Filter generation to clutter and props";
+                    else if (item.id == "theme_custom") hoveredTooltip = "Filter generation to custom artwork";
                     else if (item.id == "theme_wfc") hoveredTooltip = "Toggle procedural Wave Function Collapse synthesis";
                     else if (item.id == "toggle_terrain") hoveredTooltip = "Toggle terrain surface rendering layer";
                     else if (item.id == "toggle_light") hoveredTooltip = "Toggle directional sun lighting & drop shadows";

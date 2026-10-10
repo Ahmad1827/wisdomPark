@@ -57,7 +57,7 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
     using namespace MenuLayout;
 
     sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-    drawSubScreenHeader(window, "SETTINGS", "DISPLAY, STORAGE, PERFORMANCE AND AI", m_screenTime);
+    drawSubScreenHeader(window, "SETTINGS", "DISPLAY, STORAGE, PERFORMANCE AND ASSISTANT", m_screenTime);
 
     auto sectionAlpha = [&](int section) {
         return Animation::EaseOutCubic((m_screenTime - 0.08f - 0.07f * static_cast<float>(section)) / 0.4f);
@@ -171,7 +171,7 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         case SettingKind::TextField: {
             std::string keyDisplay = ai.getApiKey(ai.getActiveProvider());
             bool needsKey = ai.providerRequiresApiKey(ai.getActiveProvider());
-            if (!needsKey) keyDisplay = "Not needed for this provider";
+            if (!needsKey) keyDisplay = "Not needed for this engine";
             else if (keyDisplay.empty()) keyDisplay = g_typingApiKey ? "" : "Click to enter key...";
             else keyDisplay = std::string(std::min(static_cast<size_t>(16), keyDisplay.length()), '*');
             if (g_typingApiKey && needsKey) keyDisplay += "_";
@@ -188,6 +188,24 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
             break;
         }
         }
+    }
+
+    // The assistant card has room under its two rows for a plain note on what the engine needs
+    float noteA = sectionAlpha(3);
+    if (noteA > 0.0f) {
+        sf::FloatRect card = SettingsSection(3);
+        const std::string engine = ai.getActiveProvider();
+        std::string engineNote;
+        if (engine == "Claude Code") engineNote = "Claude Code uses the login already on this computer. No key needed.";
+        else if (!ai.providerRequiresApiKey(engine)) engineNote = engine + " runs without an access key.";
+        else if (ai.getApiKey(engine).empty()) engineNote = engine + " needs an access key before it can help.";
+        else engineNote = engine + " is ready to use.";
+
+        float noteX = card.left + 30.0f;
+        float noteY = card.top + 196.0f;
+        Theme::DrawCrispText(window, font, engineNote, 17, noteX, noteY, faded(Theme::SunsetGold, noteA), faded(kTextShadow, noteA), false, true);
+        Theme::DrawCrispText(window, font, "Optional. The assistant only runs when you ask it to.", 16, noteX, noteY + 30.0f, faded(Theme::TextSecondary, noteA), sf::Color::Transparent, false, true);
+        Theme::DrawCrispText(window, font, "Every suggestion is shown for review before it touches your canvas.", 16, noteX, noteY + 56.0f, faded(Theme::TextSecondary, noteA), sf::Color::Transparent, false, true);
     }
 
     // Drawn last so the open list sits above the rows beneath it.
@@ -227,7 +245,7 @@ void UIManager::drawTutorialsMenu(sf::RenderWindow& window) {
         {"Pixel Perfect Mode", "Strip jagged pixel doublets for authentic crisp retro lines."},
         {"Keyboard Matrix", "Speed up animation workflows with custom keys and shortcuts."},
         {"Exporting Studio", "Render sequential PNG sequences and packed sprite sheets."},
-        {"AI Co-Pilot Suite", "Generate palette suggestions, shading ramps and variations."}
+        {"Studio Assistant", "Generate palette suggestions, shading ramps and variations."}
     };
 
     static const char* fullText[kTutorialCount] = {
@@ -270,7 +288,7 @@ void UIManager::drawTutorialsMenu(sf::RenderWindow& window) {
         "- Output transparent individual PNG sequences for video editors.\n"
         "- Pack the entire timeline into compact sprite sheets ready for game engines.",
 
-        "AI Co-Pilot features require an active API key in Settings.\n\n"
+        "The Studio Assistant is optional. Pick its engine in Settings.\n\n"
         "- Open the Color Assistant to generate 4-color shading ramps.\n"
         "- Import palettes from Lospec links or paste hex codes directly.\n"
         "- All active palettes can be pinned and saved to your studio presets."

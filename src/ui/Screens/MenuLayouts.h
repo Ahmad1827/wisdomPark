@@ -34,7 +34,7 @@ namespace MenuLayout {
 
     inline constexpr int kSettingSectionCount = 4;
     inline constexpr const char* kSettingSections[kSettingSectionCount] = {
-        "DISPLAY & GRAPHICS", "BACKUPS & STORAGE", "PERFORMANCE & TIMELINE", "AI INTEGRATION"
+        "DISPLAY & GRAPHICS", "BACKUPS & STORAGE", "PERFORMANCE & TIMELINE", "STUDIO ASSISTANT"
     };
 
     inline constexpr SettingRow kSettingRows[] = {
@@ -54,8 +54,8 @@ namespace MenuLayout {
         { SettingId::UndoHistory,  SettingKind::Stepper,   "Undo Stack History",         2, 2 },
         { SettingId::GridContrast, SettingKind::Info,      "Pixel Grid Contrast",        2, 3 },
 
-        { SettingId::AiProvider,   SettingKind::Stepper,   "Active AI Provider",         3, 0 },
-        { SettingId::ApiKey,       SettingKind::TextField, "API Access Token",           3, 1 }
+        { SettingId::AiProvider,   SettingKind::Stepper,   "Assistant Engine",         3, 0 },
+        { SettingId::ApiKey,       SettingKind::TextField, "Access Key",           3, 1 }
     };
 
     inline constexpr int kResolutionOptionCount = 3;

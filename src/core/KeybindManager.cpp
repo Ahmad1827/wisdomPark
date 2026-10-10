@@ -54,9 +54,9 @@ void KeybindManager::init() {
     registerDefault("time_zoom_in", "Timeline Zoom In", "Timeline", sf::Keyboard::Equal, true);
     registerDefault("time_zoom_out", "Timeline Zoom Out", "Timeline", sf::Keyboard::Dash, true);
 
-    registerDefault("ai_complete", "AI Autocomplete", "AI", sf::Keyboard::Space, true);
-    registerDefault("ai_prompt", "AI Request", "AI", sf::Keyboard::Space, true, true);
-    registerDefault("ai_contour", "AI Make Contour", "AI", sf::Keyboard::O, true, true);
+    registerDefault("ai_complete", "Finish Drawing", "Assistant", sf::Keyboard::Space, true);
+    registerDefault("ai_prompt", "Ask Assistant", "Assistant", sf::Keyboard::Space, true, true);
+    registerDefault("ai_contour", "Make Contour", "Assistant", sf::Keyboard::O, true, true);
 
     registerDefault("layer_new", "New Layer", "Layers", sf::Keyboard::L, true);
     registerDefault("layer_dup", "Duplicate Layer", "Layers", sf::Keyboard::L, true, true);

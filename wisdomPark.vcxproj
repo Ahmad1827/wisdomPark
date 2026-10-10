@@ -253,6 +253,7 @@
     <ClCompile Include="src\ui\AudioPanel.cpp" />
     <ClCompile Include="src\ui\AIPanel.cpp" />
     <ClCompile Include="src\ui\AIReviewModal.cpp" />
+    <ClCompile Include="src\ui\LoadingScene.cpp" />
     <ClCompile Include="src\ui\PerspectivePanel.cpp" />
     <ClCompile Include="src\ui\GradientPanel.cpp" />
     <ClCompile Include="src\ui\TextPanel.cpp" />
@@ -362,6 +363,7 @@
     <ClInclude Include="src\ui\AudioPanel.h" />
     <ClInclude Include="src\ui\AIPanel.h" />
     <ClInclude Include="src\ui\AIReviewModal.h" />
+    <ClInclude Include="src\ui\LoadingScene.h" />
     <ClInclude Include="src\ui\GradientPanel.h" />
     <ClInclude Include="src\ui\Panels\RightDockTabs.h" />
     <ClInclude Include="src\ui\Panels\StatusBar.h" />

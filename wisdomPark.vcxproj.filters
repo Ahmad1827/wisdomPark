@@ -120,6 +120,9 @@
     <ClCompile Include="src\ui\AIReviewModal.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\ui\LoadingScene.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\core\FrameRenderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -447,6 +450,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\AIReviewModal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ui\LoadingScene.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\FrameRenderer.h">

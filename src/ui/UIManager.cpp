@@ -8,6 +8,7 @@
 #include "../ai/AIManager.h"
 #include "../ui/AIPanel.h"
 #include "../ui/AIReviewModal.h"
+#include "../ui/LoadingScene.h"
 #include <iostream>
 #include <algorithm>
 #include <ctime>
@@ -208,12 +209,8 @@ static void ApplyWindowIcon(sf::RenderWindow& window) {
 static AIPanel g_aiPanel;
 static AIReviewModal g_aiReviewModal;
 bool g_typingApiKey = false;
-static sf::RectangleShape loadingOverlay;
-static sf::RectangleShape loadingBox;
-static sf::Text loadingText;
-static sf::CircleShape loadingSpinner;
-static sf::RectangleShape loadingCancelBtn;
-static sf::Text loadingCancelText;
+static LoadingScene g_loadingScene;
+static bool g_loadingWasActive = false;
 
 static bool g_selectingOutlineColor = false;
 static sf::Color g_outlineColor = sf::Color::Black;
@@ -272,43 +269,6 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     assetBrowser = std::make_unique<AssetBrowserPanel>(assetManager, font);
     assetBrowser->setProject("CurrentProject");
     assetBrowser->setBounds(sf::FloatRect(1440.f, WisdomUI::Theme::FloatingPanelY, 390.f, 540.f));
-
-    loadingOverlay.setSize(sf::Vector2f(1920.f, 1080.f));
-    loadingOverlay.setFillColor(sf::Color(10, 4, 16, 200));
-
-    loadingBox.setSize(sf::Vector2f(450.f, 220.f));
-    loadingBox.setOrigin(225.f, 110.f);
-    loadingBox.setPosition(960.f, 540.f);
-    loadingBox.setFillColor(WisdomUI::Theme::Panel);
-    loadingBox.setOutlineThickness(1.5f);
-    loadingBox.setOutlineColor(WisdomUI::Theme::Border);
-
-    loadingText.setFont(font);
-    loadingText.setString("Wisdom Park AI is thinking...");
-    loadingText.setCharacterSize(16);
-    loadingText.setFillColor(WisdomUI::Theme::TextGold);
-    loadingText.setOrigin(loadingText.getLocalBounds().width / 2.f, loadingText.getLocalBounds().height / 2.f);
-    loadingText.setPosition(960.f, 480.f);
-
-    loadingSpinner.setRadius(25.f);
-    loadingSpinner.setPointCount(3);
-    loadingSpinner.setFillColor(WisdomUI::Theme::SunsetAmber);
-    loadingSpinner.setOrigin(25.f, 25.f);
-    loadingSpinner.setPosition(960.f, 540.f);
-
-    loadingCancelBtn.setSize(sf::Vector2f(120.f, 35.f));
-    loadingCancelBtn.setOrigin(60.f, 17.5f);
-    loadingCancelBtn.setPosition(960.f, 610.f);
-    loadingCancelBtn.setFillColor(WisdomUI::Theme::RubyDark);
-    loadingCancelBtn.setOutlineThickness(1.f);
-    loadingCancelBtn.setOutlineColor(WisdomUI::Theme::RubyHighlight);
-
-    loadingCancelText.setFont(font);
-    loadingCancelText.setString("Cancel");
-    loadingCancelText.setCharacterSize(14);
-    loadingCancelText.setFillColor(WisdomUI::Theme::TextPrimary);
-    loadingCancelText.setOrigin(loadingCancelText.getLocalBounds().width / 2.f, loadingCancelText.getLocalBounds().height / 2.f);
-    loadingCancelText.setPosition(960.f, 607.f);
 
     m_gradientPanel.init(&m_gradientConfig);
     m_perspectiveManager.init();
@@ -477,7 +437,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         }
         });
     m_toolDock.AddTool("perspective", "Perspective Grid", [this, baseCanvas]() { baseCanvas->setActiveTool(ToolType::Perspective); m_toolDock.SetActiveTool("perspective"); });
-    m_toolDock.AddTool("ai_gen", "AI Generator", [this, baseCanvas]() {
+    m_toolDock.AddTool("ai_gen", "Studio Assistant", [this, baseCanvas]() {
         g_aiPanel.toggle();
         if (g_aiPanel.getIsVisible()) {
             m_toolDock.SetActiveTool("ai_gen");
@@ -537,7 +497,7 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     AIManager& ai = AIManager::getInstance();
     const std::string provider = ai.getActiveProvider();
     if (provider != "Claude" && provider != "Claude Code") {
-        showMessage("This needs the Claude or Claude Code provider (Settings)", sf::Color::Red);
+        showMessage("Pick Claude or Claude Code as the Assistant Engine in Settings first", sf::Color::Red);
         return;
     }
 
@@ -554,7 +514,7 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     req.height = static_cast<int>(req.baseImage.getSize().y);
 
     AIResult res = ai.executeRequest(req);
-    if (!res.success) showMessage("AI: " + res.errorMessage, sf::Color::Red);
+    if (!res.success) showMessage("Assistant: " + res.errorMessage, sf::Color::Red);
 }
 
 // Send / Cancel sit to the right of the request box (promptBox is 600x50 at 660,780)
@@ -567,7 +527,7 @@ void UIManager::openAIPrompt(bool contour) {
     currentPrompt = contour ? "make contour of " : "";
     promptDisplay.setString("> " + currentPrompt + "_");
     if (contour) showMessage("Name what to outline (or leave it to outline your drawing), then press Enter", sf::Color(0, 191, 255));
-    else showMessage("Ask Claude: describe what to draw or change, then press Enter", sf::Color(0, 191, 255));
+    else showMessage("Describe what to draw or change, then press Enter", sf::Color(0, 191, 255));
 }
 
 void UIManager::showMessage(const std::string& msg, sf::Color color) {
@@ -1098,13 +1058,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
 
         if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-            sf::Vector2i mPos = sf::Mouse::getPosition(window);
-            sf::Vector2f viewPos = window.mapPixelToCoords(mPos, window.getDefaultView());
+            sf::Vector2i mPos(event.mouseButton.x, event.mouseButton.y);
+            sf::Vector2f viewPos = window.mapPixelToCoords(mPos, WisdomUI::WorkspaceLayout::GetLetterboxView(window.getSize()));
 
-            if (loadingCancelBtn.getGlobalBounds().contains(viewPos) ||
-                (viewPos.x > 700.f && viewPos.x < 1220.f && viewPos.y > 450.f && viewPos.y < 750.f)) {
-                killAiProcess();
-            }
+            if (g_loadingScene.handleClick(viewPos)) killAiProcess();
             return;
         }
         return;
@@ -1192,11 +1149,11 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     if (original.getPixel(x, y) == result.getPixel(x, y)) added.setPixel(x, y, sf::Color::Transparent);
                 }
             }
-            if (canvas.applyImageToLayer(curFrame, added, true, "AI Autocomplete")) showMessage("AI result added as new layer", sf::Color::Green);
-            else showMessage("Could not add AI layer", sf::Color::Red);
+            if (canvas.applyImageToLayer(curFrame, added, true, "Assistant Sketch")) showMessage("Suggestion added as new layer", sf::Color::Green);
+            else showMessage("Could not add the suggestion layer", sf::Color::Red);
         }
         else if (res == "accept_replace") {
-            if (canvas.applyImageToLayer(curFrame, result, false)) showMessage("Layer replaced with AI result", sf::Color::Green);
+            if (canvas.applyImageToLayer(curFrame, result, false)) showMessage("Layer replaced with suggestion", sf::Color::Green);
             else showMessage("Active layer is locked", sf::Color::Red);
         }
         else if (res == "accept_project") {
@@ -1216,7 +1173,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             }
         }
         else if (res == "reject") {
-            showMessage("AI result discarded", sf::Color::Cyan);
+            showMessage("Suggestion discarded", sf::Color::Cyan);
         }
         return;
     }
@@ -1449,7 +1406,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     else if (g_typingApiKey) {
                         g_typingApiKey = false;
                         AIManager::getInstance().saveSettingsLocally();
-                        showMessage("AI Configurations Applied and Saved", sf::Color::Green);
+                        showMessage("Assistant settings applied and saved", sf::Color::Green);
                     }
                 }
 
@@ -2717,9 +2674,12 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     if (exportModal.getIsOpen()) exportModal.updateHover(mousePos);
     if (newProjectModal.getIsOpen()) newProjectModal.updateHover(mousePos);
 
-    if (AIManager::getInstance().isProcessingAsync()) {
-        loadingSpinner.rotate(150.f * dt);
+    bool assistantBusy = AIManager::getInstance().isProcessingAsync();
+    if (assistantBusy) {
+        if (!g_loadingWasActive) g_loadingScene.reset();
+        g_loadingScene.update(dt, mousePos);
     }
+    g_loadingWasActive = assistantBusy;
 
     if (currentState != AppState::Welcome) m_wasOnMainMenu = false;
 
@@ -2945,10 +2905,10 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             AIResult asyncRes = AIManager::getInstance().getAsyncResult(originalImage);
             if (asyncRes.success) {
                 g_aiReviewModal.open(originalImage, asyncRes.resultImage);
-                showMessage("AI Generation Complete!", sf::Color::Green);
+                showMessage("Suggestion ready", sf::Color::Green);
             }
             else {
-                showMessage("AI Process Error: " + asyncRes.errorMessage, sf::Color::Red);
+                showMessage("Assistant error: " + asyncRes.errorMessage, sf::Color::Red);
             }
         }
 
@@ -3242,12 +3202,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         if (newProjectModal.getIsOpen()) newProjectModal.draw(window);
 
         if (AIManager::getInstance().isProcessingAsync()) {
-            window.draw(loadingOverlay);
-            window.draw(loadingBox);
-            window.draw(loadingText);
-            window.draw(loadingSpinner);
-            window.draw(loadingCancelBtn);
-            window.draw(loadingCancelText);
+            g_loadingScene.draw(window, font, window.mapPixelToCoords(sf::Mouse::getPosition(window)));
         }
 
         if (showUnsavedWarning) {

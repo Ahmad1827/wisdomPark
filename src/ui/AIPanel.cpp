@@ -486,16 +486,16 @@ void AIPanel::draw(sf::RenderWindow& window) {
     WisdomUI::Theme::DrawSunsetButton(window, sendAllBtnBounds, "--> Send All to Colors Panel", font, 13, false, hovSend, false, 1.0f);
 
     bool hovFinish = aiFinishBtnBounds.contains(mPos);
-    if (hovFinish) hoveredTooltip = "Claude finishes the drawing on this frame [Ctrl+Space]";
+    if (hovFinish) hoveredTooltip = "The assistant finishes the drawing on this frame [Ctrl+Space]";
     WisdomUI::Theme::DrawSunsetButton(window, aiFinishBtnBounds, "Finish Drawing", font, 12, false, hovFinish, true, 1.0f);
 
     bool hovContour = aiContourBtnBounds.contains(mPos);
-    if (hovContour) hoveredTooltip = "Claude draws a contour of what you name, or of your drawing [Ctrl+Shift+O]";
+    if (hovContour) hoveredTooltip = "The assistant draws a contour of what you name, or of your drawing [Ctrl+Shift+O]";
     WisdomUI::Theme::DrawSunsetButton(window, aiContourBtnBounds, "Make Contour", font, 12, false, hovContour, false, 1.0f);
 
     bool hovAsk = aiAskBtnBounds.contains(mPos);
-    if (hovAsk) hoveredTooltip = "Type any request for Claude to carry out on the canvas [Ctrl+Shift+Space]";
-    WisdomUI::Theme::DrawSunsetButton(window, aiAskBtnBounds, "Ask Claude", font, 12, false, hovAsk, false, 1.0f);
+    if (hovAsk) hoveredTooltip = "Type any request for the assistant to carry out on the canvas [Ctrl+Shift+Space]";
+    WisdomUI::Theme::DrawSunsetButton(window, aiAskBtnBounds, "Ask Assistant", font, 12, false, hovAsk, false, 1.0f);
 
     bool hovClose = closeBtnBounds.contains(mPos);
     if (hovClose) hoveredTooltip = "Close Color Assistant";

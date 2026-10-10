@@ -49,11 +49,11 @@ void WelcomeScreen::updateHover(sf::Vector2f mousePos) {
 
 void WelcomeScreen::updateStatus(bool configured, const std::string& provider) {
     if (configured) {
-        status.setString("AI Configured: " + provider);
+        status.setString("Assistant: " + provider);
         status.setFillColor(sf::Color(0, 191, 255));
     }
     else {
-        status.setString("AI Not Configured");
+        status.setString("Assistant not set up");
         status.setFillColor(sf::Color(200, 50, 50));
     }
 }
