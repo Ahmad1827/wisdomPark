@@ -29,6 +29,7 @@ namespace {
 }
 
 void LoadingScene::reset() {
+    title = "Sketching it out";
     time = 0.f;
     boatX = kScene.left + kScene.width * 0.5f;
     boatVel = 0.f;
@@ -234,10 +235,11 @@ void LoadingScene::draw(sf::RenderWindow& window, const sf::Font& font, sf::Vect
 
     Theme::DrawSunsetPanel(window, kPanel, 1.0f);
 
-    std::string title = "Sketching it out";
-    title.append(static_cast<size_t>(time * 2.f) % 4, '.');
-    float titleW = Theme::MeasureText(font, "Sketching it out", 26);
-    Theme::DrawCrispText(window, font, title, 26, 960.f - titleW * 0.5f, 270.f, Theme::SunsetGold, Theme::SunsetDeepDark, false, true);
+    // The dots animate, so centre on the bare title to keep it from jittering
+    std::string heading = title;
+    heading.append(static_cast<size_t>(time * 2.f) % 4, '.');
+    float titleW = Theme::MeasureText(font, title, 26);
+    Theme::DrawCrispText(window, font, heading, 26, 960.f - titleW * 0.5f, 270.f, Theme::SunsetGold, Theme::SunsetDeepDark, false, true);
 
     // Sky
     const sf::Color skyTop(29, 19, 46), skyMid(128, 58, 112), skyLow(255, 160, 122);

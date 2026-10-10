@@ -211,6 +211,13 @@ static AIReviewModal g_aiReviewModal;
 bool g_typingApiKey = false;
 static LoadingScene g_loadingScene;
 static bool g_loadingWasActive = false;
+static float g_loadingStatusTimer = 0.f;
+
+// When the artist had a selection, only that area is sent to the assistant; these remember
+// where it came from so the answer can be put back into the full frame for review.
+static bool g_assistHasRegion = false;
+static sf::IntRect g_assistRegion;
+static sf::Image g_assistFullImage;
 
 static bool g_selectingOutlineColor = false;
 static sf::Color g_outlineColor = sf::Color::Black;
@@ -502,19 +509,49 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     }
 
     int curFrame = timeline.getCurrentFrame();
+    bool hadSelection = canvas.getSelection().isActive();
+    sf::FloatRect selBox = canvas.getSelection().getBoundingBox();
     canvas.commitSelection(curFrame);
 
     AIRequest req;
     req.prompt = hint;
     req.operation = AIOperation::Edit;
     req.baseImage = canvas.flattenFrameToImage(curFrame);
+
+    g_assistHasRegion = false;
+    if (hadSelection) {
+        int imgW = static_cast<int>(req.baseImage.getSize().x);
+        int imgH = static_cast<int>(req.baseImage.getSize().y);
+        // The selection box hugs the selected pixels, so widen it a little: the assistant needs to see
+        // what surrounds them and have some room to draw
+        int pad = std::max(2, static_cast<int>(std::max(selBox.width, selBox.height)) / 8);
+        int left = std::clamp(static_cast<int>(std::floor(selBox.left)) - pad, 0, imgW);
+        int top = std::clamp(static_cast<int>(std::floor(selBox.top)) - pad, 0, imgH);
+        int right = std::clamp(static_cast<int>(std::ceil(selBox.left + selBox.width)) + pad, 0, imgW);
+        int bottom = std::clamp(static_cast<int>(std::ceil(selBox.top + selBox.height)) + pad, 0, imgH);
+        bool wholeCanvas = (left == 0 && top == 0 && right == imgW && bottom == imgH);
+        if (selBox.width >= 1.f && selBox.height >= 1.f && right > left && bottom > top && !wholeCanvas) {
+            g_assistHasRegion = true;
+            g_assistRegion = sf::IntRect(left, top, right - left, bottom - top);
+            g_assistFullImage = req.baseImage;
+
+            sf::Image area;
+            area.create(static_cast<unsigned int>(right - left), static_cast<unsigned int>(bottom - top), sf::Color::Transparent);
+            area.copy(g_assistFullImage, 0, 0, g_assistRegion, false);
+            req.baseImage = area;
+        }
+    }
     req.isPixelMode = canvas.getPixelMode();
     req.primaryColor = canvas.getPrimaryColor();
     req.width = static_cast<int>(req.baseImage.getSize().x);
     req.height = static_cast<int>(req.baseImage.getSize().y);
 
     AIResult res = ai.executeRequest(req);
-    if (!res.success) showMessage("Assistant: " + res.errorMessage, sf::Color::Red);
+    if (!res.success) {
+        g_assistHasRegion = false;
+        showMessage("Assistant: " + res.errorMessage, sf::Color::Red);
+    }
+    else if (g_assistHasRegion) showMessage("Working on the selected area only", sf::Color(0, 191, 255));
 }
 
 // Send / Cancel sit to the right of the request box (promptBox is 600x50 at 660,780)
@@ -2676,7 +2713,17 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
     bool assistantBusy = AIManager::getInstance().isProcessingAsync();
     if (assistantBusy) {
-        if (!g_loadingWasActive) g_loadingScene.reset();
+        if (!g_loadingWasActive) {
+            g_loadingScene.reset();
+            g_loadingStatusTimer = 0.f;
+        }
+        g_loadingStatusTimer -= dt;
+        if (g_loadingStatusTimer <= 0.f) {
+            g_loadingStatusTimer = 0.5f;
+            std::ifstream statusFile("temp_ai_status.txt");
+            std::string status;
+            if (statusFile && std::getline(statusFile, status) && !status.empty()) g_loadingScene.setTitle(status);
+        }
         g_loadingScene.update(dt, mousePos);
     }
     g_loadingWasActive = assistantBusy;
@@ -2904,12 +2951,24 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             sf::Image originalImage;
             AIResult asyncRes = AIManager::getInstance().getAsyncResult(originalImage);
             if (asyncRes.success) {
-                g_aiReviewModal.open(originalImage, asyncRes.resultImage);
+                bool regionFits = g_assistHasRegion
+                    && static_cast<int>(asyncRes.resultImage.getSize().x) == g_assistRegion.width
+                    && static_cast<int>(asyncRes.resultImage.getSize().y) == g_assistRegion.height;
+                if (regionFits) {
+                    // Put the reworked area back into the full frame so review and accept see the whole canvas
+                    sf::Image whole = g_assistFullImage;
+                    whole.copy(asyncRes.resultImage, static_cast<unsigned int>(g_assistRegion.left), static_cast<unsigned int>(g_assistRegion.top), sf::IntRect(0, 0, 0, 0), false);
+                    g_aiReviewModal.open(g_assistFullImage, whole);
+                }
+                else {
+                    g_aiReviewModal.open(originalImage, asyncRes.resultImage);
+                }
                 showMessage("Suggestion ready", sf::Color::Green);
             }
             else {
                 showMessage("Assistant error: " + asyncRes.errorMessage, sf::Color::Red);
             }
+            g_assistHasRegion = false;
         }
 
         bool needsShapeTool = (canvas.getActiveTool() == ToolType::Shapes);

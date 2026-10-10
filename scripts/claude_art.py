@@ -1,9 +1,11 @@
 """Claude pixel-art bridge.
 
-Reads the canvas from temp_ai_input.png, asks Claude to finish the drawing (or to
-carry out a typed request such as "make contour of a cat") and writes the result
-to temp_ai_output.png. On failure it writes the reason to
-temp_ai_error.txt and exits non-zero.
+Reads the canvas (or the selected part of it) from temp_ai_input.png, asks Claude to
+finish the drawing (or to carry out a typed request such as "make contour of a cat"),
+has Claude look at a render of its own result and correct it, and writes the final
+image to temp_ai_output.png. On failure it writes the reason to temp_ai_error.txt and
+exits non-zero. temp_ai_status.txt holds a short line on what is happening right now,
+which the app shows on its loading screen.
 
 The job arrives on stdin so neither the API key nor the user's prompt ever
 touches a command line:
@@ -27,11 +29,15 @@ from PIL import Image
 INPUT_PATH = "temp_ai_input.png"
 OUTPUT_PATH = "temp_ai_output.png"
 ERROR_PATH = "temp_ai_error.txt"
+STATUS_PATH = "temp_ai_status.txt"
 
 API_MODEL = "claude-opus-5-5"
 MAX_CELLS = 128 * 128
 MAX_INPUT_COLORS = 40
 CLI_TIMEOUT_SECONDS = 600
+# How many times Claude may look at its own result and correct it. Each round is one
+# more request, and the loop stops early as soon as Claude calls the result good.
+REVIEW_ROUNDS = 2
 
 # '.' is transparent; every other symbol is an index into the palette.
 SYMBOLS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -57,13 +63,55 @@ So "0" is palette[0], "a" is palette[10], "A" is palette[36].
 {task}
 Return the resulting canvas in exactly the same JSON shape: {{"palette": [...], "rows": [...]}}.
 
-- A program parses your reply and paints it straight onto the canvas, so it must be
+{format_rules}"""
+
+FORMAT_RULES = """- A program parses your reply and paints it straight onto the canvas, so it must be
   exactly {height} rows of exactly {width} characters each. A row that is one character
   short shifts everything after it, so count carefully.
 - Reuse the existing palette where you can. You may append new colours to the end of
   the palette when the work needs them, up to {max_colors} total. Never reorder or
   remove existing palette entries, because the rows refer to them by position.
 """
+
+# Second look: Claude sees a render of what it just produced and may correct it.
+REVIEW = """You are checking a pixel-art edit before the artist sees it. A first pass produced the
+edit from text alone, without seeing how it looks, so mistakes that are obvious to the
+eye are common: lines that came out too thick, features out of proportion or in the
+wrong place, gaps in an outline, stray pixels, or parts of the drawing changed that
+should not have been.
+
+The canvas is {width} pixels wide and {height} pixels tall. Canvases are written as
+JSON: "palette" is a list of hex colours, and "rows" holds one string per pixel row,
+top to bottom, one character per pixel. The character "." is a transparent pixel. Any
+other character is a palette index using this alphabet, in order:
+{symbols}
+
+What the artist asked for:
+{task}
+The canvas before the edit:
+{before_json}
+
+The edit that was produced:
+{after_json}
+
+{image_note}
+Compare the two renders and judge the edit the way the artist will when it appears on
+their canvas at this size:
+- Does it do what was asked, completely, and is the new work recognisable at a glance?
+- Is the new work in keeping with the drawing: line weight matching the existing
+  lines (one pixel unless the artist draws heavier), sensible proportions, placed where
+  it belongs?
+- Is everything the request did not concern still exactly as it was before?
+
+If the edit is good as it stands, reply with "verdict": "good" and leave "problems",
+"palette" and "rows" empty. Small imperfections that the artist would not notice are
+not worth a rewrite.
+
+If it needs fixing, reply with "verdict": "fix", say in "problems" what is wrong in a
+sentence or two, and put the corrected canvas in "palette" and "rows". Start from the
+edit and change only what fixes the problems.
+
+{format_rules}"""
 
 # No request typed: plain autocomplete.
 TASK_FINISH = """\
@@ -104,6 +152,18 @@ RESULT_SCHEMA = {
         "rows": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["palette", "rows"],
+    "additionalProperties": False,
+}
+
+REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string", "enum": ["good", "fix"]},
+        "problems": {"type": "string"},
+        "palette": {"type": "array", "items": {"type": "string"}},
+        "rows": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["verdict", "problems", "palette", "rows"],
     "additionalProperties": False,
 }
 
@@ -206,41 +266,54 @@ def preview_png(img):
     return img.resize((img.width * scale, img.height * scale), Image.Resampling.NEAREST)
 
 
-def build_prompt(img, palette, rows, hint, color, image_note):
-    task = TASK_REQUEST.format(request=hint, color=color) if hint else TASK_FINISH
-    return INSTRUCTIONS.format(
-        width=img.width,
-        height=img.height,
-        symbols=SYMBOLS,
-        canvas_json=json.dumps({"palette": palette, "rows": rows}, indent=0),
-        image_note=image_note,
-        task=task,
-        max_colors=len(SYMBOLS),
-    )
+def set_status(text):
+    try:
+        with open(STATUS_PATH, "w", encoding="utf-8") as f:
+            f.write(text)
+    except OSError:
+        pass
 
 
-def run_cli(img, palette, rows, hint, color):
+def canvas_json(palette, rows):
+    return json.dumps({"palette": palette, "rows": rows}, indent=0)
+
+
+def format_rules(img):
+    return FORMAT_RULES.format(width=img.width, height=img.height, max_colors=len(SYMBOLS))
+
+
+def task_text(hint, color):
+    return TASK_REQUEST.format(request=hint, color=color) if hint else TASK_FINISH
+
+
+def image_note(backend, images):
+    """Tells Claude where the renders are: files for Claude Code, attachments for the API."""
+    if backend == "cli":
+        listing = "; ".join(f"{name} is {what}" for name, what, _ in images)
+        return ("Enlarged renders are saved in the current directory: " + listing +
+                ". Read them first so you can see the drawing.\n")
+    listing = "; ".join(f"image {i + 1} is {what}" for i, (_, what, _) in enumerate(images))
+    return "Enlarged renders are attached: " + listing + ".\n"
+
+
+def ask_cli(prompt, images, schema):
     """Claude Code in headless mode: uses the user's own Claude Code login."""
     exe = shutil.which("claude")
     if not exe:
-        raise BridgeError("Claude Code is not installed (the 'claude' command was not found). Install it, or switch the AI provider to Claude and enter an API key.")
+        raise BridgeError("Claude Code is not installed (the 'claude' command was not found). Install it, or switch the Assistant Engine to Claude and enter an access key.")
 
     # A scratch directory keeps Claude Code away from this project's settings and
-    # files; the only thing it can read there is the canvas preview.
+    # files; the only things it can read there are the canvas renders.
     with tempfile.TemporaryDirectory(prefix="wisdompark_ai_") as workdir:
-        preview_png(img).save(os.path.join(workdir, "canvas.png"))
-        prompt = build_prompt(
-            img, palette, rows, hint, color,
-            "An enlarged render of the same canvas is saved as canvas.png in the current "
-            "directory. Read it first so you can see the drawing.\n",
-        )
+        for name, _, img in images:
+            preview_png(img).save(os.path.join(workdir, name))
         args = [exe, "-p", "--output-format", "json", "--system-prompt", SYSTEM_PROMPT,
                 "--tools", "Read", "--allowedTools", "Read",
                 "--strict-mcp-config", "--no-session-persistence"]
         # The schema makes Claude Code validate the reply's shape. A .cmd/.bat launcher
         # would mangle the quotes in it, so only the real executable gets it.
         if not exe.lower().endswith((".cmd", ".bat")):
-            args += ["--json-schema", json.dumps(RESULT_SCHEMA)]
+            args += ["--json-schema", json.dumps(schema)]
         try:
             proc = subprocess.run(
                 args,
@@ -250,7 +323,7 @@ def run_cli(img, palette, rows, hint, color):
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except subprocess.TimeoutExpired:
-            raise BridgeError("Claude Code took too long to answer. Try a smaller canvas.")
+            raise BridgeError("Claude Code took too long to answer. Try a smaller area.")
 
     try:
         envelope = json.loads(proc.stdout)
@@ -264,18 +337,22 @@ def run_cli(img, palette, rows, hint, color):
     return extract_json(str(envelope.get("result", "")))
 
 
-def run_api(img, palette, rows, hint, color, api_key):
+def ask_api(prompt, images, schema, api_key):
     """Anthropic API: for users who have an API key instead of Claude Code."""
     try:
         import anthropic
     except ImportError:
-        raise BridgeError("The Claude API provider needs the Anthropic SDK. Run: pip install anthropic")
+        raise BridgeError("The Claude engine needs the Anthropic SDK. Run: pip install anthropic")
     if not api_key:
-        raise BridgeError("No Claude API key set. Enter one in Settings, or switch the AI provider to Claude Code.")
+        raise BridgeError("No Claude access key set. Enter one in Settings, or switch the Assistant Engine to Claude Code.")
 
-    buf = io.BytesIO()
-    preview_png(img).save(buf, format="PNG")
-    prompt = build_prompt(img, palette, rows, hint, color, "The attached image is an enlarged render of the same canvas.\n")
+    content = []
+    for _, _, img in images:
+        buf = io.BytesIO()
+        preview_png(img).save(buf, format="PNG")
+        content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png",
+                                                    "data": base64.standard_b64encode(buf.getvalue()).decode("ascii")}})
+    content.append({"type": "text", "text": prompt})
 
     client = anthropic.Anthropic(api_key=api_key)
     try:
@@ -287,19 +364,12 @@ def run_api(img, palette, rows, hint, color, api_key):
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
             system=SYSTEM_PROMPT,
-            output_config={"effort": "medium", "format": {"type": "json_schema", "schema": RESULT_SCHEMA}},
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": "image/png",
-                                                 "data": base64.standard_b64encode(buf.getvalue()).decode("ascii")}},
-                    {"type": "text", "text": prompt},
-                ],
-            }],
+            output_config={"effort": "medium", "format": {"type": "json_schema", "schema": schema}},
+            messages=[{"role": "user", "content": content}],
         ) as stream:
             message = stream.get_final_message()
     except anthropic.AuthenticationError:
-        raise BridgeError("The Claude API key was rejected. Check it in Settings.")
+        raise BridgeError("The Claude access key was rejected. Check it in Settings.")
     except anthropic.RateLimitError:
         raise BridgeError("Claude API rate limit reached. Wait a moment and try again.")
     except anthropic.APIStatusError as e:
@@ -310,13 +380,56 @@ def run_api(img, palette, rows, hint, color, api_key):
     if message.stop_reason == "refusal":
         raise BridgeError("Claude declined this request.")
     if message.stop_reason == "max_tokens":
-        raise BridgeError("The canvas is too large for Claude to finish in one go. Try a smaller canvas.")
+        raise BridgeError("The area is too large for Claude to finish in one go. Select a smaller area.")
     text = next((b.text for b in message.content if b.type == "text"), "")
     return extract_json(text)
 
 
+def ask(backend, api_key, prompt, images, schema):
+    if backend == "cli":
+        return ask_cli(prompt, images, schema)
+    return ask_api(prompt, images, schema, api_key)
+
+
+def first_pass(backend, api_key, img, hint, color):
+    palette, rows = encode_canvas(img)
+    images = [("canvas.png", "the canvas", img)]
+    prompt = INSTRUCTIONS.format(
+        width=img.width, height=img.height, symbols=SYMBOLS,
+        canvas_json=canvas_json(palette, rows),
+        image_note=image_note(backend, images),
+        task=task_text(hint, color),
+        format_rules=format_rules(img),
+    )
+    for attempt in range(2):
+        try:
+            return decode_canvas(ask(backend, api_key, prompt, images, RESULT_SCHEMA), img.width, img.height)
+        except BadReplyError:
+            if attempt == 1:
+                raise
+
+
+def review_pass(backend, api_key, img, edit, hint, color):
+    """Shows Claude a render of its edit. Returns a corrected image, or None if it is fine."""
+    images = [("before.png", "the canvas before the edit", img), ("edit.png", "the edit being checked", edit)]
+    prompt = REVIEW.format(
+        width=img.width, height=img.height, symbols=SYMBOLS,
+        task=task_text(hint, color),
+        before_json=canvas_json(*encode_canvas(img)),
+        after_json=canvas_json(*encode_canvas(edit)),
+        image_note=image_note(backend, images),
+        format_rules=format_rules(img),
+    )
+    review = ask(backend, api_key, prompt, images, REVIEW_SCHEMA)
+    if not isinstance(review, dict) or review.get("verdict") != "fix":
+        print("claude_art: check passed", file=sys.stderr)
+        return None
+    print("claude_art: fixing - " + str(review.get("problems", "")), file=sys.stderr)
+    return decode_canvas(review, img.width, img.height)
+
+
 def main():
-    for path in (OUTPUT_PATH, ERROR_PATH):
+    for path in (OUTPUT_PATH, ERROR_PATH, STATUS_PATH):
         try:
             os.remove(path)
         except OSError:
@@ -332,23 +445,27 @@ def main():
         except OSError:
             raise BridgeError("Could not read the canvas image.")
         if img.width * img.height > MAX_CELLS:
-            raise BridgeError(f"Claude works on canvases up to {MAX_CELLS} pixels (128x128). This one is {img.width}x{img.height}.")
-
-        palette, rows = encode_canvas(img)
+            raise BridgeError(f"That is {img.width}x{img.height} pixels; the assistant handles up to 128x128 at a time. Select a smaller area first.")
         if backend not in ("cli", "api"):
             raise BridgeError(f"Unknown backend '{backend}'.")
 
-        for attempt in range(2):
+        set_status("Sketching it out")
+        edit = first_pass(backend, api_key, img, hint, color)
+        edit.save(OUTPUT_PATH)
+
+        # From here on there is always a usable result, so a failed check keeps it
+        # rather than failing the whole request.
+        for round_no in range(REVIEW_ROUNDS):
+            set_status("Checking how it looks" if round_no == 0 else "Checking the touch-up")
             try:
-                if backend == "cli":
-                    result = run_cli(img, palette, rows, hint, color)
-                else:
-                    result = run_api(img, palette, rows, hint, color, api_key)
-                decode_canvas(result, img.width, img.height).save(OUTPUT_PATH)
+                fixed = review_pass(backend, api_key, img, edit, hint, color)
+            except BridgeError as e:
+                print(f"claude_art: check skipped - {e}", file=sys.stderr)
                 break
-            except BadReplyError:
-                if attempt == 1:
-                    raise
+            if fixed is None:
+                break
+            edit = fixed
+            edit.save(OUTPUT_PATH)
     except BridgeError as e:
         with open(ERROR_PATH, "w", encoding="utf-8") as f:
             f.write(str(e))

@@ -1,5 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <string>
 #include <vector>
 
 // The little sea scene shown while the assistant works on a request.
@@ -7,6 +8,7 @@
 class LoadingScene {
 public:
     void reset();
+    void setTitle(const std::string& text) { title = text; }
     void update(float dt, sf::Vector2f mouse);
     // Returns true when the click landed on Cancel
     bool handleClick(sf::Vector2f mouse);
@@ -25,6 +27,7 @@ private:
     void drawWaveLayer(sf::RenderWindow& window, float base, float amp, float speed, float phase, sf::Color top, sf::Color bottom, sf::Color foam) const;
     void drawBoat(sf::RenderWindow& window) const;
 
+    std::string title = "Sketching it out";
     float time = 0.f;
     float boatX = 960.f;
     float boatVel = 0.f;

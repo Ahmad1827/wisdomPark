@@ -367,3 +367,5 @@ FodyWeavers.xsd
 
 # AI bridge scratch files
 temp_ai_error.txt
+
+temp_ai_status.txt
