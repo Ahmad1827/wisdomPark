@@ -28,6 +28,7 @@ private:
     sf::FloatRect aiContourBtnBounds;
     sf::FloatRect aiAskBtnBounds;
     sf::FloatRect aiColorsBtnBounds;
+    sf::FloatRect aiNextFrameBtnBounds;
     sf::FloatRect aiOptionsBtnBounds;
     int assistColorMode = 0;
     int assistOptionCount = 1;

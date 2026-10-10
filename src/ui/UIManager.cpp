@@ -231,6 +231,9 @@ static sf::Image g_assistLastResult;
 static std::vector<sf::Image> g_assistOptionsRaw;
 static sf::IntRect g_assistLastArea;
 static bool g_assistLastDiscarded = false;
+// The request box was opened to ask for the next animation frame / the request in flight is one
+static bool g_assistFramePrompt = false;
+static bool g_assistFrameMode = false;
 static const size_t kAssistMaxTurns = 6;
 static const int kAssistMaxLayers = 24;
 
@@ -259,9 +262,29 @@ static std::string jsonQuote(const std::string& text) {
 
 // Writes temp_ai_context.json for scripts/claude_art.py: the frame's layers one by one (cut to the
 // area being sent) and the earlier requests. The flat canvas alone cannot show either.
-static void writeAssistContext(Canvas& canvas, int frameIndex, const sf::IntRect& area, const std::vector<sf::Color>* allowedColors, int optionCount) {
+static void writeAssistContext(Canvas& canvas, int frameIndex, const sf::IntRect& area, const std::vector<sf::Color>* allowedColors, int optionCount, bool nextFrame, float fps) {
     std::ostringstream json;
     json << "{\"options\":" << optionCount << ",";
+
+    // In an animation the frames around this one show what the subject looks like in motion
+    int frameCount = static_cast<int>(canvas.getFrameCount());
+    json << "\"mode\":\"" << (nextFrame ? "next_frame" : "edit") << "\",\"frame\":" << (frameIndex + 1)
+        << ",\"frame_count\":" << frameCount << ",\"fps\":" << fps << ",\"frames\":[";
+    if (frameCount > 1 && area.width * area.height <= 128 * 128) {
+        bool firstFrame = true;
+        for (int i = std::max(0, frameIndex - 3); i <= std::min(frameCount - 1, frameIndex + 1); ++i) {
+            if (i == frameIndex) continue;
+            sf::Image whole = canvas.flattenFrameToImage(i);
+            sf::Image cut;
+            cut.create(static_cast<unsigned int>(area.width), static_cast<unsigned int>(area.height), sf::Color::Transparent);
+            cut.copy(whole, 0, 0, area, false);
+            std::string file = "temp_ai_frame_" + std::to_string(i + 1) + ".png";
+            if (!cut.saveToFile(file)) continue;
+            json << (firstFrame ? "" : ",") << "{\"number\":" << (i + 1) << ",\"file\":" << jsonQuote(file) << "}";
+            firstFrame = false;
+        }
+    }
+    json << "],";
     if (allowedColors) {
         json << "\"allowed_colors\":[";
         for (size_t i = 0; i < allowedColors->size(); ++i) {
@@ -604,7 +627,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     }
 }
 
-void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const std::string& hint) {
+void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const std::string& hint, bool nextFrame) {
     AIManager& ai = AIManager::getInstance();
     const std::string provider = ai.getActiveProvider();
     if (provider != "Claude" && provider != "Claude Code") {
@@ -613,7 +636,8 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     }
 
     int curFrame = timeline.getCurrentFrame();
-    bool hadSelection = canvas.getSelection().isActive();
+    // A new frame is always the whole canvas, so a selection does not narrow it
+    bool hadSelection = canvas.getSelection().isActive() && !nextFrame;
     sf::FloatRect selBox = canvas.getSelection().getBoundingBox();
     canvas.commitSelection(curFrame);
 
@@ -671,9 +695,10 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
         forgetAssistTurns();
         g_assistTurnsProject = projectKey;
     }
-    g_assistPendingRequest = hint;
+    g_assistPendingRequest = nextFrame ? "[draw the next animation frame] " + hint : hint;
+    g_assistFrameMode = nextFrame;
     g_assistPendingArea = g_assistHasRegion ? g_assistRegion : sf::IntRect(0, 0, req.width, req.height);
-    writeAssistContext(canvas, curFrame, g_assistPendingArea, colorMode != 0 ? &allowedColors : nullptr, g_aiPanel.getAssistOptionCount());
+    writeAssistContext(canvas, curFrame, g_assistPendingArea, colorMode != 0 ? &allowedColors : nullptr, g_aiPanel.getAssistOptionCount(), nextFrame, timeline.getFps());
 
     AIResult res = ai.executeRequest(req);
     if (!res.success) {
@@ -687,12 +712,14 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
 static const sf::FloatRect kPromptSendBounds(1268.f, 780.f, 84.f, 50.f);
 static const sf::FloatRect kPromptCancelBounds(1360.f, 780.f, 84.f, 50.f);
 
-void UIManager::openAIPrompt(bool contour) {
+void UIManager::openAIPrompt(bool contour, bool nextFrame) {
     isTypingPrompt = true;
+    g_assistFramePrompt = nextFrame;
     // The contour entry only pre-fills the request; Claude still reads it as free text
     currentPrompt = contour ? "make contour of " : "";
     promptDisplay.setString("> " + currentPrompt + "_");
-    if (contour) showMessage("Name what to outline (or leave it to outline your drawing), then press Enter", sf::Color(0, 191, 255));
+    if (nextFrame) showMessage("Say what happens in the next frame, or just press Enter to continue the motion", sf::Color(0, 191, 255));
+    else if (contour) showMessage("Name what to outline (or leave it to outline your drawing), then press Enter", sf::Color(0, 191, 255));
     else showMessage("Describe what to draw or change, then press Enter", sf::Color(0, 191, 255));
 }
 
@@ -1285,7 +1312,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     if (isTypingPrompt && event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
         if (kPromptSendBounds.contains(mousePos)) {
             isTypingPrompt = false;
-            startAIAutocomplete(canvas, timeline, currentPrompt);
+            startAIAutocomplete(canvas, timeline, currentPrompt, g_assistFramePrompt);
             return;
         }
         if (kPromptCancelBounds.contains(mousePos)) {
@@ -1369,6 +1396,63 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 canvas.clearHistory();
                 showMessage("Created Project: " + activeProjectName, sf::Color::Green);
             }
+        }
+        else if (res == "accept_frame") {
+            canvas.commitSelection(curFrame);
+            canvas.clearObjectSelection();
+            canvas.duplicateFrame(curFrame);
+            timeline.duplicateFrame(curFrame);
+            timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+            int newFrame = curFrame + 1;
+            timeline.setFrame(newFrame);
+
+            // The new frame starts as a copy, layers and all. What changed goes onto the active layer,
+            // which is the whole story whenever the moving parts live on that layer.
+            bool placed = false;
+            sf::Image untouched;
+            sf::RenderTexture layerTex;
+            if (original.getSize() == result.getSize() && canvas.renderLayerToTexture(newFrame, canvas.getActiveLayer(), layerTex)) {
+                untouched = layerTex.getTexture().copyToImage();
+                if (untouched.getSize() == result.getSize()) {
+                    sf::Image moved = untouched;
+                    for (unsigned int y = 0; y < result.getSize().y; ++y) {
+                        for (unsigned int x = 0; x < result.getSize().x; ++x) {
+                            if (original.getPixel(x, y) != result.getPixel(x, y)) moved.setPixel(x, y, result.getPixel(x, y));
+                        }
+                    }
+                    if (canvas.applyImageToLayer(newFrame, moved, false)) {
+                        sf::Image now = canvas.flattenFrameToImage(newFrame);
+                        placed = now.getSize() == result.getSize()
+                            && std::equal(now.getPixelsPtr(), now.getPixelsPtr() + static_cast<size_t>(now.getSize().x) * now.getSize().y * 4, result.getPixelsPtr());
+                        if (!placed) canvas.applyImageToLayer(newFrame, untouched, false);
+                    }
+                }
+            }
+
+            if (placed) showMessage("Added as frame " + std::to_string(newFrame + 1), sf::Color::Green);
+            else {
+                // Other layers hold parts that moved too, and layer visibility is shared by every frame, so the
+                // copy cannot be patched up. The frame is rebuilt empty and drawn whole onto one visible layer.
+                canvas.deleteFrame(newFrame);
+                timeline.deleteFrame(newFrame);
+                canvas.addFrameAt(newFrame);
+                timeline.addFrameAt(newFrame);
+                timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+                timeline.setFrame(newFrame);
+                if (const Frame* blank = canvas.getFrameReadOnly(newFrame)) {
+                    int target = canvas.getActiveLayer();
+                    int count = static_cast<int>(blank->layers.size());
+                    if (target < 0 || target >= count || !blank->layers[target].visible || blank->layers[target].locked) {
+                        for (int i = count - 1; i >= 0; --i) {
+                            if (blank->layers[i].visible && !blank->layers[i].locked) { target = i; break; }
+                        }
+                    }
+                    canvas.setActiveLayer(target, newFrame);
+                }
+                if (canvas.applyImageToLayer(newFrame, result, false)) showMessage("Added as frame " + std::to_string(newFrame + 1) + ", drawn onto one layer", sf::Color::Green);
+                else showMessage("Could not draw the new frame: no unlocked layer", sf::Color::Red);
+            }
+            setAssistOutcome("the artist kept it, as the next frame", false);
         }
         else if (res == "reject") {
             showMessage("Suggestion discarded", sf::Color::Cyan);
@@ -2168,6 +2252,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     else if (action == "action:ai_ask") {
                         openAIPrompt(false);
                     }
+                    else if (action == "action:ai_next_frame") {
+                        openAIPrompt(false, true);
+                    }
                     else if (action == "close") {
                         canvas.setActiveTool(ToolType::Brush);
                         m_toolDock.SetActiveTool("brush");
@@ -2208,7 +2295,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 if (isTypingPrompt) {
                     if (event.key.code == sf::Keyboard::Enter) {
                         isTypingPrompt = false;
-                        startAIAutocomplete(canvas, timeline, currentPrompt);
+                        startAIAutocomplete(canvas, timeline, currentPrompt, g_assistFramePrompt);
                     }
                     else if (event.key.code == sf::Keyboard::Escape) {
                         isTypingPrompt = false;
@@ -3139,6 +3226,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                     }
                 }
                 g_aiReviewModal.open(regionFits ? g_assistFullImage : originalImage, shown);
+                g_aiReviewModal.setNextFrameMode(g_assistFrameMode);
                 if (shown.size() > 1) showMessage(std::to_string(shown.size()) + " options ready: pick one with the arrows", sf::Color::Green);
                 else showMessage("Suggestion ready", sf::Color::Green);
 
@@ -3438,6 +3526,10 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             WisdomUI::Theme::DrawSunsetButton(window, kPromptSendBounds, "Send", font, 14, false, kPromptSendBounds.contains(promptMouse), true, 1.0f);
             WisdomUI::Theme::DrawSunsetButton(window, kPromptCancelBounds, "Cancel", font, 14, false, kPromptCancelBounds.contains(promptMouse), false, 1.0f);
             float hintY = 838.f;
+            if (g_assistFramePrompt) {
+                WisdomUI::Theme::DrawCrispText(window, font, "Next frame: say what happens, or leave it empty to continue the motion.", 15, 664.f, hintY, WisdomUI::Theme::SunsetGold, sf::Color(0, 0, 0, 200), false, true);
+                hintY += 22.f;
+            }
             if (!g_assistTurns.empty() && g_assistTurnsProject == activeProjectPath + "|" + activeProjectName) {
                 std::string memo = "Remembers your last " + std::string(g_assistTurns.size() == 1 ? "request" : std::to_string(g_assistTurns.size()) + " requests")
                     + ", so you can follow up (\"bigger\", \"try again\"). Tab starts fresh.";

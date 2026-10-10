@@ -20,7 +20,7 @@
 
 AIPanel::AIPanel()
     : position(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY),
-    size(360.f, 430.f),
+    size(360.f, 468.f),
     isVisible(false),
     isDraggingPanel(false),
     selectedPaletteIdx(0),
@@ -414,9 +414,10 @@ void AIPanel::update(float dt) {
     aiContourBtnBounds = sf::FloatRect(bx + 20.f + thirdW, by + 300.f, thirdW, 32.f);
     aiAskBtnBounds = sf::FloatRect(bx + 24.f + thirdW * 2.f, by + 300.f, thirdW, 32.f);
     float colorsW = (size.x - 36.f) * 0.62f;
-    aiColorsBtnBounds = sf::FloatRect(bx + 16.f, by + 338.f, colorsW, 28.f);
-    aiOptionsBtnBounds = sf::FloatRect(bx + 20.f + colorsW, by + 338.f, size.x - 36.f - colorsW, 28.f);
-    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 378.f, size.x - 32.f, 28.f);
+    aiNextFrameBtnBounds = sf::FloatRect(bx + 16.f, by + 338.f, size.x - 32.f, 32.f);
+    aiColorsBtnBounds = sf::FloatRect(bx + 16.f, by + 376.f, colorsW, 28.f);
+    aiOptionsBtnBounds = sf::FloatRect(bx + 20.f + colorsW, by + 376.f, size.x - 36.f - colorsW, 28.f);
+    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 416.f, size.x - 32.f, 28.f);
 
     float listY = dropdownBtnBounds.top + dropdownBtnBounds.height + 2.f;
     float listH = 160.f;
@@ -499,6 +500,10 @@ void AIPanel::draw(sf::RenderWindow& window) {
     bool hovAsk = aiAskBtnBounds.contains(mPos);
     if (hovAsk) hoveredTooltip = "Type any request for the assistant to carry out on the canvas [Ctrl+Shift+Space]";
     WisdomUI::Theme::DrawSunsetButton(window, aiAskBtnBounds, "Ask Assistant", font, 12, false, hovAsk, false, 1.0f);
+
+    bool hovNextFrame = aiNextFrameBtnBounds.contains(mPos);
+    if (hovNextFrame) hoveredTooltip = "The assistant draws the next animation frame after this one; say what happens, or let it continue the motion";
+    WisdomUI::Theme::DrawSunsetButton(window, aiNextFrameBtnBounds, "Draw Next Frame", font, 12, false, hovNextFrame, false, 1.0f);
 
     static const char* kColorModes[] = { "Colours: Free", "Colours: Drawing Only", "Colours: This Palette" };
     bool hovColors = aiColorsBtnBounds.contains(mPos);
@@ -638,6 +643,11 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
 
         if (aiAskBtnBounds.contains(mousePos)) {
             pendingAction = "action:ai_ask";
+            return true;
+        }
+
+        if (aiNextFrameBtnBounds.contains(mousePos)) {
+            pendingAction = "action:ai_next_frame";
             return true;
         }
 

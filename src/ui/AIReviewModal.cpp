@@ -62,6 +62,7 @@ void AIReviewModal::open(const sf::Image& originalImg, const sf::Image& resultIm
     resultSavedImage = resultImg;
     options.assign(1, resultImg);
     optionIndex = 0;
+    nextFrameMode = false;
 
     if (originalImg.getSize().x > 0 && originalImg.getSize().y > 0) {
         originalTexture.loadFromImage(originalImg);
@@ -116,7 +117,7 @@ void AIReviewModal::draw(sf::RenderWindow& window) {
     window.draw(originalView);
     window.draw(resultView);
 
-    WisdomUI::Theme::DrawCrispText(window, font, "SOURCE CANVAS", 12, 330.f + 290.f, 195.f, WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, nextFrameMode ? "THIS FRAME" : "SOURCE CANVAS", 12, 330.f + 290.f, 195.f, WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
     if (options.size() > 1) {
@@ -126,7 +127,13 @@ void AIReviewModal::draw(sf::RenderWindow& window) {
         WisdomUI::Theme::DrawSunsetButton(window, nextOptionBounds, ">", font, 14, false, nextOptionBounds.contains(mPos), false, 1.0f);
     }
     else {
-        WisdomUI::Theme::DrawCrispText(window, font, "GENERATED OUTPUT", 12, 1010.f + 290.f, 195.f, WisdomUI::Theme::SunsetGold, sf::Color::Transparent, true, true);
+        WisdomUI::Theme::DrawCrispText(window, font, nextFrameMode ? "NEXT FRAME" : "GENERATED OUTPUT", 12, 1010.f + 290.f, 195.f, WisdomUI::Theme::SunsetGold, sf::Color::Transparent, true, true);
+    }
+
+    if (nextFrameMode) {
+        WisdomUI::Theme::DrawSunsetButton(window, acceptNewLayerBtn.getGlobalBounds(), "Add As Next Frame", font, 12, false, acceptNewLayerBtn.getGlobalBounds().contains(mPos), true, 1.0f);
+        WisdomUI::Theme::DrawSunsetButton(window, rejectBtn.getGlobalBounds(), "Discard Result", font, 12, false, rejectBtn.getGlobalBounds().contains(mPos), true, 1.0f);
+        return;
     }
 
     WisdomUI::Theme::DrawSunsetButton(window, acceptNewLayerBtn.getGlobalBounds(), "Accept New Layer", font, 12, false, acceptNewLayerBtn.getGlobalBounds().contains(mPos), true, 1.0f);
@@ -146,7 +153,14 @@ std::string AIReviewModal::handleEvent(const sf::Event& event, sf::Vector2f mous
         if (options.size() > 1 && nextOptionBounds.contains(mousePos)) showOption(optionIndex + 1);
         if (acceptNewLayerBtn.getGlobalBounds().contains(mousePos)) {
             close();
-            return "accept_new";
+            return nextFrameMode ? "accept_frame" : "accept_new";
+        }
+        if (nextFrameMode) {
+            if (rejectBtn.getGlobalBounds().contains(mousePos)) {
+                close();
+                return "reject";
+            }
+            return "consumed";
         }
         if (replaceLayerBtn.getGlobalBounds().contains(mousePos)) {
             close();

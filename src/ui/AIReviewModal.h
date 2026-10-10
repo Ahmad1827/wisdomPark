@@ -35,6 +35,9 @@ private:
     sf::FloatRect prevOptionBounds;
     sf::FloatRect nextOptionBounds;
 
+    // The result is a new animation frame rather than an edit of this one
+    bool nextFrameMode = false;
+
     void showOption(int index);
 
     bool isOpen;
@@ -44,6 +47,7 @@ public:
     void init();
     void open(const sf::Image& originalImg, const sf::Image& resultImg);
     void open(const sf::Image& originalImg, const std::vector<sf::Image>& resultOptions);
+    void setNextFrameMode(bool enabled) { nextFrameMode = enabled; }
     int getOptionIndex() const { return optionIndex; }
     int getOptionCount() const { return static_cast<int>(options.size()); }
     void close();

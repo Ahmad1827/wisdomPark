@@ -334,8 +334,8 @@ private:
     void drawBackButton(sf::RenderWindow& window, const std::string& hoverKey, float x, float y);
 
     bool triggerSave(Canvas& canvas, Timeline& timeline);
-    void startAIAutocomplete(Canvas& canvas, Timeline& timeline, const std::string& hint);
-    void openAIPrompt(bool contour);
+    void startAIAutocomplete(Canvas& canvas, Timeline& timeline, const std::string& hint, bool nextFrame = false);
+    void openAIPrompt(bool contour, bool nextFrame = false);
 
     std::string m_pendingCheckoutHash;
 

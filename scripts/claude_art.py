@@ -10,7 +10,8 @@ which the app shows on its loading screen.
 temp_ai_context.json, when the app wrote one, adds what the flat canvas cannot show:
 the separate layers of the frame, and the requests made earlier in this project with
 what the artist did with each result, so a follow-up such as "bigger" makes sense.
-It can also hold a colour limit (the only colours new work may use) and a number of
+For an animation it lists the neighbouring frames, and it can ask for the next frame
+to be drawn instead of an edit to this one. It can also hold a colour limit (the only colours new work may use) and a number of
 options to make; extra options are written to temp_ai_output_2.png and _3.png.
 
 The job arrives on stdin so neither the API key nor the user's prompt ever
@@ -212,6 +213,53 @@ OPTION_ANGLES = [
     "while still doing exactly what was asked.",
 ]
 
+FRAMES = """\
+This drawing is frame {number} of {count} in an animation that plays at {fps} frames a
+second. Its neighbouring frames are given here for reference, each with its own palette
+and written in the same format as the canvas:
+
+{frames}
+
+"""
+
+FRAMES_CONSISTENT = """\
+Whatever you change should hold up when the animation plays: the same subject keeps the
+same proportions, colours and line weight from one frame to the next.
+"""
+
+# The artist asked for the following frame of the animation rather than an edit.
+TASK_NEXT_FRAME = """\
+The canvas is one frame of an animation. The artist has asked you to draw the frame
+that comes right after it{between}. What you return is that new frame, complete. It is
+a new drawing of the same scene a moment later, not an edit of this frame.
+
+{direction}
+
+- Stay on model. Proportions, colours, outline weight and level of detail match this
+  frame, so the two read as the same drawing when they are flipped back and forth.
+- Move only what moves. At {fps} frames a second one frame is a small step: a moving
+  part travels a pixel or a few, not across the canvas. Everything at rest stays where
+  it is pixel for pixel, because any stray change shows up as flicker in playback.
+- When earlier frames are given, work out the motion from them (what moved, in which
+  direction, how far per frame) and take it one step further, including easing if the
+  steps are getting smaller or larger.
+- Keep the framing. The subject is not recentred or rescaled unless the motion itself
+  carries it.
+- The artist's currently selected colour is {color}. It is only for something new that
+  appears in the frame; what is already drawn keeps its colours.
+"""
+
+DIRECTION_GIVEN = 'The artist described what happens: "{request}"'
+DIRECTION_OPEN = (
+    "The artist gave no direction. Continue the motion the earlier frames show. If there "
+    "are no earlier frames, or nothing moves in them, begin a small natural movement that "
+    "suits the subject, such as a blink, a breath or a flick of a tail."
+)
+BETWEEN = (
+    " and before the frame that follows it, which is given below, so it has to work as "
+    "the in-between of the two"
+)
+
 RESULT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -349,7 +397,18 @@ def format_rules(img):
     return FORMAT_RULES.format(width=img.width, height=img.height, max_colors=len(SYMBOLS))
 
 
+# Set once in main() from the context file: None for an edit, or a dict describing the
+# animation when the artist asked for the next frame.
+NEXT_FRAME = None
+
+
 def task_text(hint, color):
+    if NEXT_FRAME is not None:
+        return TASK_NEXT_FRAME.format(
+            between=BETWEEN if NEXT_FRAME["has_following"] else "",
+            direction=DIRECTION_GIVEN.format(request=hint) if hint else DIRECTION_OPEN,
+            fps=NEXT_FRAME["fps"], color=color,
+        )
     return TASK_REQUEST.format(request=hint, color=color) if hint else TASK_FINISH
 
 
@@ -457,13 +516,46 @@ def color_limit_text(allowed):
     return COLOR_LIMIT.format(colors=" ".join("#%02x%02x%02x" % c for c in allowed)) + "\n"
 
 
+def frames_text(ctx, size):
+    """Returns (text, renders) for the frames around this one, nearest first in the budget."""
+    frames = [f for f in ctx.get("frames", []) if isinstance(f, dict)]
+    current = int(ctx.get("frame", 1))
+    budget = LAYER_CELL_BUDGET
+    shown = {}
+    for frame in sorted(frames, key=lambda f: abs(int(f.get("number", 0)) - current)):
+        img = open_matching(frame.get("file", ""), size)
+        if img is None or budget < size[0] * size[1]:
+            continue
+        budget -= size[0] * size[1]
+        shown[int(frame.get("number", 0))] = img
+    if not shown:
+        return "", []
+
+    lines = []
+    for number in sorted(shown):
+        where = "before this one" if number < current else "after this one"
+        lines.append(f"Frame {number} ({where}):\n{canvas_json(*encode_canvas(shown[number]))}")
+    text = FRAMES.format(number=current, count=ctx.get("frame_count", len(shown) + 1),
+                         fps=ctx.get("fps", 12), frames="\n\n".join(lines))
+    if NEXT_FRAME is None:
+        text += FRAMES_CONSISTENT + "\n"
+    renders = []
+    if current - 1 in shown:
+        renders.append(("frame_before.png", f"frame {current - 1}, the one before the canvas", shown[current - 1]))
+    if current + 1 in shown:
+        renders.append(("frame_after.png", f"frame {current + 1}, the one after the canvas", shown[current + 1]))
+    return text, renders
+
+
 def build_context(ctx, size):
-    """Returns (text for the prompt, the discarded last result or None)."""
-    text = layers_text(ctx, size) + history_text(ctx)
+    """Returns (text for the prompt, extra renders to show alongside the canvas)."""
+    frames, renders = frames_text(ctx, size)
+    text = layers_text(ctx, size) + frames + history_text(ctx)
     previous = open_matching(ctx["previous"], size) if ctx.get("previous") and ctx.get("history") else None
     if previous is not None:
         text += PREVIOUS.format(previous_json=canvas_json(*encode_canvas(previous))) + "\n"
-    return text, previous
+        renders.append(("discarded.png", "your last result, which the artist discarded", previous))
+    return text, renders
 
 
 def image_note(backend, images):
@@ -573,9 +665,7 @@ def ask(backend, api_key, prompt, images, schema):
 
 def first_pass(backend, api_key, img, hint, color, context, previous):
     palette, rows = encode_canvas(img)
-    images = [("canvas.png", "the canvas", img)]
-    if previous is not None:
-        images.append(("discarded.png", "your last result, which the artist discarded", previous))
+    images = [("canvas.png", "the canvas", img)] + previous
     prompt = INSTRUCTIONS.format(
         width=img.width, height=img.height, symbols=SYMBOLS,
         canvas_json=canvas_json(palette, rows),
@@ -638,6 +728,13 @@ def main():
             raise BridgeError(f"Unknown backend '{backend}'.")
 
         ctx = load_context()
+        global NEXT_FRAME
+        if ctx.get("mode") == "next_frame":
+            current = int(ctx.get("frame", 1))
+            NEXT_FRAME = {
+                "fps": ctx.get("fps", 12),
+                "has_following": any(isinstance(f, dict) and f.get("number") == current + 1 for f in ctx.get("frames", [])),
+            }
         context, previous = build_context(ctx, img.size)
         allowed = allowed_colors(ctx, img, color)
         context += color_limit_text(allowed)
@@ -674,7 +771,10 @@ def main():
                     edit.save(OUTPUT_PATH)
             return edit
 
-        set_status("Sketching it out" if total == 1 else f"Sketching {total} options")
+        if NEXT_FRAME is not None:
+            set_status("Drawing the next frame" if total == 1 else f"Drawing {total} takes on the next frame")
+        else:
+            set_status("Sketching it out" if total == 1 else f"Sketching {total} options")
         with ThreadPoolExecutor(max_workers=total) as pool:
             sketches = list(pool.map(sketch, range(1, total + 1)))
             jobs = [(n, s) for n, s in enumerate(sketches, 1) if not isinstance(s, BridgeError)]
