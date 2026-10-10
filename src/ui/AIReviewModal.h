@@ -38,6 +38,7 @@ public:
     void close();
     bool getIsOpen() const;
     const sf::Image& getResultImage() const;
+    const sf::Image& getOriginalImage() const;
     void draw(sf::RenderWindow& window);
     std::string handleEvent(const sf::Event& event, sf::Vector2f mousePos);
 };

@@ -50,6 +50,7 @@ public:
     void removeApiKey(const std::string& providerName);
 
     bool testConnection(const std::string& providerName);
+    bool providerRequiresApiKey(const std::string& providerName) const;
 
     void setAIEnabled(bool enabled);
     bool isAIEnabled() const;

@@ -46,10 +46,13 @@ void AIReviewModal::open(const sf::Image& originalImg, const sf::Image& resultIm
     if (originalImg.getSize().x > 0 && originalImg.getSize().y > 0) {
         originalTexture.loadFromImage(originalImg);
         originalView.setTexture(&originalTexture);
+        // A fill colour tints the texture, so it has to be white for the preview to show true colours
+        originalView.setFillColor(sf::Color::White);
     }
     if (resultImg.getSize().x > 0 && resultImg.getSize().y > 0) {
         resultTexture.loadFromImage(resultImg);
         resultView.setTexture(&resultTexture);
+        resultView.setFillColor(sf::Color::White);
     }
 }
 
@@ -57,6 +60,8 @@ void AIReviewModal::close() {
     isOpen = false;
     originalView.setTexture(nullptr);
     resultView.setTexture(nullptr);
+    originalView.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    resultView.setFillColor(WisdomUI::Theme::SunsetDeepDark);
 }
 
 bool AIReviewModal::getIsOpen() const {
@@ -65,6 +70,10 @@ bool AIReviewModal::getIsOpen() const {
 
 const sf::Image& AIReviewModal::getResultImage() const {
     return resultSavedImage;
+}
+
+const sf::Image& AIReviewModal::getOriginalImage() const {
+    return originalSavedImage;
 }
 
 void AIReviewModal::draw(sf::RenderWindow& window) {
@@ -76,6 +85,13 @@ void AIReviewModal::draw(sf::RenderWindow& window) {
     WisdomUI::Theme::DrawSunsetPanel(window, modalBounds, 1.0f);
 
     WisdomUI::Theme::DrawCrispText(window, font, ":: AI GENERATION REVIEW ::", 18, 960.f, modalBounds.top + 28.f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+
+    sf::RectangleShape viewBg(originalView.getSize());
+    viewBg.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    viewBg.setPosition(originalView.getPosition());
+    window.draw(viewBg);
+    viewBg.setPosition(resultView.getPosition());
+    window.draw(viewBg);
 
     window.draw(originalView);
     window.draw(resultView);

@@ -20,7 +20,7 @@
 
 AIPanel::AIPanel()
     : position(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY),
-    size(360.f, 350.f),
+    size(360.f, 392.f),
     isVisible(false),
     isDraggingPanel(false),
     selectedPaletteIdx(0),
@@ -409,7 +409,11 @@ void AIPanel::update(float dt) {
 
     suggestBtnBounds = sf::FloatRect(bx + 16.f, by + 214.f, size.x - 32.f, 40.f);
     sendAllBtnBounds = sf::FloatRect(bx + 16.f, by + 260.f, size.x - 32.f, 32.f);
-    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 298.f, size.x - 32.f, 28.f);
+    float thirdW = (size.x - 40.f) / 3.f;
+    aiFinishBtnBounds = sf::FloatRect(bx + 16.f, by + 300.f, thirdW, 32.f);
+    aiContourBtnBounds = sf::FloatRect(bx + 20.f + thirdW, by + 300.f, thirdW, 32.f);
+    aiAskBtnBounds = sf::FloatRect(bx + 24.f + thirdW * 2.f, by + 300.f, thirdW, 32.f);
+    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 340.f, size.x - 32.f, 28.f);
 
     float listY = dropdownBtnBounds.top + dropdownBtnBounds.height + 2.f;
     float listH = 160.f;
@@ -480,6 +484,18 @@ void AIPanel::draw(sf::RenderWindow& window) {
     bool hovSend = sendAllBtnBounds.contains(mPos);
     if (hovSend) hoveredTooltip = "Transfer all swatches from this palette to Colors panel";
     WisdomUI::Theme::DrawSunsetButton(window, sendAllBtnBounds, "--> Send All to Colors Panel", font, 13, false, hovSend, false, 1.0f);
+
+    bool hovFinish = aiFinishBtnBounds.contains(mPos);
+    if (hovFinish) hoveredTooltip = "Claude finishes the drawing on this frame [Ctrl+Space]";
+    WisdomUI::Theme::DrawSunsetButton(window, aiFinishBtnBounds, "Finish Drawing", font, 12, false, hovFinish, true, 1.0f);
+
+    bool hovContour = aiContourBtnBounds.contains(mPos);
+    if (hovContour) hoveredTooltip = "Claude draws a contour of what you name, or of your drawing [Ctrl+Shift+O]";
+    WisdomUI::Theme::DrawSunsetButton(window, aiContourBtnBounds, "Make Contour", font, 12, false, hovContour, false, 1.0f);
+
+    bool hovAsk = aiAskBtnBounds.contains(mPos);
+    if (hovAsk) hoveredTooltip = "Type any request for Claude to carry out on the canvas [Ctrl+Shift+Space]";
+    WisdomUI::Theme::DrawSunsetButton(window, aiAskBtnBounds, "Ask Claude", font, 12, false, hovAsk, false, 1.0f);
 
     bool hovClose = closeBtnBounds.contains(mPos);
     if (hovClose) hoveredTooltip = "Close Color Assistant";
@@ -595,6 +611,21 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
 
         if (sendAllBtnBounds.contains(mousePos)) {
             pendingAction = "action:send_all_swatches";
+            return true;
+        }
+
+        if (aiFinishBtnBounds.contains(mousePos)) {
+            pendingAction = "action:ai_finish";
+            return true;
+        }
+
+        if (aiContourBtnBounds.contains(mousePos)) {
+            pendingAction = "action:ai_contour";
+            return true;
+        }
+
+        if (aiAskBtnBounds.contains(mousePos)) {
+            pendingAction = "action:ai_ask";
             return true;
         }
 

@@ -24,6 +24,9 @@ private:
     sf::FloatRect randomBtnBounds;
     sf::FloatRect suggestBtnBounds;
     sf::FloatRect sendAllBtnBounds;
+    sf::FloatRect aiFinishBtnBounds;
+    sf::FloatRect aiContourBtnBounds;
+    sf::FloatRect aiAskBtnBounds;
     sf::FloatRect closeBtnBounds;
 
     std::vector<std::pair<sf::FloatRect, sf::Color>> paletteSwatchBounds;

@@ -533,6 +533,43 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
     }
 }
 
+void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const std::string& hint) {
+    AIManager& ai = AIManager::getInstance();
+    const std::string provider = ai.getActiveProvider();
+    if (provider != "Claude" && provider != "Claude Code") {
+        showMessage("This needs the Claude or Claude Code provider (Settings)", sf::Color::Red);
+        return;
+    }
+
+    int curFrame = timeline.getCurrentFrame();
+    canvas.commitSelection(curFrame);
+
+    AIRequest req;
+    req.prompt = hint;
+    req.operation = AIOperation::Edit;
+    req.baseImage = canvas.flattenFrameToImage(curFrame);
+    req.isPixelMode = canvas.getPixelMode();
+    req.primaryColor = canvas.getPrimaryColor();
+    req.width = static_cast<int>(req.baseImage.getSize().x);
+    req.height = static_cast<int>(req.baseImage.getSize().y);
+
+    AIResult res = ai.executeRequest(req);
+    if (!res.success) showMessage("AI: " + res.errorMessage, sf::Color::Red);
+}
+
+// Send / Cancel sit to the right of the request box (promptBox is 600x50 at 660,780)
+static const sf::FloatRect kPromptSendBounds(1268.f, 780.f, 84.f, 50.f);
+static const sf::FloatRect kPromptCancelBounds(1360.f, 780.f, 84.f, 50.f);
+
+void UIManager::openAIPrompt(bool contour) {
+    isTypingPrompt = true;
+    // The contour entry only pre-fills the request; Claude still reads it as free text
+    currentPrompt = contour ? "make contour of " : "";
+    promptDisplay.setString("> " + currentPrompt + "_");
+    if (contour) showMessage("Name what to outline (or leave it to outline your drawing), then press Enter", sf::Color(0, 191, 255));
+    else showMessage("Ask Claude: describe what to draw or change, then press Enter", sf::Color(0, 191, 255));
+}
+
 void UIManager::showMessage(const std::string& msg, sf::Color color) {
     uiText.setString(msg);
     uiText.setFillColor(color);
@@ -1122,6 +1159,68 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         return;
     }
 
+    if (isTypingPrompt && event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        if (kPromptSendBounds.contains(mousePos)) {
+            isTypingPrompt = false;
+            startAIAutocomplete(canvas, timeline, currentPrompt);
+            return;
+        }
+        if (kPromptCancelBounds.contains(mousePos)) {
+            isTypingPrompt = false;
+            return;
+        }
+        if (promptBox.getGlobalBounds().contains(mousePos)) return;
+    }
+
+    if (g_aiReviewModal.getIsOpen()) {
+        std::string res = g_aiReviewModal.handleEvent(event, mousePos);
+        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+            g_aiReviewModal.close();
+            res = "reject";
+        }
+
+        const sf::Image original = g_aiReviewModal.getOriginalImage();
+        const sf::Image result = g_aiReviewModal.getResultImage();
+        int curFrame = timeline.getCurrentFrame();
+
+        if (res == "accept_new") {
+            // Only the pixels the AI changed go on the new layer, so the existing layers stay untouched underneath
+            sf::Image added = result;
+            sf::Vector2u origSize = original.getSize();
+            for (unsigned int y = 0; y < added.getSize().y && y < origSize.y; ++y) {
+                for (unsigned int x = 0; x < added.getSize().x && x < origSize.x; ++x) {
+                    if (original.getPixel(x, y) == result.getPixel(x, y)) added.setPixel(x, y, sf::Color::Transparent);
+                }
+            }
+            if (canvas.applyImageToLayer(curFrame, added, true, "AI Autocomplete")) showMessage("AI result added as new layer", sf::Color::Green);
+            else showMessage("Could not add AI layer", sf::Color::Red);
+        }
+        else if (res == "accept_replace") {
+            if (canvas.applyImageToLayer(curFrame, result, false)) showMessage("Layer replaced with AI result", sf::Color::Green);
+            else showMessage("Active layer is locked", sf::Color::Red);
+        }
+        else if (res == "accept_project") {
+            if (canvas.getIsDirty()) {
+                g_aiReviewModal.open(original, result);
+                showMessage("Save the current project first", sf::Color::Red);
+            }
+            else {
+                activeProjectName = "AI_Art_" + std::to_string(static_cast<long long>(std::time(nullptr)));
+                activeProjectPath = "projects/" + activeProjectName + ".wpk";
+                canvas.clearCanvasImages();
+                canvas.clearObjectSelection();
+                pm.createNewProject(activeProjectName, static_cast<int>(result.getSize().x), static_cast<int>(result.getSize().y), 12, canvas.getPixelMode(), canvas);
+                canvas.applyImageToLayer(timeline.getCurrentFrame(), result, false);
+                canvas.clearHistory();
+                showMessage("Created Project: " + activeProjectName, sf::Color::Green);
+            }
+        }
+        else if (res == "reject") {
+            showMessage("AI result discarded", sf::Color::Cyan);
+        }
+        return;
+    }
+
     if (currentState == AppState::Welcome) {
         if (m_showKeybinds) {
             handleKeybindModalEvent(event, window);
@@ -1336,7 +1435,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             if (dir != 0) AIManager::getInstance().cycleProvider(dir);
                             break;
                         case SettingId::ApiKey:
-                            clickedKeyField = TextField(rowRect).contains(mousePos);
+                            clickedKeyField = TextField(rowRect).contains(mousePos) && AIManager::getInstance().providerRequiresApiKey(AIManager::getInstance().getActiveProvider());
                             break;
                         default:
                             break;
@@ -1852,7 +1951,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             return;
         }
 
-        if (g_aiPanel.getIsVisible()) {
+        // While the request box is open, typing must reach it even with the mouse still over the panel
+        bool promptKeyEvent = isTypingPrompt && (event.type == sf::Event::TextEntered || event.type == sf::Event::KeyPressed || event.type == sf::Event::KeyReleased);
+        if (g_aiPanel.getIsVisible() && !promptKeyEvent) {
             if (g_aiPanel.handleEvent(event, mousePos)) {
                 if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
                     std::string action = g_aiPanel.handleClick(mousePos);
@@ -1902,6 +2003,15 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             showMessage("Added Color Advice Palette (Max 5)", sf::Color::Green);
                         }
                     }
+                    else if (action == "action:ai_finish") {
+                        startAIAutocomplete(canvas, timeline, "");
+                    }
+                    else if (action == "action:ai_contour") {
+                        openAIPrompt(true);
+                    }
+                    else if (action == "action:ai_ask") {
+                        openAIPrompt(false);
+                    }
                     else if (action == "close") {
                         canvas.setActiveTool(ToolType::Brush);
                         m_toolDock.SetActiveTool("brush");
@@ -1932,16 +2042,28 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                 return;
             }
             if (m_textManager.getEditingText() == nullptr) {
-                if (event.key.code == sf::Keyboard::Numpad6) {
-                    isTypingPrompt = !isTypingPrompt;
-                    if (isTypingPrompt) {
-                        currentPrompt = "";
-                        promptDisplay.setString("> _");
-                        showMessage("Legacy Terminal (Use AI Panel on the left)", sf::Color(0, 191, 255));
-                    }
+                bool contourPrompt = keybindManager.isActionTriggered("ai_contour", event);
+                if (event.key.code == sf::Keyboard::Numpad6 || contourPrompt || keybindManager.isActionTriggered("ai_prompt", event)) {
+                    if (isTypingPrompt) isTypingPrompt = false;
+                    else openAIPrompt(contourPrompt);
+                    return;
                 }
 
-                if (isTypingPrompt) return;
+                if (isTypingPrompt) {
+                    if (event.key.code == sf::Keyboard::Enter) {
+                        isTypingPrompt = false;
+                        startAIAutocomplete(canvas, timeline, currentPrompt);
+                    }
+                    else if (event.key.code == sf::Keyboard::Escape) {
+                        isTypingPrompt = false;
+                    }
+                    return;
+                }
+
+                if (keybindManager.isActionTriggered("ai_complete", event)) {
+                    startAIAutocomplete(canvas, timeline, "");
+                    return;
+                }
                 if (!event.key.control && !event.key.alt) {
                     int curFrame = timeline.getCurrentFrame();
                     if (event.key.code == sf::Keyboard::Num1) {
@@ -3110,6 +3232,9 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         if (isTypingPrompt) {
             window.draw(promptBox);
             window.draw(promptDisplay);
+            sf::Vector2f promptMouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+            WisdomUI::Theme::DrawSunsetButton(window, kPromptSendBounds, "Send", font, 14, false, kPromptSendBounds.contains(promptMouse), true, 1.0f);
+            WisdomUI::Theme::DrawSunsetButton(window, kPromptCancelBounds, "Cancel", font, 14, false, kPromptCancelBounds.contains(promptMouse), false, 1.0f);
         }
 
         keybindPanel.draw(window);

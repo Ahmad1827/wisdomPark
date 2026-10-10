@@ -16,6 +16,7 @@ void AIManager::init() {
     registerProvider(std::make_shared<GeminiProvider>());
     registerProvider(std::make_shared<OpenAIProvider>());
     registerProvider(std::make_shared<ClaudeProvider>());
+    registerProvider(std::make_shared<ClaudeCodeProvider>());
     registerProvider(std::make_shared<OpenRouterProvider>());
     registerProvider(std::make_shared<OllamaProvider>());
     loadSettingsLocally();
@@ -98,6 +99,11 @@ bool AIManager::testConnection(const std::string& providerName) {
     return false;
 }
 
+bool AIManager::providerRequiresApiKey(const std::string& providerName) const {
+    auto it = providers.find(providerName);
+    return it == providers.end() || it->second->requiresApiKey();
+}
+
 void AIManager::setAIEnabled(bool enabled) {
     aiEnabled = enabled;
     saveSettingsLocally();
@@ -149,51 +155,30 @@ void AIManager::addHistory(const std::string& prompt, const std::string& negativ
 const std::vector<AIPromptHistory>& AIManager::getHistory() const { return history; }
 
 static void asyncAIWorker(std::shared_ptr<AIProvider> provider, AIRequest request) {
-    g_asyncResult = provider->process(request);
+    AIResult result = provider->process(request);
     if (AIManager::getInstance().isTaskAborted()) {
         AIManager::getInstance().resetAbortTask();
-        g_asyncResult.success = false;
-        g_asyncResult.errorMessage = "Task canceled by user.";
-
-        // CRITICAL FIX: No 'return;' here! 
-        // We let it fall through to the bottom of the function so the UI unlocks!
+        result.success = false;
+        result.errorMessage = "Task canceled by user.";
     }
-    else {
-        // Check if the external python file actually dropped the output asset
-        if (std::filesystem::exists("temp_ai_output.png")) {
-            sf::Image loadedResult;
-            if (loadedResult.loadFromFile("temp_ai_output.png")) {
-                g_asyncResult.resultImage = loadedResult;
-                g_asyncResult.success = true;
-            }
-            else {
-                g_asyncResult.success = false;
-                g_asyncResult.errorMessage = "Output file corrupted or unreadable.";
-            }
-        }
-        else {
-            g_asyncResult.success = false;
-            g_asyncResult.errorMessage = "Python script failed to drop asset.";
-        }
-    }
-    // Check if the external python file actually dropped the output asset
-    if (std::filesystem::exists("temp_ai_output.png")) {
+    else if (std::filesystem::exists("temp_ai_output.png")) {
+        // Check that the external python file dropped a usable output asset
         sf::Image loadedResult;
         if (loadedResult.loadFromFile("temp_ai_output.png")) {
-            g_asyncResult.resultImage = loadedResult;
-            g_asyncResult.success = true;
+            result.resultImage = loadedResult;
+            result.success = true;
         }
         else {
-            g_asyncResult.success = false;
-            g_asyncResult.errorMessage = "Output file corrupted or unreadable.";
+            result.success = false;
+            result.errorMessage = "Output file corrupted or unreadable.";
         }
     }
     else {
-        g_asyncResult.success = false;
-        // Provide clear diagnostic info to the user
-        g_asyncResult.errorMessage = "Script failed to write 'temp_ai_output.png'. Check API Key / Console.";
+        result.success = false;
+        if (result.errorMessage.empty()) result.errorMessage = "Script failed to write 'temp_ai_output.png'. Check API Key / Console.";
     }
 
+    g_asyncResult = result;
     g_aiFinished = true;
     g_aiProcessing = false;
 }
@@ -209,7 +194,7 @@ AIResult AIManager::executeRequest(const AIRequest& request) {
     if (!aiEnabled || activeProvider.empty() || providers.find(activeProvider) == providers.end()) {
         res.success = false; res.errorMessage = "AI is disabled or no provider configured."; return res;
     }
-    if (activeProvider != "Ollama (Local)" && (apiKeys.find(activeProvider) == apiKeys.end() || apiKeys[activeProvider].empty())) {
+    if (providers[activeProvider]->requiresApiKey() && (apiKeys.find(activeProvider) == apiKeys.end() || apiKeys[activeProvider].empty())) {
         res.success = false; res.errorMessage = "API key missing for provider: " + activeProvider; return res;
     }
 

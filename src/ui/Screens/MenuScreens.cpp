@@ -170,9 +170,11 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         }
         case SettingKind::TextField: {
             std::string keyDisplay = ai.getApiKey(ai.getActiveProvider());
-            if (keyDisplay.empty()) keyDisplay = g_typingApiKey ? "" : "Click to enter key...";
+            bool needsKey = ai.providerRequiresApiKey(ai.getActiveProvider());
+            if (!needsKey) keyDisplay = "Not needed for this provider";
+            else if (keyDisplay.empty()) keyDisplay = g_typingApiKey ? "" : "Click to enter key...";
             else keyDisplay = std::string(std::min(static_cast<size_t>(16), keyDisplay.length()), '*');
-            if (g_typingApiKey) keyDisplay += "_";
+            if (g_typingApiKey && needsKey) keyDisplay += "_";
 
             sf::FloatRect field = TextField(r);
             sf::RectangleShape box(sf::Vector2f(field.width, field.height));

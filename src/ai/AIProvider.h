@@ -26,6 +26,7 @@ struct AIRequest {
     int width = 0;
     int height = 0;
     float transparency = 1.0f;
+    sf::Color primaryColor = sf::Color::Black;
 };
 
 struct AIResult {
@@ -43,6 +44,7 @@ public:
     virtual bool testConnection() = 0;
     virtual AIResult process(const AIRequest& request) = 0;
     virtual std::string getName() const = 0;
+    virtual bool requiresApiKey() const { return true; }
 };
 
 class GeminiProvider : public AIProvider {
@@ -66,6 +68,15 @@ public:
     std::string getName() const override;
 };
 
+// Claude through the user's own Claude Code login instead of an API key.
+class ClaudeCodeProvider : public AIProvider {
+public:
+    bool testConnection() override;
+    AIResult process(const AIRequest& request) override;
+    std::string getName() const override;
+    bool requiresApiKey() const override { return false; }
+};
+
 class OpenRouterProvider : public AIProvider {
 public:
     bool testConnection() override;
@@ -78,4 +89,5 @@ public:
     bool testConnection() override;
     AIResult process(const AIRequest& request) override;
     std::string getName() const override;
+    bool requiresApiKey() const override { return false; }
 };

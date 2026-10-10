@@ -364,3 +364,6 @@ MigrationBackup/
 FodyWeavers.xsd
 *.png
 /build-ship-windows
+
+# AI bridge scratch files
+temp_ai_error.txt

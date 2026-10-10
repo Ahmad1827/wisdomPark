@@ -447,6 +447,7 @@ public:
 
     void importImageToActiveLayer(const std::string& filepath, int currentFrame);
     void replaceFrameImage(int frameIndex, const sf::Image& img);
+    bool applyImageToLayer(int frameIndex, const sf::Image& img, bool asNewLayer, const std::string& newLayerName = "Layer");
 
     void enterTransformMode(int currentFrame);
     void applyTransform(int currentFrame);

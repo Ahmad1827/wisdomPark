@@ -6761,3 +6761,40 @@ void Canvas::replaceFrameImage(int frameIndex, const sf::Image& img) {
         }
     }
 }
+
+bool Canvas::applyImageToLayer(int frameIndex, const sf::Image& img, bool asNewLayer, const std::string& newLayerName) {
+    if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return false;
+    if (img.getSize().x == 0 || img.getSize().y == 0) return false;
+
+    sf::Texture tex;
+    if (!tex.loadFromImage(img)) return false;
+    tex.setSmooth(false);
+
+    if (asNewLayer) {
+        addLayer(frameIndex, newLayerName);
+    }
+    else {
+        const Frame* cur = getFrameReadOnly(frameIndex);
+        if (!cur || activeLayer < 0 || activeLayer >= static_cast<int>(cur->layers.size())) return false;
+        if (cur->layers[activeLayer].locked) return false;
+        saveUndoState();
+    }
+
+    Frame* f = getFrame(frameIndex);
+    if (!f || activeLayer < 0 || activeLayer >= static_cast<int>(f->layers.size())) return false;
+    auto& target = f->layers[activeLayer].texture;
+    if (!target) return false;
+
+    sf::Sprite spr(tex);
+    float cW = static_cast<float>(canvasLogicalSize.x);
+    float cH = static_cast<float>(canvasLogicalSize.y);
+    float iW = static_cast<float>(img.getSize().x);
+    float iH = static_cast<float>(img.getSize().y);
+    if (iW != cW || iH != cH) spr.setScale(cW / iW, cH / iH);
+
+    target->clear(sf::Color::Transparent);
+    target->draw(spr, sf::RenderStates(sf::BlendNone));
+    target->display();
+    isDirty = true;
+    return true;
+}
