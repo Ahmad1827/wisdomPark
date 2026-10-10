@@ -69,6 +69,8 @@ static AIResult runClaudeArt(const std::string& backend, const std::string& apiK
     std::filesystem::remove("temp_ai_output.png", ec);
     std::filesystem::remove("temp_ai_error.txt", ec);
     std::filesystem::remove("temp_ai_status.txt", ec);
+    std::filesystem::remove("temp_ai_output_2.png", ec);
+    std::filesystem::remove("temp_ai_output_3.png", ec);
 
     char color[8];
     snprintf(color, sizeof(color), "#%02x%02x%02x", request.primaryColor.r, request.primaryColor.g, request.primaryColor.b);

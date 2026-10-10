@@ -1,6 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <string>
+#include <vector>
 
 class AIReviewModal {
 private:
@@ -28,6 +29,13 @@ private:
 
     sf::Image originalSavedImage;
     sf::Image resultSavedImage;
+    // More than one entry when the assistant was asked for several options to pick from
+    std::vector<sf::Image> options;
+    int optionIndex = 0;
+    sf::FloatRect prevOptionBounds;
+    sf::FloatRect nextOptionBounds;
+
+    void showOption(int index);
 
     bool isOpen;
 
@@ -35,6 +43,9 @@ public:
     AIReviewModal();
     void init();
     void open(const sf::Image& originalImg, const sf::Image& resultImg);
+    void open(const sf::Image& originalImg, const std::vector<sf::Image>& resultOptions);
+    int getOptionIndex() const { return optionIndex; }
+    int getOptionCount() const { return static_cast<int>(options.size()); }
     void close();
     bool getIsOpen() const;
     const sf::Image& getResultImage() const;

@@ -227,6 +227,8 @@ static std::string g_assistTurnsProject;
 static std::string g_assistPendingRequest;
 static sf::IntRect g_assistPendingArea;
 static sf::Image g_assistLastResult;
+// Each option as the bridge returned it (the selected area only), in the order the review shows them
+static std::vector<sf::Image> g_assistOptionsRaw;
 static sf::IntRect g_assistLastArea;
 static bool g_assistLastDiscarded = false;
 static const size_t kAssistMaxTurns = 6;
@@ -239,6 +241,9 @@ static void forgetAssistTurns() {
 
 static void setAssistOutcome(const std::string& outcome, bool discarded) {
     if (!g_assistTurns.empty()) g_assistTurns.back().outcome = outcome;
+    // The option that was on screen is the one a follow-up will be about
+    int shown = g_aiReviewModal.getOptionIndex();
+    if (shown >= 0 && shown < static_cast<int>(g_assistOptionsRaw.size())) g_assistLastResult = g_assistOptionsRaw[shown];
     g_assistLastDiscarded = discarded;
 }
 
@@ -254,9 +259,19 @@ static std::string jsonQuote(const std::string& text) {
 
 // Writes temp_ai_context.json for scripts/claude_art.py: the frame's layers one by one (cut to the
 // area being sent) and the earlier requests. The flat canvas alone cannot show either.
-static void writeAssistContext(Canvas& canvas, int frameIndex, const sf::IntRect& area) {
+static void writeAssistContext(Canvas& canvas, int frameIndex, const sf::IntRect& area, const std::vector<sf::Color>* allowedColors, int optionCount) {
     std::ostringstream json;
-    json << "{\"layers\":[";
+    json << "{\"options\":" << optionCount << ",";
+    if (allowedColors) {
+        json << "\"allowed_colors\":[";
+        for (size_t i = 0; i < allowedColors->size(); ++i) {
+            char hex[8];
+            snprintf(hex, sizeof(hex), "#%02x%02x%02x", (*allowedColors)[i].r, (*allowedColors)[i].g, (*allowedColors)[i].b);
+            json << (i > 0 ? "," : "") << "\"" << hex << "\"";
+        }
+        json << "],";
+    }
+    json << "\"layers\":[";
 
     const Frame* frame = canvas.getFrameReadOnly(frameIndex);
     int layerCount = frame ? static_cast<int>(frame->layers.size()) : 0;
@@ -607,6 +622,22 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     req.operation = AIOperation::Edit;
     req.baseImage = canvas.flattenFrameToImage(curFrame);
 
+    // Colour limit chosen in the assistant panel. The bridge adds what is on the canvas and the current colour itself.
+    std::vector<sf::Color> allowedColors;
+    int colorMode = g_aiPanel.getAssistColorMode();
+    if (colorMode == 1) {
+        const sf::Image& whole = req.baseImage;
+        for (unsigned int y = 0; y < whole.getSize().y && allowedColors.size() < 256; ++y) {
+            for (unsigned int x = 0; x < whole.getSize().x && allowedColors.size() < 256; ++x) {
+                sf::Color c = whole.getPixel(x, y);
+                if (c.a < 128) continue;
+                c.a = 255;
+                if (std::find(allowedColors.begin(), allowedColors.end(), c) == allowedColors.end()) allowedColors.push_back(c);
+            }
+        }
+    }
+    else if (colorMode == 2) allowedColors = g_aiPanel.getSelectedPaletteColors();
+
     g_assistHasRegion = false;
     if (hadSelection) {
         int imgW = static_cast<int>(req.baseImage.getSize().x);
@@ -642,7 +673,7 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     }
     g_assistPendingRequest = hint;
     g_assistPendingArea = g_assistHasRegion ? g_assistRegion : sf::IntRect(0, 0, req.width, req.height);
-    writeAssistContext(canvas, curFrame, g_assistPendingArea);
+    writeAssistContext(canvas, curFrame, g_assistPendingArea, colorMode != 0 ? &allowedColors : nullptr, g_aiPanel.getAssistOptionCount());
 
     AIResult res = ai.executeRequest(req);
     if (!res.success) {
@@ -3089,16 +3120,27 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 bool regionFits = g_assistHasRegion
                     && static_cast<int>(asyncRes.resultImage.getSize().x) == g_assistRegion.width
                     && static_cast<int>(asyncRes.resultImage.getSize().y) == g_assistRegion.height;
+
+                // Further options, when asked for, sit next to the first one
+                g_assistOptionsRaw.assign(1, asyncRes.resultImage);
+                for (int n = 2; n <= 3; ++n) {
+                    sf::Image option;
+                    std::string file = "temp_ai_output_" + std::to_string(n) + ".png";
+                    if (std::filesystem::exists(file) && option.loadFromFile(file) && option.getSize() == asyncRes.resultImage.getSize()) g_assistOptionsRaw.push_back(option);
+                }
+
+                std::vector<sf::Image> shown = g_assistOptionsRaw;
                 if (regionFits) {
                     // Put the reworked area back into the full frame so review and accept see the whole canvas
-                    sf::Image whole = g_assistFullImage;
-                    whole.copy(asyncRes.resultImage, static_cast<unsigned int>(g_assistRegion.left), static_cast<unsigned int>(g_assistRegion.top), sf::IntRect(0, 0, 0, 0), false);
-                    g_aiReviewModal.open(g_assistFullImage, whole);
+                    for (auto& option : shown) {
+                        sf::Image whole = g_assistFullImage;
+                        whole.copy(option, static_cast<unsigned int>(g_assistRegion.left), static_cast<unsigned int>(g_assistRegion.top), sf::IntRect(0, 0, 0, 0), false);
+                        option = whole;
+                    }
                 }
-                else {
-                    g_aiReviewModal.open(originalImage, asyncRes.resultImage);
-                }
-                showMessage("Suggestion ready", sf::Color::Green);
+                g_aiReviewModal.open(regionFits ? g_assistFullImage : originalImage, shown);
+                if (shown.size() > 1) showMessage(std::to_string(shown.size()) + " options ready: pick one with the arrows", sf::Color::Green);
+                else showMessage("Suggestion ready", sf::Color::Green);
 
                 g_assistTurns.push_back({ g_assistPendingRequest, "shown to the artist" });
                 if (g_assistTurns.size() > kAssistMaxTurns) g_assistTurns.erase(g_assistTurns.begin());
@@ -3395,11 +3437,19 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             sf::Vector2f promptMouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
             WisdomUI::Theme::DrawSunsetButton(window, kPromptSendBounds, "Send", font, 14, false, kPromptSendBounds.contains(promptMouse), true, 1.0f);
             WisdomUI::Theme::DrawSunsetButton(window, kPromptCancelBounds, "Cancel", font, 14, false, kPromptCancelBounds.contains(promptMouse), false, 1.0f);
+            float hintY = 838.f;
             if (!g_assistTurns.empty() && g_assistTurnsProject == activeProjectPath + "|" + activeProjectName) {
                 std::string memo = "Remembers your last " + std::string(g_assistTurns.size() == 1 ? "request" : std::to_string(g_assistTurns.size()) + " requests")
                     + ", so you can follow up (\"bigger\", \"try again\"). Tab starts fresh.";
-                WisdomUI::Theme::DrawCrispText(window, font, memo, 15, 664.f, 838.f, WisdomUI::Theme::SunsetGold, sf::Color(0, 0, 0, 200), false, true);
+                WisdomUI::Theme::DrawCrispText(window, font, memo, 15, 664.f, hintY, WisdomUI::Theme::SunsetGold, sf::Color(0, 0, 0, 200), false, true);
+                hintY += 22.f;
             }
+            // The panel may be closed while typing, so say which of its limits are in force
+            std::string limits;
+            if (g_aiPanel.getAssistColorMode() == 1) limits = "Colours: drawing only";
+            else if (g_aiPanel.getAssistColorMode() == 2) limits = "Colours: " + g_aiPanel.getSelectedPaletteName();
+            if (g_aiPanel.getAssistOptionCount() > 1) limits += std::string(limits.empty() ? "" : "   |   ") + std::to_string(g_aiPanel.getAssistOptionCount()) + " options";
+            if (!limits.empty()) WisdomUI::Theme::DrawCrispText(window, font, limits, 15, 664.f, hintY, WisdomUI::Theme::SunsetGold, sf::Color(0, 0, 0, 200), false, true);
         }
 
         keybindPanel.draw(window);

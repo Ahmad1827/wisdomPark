@@ -10,6 +10,8 @@ which the app shows on its loading screen.
 temp_ai_context.json, when the app wrote one, adds what the flat canvas cannot show:
 the separate layers of the frame, and the requests made earlier in this project with
 what the artist did with each result, so a follow-up such as "bigger" makes sense.
+It can also hold a colour limit (the only colours new work may use) and a number of
+options to make; extra options are written to temp_ai_output_2.png and _3.png.
 
 The job arrives on stdin so neither the API key nor the user's prompt ever
 touches a command line:
@@ -27,11 +29,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image
 
 INPUT_PATH = "temp_ai_input.png"
 OUTPUT_PATH = "temp_ai_output.png"
+MAX_OPTIONS = 3
 ERROR_PATH = "temp_ai_error.txt"
 STATUS_PATH = "temp_ai_status.txt"
 CONTEXT_PATH = "temp_ai_context.json"
@@ -183,6 +187,30 @@ The artist discarded your result for the last request. Here it is, so that a fol
 referring to it makes sense and you do not hand back the same thing:
 {previous_json}
 """
+
+COLOR_LIMIT = """\
+The artist is keeping this drawing to a fixed set of colours. Everything you draw or
+change must use one of these and nothing else:
+{colors}
+Any of them may be appended to the palette if it is not there yet. The app snaps every
+other colour to the nearest one on this list, which rarely looks the way you meant, so
+plan shading and highlights around these colours from the start.
+"""
+
+OPTION = """\
+You are making option {number} of {total}. The artist will see the options next to each
+other and keep one. The others are being made separately, so each has to differ in a
+way the artist would care about, not by a stray pixel.
+{angle}
+"""
+
+OPTION_ANGLES = [
+    "Option 1 is the most direct reading of the request: what the artist most likely has in mind.",
+    "Option 2 takes a different approach to the same request, such as another shape, pose, "
+    "placement or proportion than the obvious one, while still doing exactly what was asked.",
+    "Option 3 is the boldest: more stylised or more detailed than the obvious reading, "
+    "while still doing exactly what was asked.",
+]
 
 RESULT_SCHEMA = {
     "type": "object",
@@ -388,6 +416,47 @@ def history_text(ctx):
     return HISTORY.format(turns="\n".join(lines)) + "\n"
 
 
+def allowed_colors(ctx, img, color):
+    """The colours new work is limited to, or None when the artist set no limit."""
+    listed = ctx.get("allowed_colors")
+    if not isinstance(listed, list):
+        return None
+    allowed = []
+    # What is already on the canvas and the colour in the artist's hand always count
+    for value in [str(c) for c in listed] + encode_canvas(img)[0] + [color]:
+        try:
+            rgb = parse_hex(value)[:3]
+        except BadReplyError:
+            continue
+        if rgb not in allowed:
+            allowed.append(rgb)
+    return allowed
+
+
+def enforce_colors(edit, img, allowed):
+    """Snaps any colour outside the limit to the nearest allowed one, on changed pixels only."""
+    if not allowed:
+        return edit
+    allowed_set = set(allowed)
+    nearest = {}
+    src, out = img.load(), edit.load()
+    for y in range(edit.height):
+        for x in range(edit.width):
+            r, g, b, a = out[x, y]
+            if a < 128 or (r, g, b) in allowed_set or out[x, y] == src[x, y]:
+                continue
+            if (r, g, b) not in nearest:
+                nearest[(r, g, b)] = min(allowed, key=lambda c: (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2)
+            out[x, y] = nearest[(r, g, b)] + (255,)
+    return edit
+
+
+def color_limit_text(allowed):
+    if not allowed:
+        return ""
+    return COLOR_LIMIT.format(colors=" ".join("#%02x%02x%02x" % c for c in allowed)) + "\n"
+
+
 def build_context(ctx, size):
     """Returns (text for the prompt, the discarded last result or None)."""
     text = layers_text(ctx, size) + history_text(ctx)
@@ -543,8 +612,12 @@ def review_pass(backend, api_key, img, edit, hint, color, context):
     return decode_canvas(review, img.width, img.height)
 
 
+def option_path(number):
+    return f"temp_ai_output_{number}.png"
+
+
 def main():
-    for path in (OUTPUT_PATH, ERROR_PATH, STATUS_PATH):
+    for path in [OUTPUT_PATH, ERROR_PATH, STATUS_PATH] + [option_path(n) for n in range(2, MAX_OPTIONS + 1)]:
         try:
             os.remove(path)
         except OSError:
@@ -564,25 +637,61 @@ def main():
         if backend not in ("cli", "api"):
             raise BridgeError(f"Unknown backend '{backend}'.")
 
-        context, previous = build_context(load_context(), img.size)
+        ctx = load_context()
+        context, previous = build_context(ctx, img.size)
+        allowed = allowed_colors(ctx, img, color)
+        context += color_limit_text(allowed)
+        try:
+            total = max(1, min(MAX_OPTIONS, int(ctx.get("options", 1))))
+        except (TypeError, ValueError):
+            total = 1
 
-        set_status("Sketching it out")
-        edit = first_pass(backend, api_key, img, hint, color, context, previous)
-        edit.save(OUTPUT_PATH)
-
-        # From here on there is always a usable result, so a failed check keeps it
-        # rather than failing the whole request.
-        for round_no in range(REVIEW_ROUNDS):
-            set_status("Checking how it looks" if round_no == 0 else "Checking the touch-up")
+        def sketch(number):
+            extra = OPTION.format(number=number, total=total, angle=OPTION_ANGLES[number - 1]) if total > 1 else ""
             try:
-                fixed = review_pass(backend, api_key, img, edit, hint, color, context)
+                edit = first_pass(backend, api_key, img, hint, color, context + extra, previous)
             except BridgeError as e:
-                print(f"claude_art: check skipped - {e}", file=sys.stderr)
-                break
-            if fixed is None:
-                break
-            edit = fixed
-            edit.save(OUTPUT_PATH)
+                return e
+            return enforce_colors(edit, img, allowed)
+
+        def check(job):
+            # There is already a usable result here, so a failed check keeps it rather
+            # than failing the request.
+            number, edit = job
+            extra = OPTION.format(number=number, total=total, angle=OPTION_ANGLES[number - 1]) if total > 1 else ""
+            for round_no in range(REVIEW_ROUNDS):
+                if total == 1:
+                    set_status("Checking how it looks" if round_no == 0 else "Checking the touch-up")
+                try:
+                    fixed = review_pass(backend, api_key, img, edit, hint, color, context + extra)
+                except BridgeError as e:
+                    print(f"claude_art: check skipped - {e}", file=sys.stderr)
+                    break
+                if fixed is None:
+                    break
+                edit = enforce_colors(fixed, img, allowed)
+                if total == 1:
+                    edit.save(OUTPUT_PATH)
+            return edit
+
+        set_status("Sketching it out" if total == 1 else f"Sketching {total} options")
+        with ThreadPoolExecutor(max_workers=total) as pool:
+            sketches = list(pool.map(sketch, range(1, total + 1)))
+            jobs = [(n, s) for n, s in enumerate(sketches, 1) if not isinstance(s, BridgeError)]
+            if not jobs:
+                raise sketches[0]
+            jobs[0][1].save(OUTPUT_PATH)
+            if total > 1:
+                set_status("Checking how they look")
+            edits = list(pool.map(check, jobs))
+
+        # Two options that came out identical are one option
+        distinct = []
+        for edit in edits:
+            if all(edit.tobytes() != other.tobytes() for other in distinct):
+                distinct.append(edit)
+        for i, edit in enumerate(distinct):
+            edit.save(OUTPUT_PATH if i == 0 else option_path(i + 1))
     except BridgeError as e:
         with open(ERROR_PATH, "w", encoding="utf-8") as f:
             f.write(str(e))

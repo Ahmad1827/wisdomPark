@@ -20,7 +20,7 @@
 
 AIPanel::AIPanel()
     : position(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY),
-    size(360.f, 392.f),
+    size(360.f, 430.f),
     isVisible(false),
     isDraggingPanel(false),
     selectedPaletteIdx(0),
@@ -413,7 +413,10 @@ void AIPanel::update(float dt) {
     aiFinishBtnBounds = sf::FloatRect(bx + 16.f, by + 300.f, thirdW, 32.f);
     aiContourBtnBounds = sf::FloatRect(bx + 20.f + thirdW, by + 300.f, thirdW, 32.f);
     aiAskBtnBounds = sf::FloatRect(bx + 24.f + thirdW * 2.f, by + 300.f, thirdW, 32.f);
-    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 340.f, size.x - 32.f, 28.f);
+    float colorsW = (size.x - 36.f) * 0.62f;
+    aiColorsBtnBounds = sf::FloatRect(bx + 16.f, by + 338.f, colorsW, 28.f);
+    aiOptionsBtnBounds = sf::FloatRect(bx + 20.f + colorsW, by + 338.f, size.x - 36.f - colorsW, 28.f);
+    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 378.f, size.x - 32.f, 28.f);
 
     float listY = dropdownBtnBounds.top + dropdownBtnBounds.height + 2.f;
     float listH = 160.f;
@@ -496,6 +499,15 @@ void AIPanel::draw(sf::RenderWindow& window) {
     bool hovAsk = aiAskBtnBounds.contains(mPos);
     if (hovAsk) hoveredTooltip = "Type any request for the assistant to carry out on the canvas [Ctrl+Shift+Space]";
     WisdomUI::Theme::DrawSunsetButton(window, aiAskBtnBounds, "Ask Assistant", font, 12, false, hovAsk, false, 1.0f);
+
+    static const char* kColorModes[] = { "Colours: Free", "Colours: Drawing Only", "Colours: This Palette" };
+    bool hovColors = aiColorsBtnBounds.contains(mPos);
+    if (hovColors) hoveredTooltip = "Limit the assistant to the colours already in your drawing, or to the palette selected above";
+    WisdomUI::Theme::DrawSunsetButton(window, aiColorsBtnBounds, kColorModes[assistColorMode], font, 12, false, hovColors, assistColorMode != 0, 1.0f);
+
+    bool hovOptions = aiOptionsBtnBounds.contains(mPos);
+    if (hovOptions) hoveredTooltip = "How many alternatives the assistant makes for you to pick from (more takes longer)";
+    WisdomUI::Theme::DrawSunsetButton(window, aiOptionsBtnBounds, "Options: " + std::to_string(assistOptionCount), font, 12, false, hovOptions, assistOptionCount > 1, 1.0f);
 
     bool hovClose = closeBtnBounds.contains(mPos);
     if (hovClose) hoveredTooltip = "Close Color Assistant";
@@ -626,6 +638,16 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
 
         if (aiAskBtnBounds.contains(mousePos)) {
             pendingAction = "action:ai_ask";
+            return true;
+        }
+
+        if (aiColorsBtnBounds.contains(mousePos)) {
+            assistColorMode = (assistColorMode + 1) % 3;
+            return true;
+        }
+
+        if (aiOptionsBtnBounds.contains(mousePos)) {
+            assistOptionCount = assistOptionCount % 3 + 1;
             return true;
         }
 

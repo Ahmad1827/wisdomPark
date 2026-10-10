@@ -36,12 +36,32 @@ void AIReviewModal::init() {
 
     rejectBtn.setSize(sf::Vector2f(140.f, 40.f));
     rejectBtn.setPosition(330.f, 810.f);
+
+    prevOptionBounds = sf::FloatRect(1186.f, 180.f, 34.f, 24.f);
+    nextOptionBounds = sf::FloatRect(1380.f, 180.f, 34.f, 24.f);
+}
+
+void AIReviewModal::open(const sf::Image& originalImg, const std::vector<sf::Image>& resultOptions) {
+    if (resultOptions.empty()) return;
+    open(originalImg, resultOptions.front());
+    options = resultOptions;
+}
+
+void AIReviewModal::showOption(int index) {
+    int count = static_cast<int>(options.size());
+    if (count < 2) return;
+    optionIndex = (index % count + count) % count;
+    resultSavedImage = options[optionIndex];
+    resultTexture.loadFromImage(resultSavedImage);
+    resultView.setTexture(&resultTexture, true);
 }
 
 void AIReviewModal::open(const sf::Image& originalImg, const sf::Image& resultImg) {
     isOpen = true;
     originalSavedImage = originalImg;
     resultSavedImage = resultImg;
+    options.assign(1, resultImg);
+    optionIndex = 0;
 
     if (originalImg.getSize().x > 0 && originalImg.getSize().y > 0) {
         originalTexture.loadFromImage(originalImg);
@@ -97,9 +117,17 @@ void AIReviewModal::draw(sf::RenderWindow& window) {
     window.draw(resultView);
 
     WisdomUI::Theme::DrawCrispText(window, font, "SOURCE CANVAS", 12, 330.f + 290.f, 195.f, WisdomUI::Theme::TextSecondary, sf::Color::Transparent, true, true);
-    WisdomUI::Theme::DrawCrispText(window, font, "GENERATED OUTPUT", 12, 1010.f + 290.f, 195.f, WisdomUI::Theme::SunsetGold, sf::Color::Transparent, true, true);
-
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+    if (options.size() > 1) {
+        std::string label = "OPTION " + std::to_string(optionIndex + 1) + " OF " + std::to_string(options.size()) + "   (LEFT / RIGHT)";
+        WisdomUI::Theme::DrawCrispText(window, font, label, 12, 1010.f + 290.f, 195.f, WisdomUI::Theme::SunsetGold, sf::Color::Transparent, true, true);
+        WisdomUI::Theme::DrawSunsetButton(window, prevOptionBounds, "<", font, 14, false, prevOptionBounds.contains(mPos), false, 1.0f);
+        WisdomUI::Theme::DrawSunsetButton(window, nextOptionBounds, ">", font, 14, false, nextOptionBounds.contains(mPos), false, 1.0f);
+    }
+    else {
+        WisdomUI::Theme::DrawCrispText(window, font, "GENERATED OUTPUT", 12, 1010.f + 290.f, 195.f, WisdomUI::Theme::SunsetGold, sf::Color::Transparent, true, true);
+    }
 
     WisdomUI::Theme::DrawSunsetButton(window, acceptNewLayerBtn.getGlobalBounds(), "Accept New Layer", font, 12, false, acceptNewLayerBtn.getGlobalBounds().contains(mPos), true, 1.0f);
     WisdomUI::Theme::DrawSunsetButton(window, replaceLayerBtn.getGlobalBounds(), "Replace Layer", font, 12, false, replaceLayerBtn.getGlobalBounds().contains(mPos), false, 1.0f);
@@ -109,7 +137,13 @@ void AIReviewModal::draw(sf::RenderWindow& window) {
 
 std::string AIReviewModal::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
     if (!isOpen) return "";
+    if (event.type == sf::Event::KeyPressed && options.size() > 1) {
+        if (event.key.code == sf::Keyboard::Left) showOption(optionIndex - 1);
+        if (event.key.code == sf::Keyboard::Right) showOption(optionIndex + 1);
+    }
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        if (options.size() > 1 && prevOptionBounds.contains(mousePos)) showOption(optionIndex - 1);
+        if (options.size() > 1 && nextOptionBounds.contains(mousePos)) showOption(optionIndex + 1);
         if (acceptNewLayerBtn.getGlobalBounds().contains(mousePos)) {
             close();
             return "accept_new";

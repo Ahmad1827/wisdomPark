@@ -27,6 +27,10 @@ private:
     sf::FloatRect aiFinishBtnBounds;
     sf::FloatRect aiContourBtnBounds;
     sf::FloatRect aiAskBtnBounds;
+    sf::FloatRect aiColorsBtnBounds;
+    sf::FloatRect aiOptionsBtnBounds;
+    int assistColorMode = 0;
+    int assistOptionCount = 1;
     sf::FloatRect closeBtnBounds;
 
     std::vector<std::pair<sf::FloatRect, sf::Color>> paletteSwatchBounds;
@@ -66,6 +70,11 @@ public:
     std::string getSelectedPaletteName() const;
     const std::vector<sf::Color>& getSelectedPaletteColors() const;
     sf::Color getLastPickedColor() const;
+
+    // What the assistant may colour with: 0 = anything, 1 = only colours already in the drawing, 2 = only the selected palette
+    int getAssistColorMode() const { return assistColorMode; }
+    // How many alternatives the assistant makes per request (1 to 3)
+    int getAssistOptionCount() const { return assistOptionCount; }
 
     std::vector<sf::Color> generateAdvice(sf::Color base, int variation);
 };
