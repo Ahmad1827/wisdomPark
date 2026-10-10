@@ -219,6 +219,95 @@ static bool g_assistHasRegion = false;
 static sf::IntRect g_assistRegion;
 static sf::Image g_assistFullImage;
 
+// What the assistant was asked earlier in this project and what became of each result, so a
+// follow-up ("bigger", "try again") makes sense to it.
+struct AssistTurn { std::string request; std::string outcome; };
+static std::vector<AssistTurn> g_assistTurns;
+static std::string g_assistTurnsProject;
+static std::string g_assistPendingRequest;
+static sf::IntRect g_assistPendingArea;
+static sf::Image g_assistLastResult;
+static sf::IntRect g_assistLastArea;
+static bool g_assistLastDiscarded = false;
+static const size_t kAssistMaxTurns = 6;
+static const int kAssistMaxLayers = 24;
+
+static void forgetAssistTurns() {
+    g_assistTurns.clear();
+    g_assistLastDiscarded = false;
+}
+
+static void setAssistOutcome(const std::string& outcome, bool discarded) {
+    if (!g_assistTurns.empty()) g_assistTurns.back().outcome = outcome;
+    g_assistLastDiscarded = discarded;
+}
+
+static std::string jsonQuote(const std::string& text) {
+    std::string out = "\"";
+    for (unsigned char c : text) {
+        if (c == '"' || c == '\\') { out += '\\'; out += static_cast<char>(c); }
+        else if (c < 0x20) out += ' ';
+        else out += static_cast<char>(c);
+    }
+    return out + "\"";
+}
+
+// Writes temp_ai_context.json for scripts/claude_art.py: the frame's layers one by one (cut to the
+// area being sent) and the earlier requests. The flat canvas alone cannot show either.
+static void writeAssistContext(Canvas& canvas, int frameIndex, const sf::IntRect& area) {
+    std::ostringstream json;
+    json << "{\"layers\":[";
+
+    const Frame* frame = canvas.getFrameReadOnly(frameIndex);
+    int layerCount = frame ? static_cast<int>(frame->layers.size()) : 0;
+    // The bridge turns away anything above 128x128, so larger areas skip the layer renders
+    if (layerCount >= 2 && layerCount <= kAssistMaxLayers && area.width * area.height <= 128 * 128) {
+        sf::RenderTexture layerTex;
+        bool first = true;
+        for (int i = 0; i < layerCount; ++i) {
+            if (!canvas.renderLayerToTexture(frameIndex, i, layerTex)) continue;
+            sf::Image whole = layerTex.getTexture().copyToImage();
+            sf::Image cut;
+            cut.create(static_cast<unsigned int>(area.width), static_cast<unsigned int>(area.height), sf::Color::Transparent);
+            cut.copy(whole, 0, 0, area, false);
+            std::string file = "temp_ai_layer_" + std::to_string(i) + ".png";
+            if (!cut.saveToFile(file)) continue;
+
+            // Read again after the render: the pointer is only good until the frame list changes
+            const Layer& layer = canvas.getFrameReadOnly(frameIndex)->layers[i];
+            if (!first) json << ",";
+            first = false;
+            json << "{\"name\":" << jsonQuote(layer.name)
+                << ",\"visible\":" << (layer.visible ? "true" : "false")
+                << ",\"locked\":" << (layer.locked ? "true" : "false")
+                << ",\"opacity\":" << layer.opacity
+                << ",\"active\":" << (i == canvas.getActiveLayer() ? "true" : "false")
+                << ",\"file\":" << jsonQuote(file) << "}";
+        }
+    }
+
+    json << "],\"history\":[";
+    for (size_t i = 0; i < g_assistTurns.size(); ++i) {
+        if (i > 0) json << ",";
+        json << "{\"request\":" << jsonQuote(g_assistTurns[i].request) << ",\"outcome\":" << jsonQuote(g_assistTurns[i].outcome) << "}";
+    }
+    json << "]";
+
+    // A discarded result is worth showing again only when the same area is being worked on
+    std::error_code ec;
+    std::filesystem::remove("temp_ai_previous.png", ec);
+    bool sameArea = g_assistLastArea == area
+        && static_cast<int>(g_assistLastResult.getSize().x) == area.width
+        && static_cast<int>(g_assistLastResult.getSize().y) == area.height;
+    if (g_assistLastDiscarded && !g_assistTurns.empty() && sameArea && g_assistLastResult.saveToFile("temp_ai_previous.png")) {
+        json << ",\"previous\":\"temp_ai_previous.png\"";
+    }
+    json << "}";
+
+    std::ofstream out("temp_ai_context.json", std::ios::binary);
+    out << json.str();
+}
+
 static bool g_selectingOutlineColor = false;
 static sf::Color g_outlineColor = sf::Color::Black;
 static bool g_selectingGridColor = false;
@@ -545,6 +634,15 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     req.primaryColor = canvas.getPrimaryColor();
     req.width = static_cast<int>(req.baseImage.getSize().x);
     req.height = static_cast<int>(req.baseImage.getSize().y);
+
+    const std::string projectKey = activeProjectPath + "|" + activeProjectName;
+    if (g_assistTurnsProject != projectKey) {
+        forgetAssistTurns();
+        g_assistTurnsProject = projectKey;
+    }
+    g_assistPendingRequest = hint;
+    g_assistPendingArea = g_assistHasRegion ? g_assistRegion : sf::IntRect(0, 0, req.width, req.height);
+    writeAssistContext(canvas, curFrame, g_assistPendingArea);
 
     AIResult res = ai.executeRequest(req);
     if (!res.success) {
@@ -1186,11 +1284,43 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     if (original.getPixel(x, y) == result.getPixel(x, y)) added.setPixel(x, y, sf::Color::Transparent);
                 }
             }
-            if (canvas.applyImageToLayer(curFrame, added, true, "Assistant Sketch")) showMessage("Suggestion added as new layer", sf::Color::Green);
+            if (canvas.applyImageToLayer(curFrame, added, true, "Assistant Sketch")) {
+                showMessage("Suggestion added as new layer", sf::Color::Green);
+                setAssistOutcome("the artist kept it, as a new layer", false);
+            }
             else showMessage("Could not add the suggestion layer", sf::Color::Red);
         }
         else if (res == "accept_replace") {
-            if (canvas.applyImageToLayer(curFrame, result, false)) showMessage("Layer replaced with suggestion", sf::Color::Green);
+            // The suggestion is the whole frame flattened. Only the pixels it changed are written, onto
+            // what the active layer already holds, so the other layers do not get baked into this one.
+            sf::Image merged = result;
+            sf::RenderTexture layerTex;
+            if (original.getSize() == result.getSize() && canvas.renderLayerToTexture(curFrame, canvas.getActiveLayer(), layerTex)) {
+                sf::Image layerImage = layerTex.getTexture().copyToImage();
+                if (layerImage.getSize() == result.getSize()) {
+                    for (unsigned int y = 0; y < result.getSize().y; ++y) {
+                        for (unsigned int x = 0; x < result.getSize().x; ++x) {
+                            if (original.getPixel(x, y) != result.getPixel(x, y)) layerImage.setPixel(x, y, result.getPixel(x, y));
+                        }
+                    }
+                    merged = layerImage;
+                }
+            }
+            if (canvas.applyImageToLayer(curFrame, merged, false)) {
+                // The change can land underneath a layer that covers it; say so rather than look like nothing happened
+                sf::Image now = canvas.flattenFrameToImage(curFrame);
+                bool covered = false;
+                if (now.getSize() == result.getSize()) {
+                    for (unsigned int y = 0; y < result.getSize().y && !covered; ++y) {
+                        for (unsigned int x = 0; x < result.getSize().x; ++x) {
+                            if (original.getPixel(x, y) != result.getPixel(x, y) && now.getPixel(x, y) != result.getPixel(x, y)) { covered = true; break; }
+                        }
+                    }
+                }
+                if (covered) showMessage("Added to the active layer, but layers above it cover part of it", sf::Color::Yellow);
+                else showMessage("Layer updated with suggestion", sf::Color::Green);
+                setAssistOutcome("the artist kept it, on the active layer", false);
+            }
             else showMessage("Active layer is locked", sf::Color::Red);
         }
         else if (res == "accept_project") {
@@ -1211,6 +1341,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         }
         else if (res == "reject") {
             showMessage("Suggestion discarded", sf::Color::Cyan);
+            setAssistOutcome("the artist discarded it", true);
         }
         return;
     }
@@ -2020,7 +2151,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (event.text.unicode == '\b') {
                 if (!currentPrompt.empty()) currentPrompt.pop_back();
             }
-            else if (event.text.unicode < 128 && event.text.unicode != '\r' && event.text.unicode != '\n' && event.text.unicode != '\b') {
+            else if (event.text.unicode >= 32 && event.text.unicode < 127) {
                 currentPrompt += static_cast<char>(event.text.unicode);
             }
             promptDisplay.setString("> " + currentPrompt + "_");
@@ -2050,6 +2181,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                     else if (event.key.code == sf::Keyboard::Escape) {
                         isTypingPrompt = false;
+                    }
+                    else if (event.key.code == sf::Keyboard::Tab && !g_assistTurns.empty()) {
+                        forgetAssistTurns();
+                        showMessage("Starting fresh: earlier requests forgotten", sf::Color::Cyan);
                     }
                     return;
                 }
@@ -2964,6 +3099,12 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                     g_aiReviewModal.open(originalImage, asyncRes.resultImage);
                 }
                 showMessage("Suggestion ready", sf::Color::Green);
+
+                g_assistTurns.push_back({ g_assistPendingRequest, "shown to the artist" });
+                if (g_assistTurns.size() > kAssistMaxTurns) g_assistTurns.erase(g_assistTurns.begin());
+                g_assistLastResult = asyncRes.resultImage;
+                g_assistLastArea = g_assistPendingArea;
+                g_assistLastDiscarded = false;
             }
             else {
                 showMessage("Assistant error: " + asyncRes.errorMessage, sf::Color::Red);
@@ -3254,6 +3395,11 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             sf::Vector2f promptMouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
             WisdomUI::Theme::DrawSunsetButton(window, kPromptSendBounds, "Send", font, 14, false, kPromptSendBounds.contains(promptMouse), true, 1.0f);
             WisdomUI::Theme::DrawSunsetButton(window, kPromptCancelBounds, "Cancel", font, 14, false, kPromptCancelBounds.contains(promptMouse), false, 1.0f);
+            if (!g_assistTurns.empty() && g_assistTurnsProject == activeProjectPath + "|" + activeProjectName) {
+                std::string memo = "Remembers your last " + std::string(g_assistTurns.size() == 1 ? "request" : std::to_string(g_assistTurns.size()) + " requests")
+                    + ", so you can follow up (\"bigger\", \"try again\"). Tab starts fresh.";
+                WisdomUI::Theme::DrawCrispText(window, font, memo, 15, 664.f, 838.f, WisdomUI::Theme::SunsetGold, sf::Color(0, 0, 0, 200), false, true);
+            }
         }
 
         keybindPanel.draw(window);

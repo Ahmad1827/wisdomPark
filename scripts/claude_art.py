@@ -7,6 +7,10 @@ image to temp_ai_output.png. On failure it writes the reason to temp_ai_error.tx
 exits non-zero. temp_ai_status.txt holds a short line on what is happening right now,
 which the app shows on its loading screen.
 
+temp_ai_context.json, when the app wrote one, adds what the flat canvas cannot show:
+the separate layers of the frame, and the requests made earlier in this project with
+what the artist did with each result, so a follow-up such as "bigger" makes sense.
+
 The job arrives on stdin so neither the API key nor the user's prompt ever
 touches a command line:
     line 1: backend  ("cli" = Claude Code login, "api" = Anthropic API key)
@@ -30,6 +34,7 @@ INPUT_PATH = "temp_ai_input.png"
 OUTPUT_PATH = "temp_ai_output.png"
 ERROR_PATH = "temp_ai_error.txt"
 STATUS_PATH = "temp_ai_status.txt"
+CONTEXT_PATH = "temp_ai_context.json"
 
 API_MODEL = "claude-opus-5-5"
 MAX_CELLS = 128 * 128
@@ -38,6 +43,9 @@ CLI_TIMEOUT_SECONDS = 600
 # How many times Claude may look at its own result and correct it. Each round is one
 # more request, and the loop stops early as soon as Claude calls the result good.
 REVIEW_ROUNDS = 2
+# Every layer is a second copy of the canvas in the prompt, so only this many pixels of
+# layers are spelled out; the rest are listed by name.
+LAYER_CELL_BUDGET = 40000
 
 # '.' is transparent; every other symbol is an index into the palette.
 SYMBOLS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -59,7 +67,7 @@ So "0" is palette[0], "a" is palette[10], "A" is palette[36].
 
 {canvas_json}
 
-{image_note}
+{context}{image_note}
 {task}
 Return the resulting canvas in exactly the same JSON shape: {{"palette": [...], "rows": [...]}}.
 
@@ -91,7 +99,7 @@ What the artist asked for:
 The canvas before the edit:
 {before_json}
 
-The edit that was produced:
+{context}The edit that was produced:
 {after_json}
 
 {image_note}
@@ -143,6 +151,37 @@ Carry it out on the canvas.
 - The artist's currently selected colour is {color}. Use it for anything new unless the
   request names a colour or the existing drawing clearly calls for a different one.
 - Leave the background transparent unless the request is about the background.
+"""
+
+LAYERS = """\
+The drawing is built from {count} layers, and the canvas is what the visible ones look
+like put together. Here they are one at a time, bottom layer first. Each has its own
+palette and is written in the same format as the canvas:
+
+{layers}
+
+The artist is working on the layer marked "active". Your result is still the whole
+canvas, as it should look with every visible layer together: the app compares it with
+the canvas and places the pixels you changed on the active layer, or on a new layer
+above it. The layers are here so you can tell what belongs to what. When the request
+names a layer ("recolour the outline layer"), change only the pixels that layer
+contributes. Hidden layers are not part of the canvas, so treat them as reference,
+for example a rough sketch the artist wants followed.
+"""
+
+HISTORY = """\
+Earlier in this session the artist made these requests, oldest first, and this is what
+they did with each result:
+{turns}
+Everything the artist kept is already part of the canvas. This is background for
+understanding a follow-up such as "bigger" or "try again"; the only request to carry
+out is the current one.
+"""
+
+PREVIOUS = """\
+The artist discarded your result for the last request. Here it is, so that a follow-up
+referring to it makes sense and you do not hand back the same thing:
+{previous_json}
 """
 
 RESULT_SCHEMA = {
@@ -286,6 +325,78 @@ def task_text(hint, color):
     return TASK_REQUEST.format(request=hint, color=color) if hint else TASK_FINISH
 
 
+def load_context():
+    try:
+        with open(CONTEXT_PATH, encoding="utf-8", errors="replace") as f:
+            ctx = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return ctx if isinstance(ctx, dict) else {}
+
+
+def open_matching(path, size):
+    """An image the app saved next to the canvas, or None unless it is the same size."""
+    try:
+        img = Image.open(str(path)).convert("RGBA")
+    except OSError:
+        return None
+    return img if img.size == size else None
+
+
+def layers_text(ctx, size):
+    layers = [l for l in ctx.get("layers", []) if isinstance(l, dict)]
+    if len(layers) < 2:
+        return ""  # one layer is the canvas itself
+    active = next((i for i, l in enumerate(layers) if l.get("active")), 0)
+    budget = LAYER_CELL_BUDGET
+    encoded = {}
+    # The active layer and its neighbours matter most, so they get the budget first
+    for i in sorted(range(len(layers)), key=lambda i: abs(i - active)):
+        img = open_matching(layers[i].get("file", ""), size)
+        if img is None:
+            continue
+        if img.getextrema()[3][1] < 128:
+            encoded[i] = "empty"
+        elif budget >= size[0] * size[1]:
+            budget -= size[0] * size[1]
+            encoded[i] = canvas_json(*encode_canvas(img))
+
+    lines = []
+    for i, layer in enumerate(layers):
+        notes = ["active"] if layer.get("active") else []
+        notes.append("visible" if layer.get("visible", True) else "hidden")
+        opacity = round(float(layer.get("opacity", 1)) * 100)
+        if opacity < 100:
+            notes.append(f"{opacity}% opacity")
+        if layer.get("locked"):
+            notes.append("locked")
+        body = encoded.get(i, "pixels left out to keep this request small")
+        name = str(layer.get("name", "Layer")).replace('"', "'")
+        lines.append(f'Layer {i + 1} "{name}" ({", ".join(notes)}):\n{body}')
+    return LAYERS.format(count=len(layers), layers="\n\n".join(lines)) + "\n"
+
+
+def history_text(ctx):
+    turns = [t for t in ctx.get("history", []) if isinstance(t, dict)]
+    if not turns:
+        return ""
+    lines = []
+    for n, turn in enumerate(turns, 1):
+        request = " ".join(str(turn.get("request", "")).split()).replace('"', "'")
+        asked = f'"{request}"' if request else "finish my drawing (no request typed)"
+        lines.append(f"{n}. {asked} - {turn.get('outcome', 'shown to the artist')}")
+    return HISTORY.format(turns="\n".join(lines)) + "\n"
+
+
+def build_context(ctx, size):
+    """Returns (text for the prompt, the discarded last result or None)."""
+    text = layers_text(ctx, size) + history_text(ctx)
+    previous = open_matching(ctx["previous"], size) if ctx.get("previous") and ctx.get("history") else None
+    if previous is not None:
+        text += PREVIOUS.format(previous_json=canvas_json(*encode_canvas(previous))) + "\n"
+    return text, previous
+
+
 def image_note(backend, images):
     """Tells Claude where the renders are: files for Claude Code, attachments for the API."""
     if backend == "cli":
@@ -391,12 +502,15 @@ def ask(backend, api_key, prompt, images, schema):
     return ask_api(prompt, images, schema, api_key)
 
 
-def first_pass(backend, api_key, img, hint, color):
+def first_pass(backend, api_key, img, hint, color, context, previous):
     palette, rows = encode_canvas(img)
     images = [("canvas.png", "the canvas", img)]
+    if previous is not None:
+        images.append(("discarded.png", "your last result, which the artist discarded", previous))
     prompt = INSTRUCTIONS.format(
         width=img.width, height=img.height, symbols=SYMBOLS,
         canvas_json=canvas_json(palette, rows),
+        context=context,
         image_note=image_note(backend, images),
         task=task_text(hint, color),
         format_rules=format_rules(img),
@@ -409,13 +523,14 @@ def first_pass(backend, api_key, img, hint, color):
                 raise
 
 
-def review_pass(backend, api_key, img, edit, hint, color):
+def review_pass(backend, api_key, img, edit, hint, color, context):
     """Shows Claude a render of its edit. Returns a corrected image, or None if it is fine."""
     images = [("before.png", "the canvas before the edit", img), ("edit.png", "the edit being checked", edit)]
     prompt = REVIEW.format(
         width=img.width, height=img.height, symbols=SYMBOLS,
         task=task_text(hint, color),
         before_json=canvas_json(*encode_canvas(img)),
+        context=context,
         after_json=canvas_json(*encode_canvas(edit)),
         image_note=image_note(backend, images),
         format_rules=format_rules(img),
@@ -449,8 +564,10 @@ def main():
         if backend not in ("cli", "api"):
             raise BridgeError(f"Unknown backend '{backend}'.")
 
+        context, previous = build_context(load_context(), img.size)
+
         set_status("Sketching it out")
-        edit = first_pass(backend, api_key, img, hint, color)
+        edit = first_pass(backend, api_key, img, hint, color, context, previous)
         edit.save(OUTPUT_PATH)
 
         # From here on there is always a usable result, so a failed check keeps it
@@ -458,7 +575,7 @@ def main():
         for round_no in range(REVIEW_ROUNDS):
             set_status("Checking how it looks" if round_no == 0 else "Checking the touch-up")
             try:
-                fixed = review_pass(backend, api_key, img, edit, hint, color)
+                fixed = review_pass(backend, api_key, img, edit, hint, color, context)
             except BridgeError as e:
                 print(f"claude_art: check skipped - {e}", file=sys.stderr)
                 break
