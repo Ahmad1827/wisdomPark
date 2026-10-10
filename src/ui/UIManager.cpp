@@ -237,13 +237,94 @@ static bool g_assistFrameMode = false;
 static const size_t kAssistMaxTurns = 6;
 static const int kAssistMaxLayers = 24;
 
+// Where this project's requests are remembered between runs; empty while the project has no folder yet
+static std::string g_assistMemoryFile;
+
 static void forgetAssistTurns() {
     g_assistTurns.clear();
     g_assistLastDiscarded = false;
 }
 
+static void saveAssistTurns() {
+    if (g_assistMemoryFile.empty()) return;
+    std::error_code ec;
+    if (!std::filesystem::is_directory(std::filesystem::path(g_assistMemoryFile).parent_path(), ec)) return;
+    if (g_assistTurns.empty()) {
+        std::filesystem::remove(g_assistMemoryFile, ec);
+        return;
+    }
+    // Two lines per request: what was asked, then what became of the result
+    std::ofstream out(g_assistMemoryFile, std::ios::trunc);
+    for (const auto& turn : g_assistTurns) {
+        std::string request = turn.request;
+        std::replace(request.begin(), request.end(), '\n', ' ');
+        out << request << "\n" << turn.outcome << "\n";
+    }
+}
+
+// Call before reading or adding to the memory: switches it over when another project has been opened
+static void syncAssistProject(const std::string& projectPath, const std::string& projectName) {
+    const std::string key = projectPath + "|" + projectName;
+    if (g_assistTurnsProject == key) return;
+    forgetAssistTurns();
+    g_assistTurnsProject = key;
+    g_assistMemoryFile = projectPath.empty() ? "" : projectPath + "/assistant_memory.txt";
+
+    std::ifstream in(g_assistMemoryFile);
+    std::string request, outcome;
+    while (!g_assistMemoryFile.empty() && std::getline(in, request) && std::getline(in, outcome)) {
+        if (!request.empty() && request.back() == '\r') request.pop_back();
+        if (!outcome.empty() && outcome.back() == '\r') outcome.pop_back();
+        g_assistTurns.push_back({ request, outcome });
+    }
+    while (g_assistTurns.size() > kAssistMaxTurns) g_assistTurns.erase(g_assistTurns.begin());
+}
+
+// The request box: text as typed (any language), and where the caret sits in it
+static sf::String g_promptText;
+static size_t g_promptCaret = 0;
+static const size_t kPromptMaxLength = 400;
+
+static void refreshPrompt(sf::Text& display, std::string& utf8) {
+    g_promptCaret = std::min(g_promptCaret, g_promptText.getSize());
+    sf::String shown = g_promptText;
+    shown.insert(g_promptCaret, "|");
+    // When the text outgrows the box, the start scrolls out of view so the caret stays visible
+    size_t skip = 0;
+    display.setString(sf::String("> ") + shown);
+    while (display.getLocalBounds().width > 570.f && skip < g_promptCaret) {
+        ++skip;
+        display.setString(sf::String("> ...") + shown.substring(skip));
+    }
+    auto bytes = g_promptText.toUtf8();
+    utf8.assign(bytes.begin(), bytes.end());
+}
+
+// An area dragged out on the canvas while the request box is open, in canvas pixels. Unlike a
+// selection it can cover empty canvas, which is how "draw a tree here" is said.
+static bool g_assistMarkDragging = false;
+static bool g_assistMarkActive = false;
+static sf::Vector2f g_assistMarkStart;
+static sf::Vector2f g_assistMarkEnd;
+
+static sf::Vector2f toCanvasPixel(const Canvas& canvas, sf::Vector2f logicalPos) {
+    sf::FloatRect area = canvas.getDrawArea();
+    sf::Vector2u size = canvas.getCanvasSize();
+    return sf::Vector2f((logicalPos.x - area.left) * static_cast<float>(size.x) / area.width, (logicalPos.y - area.top) * static_cast<float>(size.y) / area.height);
+}
+
+static sf::IntRect assistMarkRect(const Canvas& canvas) {
+    sf::Vector2u size = canvas.getCanvasSize();
+    int left = std::clamp(static_cast<int>(std::floor(std::min(g_assistMarkStart.x, g_assistMarkEnd.x))), 0, static_cast<int>(size.x));
+    int top = std::clamp(static_cast<int>(std::floor(std::min(g_assistMarkStart.y, g_assistMarkEnd.y))), 0, static_cast<int>(size.y));
+    int right = std::clamp(static_cast<int>(std::ceil(std::max(g_assistMarkStart.x, g_assistMarkEnd.x))), 0, static_cast<int>(size.x));
+    int bottom = std::clamp(static_cast<int>(std::ceil(std::max(g_assistMarkStart.y, g_assistMarkEnd.y))), 0, static_cast<int>(size.y));
+    return sf::IntRect(left, top, right - left, bottom - top);
+}
+
 static void setAssistOutcome(const std::string& outcome, bool discarded) {
     if (!g_assistTurns.empty()) g_assistTurns.back().outcome = outcome;
+    saveAssistTurns();
     // The option that was on screen is the one a follow-up will be about
     int shown = g_aiReviewModal.getOptionIndex();
     if (shown >= 0 && shown < static_cast<int>(g_assistOptionsRaw.size())) g_assistLastResult = g_assistOptionsRaw[shown];
@@ -264,13 +345,13 @@ static std::string jsonQuote(const std::string& text) {
 // area being sent) and the earlier requests. The flat canvas alone cannot show either.
 static void writeAssistContext(Canvas& canvas, int frameIndex, const sf::IntRect& area, const std::vector<sf::Color>* allowedColors, int optionCount, bool nextFrame, float fps) {
     std::ostringstream json;
-    json << "{\"options\":" << optionCount << ",";
+    json << "{\"options\":" << optionCount << ",\"output\":\"" << (g_aiPanel.getAssistChangesOnly() ? "changes" : "whole") << "\",";
 
     // In an animation the frames around this one show what the subject looks like in motion
     int frameCount = static_cast<int>(canvas.getFrameCount());
     json << "\"mode\":\"" << (nextFrame ? "next_frame" : "edit") << "\",\"frame\":" << (frameIndex + 1)
         << ",\"frame_count\":" << frameCount << ",\"fps\":" << fps << ",\"frames\":[";
-    if (frameCount > 1 && area.width * area.height <= 128 * 128) {
+    if (frameCount > 1 && area.width * area.height <= 256 * 256) {
         bool firstFrame = true;
         for (int i = std::max(0, frameIndex - 3); i <= std::min(frameCount - 1, frameIndex + 1); ++i) {
             if (i == frameIndex) continue;
@@ -298,8 +379,8 @@ static void writeAssistContext(Canvas& canvas, int frameIndex, const sf::IntRect
 
     const Frame* frame = canvas.getFrameReadOnly(frameIndex);
     int layerCount = frame ? static_cast<int>(frame->layers.size()) : 0;
-    // The bridge turns away anything above 128x128, so larger areas skip the layer renders
-    if (layerCount >= 2 && layerCount <= kAssistMaxLayers && area.width * area.height <= 128 * 128) {
+    // The bridge turns away anything above 256x256, so larger areas skip the layer renders
+    if (layerCount >= 2 && layerCount <= kAssistMaxLayers && area.width * area.height <= 256 * 256) {
         sf::RenderTexture layerTex;
         bool first = true;
         for (int i = 0; i < layerCount; ++i) {
@@ -640,6 +721,11 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     bool hadSelection = canvas.getSelection().isActive() && !nextFrame;
     sf::FloatRect selBox = canvas.getSelection().getBoundingBox();
     canvas.commitSelection(curFrame);
+    // An area marked from the request box wins over a selection, and is used exactly as drawn
+    bool marked = g_assistMarkActive && !nextFrame;
+    sf::IntRect markRect = assistMarkRect(canvas);
+    g_assistMarkActive = false;
+    g_assistMarkDragging = false;
 
     AIRequest req;
     req.prompt = hint;
@@ -663,7 +749,7 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     else if (colorMode == 2) allowedColors = g_aiPanel.getSelectedPaletteColors();
 
     g_assistHasRegion = false;
-    if (hadSelection) {
+    if (marked || hadSelection) {
         int imgW = static_cast<int>(req.baseImage.getSize().x);
         int imgH = static_cast<int>(req.baseImage.getSize().y);
         // The selection box hugs the selected pixels, so widen it a little: the assistant needs to see
@@ -673,8 +759,14 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
         int top = std::clamp(static_cast<int>(std::floor(selBox.top)) - pad, 0, imgH);
         int right = std::clamp(static_cast<int>(std::ceil(selBox.left + selBox.width)) + pad, 0, imgW);
         int bottom = std::clamp(static_cast<int>(std::ceil(selBox.top + selBox.height)) + pad, 0, imgH);
+        if (marked) {
+            left = std::clamp(markRect.left, 0, imgW);
+            top = std::clamp(markRect.top, 0, imgH);
+            right = std::clamp(markRect.left + markRect.width, 0, imgW);
+            bottom = std::clamp(markRect.top + markRect.height, 0, imgH);
+        }
         bool wholeCanvas = (left == 0 && top == 0 && right == imgW && bottom == imgH);
-        if (selBox.width >= 1.f && selBox.height >= 1.f && right > left && bottom > top && !wholeCanvas) {
+        if ((marked || (selBox.width >= 1.f && selBox.height >= 1.f)) && right > left && bottom > top && !wholeCanvas) {
             g_assistHasRegion = true;
             g_assistRegion = sf::IntRect(left, top, right - left, bottom - top);
             g_assistFullImage = req.baseImage;
@@ -690,11 +782,7 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     req.width = static_cast<int>(req.baseImage.getSize().x);
     req.height = static_cast<int>(req.baseImage.getSize().y);
 
-    const std::string projectKey = activeProjectPath + "|" + activeProjectName;
-    if (g_assistTurnsProject != projectKey) {
-        forgetAssistTurns();
-        g_assistTurnsProject = projectKey;
-    }
+    syncAssistProject(activeProjectPath, activeProjectName);
     g_assistPendingRequest = nextFrame ? "[draw the next animation frame] " + hint : hint;
     g_assistFrameMode = nextFrame;
     g_assistPendingArea = g_assistHasRegion ? g_assistRegion : sf::IntRect(0, 0, req.width, req.height);
@@ -705,7 +793,7 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
         g_assistHasRegion = false;
         showMessage("Assistant: " + res.errorMessage, sf::Color::Red);
     }
-    else if (g_assistHasRegion) showMessage("Working on the selected area only", sf::Color(0, 191, 255));
+    else if (g_assistHasRegion) showMessage(marked ? "Working on the marked area only" : "Working on the selected area only", sf::Color(0, 191, 255));
 }
 
 // Send / Cancel sit to the right of the request box (promptBox is 600x50 at 660,780)
@@ -715,9 +803,13 @@ static const sf::FloatRect kPromptCancelBounds(1360.f, 780.f, 84.f, 50.f);
 void UIManager::openAIPrompt(bool contour, bool nextFrame) {
     isTypingPrompt = true;
     g_assistFramePrompt = nextFrame;
+    g_assistMarkActive = false;
+    g_assistMarkDragging = false;
+    syncAssistProject(activeProjectPath, activeProjectName);
     // The contour entry only pre-fills the request; Claude still reads it as free text
-    currentPrompt = contour ? "make contour of " : "";
-    promptDisplay.setString("> " + currentPrompt + "_");
+    g_promptText = contour ? "make contour of " : "";
+    g_promptCaret = g_promptText.getSize();
+    refreshPrompt(promptDisplay, currentPrompt);
     if (nextFrame) showMessage("Say what happens in the next frame, or just press Enter to continue the motion", sf::Color(0, 191, 255));
     else if (contour) showMessage("Name what to outline (or leave it to outline your drawing), then press Enter", sf::Color(0, 191, 255));
     else showMessage("Describe what to draw or change, then press Enter", sf::Color(0, 191, 255));
@@ -1234,10 +1326,17 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     if (AIManager::getInstance().isProcessingAsync()) {
         auto killAiProcess = [&]() {
             AIManager::getInstance().abortTask();
+            const std::string engine = AIManager::getInstance().getActiveProvider();
+            if (engine == "Claude" || engine == "Claude Code") {
+                // Ends only the assistant's own processes; other Python programs on the machine keep running
+                cancelClaudeArt();
+            }
 #if defined(_WIN32)
-            std::system("taskkill /IM python.exe /F /T >nul 2>nul");
-            std::system("taskkill /IM py.exe /F /T >nul 2>nul");
-            std::system("taskkill /IM python3.exe /F /T >nul 2>nul");
+            else {
+                std::system("taskkill /IM python.exe /F /T >nul 2>nul");
+                std::system("taskkill /IM py.exe /F /T >nul 2>nul");
+                std::system("taskkill /IM python3.exe /F /T >nul 2>nul");
+            }
 #else
             std::system("pkill -f run_ai.py");
 #endif
@@ -1320,6 +1419,26 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             return;
         }
         if (promptBox.getGlobalBounds().contains(mousePos)) return;
+        if (!g_assistFramePrompt && !g_aiPanel.containsPoint(mousePos) && canvas.getDrawArea().contains(logicalMousePos)) {
+            g_assistMarkDragging = true;
+            g_assistMarkActive = false;
+            g_assistMarkStart = g_assistMarkEnd = toCanvasPixel(canvas, logicalMousePos);
+            return;
+        }
+    }
+    if (isTypingPrompt && g_assistMarkDragging) {
+        if (event.type == sf::Event::MouseMoved) {
+            g_assistMarkEnd = toCanvasPixel(canvas, logicalMousePos);
+            return;
+        }
+        if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+            g_assistMarkEnd = toCanvasPixel(canvas, logicalMousePos);
+            g_assistMarkDragging = false;
+            // A plain click, or a sliver, clears the mark instead of setting one
+            sf::IntRect rect = assistMarkRect(canvas);
+            g_assistMarkActive = rect.width >= 2 && rect.height >= 2;
+            return;
+        }
     }
 
     if (g_aiReviewModal.getIsOpen()) {
@@ -1332,6 +1451,8 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         const sf::Image original = g_aiReviewModal.getOriginalImage();
         const sf::Image result = g_aiReviewModal.getResultImage();
         int curFrame = timeline.getCurrentFrame();
+        // Accepting can take several canvas operations; they are folded into one undo step at the end
+        size_t undoDepth = canvas.getUndoDepth();
 
         if (res == "accept_new") {
             // Only the pixels the AI changed go on the new layer, so the existing layers stay untouched underneath
@@ -1458,6 +1579,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             showMessage("Suggestion discarded", sf::Color::Cyan);
             setAssistOutcome("the artist discarded it", true);
         }
+        if (res == "accept_new" || res == "accept_replace" || res == "accept_frame") canvas.collapseUndoSteps(undoDepth);
         return;
     }
 
@@ -2267,12 +2389,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
         if (event.type == sf::Event::TextEntered && isTypingPrompt) {
             if (event.text.unicode == '\b') {
-                if (!currentPrompt.empty()) currentPrompt.pop_back();
+                if (g_promptCaret > 0) g_promptText.erase(--g_promptCaret);
             }
-            else if (event.text.unicode >= 32 && event.text.unicode < 127) {
-                currentPrompt += static_cast<char>(event.text.unicode);
+            else if (event.text.unicode >= 32 && event.text.unicode != 127 && g_promptText.getSize() < kPromptMaxLength) {
+                g_promptText.insert(g_promptCaret++, sf::String(static_cast<sf::Uint32>(event.text.unicode)));
             }
-            promptDisplay.setString("> " + currentPrompt + "_");
+            refreshPrompt(promptDisplay, currentPrompt);
         }
 
         if (event.type == sf::Event::KeyReleased) {
@@ -2302,7 +2424,26 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                     }
                     else if (event.key.code == sf::Keyboard::Tab && !g_assistTurns.empty()) {
                         forgetAssistTurns();
+                        saveAssistTurns();
                         showMessage("Starting fresh: earlier requests forgotten", sf::Color::Cyan);
+                    }
+                    else {
+                        if (event.key.code == sf::Keyboard::Left && g_promptCaret > 0) --g_promptCaret;
+                        else if (event.key.code == sf::Keyboard::Right) ++g_promptCaret;
+                        else if (event.key.code == sf::Keyboard::Home) g_promptCaret = 0;
+                        else if (event.key.code == sf::Keyboard::End) g_promptCaret = g_promptText.getSize();
+                        else if (event.key.code == sf::Keyboard::Delete && g_promptCaret < g_promptText.getSize()) g_promptText.erase(g_promptCaret);
+                        else if (event.key.code == sf::Keyboard::V && event.key.control) {
+                            // Pasted text goes in on one line, as far as there is room
+                            sf::String pasted = sf::Clipboard::getString();
+                            for (size_t i = 0; i < pasted.getSize() && g_promptText.getSize() < kPromptMaxLength; ++i) {
+                                sf::Uint32 ch = pasted[i];
+                                if (ch == '\r') continue;
+                                if (ch < 32) ch = ' ';
+                                g_promptText.insert(g_promptCaret++, sf::String(ch));
+                            }
+                        }
+                        refreshPrompt(promptDisplay, currentPrompt);
                     }
                     return;
                 }
@@ -3232,6 +3373,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 
                 g_assistTurns.push_back({ g_assistPendingRequest, "shown to the artist" });
                 if (g_assistTurns.size() > kAssistMaxTurns) g_assistTurns.erase(g_assistTurns.begin());
+                saveAssistTurns();
                 g_assistLastResult = asyncRes.resultImage;
                 g_assistLastArea = g_assistPendingArea;
                 g_assistLastDiscarded = false;
@@ -3526,6 +3668,26 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             WisdomUI::Theme::DrawSunsetButton(window, kPromptSendBounds, "Send", font, 14, false, kPromptSendBounds.contains(promptMouse), true, 1.0f);
             WisdomUI::Theme::DrawSunsetButton(window, kPromptCancelBounds, "Cancel", font, 14, false, kPromptCancelBounds.contains(promptMouse), false, 1.0f);
             float hintY = 838.f;
+            if (!g_assistFramePrompt) {
+                sf::IntRect mark = assistMarkRect(canvas);
+                bool showMark = (g_assistMarkDragging || g_assistMarkActive) && mark.width > 0 && mark.height > 0;
+                if (showMark) {
+                    sf::FloatRect area = canvas.getDrawArea();
+                    sf::Vector2u cs = canvas.getCanvasSize();
+                    sf::Vector2f unit(area.width / static_cast<float>(cs.x), area.height / static_cast<float>(cs.y));
+                    sf::RectangleShape box(sf::Vector2f(mark.width * unit.x, mark.height * unit.y));
+                    box.setPosition(area.left + mark.left * unit.x, area.top + mark.top * unit.y);
+                    box.setFillColor(sf::Color(255, 196, 64, 36));
+                    box.setOutlineColor(WisdomUI::Theme::SunsetGold);
+                    box.setOutlineThickness(-2.f / std::max(0.01f, canvas.getTransform().getMatrix()[0]));
+                    window.draw(box, canvas.getTransform());
+                }
+                std::string markHint = showMark
+                    ? "Working on the marked area (" + std::to_string(mark.width) + "x" + std::to_string(mark.height) + "). Click the canvas to clear it."
+                    : "Drag on the canvas to mark the area to work on, or send to use the whole canvas.";
+                WisdomUI::Theme::DrawCrispText(window, font, markHint, 15, 664.f, hintY, WisdomUI::Theme::SunsetGold, sf::Color(0, 0, 0, 200), false, true);
+                hintY += 22.f;
+            }
             if (g_assistFramePrompt) {
                 WisdomUI::Theme::DrawCrispText(window, font, "Next frame: say what happens, or leave it empty to continue the motion.", 15, 664.f, hintY, WisdomUI::Theme::SunsetGold, sf::Color(0, 0, 0, 200), false, true);
                 hintY += 22.f;
@@ -3541,6 +3703,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
             if (g_aiPanel.getAssistColorMode() == 1) limits = "Colours: drawing only";
             else if (g_aiPanel.getAssistColorMode() == 2) limits = "Colours: " + g_aiPanel.getSelectedPaletteName();
             if (g_aiPanel.getAssistOptionCount() > 1) limits += std::string(limits.empty() ? "" : "   |   ") + std::to_string(g_aiPanel.getAssistOptionCount()) + " options";
+            if (!g_aiPanel.getAssistChangesOnly()) limits += std::string(limits.empty() ? "" : "   |   ") + "whole canvas output";
             if (!limits.empty()) WisdomUI::Theme::DrawCrispText(window, font, limits, 15, 664.f, hintY, WisdomUI::Theme::SunsetGold, sf::Color(0, 0, 0, 200), false, true);
         }
 

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
+#include <mutex>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -12,6 +13,20 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
+
+#if defined(_WIN32)
+// The bridge runs inside a job object, so cancelling ends it together with the Claude Code processes it
+// launched and touches nothing else on the machine.
+static std::mutex g_artJobMutex;
+static HANDLE g_artJob = nullptr;
+#endif
+
+void cancelClaudeArt() {
+#if defined(_WIN32)
+    std::lock_guard<std::mutex> lock(g_artJobMutex);
+    if (g_artJob) TerminateJobObject(g_artJob, 1);
+#endif
+}
 
 // Starts a command, feeds it `input` on stdin and waits for it. Returns false if it could not be started.
 static bool runWithStdin(const std::string& command, const std::string& input, int& exitCode) {
@@ -32,13 +47,27 @@ static bool runWithStdin(const std::string& command, const std::string& input, i
 
     PROCESS_INFORMATION pi{};
     std::string cmdLine = command;
-    BOOL started = CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    // Started suspended so it is inside the job before it can launch anything itself
+    BOOL started = CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &si, &pi);
     CloseHandle(stdinRead);
     if (nul != INVALID_HANDLE_VALUE) CloseHandle(nul);
     if (!started) {
         CloseHandle(stdinWrite);
         return false;
     }
+
+    HANDLE job = CreateJobObjectA(nullptr, nullptr);
+    if (job) {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+        AssignProcessToJobObject(job, pi.hProcess);
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_artJobMutex);
+        g_artJob = job;
+    }
+    ResumeThread(pi.hThread);
 
     DWORD written = 0;
     WriteFile(stdinWrite, input.data(), static_cast<DWORD>(input.size()), &written, nullptr);
@@ -47,6 +76,11 @@ static bool runWithStdin(const std::string& command, const std::string& input, i
     WaitForSingleObject(pi.hProcess, INFINITE);
     DWORD code = 1;
     GetExitCodeProcess(pi.hProcess, &code);
+    {
+        std::lock_guard<std::mutex> lock(g_artJobMutex);
+        g_artJob = nullptr;
+    }
+    if (job) CloseHandle(job);
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
     exitCode = static_cast<int>(code);

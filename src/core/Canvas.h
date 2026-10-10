@@ -387,6 +387,9 @@ public:
     bool renderLayerToTexture(int frameIndex, int layerIndex, sf::RenderTexture& out);
 
     void saveUndoState();
+    size_t getUndoDepth() const { return undoHistory.size(); }
+    // Folds every undo step recorded after `depth` into the first of them, so one undo takes them all back
+    void collapseUndoSteps(size_t depth) { if (undoHistory.size() > depth + 1) undoHistory.erase(undoHistory.begin() + depth + 1, undoHistory.end()); }
     void undo();
     void redo();
 

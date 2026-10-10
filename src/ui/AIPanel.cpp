@@ -20,7 +20,7 @@
 
 AIPanel::AIPanel()
     : position(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY),
-    size(360.f, 468.f),
+    size(360.f, 504.f),
     isVisible(false),
     isDraggingPanel(false),
     selectedPaletteIdx(0),
@@ -33,6 +33,23 @@ void AIPanel::init() {
     font.loadFromFile("assets/Jersey10-Regular.ttf");
     position = sf::Vector2f(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY);
     loadPalettes();
+    loadAssistPrefs();
+}
+
+// The assistant's panel settings are kept between runs in a small text file next to the app
+void AIPanel::loadAssistPrefs() {
+    std::ifstream in("assistant_prefs.txt");
+    int colors = 0, options = 1, output = 0;
+    if (in >> colors >> options >> output) {
+        assistColorMode = std::clamp(colors, 0, 2);
+        assistOptionCount = std::clamp(options, 1, 3);
+        assistOutputMode = std::clamp(output, 0, 1);
+    }
+}
+
+void AIPanel::saveAssistPrefs() const {
+    std::ofstream out("assistant_prefs.txt", std::ios::trunc);
+    out << assistColorMode << " " << assistOptionCount << " " << assistOutputMode << "\n";
 }
 
 void AIPanel::toggle() {
@@ -417,7 +434,8 @@ void AIPanel::update(float dt) {
     aiNextFrameBtnBounds = sf::FloatRect(bx + 16.f, by + 338.f, size.x - 32.f, 32.f);
     aiColorsBtnBounds = sf::FloatRect(bx + 16.f, by + 376.f, colorsW, 28.f);
     aiOptionsBtnBounds = sf::FloatRect(bx + 20.f + colorsW, by + 376.f, size.x - 36.f - colorsW, 28.f);
-    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 416.f, size.x - 32.f, 28.f);
+    aiOutputBtnBounds = sf::FloatRect(bx + 16.f, by + 410.f, size.x - 32.f, 28.f);
+    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 450.f, size.x - 32.f, 28.f);
 
     float listY = dropdownBtnBounds.top + dropdownBtnBounds.height + 2.f;
     float listH = 160.f;
@@ -513,6 +531,12 @@ void AIPanel::draw(sf::RenderWindow& window) {
     bool hovOptions = aiOptionsBtnBounds.contains(mPos);
     if (hovOptions) hoveredTooltip = "How many alternatives the assistant makes for you to pick from (more takes longer)";
     WisdomUI::Theme::DrawSunsetButton(window, aiOptionsBtnBounds, "Options: " + std::to_string(assistOptionCount), font, 12, false, hovOptions, assistOptionCount > 1, 1.0f);
+
+    bool hovOutput = aiOutputBtnBounds.contains(mPos);
+    if (hovOutput) hoveredTooltip = assistOutputMode == 0
+        ? "The assistant sends back only the pixels it changes: quicker, and works up to 256x256"
+        : "The assistant redraws the whole canvas each time: slower, up to 128x128";
+    WisdomUI::Theme::DrawSunsetButton(window, aiOutputBtnBounds, assistOutputMode == 0 ? "Output: Changes Only" : "Output: Whole Canvas", font, 12, false, hovOutput, false, 1.0f);
 
     bool hovClose = closeBtnBounds.contains(mPos);
     if (hovClose) hoveredTooltip = "Close Color Assistant";
@@ -653,11 +677,19 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
 
         if (aiColorsBtnBounds.contains(mousePos)) {
             assistColorMode = (assistColorMode + 1) % 3;
+            saveAssistPrefs();
             return true;
         }
 
         if (aiOptionsBtnBounds.contains(mousePos)) {
             assistOptionCount = assistOptionCount % 3 + 1;
+            saveAssistPrefs();
+            return true;
+        }
+
+        if (aiOutputBtnBounds.contains(mousePos)) {
+            assistOutputMode = 1 - assistOutputMode;
+            saveAssistPrefs();
             return true;
         }
 

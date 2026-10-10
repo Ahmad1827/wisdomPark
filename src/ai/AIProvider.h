@@ -29,6 +29,9 @@ struct AIRequest {
     sf::Color primaryColor = sf::Color::Black;
 };
 
+// Stops the Claude bridge that is running, if any, along with everything it started.
+void cancelClaudeArt();
+
 struct AIResult {
     bool success = false;
     std::string errorMessage;

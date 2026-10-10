@@ -11,7 +11,8 @@ temp_ai_context.json, when the app wrote one, adds what the flat canvas cannot s
 the separate layers of the frame, and the requests made earlier in this project with
 what the artist did with each result, so a follow-up such as "bigger" makes sense.
 For an animation it lists the neighbouring frames, and it can ask for the next frame
-to be drawn instead of an edit to this one. It can also hold a colour limit (the only colours new work may use) and a number of
+to be drawn instead of an edit to this one. It also says whether Claude should answer with the whole canvas or only with the
+pixels it changes, which is quicker and allows larger canvases. It can also hold a colour limit (the only colours new work may use) and a number of
 options to make; extra options are written to temp_ai_output_2.png and _3.png.
 
 The job arrives on stdin so neither the API key nor the user's prompt ever
@@ -43,6 +44,9 @@ CONTEXT_PATH = "temp_ai_context.json"
 
 API_MODEL = "claude-opus-5-5"
 MAX_CELLS = 128 * 128
+# When Claude answers with changes only, the canvas is read but never written back out
+# in full, so a larger one is affordable.
+MAX_CELLS_CHANGES = 256 * 256
 MAX_INPUT_COLORS = 40
 CLI_TIMEOUT_SECONDS = 600
 # How many times Claude may look at its own result and correct it. Each round is one
@@ -63,10 +67,10 @@ SYSTEM_PROMPT = (
 INSTRUCTIONS = """\
 You are helping an artist with a pixel-art drawing inside their drawing app.
 
-The canvas is {width} pixels wide and {height} pixels tall. It is given below as JSON:
-"palette" is a list of hex colours, and "rows" holds one string per pixel row, top to
-bottom, one character per pixel. The character "." is a transparent pixel. Any other
-character is a palette index using this alphabet, in order:
+The canvas is {width} pixels wide and {height} pixels tall. It is given below as JSON.
+{layout}
+The character "." is a transparent pixel. Any other character is a palette index using
+this alphabet, in order:
 {symbols}
 So "0" is palette[0], "a" is palette[10], "A" is palette[36].
 
@@ -74,9 +78,30 @@ So "0" is palette[0], "a" is palette[10], "A" is palette[36].
 
 {context}{image_note}
 {task}
-Return the resulting canvas in exactly the same JSON shape: {{"palette": [...], "rows": [...]}}.
+{answer}"""
+
+# How the canvas itself is laid out, for each of the two ways of answering.
+LAYOUT_ROWS = """\
+"palette" is a list of hex colours, and "rows" holds one string per pixel row, top to
+bottom, one character per pixel."""
+
+LAYOUT_NUMBERED = """\
+"palette" is a list of hex colours. Each "yNNN" entry is one pixel row, where NNN is
+its y, counting from 0 at the top, with one character per pixel. "tens" and "ones" are
+rulers for x: read downwards, the two digits above a pixel give its column, counting
+from 0 at the left (on a canvas wider than 100 the hundreds digit is left off)."""
+
+ANSWER_ROWS = """\
+Return the resulting canvas as {{"palette": [...], "rows": [...]}}, with "rows" holding
+one string per pixel row, top to bottom.
 
 {format_rules}"""
+
+ANSWER_CHANGES = """\
+Return only what changes, in this form:
+{{"palette": [...], "changes": [{{"y": 12, "x": 5, "pixels": "00a."}}, ...]}}
+
+{change_rules}"""
 
 FORMAT_RULES = """- A program parses your reply and paints it straight onto the canvas, so it must be
   exactly {height} rows of exactly {width} characters each. A row that is one character
@@ -86,6 +111,23 @@ FORMAT_RULES = """- A program parses your reply and paints it straight onto the 
   remove existing palette entries, because the rows refer to them by position.
 """
 
+CHANGE_RULES = """- Each entry in "changes" overwrites one horizontal run of pixels: "pixels" is written
+  onto row y starting at column x and going right, one character per pixel, in the same
+  symbols as the canvas. A "." there makes that pixel transparent, which is how you
+  erase.
+- A program applies the changes exactly as written and leaves every other pixel alone,
+  so list every pixel that should differ and nothing else. Where changed pixels are
+  separated by a few unchanged ones, one run that repeats the unchanged pixels as they
+  are is fine.
+- Position is what goes wrong most: a run that starts one column off draws the right
+  shape in the wrong place. Read x and y off the rulers and the row names rather than
+  estimating them, and check the first and last run of each shape against its
+  neighbours on the canvas.
+- "palette" is the palette you were given, in the same order, with any new colours
+  appended, up to {max_colors} total. Never reorder or remove entries, because the
+  pixels refer to them by position.
+"""
+
 # Second look: Claude sees a render of what it just produced and may correct it.
 REVIEW = """You are checking a pixel-art edit before the artist sees it. A first pass produced the
 edit from text alone, without seeing how it looks, so mistakes that are obvious to the
@@ -93,10 +135,10 @@ eye are common: lines that came out too thick, features out of proportion or in 
 wrong place, gaps in an outline, stray pixels, or parts of the drawing changed that
 should not have been.
 
-The canvas is {width} pixels wide and {height} pixels tall. Canvases are written as
-JSON: "palette" is a list of hex colours, and "rows" holds one string per pixel row,
-top to bottom, one character per pixel. The character "." is a transparent pixel. Any
-other character is a palette index using this alphabet, in order:
+The canvas is {width} pixels wide and {height} pixels tall and is written as JSON.
+{layout}
+The character "." is a transparent pixel. Any other character is a palette index using
+this alphabet, in order:
 {symbols}
 
 What the artist asked for:
@@ -104,8 +146,7 @@ What the artist asked for:
 The canvas before the edit:
 {before_json}
 
-{context}The edit that was produced:
-{after_json}
+{context}{edit_block}
 
 {image_note}
 Compare the two renders and judge the edit the way the artist will when it appears on
@@ -116,15 +157,36 @@ their canvas at this size:
   it belongs?
 - Is everything the request did not concern still exactly as it was before?
 
-If the edit is good as it stands, reply with "verdict": "good" and leave "problems",
-"palette" and "rows" empty. Small imperfections that the artist would not notice are
-not worth a rewrite.
+If the edit is good as it stands, reply with "verdict": "good" and leave the other
+fields empty. Small imperfections that the artist would not notice are not worth a
+rewrite.
 
-If it needs fixing, reply with "verdict": "fix", say in "problems" what is wrong in a
-sentence or two, and put the corrected canvas in "palette" and "rows". Start from the
-edit and change only what fixes the problems.
+If it needs fixing, reply with "verdict": "fix" and say in "problems" what is wrong in
+a sentence or two. {fix_answer}"""
+
+EDIT_AS_ROWS = """\
+The edit that was produced:
+{after_json}"""
+
+EDIT_AS_CHANGES = """\
+The edit that was produced, written as the changes it made to the canvas above. Each
+entry overwrites a run of pixels on row y starting at column x, and "palette" is the
+canvas palette with the edit's new colours appended:
+{changes_json}"""
+
+FIX_ROWS = """\
+Put the corrected canvas in "palette" and "rows". Start from the edit and change only
+what fixes the problems.
 
 {format_rules}"""
+
+FIX_CHANGES = """\
+Put the correction in "palette" and "changes", in the same form the edit is written
+in. Your changes are applied on top of the edit, so list only the pixels that must
+differ from the edit as it stands. To undo something the edit did, write the original
+pixels back.
+
+{change_rules}"""
 
 # No request typed: plain autocomplete.
 TASK_FINISH = """\
@@ -161,7 +223,7 @@ Carry it out on the canvas.
 LAYERS = """\
 The drawing is built from {count} layers, and the canvas is what the visible ones look
 like put together. Here they are one at a time, bottom layer first. Each has its own
-palette and is written in the same format as the canvas:
+palette and is written as {{"palette", "rows"}} JSON, one string per pixel row:
 
 {layers}
 
@@ -185,7 +247,8 @@ out is the current one.
 
 PREVIOUS = """\
 The artist discarded your result for the last request. Here it is, so that a follow-up
-referring to it makes sense and you do not hand back the same thing:
+referring to it makes sense and you do not hand back the same thing (written as
+{{"palette", "rows"}} JSON, one string per pixel row):
 {previous_json}
 """
 
@@ -216,7 +279,7 @@ OPTION_ANGLES = [
 FRAMES = """\
 This drawing is frame {number} of {count} in an animation that plays at {fps} frames a
 second. Its neighbouring frames are given here for reference, each with its own palette
-and written in the same format as the canvas:
+and written as {{"palette", "rows"}} JSON, one string per pixel row:
 
 {frames}
 
@@ -230,8 +293,8 @@ same proportions, colours and line weight from one frame to the next.
 # The artist asked for the following frame of the animation rather than an edit.
 TASK_NEXT_FRAME = """\
 The canvas is one frame of an animation. The artist has asked you to draw the frame
-that comes right after it{between}. What you return is that new frame, complete. It is
-a new drawing of the same scene a moment later, not an edit of this frame.
+that comes right after it{between}. Your result is that new frame: the same scene a
+moment later, as it should look on its own.
 
 {direction}
 
@@ -267,6 +330,35 @@ RESULT_SCHEMA = {
         "rows": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["palette", "rows"],
+    "additionalProperties": False,
+}
+
+CHANGES_ITEMS = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {"y": {"type": "integer"}, "x": {"type": "integer"}, "pixels": {"type": "string"}},
+        "required": ["y", "x", "pixels"],
+        "additionalProperties": False,
+    },
+}
+
+CHANGES_SCHEMA = {
+    "type": "object",
+    "properties": {"palette": {"type": "array", "items": {"type": "string"}}, "changes": CHANGES_ITEMS},
+    "required": ["palette", "changes"],
+    "additionalProperties": False,
+}
+
+REVIEW_CHANGES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string", "enum": ["good", "fix"]},
+        "problems": {"type": "string"},
+        "palette": {"type": "array", "items": {"type": "string"}},
+        "changes": CHANGES_ITEMS,
+    },
+    "required": ["verdict", "problems", "palette", "changes"],
     "additionalProperties": False,
 }
 
@@ -395,6 +487,98 @@ def canvas_json(palette, rows):
 
 def format_rules(img):
     return FORMAT_RULES.format(width=img.width, height=img.height, max_colors=len(SYMBOLS))
+
+
+# Set once in main() from the context file. True means Claude answers with the pixels it
+# changes instead of rewriting the whole canvas.
+CHANGES_ONLY = False
+
+
+def change_rules():
+    return CHANGE_RULES.format(max_colors=len(SYMBOLS))
+
+
+def numbered_canvas_json(palette, rows):
+    """The canvas with every row named by its y and rulers for x, so pixels can be addressed."""
+    width = len(rows[0]) if rows else 0
+    lines = ['{"palette": ' + json.dumps(palette) + ",",
+             '"tens": "' + "".join(str(x // 10 % 10) for x in range(width)) + '",',
+             '"ones": "' + "".join(str(x % 10) for x in range(width)) + '",']
+    lines += [f'"y{y:03d}": "{row}"' + ("," if y < len(rows) - 1 else "") for y, row in enumerate(rows)]
+    return "\n".join(lines) + "}"
+
+
+def main_canvas_json(img):
+    palette, rows = encode_canvas(img)
+    return numbered_canvas_json(palette, rows) if CHANGES_ONLY else canvas_json(palette, rows)
+
+
+def apply_changes(base, reply, require_some):
+    """Paints Claude's {"palette", "changes"} reply onto a copy of `base`."""
+    if not isinstance(reply, dict) or not isinstance(reply.get("palette"), list) or not isinstance(reply.get("changes"), list):
+        raise BadReplyError("Claude's reply was not a palette/changes object.")
+    colors = [parse_hex(str(c)) for c in reply["palette"]][: len(SYMBOLS)]
+
+    out = base.copy()
+    px = out.load()
+    misplaced = 0
+    for change in reply["changes"]:
+        try:
+            y, x, run = int(change["y"]), int(change["x"]), str(change["pixels"])
+        except (KeyError, TypeError, ValueError):
+            misplaced += 1
+            continue
+        if not (0 <= y < out.height and 0 <= x < out.width):
+            misplaced += 1
+            continue
+        for i, symbol in enumerate(run[: out.width - x]):
+            if symbol == ".":
+                px[x + i, y] = (0, 0, 0, 0)
+            else:
+                idx = SYMBOLS.find(symbol)
+                if 0 <= idx < len(colors):
+                    px[x + i, y] = colors[idx]
+    # A few runs off the edge are dropped quietly; a reply that mostly misses the canvas
+    # means the positions cannot be trusted at all.
+    if misplaced > max(2, len(reply["changes"]) // 4):
+        raise BadReplyError("Claude's changes did not fit the canvas. Try again.")
+    if require_some and out.tobytes() == base.tobytes():
+        raise BadReplyError("The assistant made no changes. Try wording the request differently.")
+    return out
+
+
+def diff_as_changes(base, edit):
+    """Writes `edit` as (palette, changes) relative to `base`, for showing Claude its own work."""
+    palette = encode_canvas(base)[0]
+    index = {parse_hex(c)[:3]: i for i, c in enumerate(palette)}
+    src, out = base.load(), edit.load()
+
+    def symbol(pixel):
+        r, g, b, a = pixel
+        if a < 128:
+            return "."
+        if (r, g, b) not in index:
+            if len(palette) >= len(SYMBOLS):
+                nearest = min(index, key=lambda c: (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2)
+                return SYMBOLS[index[nearest]]
+            index[(r, g, b)] = len(palette)
+            palette.append("#%02x%02x%02x" % (r, g, b))
+        return SYMBOLS[index[(r, g, b)]]
+
+    changes = []
+    for y in range(edit.height):
+        x = 0
+        while x < edit.width:
+            if out[x, y] == src[x, y]:
+                x += 1
+                continue
+            start = x
+            run = []
+            while x < edit.width and out[x, y] != src[x, y]:
+                run.append(symbol(out[x, y]))
+                x += 1
+            changes.append({"y": y, "x": start, "pixels": "".join(run)})
+    return palette, changes
 
 
 # Set once in main() from the context file: None for an edit, or a dict describing the
@@ -664,18 +848,24 @@ def ask(backend, api_key, prompt, images, schema):
 
 
 def first_pass(backend, api_key, img, hint, color, context, previous):
-    palette, rows = encode_canvas(img)
     images = [("canvas.png", "the canvas", img)] + previous
+    if CHANGES_ONLY:
+        answer = ANSWER_CHANGES.format(change_rules=change_rules())
+    else:
+        answer = ANSWER_ROWS.format(format_rules=format_rules(img))
     prompt = INSTRUCTIONS.format(
         width=img.width, height=img.height, symbols=SYMBOLS,
-        canvas_json=canvas_json(palette, rows),
+        layout=LAYOUT_NUMBERED if CHANGES_ONLY else LAYOUT_ROWS,
+        canvas_json=main_canvas_json(img),
         context=context,
         image_note=image_note(backend, images),
         task=task_text(hint, color),
-        format_rules=format_rules(img),
+        answer=answer,
     )
     for attempt in range(2):
         try:
+            if CHANGES_ONLY:
+                return apply_changes(img, ask(backend, api_key, prompt, images, CHANGES_SCHEMA), require_some=True)
             return decode_canvas(ask(backend, api_key, prompt, images, RESULT_SCHEMA), img.width, img.height)
         except BadReplyError:
             if attempt == 1:
@@ -685,20 +875,30 @@ def first_pass(backend, api_key, img, hint, color, context, previous):
 def review_pass(backend, api_key, img, edit, hint, color, context):
     """Shows Claude a render of its edit. Returns a corrected image, or None if it is fine."""
     images = [("before.png", "the canvas before the edit", img), ("edit.png", "the edit being checked", edit)]
+    if CHANGES_ONLY:
+        palette, changes = diff_as_changes(img, edit)
+        edit_block = EDIT_AS_CHANGES.format(changes_json=json.dumps({"palette": palette, "changes": changes}))
+        fix_answer = FIX_CHANGES.format(change_rules=change_rules())
+    else:
+        edit_block = EDIT_AS_ROWS.format(after_json=canvas_json(*encode_canvas(edit)))
+        fix_answer = FIX_ROWS.format(format_rules=format_rules(img))
     prompt = REVIEW.format(
         width=img.width, height=img.height, symbols=SYMBOLS,
+        layout=LAYOUT_NUMBERED if CHANGES_ONLY else LAYOUT_ROWS,
         task=task_text(hint, color),
-        before_json=canvas_json(*encode_canvas(img)),
+        before_json=main_canvas_json(img),
         context=context,
-        after_json=canvas_json(*encode_canvas(edit)),
+        edit_block=edit_block,
         image_note=image_note(backend, images),
-        format_rules=format_rules(img),
+        fix_answer=fix_answer,
     )
-    review = ask(backend, api_key, prompt, images, REVIEW_SCHEMA)
+    review = ask(backend, api_key, prompt, images, REVIEW_CHANGES_SCHEMA if CHANGES_ONLY else REVIEW_SCHEMA)
     if not isinstance(review, dict) or review.get("verdict") != "fix":
         print("claude_art: check passed", file=sys.stderr)
         return None
     print("claude_art: fixing - " + str(review.get("problems", "")), file=sys.stderr)
+    if CHANGES_ONLY:
+        return apply_changes(edit, review, require_some=False)
     return decode_canvas(review, img.width, img.height)
 
 
@@ -714,6 +914,8 @@ def main():
             pass
 
     try:
+        # The app writes the job as UTF-8; a piped stdin would otherwise be read in the system codepage
+        sys.stdin.reconfigure(encoding="utf-8", errors="replace")
         job = sys.stdin.read().split("\n", 3) + ["", "", "", ""]
         backend, api_key, color = job[0].strip().lower(), job[1].strip(), job[2].strip() or "#000000"
         hint = " ".join(job[3].split()).replace('"', "'")
@@ -722,13 +924,16 @@ def main():
             img = Image.open(INPUT_PATH).convert("RGBA")
         except OSError:
             raise BridgeError("Could not read the canvas image.")
-        if img.width * img.height > MAX_CELLS:
-            raise BridgeError(f"That is {img.width}x{img.height} pixels; the assistant handles up to 128x128 at a time. Select a smaller area first.")
         if backend not in ("cli", "api"):
             raise BridgeError(f"Unknown backend '{backend}'.")
 
         ctx = load_context()
-        global NEXT_FRAME
+        global NEXT_FRAME, CHANGES_ONLY
+        CHANGES_ONLY = ctx.get("output") == "changes"
+        if img.width * img.height > (MAX_CELLS_CHANGES if CHANGES_ONLY else MAX_CELLS):
+            if CHANGES_ONLY:
+                raise BridgeError(f"That is {img.width}x{img.height} pixels; the assistant handles up to 256x256 at a time. Select a smaller area first.")
+            raise BridgeError(f"That is {img.width}x{img.height} pixels; with Output set to Whole Canvas the assistant handles up to 128x128. Switch Output to Changes Only, or select a smaller area.")
         if ctx.get("mode") == "next_frame":
             current = int(ctx.get("frame", 1))
             NEXT_FRAME = {

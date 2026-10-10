@@ -96,7 +96,7 @@ void AssetBrowserPanel::draw(sf::RenderWindow& window) {
         {"Fonts", AssetType::Font},
         {"Brushes", AssetType::Brush},
         {"Patterns", AssetType::Pattern},
-        {"AI Assets", AssetType::AI}
+        {"Assistant", AssetType::AI}
     };
 
     float catY = position.y + 76.f;

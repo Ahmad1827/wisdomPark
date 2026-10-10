@@ -29,6 +29,10 @@ private:
     sf::FloatRect aiAskBtnBounds;
     sf::FloatRect aiColorsBtnBounds;
     sf::FloatRect aiNextFrameBtnBounds;
+    sf::FloatRect aiOutputBtnBounds;
+    int assistOutputMode = 0;
+    void loadAssistPrefs();
+    void saveAssistPrefs() const;
     sf::FloatRect aiOptionsBtnBounds;
     int assistColorMode = 0;
     int assistOptionCount = 1;
@@ -76,6 +80,9 @@ public:
     int getAssistColorMode() const { return assistColorMode; }
     // How many alternatives the assistant makes per request (1 to 3)
     int getAssistOptionCount() const { return assistOptionCount; }
+    // true = the assistant answers with only the pixels it changes (quicker, larger canvases); false = it redraws the whole canvas
+    bool getAssistChangesOnly() const { return assistOutputMode == 0; }
+    bool containsPoint(sf::Vector2f point) const { return isVisible && sf::FloatRect(position.x, position.y, size.x, size.y).contains(point); }
 
     std::vector<sf::Color> generateAdvice(sf::Color base, int variation);
 };

@@ -137,7 +137,7 @@ void AIReviewModal::draw(sf::RenderWindow& window) {
     }
 
     WisdomUI::Theme::DrawSunsetButton(window, acceptNewLayerBtn.getGlobalBounds(), "Accept New Layer", font, 12, false, acceptNewLayerBtn.getGlobalBounds().contains(mPos), true, 1.0f);
-    WisdomUI::Theme::DrawSunsetButton(window, replaceLayerBtn.getGlobalBounds(), "Replace Layer", font, 12, false, replaceLayerBtn.getGlobalBounds().contains(mPos), false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, replaceLayerBtn.getGlobalBounds(), "Update Layer", font, 12, false, replaceLayerBtn.getGlobalBounds().contains(mPos), false, 1.0f);
     WisdomUI::Theme::DrawSunsetButton(window, newProjectBtn.getGlobalBounds(), "New Project", font, 12, false, newProjectBtn.getGlobalBounds().contains(mPos), false, 1.0f);
     WisdomUI::Theme::DrawSunsetButton(window, rejectBtn.getGlobalBounds(), "Discard Result", font, 12, false, rejectBtn.getGlobalBounds().contains(mPos), true, 1.0f);
 }
