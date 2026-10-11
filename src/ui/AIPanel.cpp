@@ -20,7 +20,7 @@
 
 AIPanel::AIPanel()
     : position(WisdomUI::Theme::FloatingPanelX, WisdomUI::Theme::FloatingPanelY),
-    size(360.f, 504.f),
+    size(380.f, 560.f),
     isVisible(false),
     isDraggingPanel(false),
     selectedPaletteIdx(0),
@@ -39,19 +39,20 @@ void AIPanel::init() {
 // The assistant's panel settings are kept between runs in a small text file next to the app
 void AIPanel::loadAssistPrefs() {
     std::ifstream in("assistant_prefs.txt");
-    int colors = 0, options = 1, output = 0, frames = 1;
+    int colors = 0, options = 1, output = 0, frames = 1, selfCheck = 1;
     if (in >> colors >> options >> output) {
         assistColorMode = std::clamp(colors, 0, 2);
         assistOptionCount = std::clamp(options, 1, 3);
         assistOutputMode = std::clamp(output, 0, 1);
         // Added later, so a file from an older version ends before it
         if (in >> frames) assistFrameCount = std::clamp(frames, 1, 4);
+        if (in >> selfCheck) assistSelfCheck = selfCheck != 0 ? 1 : 0;
     }
 }
 
 void AIPanel::saveAssistPrefs() const {
     std::ofstream out("assistant_prefs.txt", std::ios::trunc);
-    out << assistColorMode << " " << assistOptionCount << " " << assistOutputMode << " " << assistFrameCount << "\n";
+    out << assistColorMode << " " << assistOptionCount << " " << assistOutputMode << " " << assistFrameCount << " " << assistSelfCheck << "\n";
 }
 
 void AIPanel::toggle() {
@@ -395,50 +396,84 @@ void AIPanel::drawTooltip(sf::RenderWindow& window, const std::string& text, sf:
     window.draw(tipText);
 }
 
+// A small heading with a rule running to the panel's right edge
+void AIPanel::drawSection(sf::RenderWindow& window, const std::string& label, float y) {
+    float x = position.x + 16.f;
+    WisdomUI::Theme::DrawCrispText(window, font, label, 13, x, y, WisdomUI::Theme::SunsetGold);
+    float labelW = WisdomUI::Theme::MeasureText(font, label, 13);
+    sf::RectangleShape rule(sf::Vector2f(std::max(0.f, size.x - 32.f - labelW - 8.f), 1.f));
+    rule.setPosition(x + labelW + 8.f, y + 8.f);
+    rule.setFillColor(WisdomUI::Theme::SunsetPlum);
+    window.draw(rule);
+}
+
 void AIPanel::update(float dt) {
     if (!isVisible) return;
 
+    // Everything is placed from a running y, so the panel is exactly as tall as what it holds
+    static const size_t kMaxSwatches = 42;
+    static const int kSwatchesPerRow = 14;
+    const auto* cols = (!palettes.empty() && selectedPaletteIdx < static_cast<int>(palettes.size())) ? &palettes[selectedPaletteIdx].colors : nullptr;
+    size_t swatchCount = cols ? std::min(cols->size(), kMaxSwatches) : 0;
+    int swatchRows = std::max(1, static_cast<int>((swatchCount + kSwatchesPerRow - 1) / kSwatchesPerRow));
+    float w = size.x - 32.f;
+    float cell = w / static_cast<float>(kSwatchesPerRow);
+
+    // A longer palette makes the panel taller (its height is set at the end of this function); it stays on screen
+    position.y = std::max(40.f, std::min(position.y, 1080.f - size.y));
+
     float bx = position.x;
     float by = position.y;
+    float x = bx + 16.f;
+    float y = by + 46.f;
 
     headerGripBounds = sf::FloatRect(bx + 8.f, by + 6.f, size.x - 16.f, 30.f);
-    dropdownBtnBounds = sf::FloatRect(bx + 16.f, by + 60.f, size.x - 32.f, 32.f);
 
-    float splitW = (size.x - 40.f) / 2.f;
-    pasteBtnBounds = sf::FloatRect(bx + 16.f, by + 98.f, splitW, 28.f);
-    randomBtnBounds = sf::FloatRect(bx + 20.f + splitW, by + 98.f, splitW, 28.f);
+    paletteLabelY = y;
+    y += 18.f;
+    dropdownBtnBounds = sf::FloatRect(x, y, w, 30.f);
+    y += 36.f;
+    float halfW = (w - 4.f) / 2.f;
+    pasteBtnBounds = sf::FloatRect(x, y, halfW, 26.f);
+    randomBtnBounds = sf::FloatRect(x + halfW + 4.f, y, halfW, 26.f);
+    y += 34.f;
 
+    swatchLabelY = y;
+    y += 18.f;
     paletteSwatchBounds.clear();
-    if (!palettes.empty() && selectedPaletteIdx < static_cast<int>(palettes.size())) {
-        const auto& cols = palettes[selectedPaletteIdx].colors;
-        float startX = bx + 16.f;
-        float startY = by + 150.f;
-        float swSize = 20.f;
-        float spacing = 26.f;
-        int perRow = 12;
-
-        for (size_t i = 0; i < cols.size(); ++i) {
-            if (i >= 24) break;
-            int r = static_cast<int>(i / perRow);
-            int c = static_cast<int>(i % perRow);
-            sf::FloatRect swRect(startX + c * spacing, startY + r * spacing, swSize, swSize);
-            paletteSwatchBounds.push_back({ swRect, cols[i] });
-        }
+    for (size_t i = 0; i < swatchCount; ++i) {
+        int r = static_cast<int>(i) / kSwatchesPerRow;
+        int c = static_cast<int>(i) % kSwatchesPerRow;
+        paletteSwatchBounds.push_back({ sf::FloatRect(x + c * cell, y + r * cell, cell - 4.f, cell - 4.f), (*cols)[i] });
     }
+    y += swatchRows * cell + 6.f;
+    suggestBtnBounds = sf::FloatRect(x, y, w, 34.f);
+    y += 38.f;
+    sendAllBtnBounds = sf::FloatRect(x, y, w, 28.f);
+    y += 38.f;
 
-    suggestBtnBounds = sf::FloatRect(bx + 16.f, by + 214.f, size.x - 32.f, 40.f);
-    sendAllBtnBounds = sf::FloatRect(bx + 16.f, by + 260.f, size.x - 32.f, 32.f);
-    float thirdW = (size.x - 40.f) / 3.f;
-    aiFinishBtnBounds = sf::FloatRect(bx + 16.f, by + 300.f, thirdW, 32.f);
-    aiContourBtnBounds = sf::FloatRect(bx + 20.f + thirdW, by + 300.f, thirdW, 32.f);
-    aiAskBtnBounds = sf::FloatRect(bx + 24.f + thirdW * 2.f, by + 300.f, thirdW, 32.f);
-    float colorsW = (size.x - 36.f) * 0.62f;
-    aiNextFrameBtnBounds = sf::FloatRect(bx + 16.f, by + 338.f, colorsW, 32.f);
-    aiFrameCountBtnBounds = sf::FloatRect(bx + 20.f + colorsW, by + 338.f, size.x - 36.f - colorsW, 32.f);
-    aiColorsBtnBounds = sf::FloatRect(bx + 16.f, by + 376.f, colorsW, 28.f);
-    aiOptionsBtnBounds = sf::FloatRect(bx + 20.f + colorsW, by + 376.f, size.x - 36.f - colorsW, 28.f);
-    aiOutputBtnBounds = sf::FloatRect(bx + 16.f, by + 410.f, size.x - 32.f, 28.f);
-    closeBtnBounds = sf::FloatRect(bx + 16.f, by + 450.f, size.x - 32.f, 28.f);
+    assistLabelY = y;
+    y += 18.f;
+    float thirdW = (w - 8.f) / 3.f;
+    aiFinishBtnBounds = sf::FloatRect(x, y, thirdW, 32.f);
+    aiContourBtnBounds = sf::FloatRect(x + thirdW + 4.f, y, thirdW, 32.f);
+    aiAskBtnBounds = sf::FloatRect(x + (thirdW + 4.f) * 2.f, y, thirdW, 32.f);
+    y += 36.f;
+    float wideW = (w - 4.f) * 0.62f;
+    aiNextFrameBtnBounds = sf::FloatRect(x, y, wideW, 32.f);
+    aiFrameCountBtnBounds = sf::FloatRect(x + wideW + 4.f, y, w - wideW - 4.f, 32.f);
+    y += 42.f;
+
+    settingsLabelY = y;
+    y += 18.f;
+    aiColorsBtnBounds = sf::FloatRect(x, y, wideW, 28.f);
+    aiOptionsBtnBounds = sf::FloatRect(x + wideW + 4.f, y, w - wideW - 4.f, 28.f);
+    y += 32.f;
+    aiOutputBtnBounds = sf::FloatRect(x, y, wideW, 28.f);
+    aiSelfCheckBtnBounds = sf::FloatRect(x + wideW + 4.f, y, w - wideW - 4.f, 28.f);
+    y += 38.f;
+    closeBtnBounds = sf::FloatRect(x, y, w, 28.f);
+    size.y = y + 28.f + 14.f - by;
 
     float listY = dropdownBtnBounds.top + dropdownBtnBounds.height + 2.f;
     float listH = 160.f;
@@ -472,24 +507,29 @@ void AIPanel::draw(sf::RenderWindow& window) {
 
     WisdomUI::Theme::DrawCrispText(window, font, ":: STUDIO ASSISTANT ::", 15, headerGripBounds.left + headerGripBounds.width / 2.0f, headerGripBounds.top + headerGripBounds.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
-    WisdomUI::Theme::DrawCrispText(window, font, "Preset Palette:", 13, position.x + 16.f, position.y + 40.f, WisdomUI::Theme::TextSecondary);
+    drawSection(window, "PALETTE", paletteLabelY);
+    drawSection(window, "ASSISTANT", assistLabelY);
+    drawSection(window, "ASSISTANT SETTINGS", settingsLabelY);
 
     std::string currentPalName = palettes.empty() ? "None" : palettes[selectedPaletteIdx].name;
     bool hovDrop = dropdownBtnBounds.contains(mPos);
     if (hovDrop && !isDropdownOpen) hoveredTooltip = "Choose active palette preset";
-    WisdomUI::Theme::DrawSunsetButton(window, dropdownBtnBounds, currentPalName + "  v", font, 13, false, hovDrop, isDropdownOpen, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, dropdownBtnBounds, currentPalName + "  v", font, 14, false, hovDrop, isDropdownOpen, 1.0f);
 
     bool hovPaste = pasteBtnBounds.contains(mPos);
     if (hovPaste) hoveredTooltip = "Import from Lospec link or hex list in clipboard";
-    WisdomUI::Theme::DrawSunsetButton(window, pasteBtnBounds, "+ Paste Link", font, 12, false, hovPaste, false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, pasteBtnBounds, "+ Paste Link", font, 14, false, hovPaste, false, 1.0f);
 
     bool hovRand = randomBtnBounds.contains(mPos);
     if (hovRand) hoveredTooltip = "Pick a random stylized palette";
-    WisdomUI::Theme::DrawSunsetButton(window, randomBtnBounds, "Random Vibe", font, 12, false, hovRand, false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, randomBtnBounds, "Random Vibe", font, 14, false, hovRand, false, 1.0f);
 
     size_t colCount = (!palettes.empty() && selectedPaletteIdx < static_cast<int>(palettes.size())) ? palettes[selectedPaletteIdx].colors.size() : 0;
-    std::string swLabel = "Palette Swatches (" + std::to_string(colCount) + "):";
-    WisdomUI::Theme::DrawCrispText(window, font, swLabel, 12, position.x + 16.f, position.y + 132.f, WisdomUI::Theme::SunsetGold);
+    // A very long palette shows its first rows here; Send All still sends every colour
+    std::string swLabel = paletteSwatchBounds.size() < colCount
+        ? "Swatches (first " + std::to_string(paletteSwatchBounds.size()) + " of " + std::to_string(colCount) + "):"
+        : "Swatches (" + std::to_string(colCount) + "):";
+    WisdomUI::Theme::DrawCrispText(window, font, swLabel, 12, position.x + 16.f, swatchLabelY, WisdomUI::Theme::TextSecondary);
 
     for (const auto& item : paletteSwatchBounds) {
         sf::RectangleShape r(sf::Vector2f(item.first.width, item.first.height));
@@ -508,48 +548,54 @@ void AIPanel::draw(sf::RenderWindow& window) {
 
     bool hovSend = sendAllBtnBounds.contains(mPos);
     if (hovSend) hoveredTooltip = "Transfer all swatches from this palette to Colors panel";
-    WisdomUI::Theme::DrawSunsetButton(window, sendAllBtnBounds, "--> Send All to Colors Panel", font, 13, false, hovSend, false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, sendAllBtnBounds, "--> Send All to Colors Panel", font, 14, false, hovSend, false, 1.0f);
 
     bool hovFinish = aiFinishBtnBounds.contains(mPos);
     if (hovFinish) hoveredTooltip = "The assistant finishes the drawing on this frame [Ctrl+Space]";
-    WisdomUI::Theme::DrawSunsetButton(window, aiFinishBtnBounds, "Finish Drawing", font, 12, false, hovFinish, true, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, aiFinishBtnBounds, "Finish Drawing", font, 14, false, hovFinish, true, 1.0f);
 
     bool hovContour = aiContourBtnBounds.contains(mPos);
     if (hovContour) hoveredTooltip = "The assistant draws a contour of what you name, or of your drawing [Ctrl+Shift+O]";
-    WisdomUI::Theme::DrawSunsetButton(window, aiContourBtnBounds, "Make Contour", font, 12, false, hovContour, false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, aiContourBtnBounds, "Make Contour", font, 14, false, hovContour, false, 1.0f);
 
     bool hovAsk = aiAskBtnBounds.contains(mPos);
     if (hovAsk) hoveredTooltip = "Type any request for the assistant to carry out on the canvas [Ctrl+Shift+Space]";
-    WisdomUI::Theme::DrawSunsetButton(window, aiAskBtnBounds, "Ask Assistant", font, 12, false, hovAsk, false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, aiAskBtnBounds, "Ask Assistant", font, 14, false, hovAsk, false, 1.0f);
 
     bool hovNextFrame = aiNextFrameBtnBounds.contains(mPos);
     if (hovNextFrame) hoveredTooltip = assistFrameCount == 1
         ? "The assistant draws the next animation frame after this one; say what happens, or let it continue the motion"
         : "The assistant draws the next " + std::to_string(assistFrameCount) + " animation frames after this one; say what happens, or let it continue the motion";
-    WisdomUI::Theme::DrawSunsetButton(window, aiNextFrameBtnBounds, assistFrameCount == 1 ? "Draw Next Frame" : "Draw Next " + std::to_string(assistFrameCount) + " Frames", font, 12, false, hovNextFrame, false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, aiNextFrameBtnBounds, assistFrameCount == 1 ? "Draw Next Frame" : "Draw Next " + std::to_string(assistFrameCount) + " Frames", font, 14, false, hovNextFrame, false, 1.0f);
 
     bool hovFrameCount = aiFrameCountBtnBounds.contains(mPos);
     if (hovFrameCount) hoveredTooltip = "How many frames Draw Next Frame makes in one go, each drawn from the one before (more takes longer)";
-    WisdomUI::Theme::DrawSunsetButton(window, aiFrameCountBtnBounds, "Frames: " + std::to_string(assistFrameCount), font, 12, false, hovFrameCount, assistFrameCount > 1, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, aiFrameCountBtnBounds, "Frames: " + std::to_string(assistFrameCount), font, 14, false, hovFrameCount, assistFrameCount > 1, 1.0f);
 
     static const char* kColorModes[] = { "Colours: Free", "Colours: Drawing Only", "Colours: This Palette" };
     bool hovColors = aiColorsBtnBounds.contains(mPos);
     if (hovColors) hoveredTooltip = "Limit the assistant to the colours already in your drawing, or to the palette selected above";
-    WisdomUI::Theme::DrawSunsetButton(window, aiColorsBtnBounds, kColorModes[assistColorMode], font, 12, false, hovColors, assistColorMode != 0, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, aiColorsBtnBounds, kColorModes[assistColorMode], font, 14, false, hovColors, assistColorMode != 0, 1.0f);
 
     bool hovOptions = aiOptionsBtnBounds.contains(mPos);
     if (hovOptions) hoveredTooltip = "How many alternatives the assistant makes for you to pick from (more takes longer)";
-    WisdomUI::Theme::DrawSunsetButton(window, aiOptionsBtnBounds, "Options: " + std::to_string(assistOptionCount), font, 12, false, hovOptions, assistOptionCount > 1, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, aiOptionsBtnBounds, "Options: " + std::to_string(assistOptionCount), font, 14, false, hovOptions, assistOptionCount > 1, 1.0f);
 
     bool hovOutput = aiOutputBtnBounds.contains(mPos);
     if (hovOutput) hoveredTooltip = assistOutputMode == 0
         ? "The assistant sends back only the pixels it changes: quicker. Above 256x256 it works on the part your request is about"
         : "The assistant redraws the whole canvas each time: slower. Above 128x128 it works on the part your request is about";
-    WisdomUI::Theme::DrawSunsetButton(window, aiOutputBtnBounds, assistOutputMode == 0 ? "Output: Changes Only" : "Output: Whole Canvas", font, 12, false, hovOutput, false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, aiOutputBtnBounds, assistOutputMode == 0 ? "Output: Changes Only" : "Output: Whole Canvas", font, 14, false, hovOutput, false, 1.0f);
+
+    bool hovSelfCheck = aiSelfCheckBtnBounds.contains(mPos);
+    if (hovSelfCheck) hoveredTooltip = assistSelfCheck
+        ? "The assistant looks over its result and fixes mistakes before showing it. Click for quicker, unchecked results"
+        : "Quick: the assistant shows its first attempt without checking it. Click to have it check its work again";
+    WisdomUI::Theme::DrawSunsetButton(window, aiSelfCheckBtnBounds, assistSelfCheck ? "Check: On" : "Check: Quick", font, 14, false, hovSelfCheck, assistSelfCheck == 0, 1.0f);
 
     bool hovClose = closeBtnBounds.contains(mPos);
     if (hovClose) hoveredTooltip = "Close Studio Assistant";
-    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Close", font, 13, false, hovClose, false, 1.0f);
+    WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Close", font, 14, false, hovClose, false, 1.0f);
 
     if (isDropdownOpen) {
         sf::RectangleShape shadow(sf::Vector2f(dropdownListArea.width + 6.f, dropdownListArea.height + 6.f));
@@ -686,6 +732,12 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
 
         if (aiFrameCountBtnBounds.contains(mousePos)) {
             assistFrameCount = assistFrameCount % 4 + 1;
+            saveAssistPrefs();
+            return true;
+        }
+
+        if (aiSelfCheckBtnBounds.contains(mousePos)) {
+            assistSelfCheck = 1 - assistSelfCheck;
             saveAssistPrefs();
             return true;
         }

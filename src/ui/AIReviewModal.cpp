@@ -39,6 +39,15 @@ void AIReviewModal::init() {
 
     prevOptionBounds = sf::FloatRect(1186.f, 180.f, 34.f, 24.f);
     nextOptionBounds = sf::FloatRect(1380.f, 180.f, 34.f, 24.f);
+
+    tryAgainBounds = sf::FloatRect(480.f, 810.f, 140.f, 40.f);
+    followUpBoxBounds = sf::FloatRect(330.f, 864.f, 1140.f, 36.f);
+    followUpSendBounds = sf::FloatRect(1480.f, 864.f, 110.f, 36.f);
+}
+
+std::string AIReviewModal::getFollowUp() const {
+    auto bytes = followUp.toUtf8();
+    return std::string(bytes.begin(), bytes.end());
 }
 
 void AIReviewModal::open(const sf::Image& originalImg, const std::vector<sf::Image>& resultOptions) {
@@ -64,6 +73,7 @@ void AIReviewModal::open(const sf::Image& originalImg, const sf::Image& resultIm
     optionIndex = 0;
     nextFrameMode = false;
     frameSequence = false;
+    followUp.clear();
 
     if (originalImg.getSize().x > 0 && originalImg.getSize().y > 0) {
         originalTexture.loadFromImage(originalImg);
@@ -131,6 +141,32 @@ void AIReviewModal::draw(sf::RenderWindow& window) {
         WisdomUI::Theme::DrawCrispText(window, font, nextFrameMode ? "NEXT FRAME" : "GENERATED OUTPUT", 12, 1010.f + 290.f, 195.f, WisdomUI::Theme::SunsetGold, sf::Color::Transparent, true, true);
     }
 
+    WisdomUI::Theme::DrawSunsetButton(window, tryAgainBounds, "Try Again", font, 12, false, tryAgainBounds.contains(mPos), false, 1.0f);
+
+    sf::RectangleShape box(sf::Vector2f(followUpBoxBounds.width, followUpBoxBounds.height));
+    box.setPosition(followUpBoxBounds.left, followUpBoxBounds.top);
+    box.setFillColor(WisdomUI::Theme::SunsetDeepDark);
+    box.setOutlineThickness(1.5f);
+    box.setOutlineColor(followUp.isEmpty() ? WisdomUI::Theme::SunsetPlum : WisdomUI::Theme::SunsetGold);
+    window.draw(box);
+    float textY = followUpBoxBounds.top + followUpBoxBounds.height / 2.f;
+    if (followUp.isEmpty()) {
+        WisdomUI::Theme::DrawCrispText(window, font, "Type a change to this result (\"bigger\", \"move it left\", \"darker outline\") and press Enter", 14, followUpBoxBounds.left + 12.f, textY, WisdomUI::Theme::TextMuted, sf::Color::Transparent, false, true);
+    }
+    else {
+        // A long request keeps its end in view, where the typing happens
+        sf::Text shown(followUp + "_", font, 15);
+        sf::String tail = followUp;
+        while (shown.getLocalBounds().width > followUpBoxBounds.width - 24.f && tail.getSize() > 1) {
+            tail.erase(0);
+            shown.setString(tail + "_");
+        }
+        shown.setFillColor(WisdomUI::Theme::SunsetGold);
+        shown.setPosition(std::round(followUpBoxBounds.left + 12.f), std::round(textY - 11.f));
+        window.draw(shown);
+    }
+    WisdomUI::Theme::DrawSunsetButton(window, followUpSendBounds, "Send", font, 13, false, followUpSendBounds.contains(mPos), !followUp.isEmpty(), 1.0f);
+
     if (nextFrameMode) {
         WisdomUI::Theme::DrawSunsetButton(window, acceptNewLayerBtn.getGlobalBounds(), isFrameSequence() ? "Add All " + std::to_string(options.size()) + " Frames" : "Add As Next Frame", font, 12, false, acceptNewLayerBtn.getGlobalBounds().contains(mPos), true, 1.0f);
         WisdomUI::Theme::DrawSunsetButton(window, rejectBtn.getGlobalBounds(), "Discard Result", font, 12, false, rejectBtn.getGlobalBounds().contains(mPos), true, 1.0f);
@@ -149,7 +185,36 @@ std::string AIReviewModal::handleEvent(const sf::Event& event, sf::Vector2f mous
         if (event.key.code == sf::Keyboard::Left) showOption(optionIndex - 1);
         if (event.key.code == sf::Keyboard::Right) showOption(optionIndex + 1);
     }
+    if (event.type == sf::Event::TextEntered) {
+        if (event.text.unicode == '\b') {
+            if (!followUp.isEmpty()) followUp.erase(followUp.getSize() - 1);
+        }
+        else if (event.text.unicode >= 32 && event.text.unicode != 127 && followUp.getSize() < 400) {
+            followUp += sf::String(static_cast<sf::Uint32>(event.text.unicode));
+        }
+    }
+    if (event.type == sf::Event::KeyPressed) {
+        if (event.key.code == sf::Keyboard::V && event.key.control) {
+            sf::String pasted = sf::Clipboard::getString();
+            for (size_t i = 0; i < pasted.getSize() && followUp.getSize() < 400; ++i) {
+                sf::Uint32 ch = pasted[i];
+                followUp += sf::String(ch < 32 ? static_cast<sf::Uint32>(' ') : ch);
+            }
+        }
+        if (event.key.code == sf::Keyboard::Enter && !followUp.isEmpty()) {
+            close();
+            return "refine";
+        }
+    }
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        if (tryAgainBounds.contains(mousePos)) {
+            close();
+            return "retry";
+        }
+        if (followUpSendBounds.contains(mousePos) && !followUp.isEmpty()) {
+            close();
+            return "refine";
+        }
         if (options.size() > 1 && prevOptionBounds.contains(mousePos)) showOption(optionIndex - 1);
         if (options.size() > 1 && nextOptionBounds.contains(mousePos)) showOption(optionIndex + 1);
         if (acceptNewLayerBtn.getGlobalBounds().contains(mousePos)) {

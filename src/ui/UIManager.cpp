@@ -236,6 +236,10 @@ static bool g_assistFramePrompt = false;
 static bool g_assistFrameMode = false;
 // How many next frames the request in flight asked for
 static int g_assistFrameTotal = 1;
+// The request as it was typed, for Try Again in the review window
+static std::string g_assistLastHint;
+// Set by Try Again and by a follow-up typed in the review window: the next request works on the same area as the last
+static bool g_assistRedo = false;
 static const size_t kAssistMaxTurns = 6;
 static const int kAssistMaxLayers = 24;
 // On a large canvas the bridge works on a part of it and cuts that part out of the layer and frame renders
@@ -350,7 +354,8 @@ static std::string jsonQuote(const std::string& text) {
 // area being sent) and the earlier requests. The flat canvas alone cannot show either.
 static void writeAssistContext(Canvas& canvas, int frameIndex, const sf::IntRect& area, const std::vector<sf::Color>* allowedColors, int optionCount, bool nextFrame, int newFrames, float fps) {
     std::ostringstream json;
-    json << "{\"options\":" << optionCount << ",\"output\":\"" << (g_aiPanel.getAssistChangesOnly() ? "changes" : "whole") << "\",";
+    json << "{\"options\":" << optionCount << ",\"output\":\"" << (g_aiPanel.getAssistChangesOnly() ? "changes" : "whole") << "\","
+        << "\"review\":" << (g_aiPanel.getAssistSelfCheck() ? "true" : "false") << ",";
 
     // In an animation the frames around this one show what the subject looks like in motion
     int frameCount = static_cast<int>(canvas.getFrameCount());
@@ -714,6 +719,8 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
 void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const std::string& hint, bool nextFrame) {
     AIManager& ai = AIManager::getInstance();
+    const bool redo = g_assistRedo;
+    g_assistRedo = false;
     const std::string provider = ai.getActiveProvider();
     if (!ai.testConnection(provider)) {
         showMessage(provider == "Claude Code"
@@ -730,6 +737,11 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
     // An area marked from the request box wins over a selection, and is used exactly as drawn
     bool marked = g_assistMarkActive && !nextFrame;
     sf::IntRect markRect = assistMarkRect(canvas);
+    if (redo && !nextFrame) {
+        marked = true;
+        markRect = g_assistLastArea;
+    }
+    g_assistLastHint = hint;
     g_assistMarkActive = false;
     g_assistMarkDragging = false;
 
@@ -1589,6 +1601,14 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         else if (res == "reject") {
             showMessage("Suggestion discarded", sf::Color::Cyan);
             setAssistOutcome("the artist discarded it", true);
+        }
+        else if (res == "retry" || res == "refine") {
+            // The result goes back to the assistant as discarded, so it knows what not to repeat and what
+            // a follow-up such as "bigger" refers to
+            bool refine = res == "refine";
+            setAssistOutcome(refine ? "the artist discarded it and asked for a change" : "the artist discarded it and asked for another try", true);
+            g_assistRedo = true;
+            startAIAutocomplete(canvas, timeline, refine ? g_aiReviewModal.getFollowUp() : g_assistLastHint, g_assistFrameMode);
         }
         if (res == "accept_new" || res == "accept_replace" || res == "accept_frame") canvas.collapseUndoSteps(undoDepth);
         return;

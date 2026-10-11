@@ -12,7 +12,8 @@ the separate layers of the frame, and the requests made earlier in this project 
 what the artist did with each result, so a follow-up such as "bigger" makes sense.
 For an animation it lists the neighbouring frames, and it can ask for the next frame
 to be drawn instead of an edit to this one. It also says whether Claude should answer with the whole canvas or only with the
-pixels it changes, which is quicker and allows larger canvases. It can also hold a colour limit (the only colours new work may use) and a number of
+pixels it changes, which is quicker and allows larger canvases, and whether Claude checks its own result
+at all ("review": false skips that for a quicker answer). It can also hold a colour limit (the only colours new work may use) and a number of
 options to make; extra options are written to temp_ai_output_2.png and _3.png. When
 several next frames are asked for at once they are drawn one after another, each from
 the one before it, and written to the same files in order (up to _4.png).
@@ -1115,7 +1116,10 @@ def main():
             raise BridgeError(f"Unknown backend '{backend}'.")
 
         ctx = load_context()
-        global NEXT_FRAME, CHANGES_ONLY, REGION
+        global NEXT_FRAME, CHANGES_ONLY, REGION, REVIEW_ROUNDS
+        if ctx.get("review") is False:
+            # Quick mode: the first attempt is shown as it is
+            REVIEW_ROUNDS = 0
         CHANGES_ONLY = ctx.get("output") == "changes"
         limit = MAX_CELLS_CHANGES if CHANGES_ONLY else MAX_CELLS
         full, box = img, None
@@ -1217,7 +1221,7 @@ def main():
                 edit = enforce_colors(fixed, img, allowed)
                 if total == 1:
                     save(edit, OUTPUT_PATH)
-            if total > 1:
+            if total > 1 and REVIEW_ROUNDS:
                 with checked_lock:
                     checked.append(number)
                     if len(checked) < len(jobs):
@@ -1234,7 +1238,7 @@ def main():
             if not jobs:
                 raise sketches[0]
             save(jobs[0][1], OUTPUT_PATH)
-            if total > 1:
+            if total > 1 and REVIEW_ROUNDS:
                 set_status("Checking how they look")
             edits = list(pool.map(check, jobs))
 

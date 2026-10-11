@@ -40,6 +40,12 @@ private:
     // The results are frames that follow one another, all kept together, rather than options to pick from
     bool frameSequence = false;
 
+    // Asking again without leaving the window: the same request once more, or a typed change to this result
+    sf::FloatRect tryAgainBounds;
+    sf::FloatRect followUpBoxBounds;
+    sf::FloatRect followUpSendBounds;
+    sf::String followUp;
+
     void showOption(int index);
 
     bool isOpen;
@@ -53,6 +59,8 @@ public:
     void setFrameSequence(bool enabled) { frameSequence = enabled; }
     bool isFrameSequence() const { return frameSequence && options.size() > 1; }
     const std::vector<sf::Image>& getOptions() const { return options; }
+    // What the artist typed into the follow-up box, as UTF-8
+    std::string getFollowUp() const;
     int getOptionIndex() const { return optionIndex; }
     int getOptionCount() const { return static_cast<int>(options.size()); }
     void close();
