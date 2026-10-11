@@ -238,6 +238,9 @@ static bool g_assistFrameMode = false;
 static int g_assistFrameTotal = 1;
 static const size_t kAssistMaxTurns = 6;
 static const int kAssistMaxLayers = 24;
+// On a large canvas the bridge works on a part of it and cuts that part out of the layer and frame renders
+// itself. Above this size they are left out, since saving them all would stall the app.
+static const int kAssistContextMaxPixels = 1024 * 1024;
 
 // Where this project's requests are remembered between runs; empty while the project has no folder yet
 static std::string g_assistMemoryFile;
@@ -353,7 +356,7 @@ static void writeAssistContext(Canvas& canvas, int frameIndex, const sf::IntRect
     int frameCount = static_cast<int>(canvas.getFrameCount());
     json << "\"mode\":\"" << (nextFrame ? "next_frame" : "edit") << "\",\"new_frames\":" << newFrames << ",\"frame\":" << (frameIndex + 1)
         << ",\"frame_count\":" << frameCount << ",\"fps\":" << fps << ",\"frames\":[";
-    if (frameCount > 1 && area.width * area.height <= 256 * 256) {
+    if (frameCount > 1 && area.width * area.height <= kAssistContextMaxPixels) {
         bool firstFrame = true;
         for (int i = std::max(0, frameIndex - 3); i <= std::min(frameCount - 1, frameIndex + 1); ++i) {
             if (i == frameIndex) continue;
@@ -381,8 +384,7 @@ static void writeAssistContext(Canvas& canvas, int frameIndex, const sf::IntRect
 
     const Frame* frame = canvas.getFrameReadOnly(frameIndex);
     int layerCount = frame ? static_cast<int>(frame->layers.size()) : 0;
-    // The bridge turns away anything above 256x256, so larger areas skip the layer renders
-    if (layerCount >= 2 && layerCount <= kAssistMaxLayers && area.width * area.height <= 256 * 256) {
+    if (layerCount >= 2 && layerCount <= kAssistMaxLayers && area.width * area.height <= kAssistContextMaxPixels) {
         sf::RenderTexture layerTex;
         bool first = true;
         for (int i = 0; i < layerCount; ++i) {
@@ -3387,6 +3389,11 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
                 else if (g_assistFrameTotal > 1) showMessage("Only the first of " + std::to_string(g_assistFrameTotal) + " frames could be drawn", sf::Color::Yellow);
                 else if (shown.size() > 1) showMessage(std::to_string(shown.size()) + " options ready: pick one with the arrows", sf::Color::Green);
                 else showMessage("Suggestion ready", sf::Color::Green);
+
+                // On a canvas too large to edit in one go the bridge says which part it worked on
+                std::ifstream noteFile("temp_ai_note.txt");
+                std::string note;
+                if (noteFile && std::getline(noteFile, note) && !note.empty()) showMessage(note, sf::Color::Yellow);
 
                 g_assistTurns.push_back({ g_assistPendingRequest, "shown to the artist" });
                 if (g_assistTurns.size() > kAssistMaxTurns) g_assistTurns.erase(g_assistTurns.begin());

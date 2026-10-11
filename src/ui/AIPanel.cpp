@@ -543,8 +543,8 @@ void AIPanel::draw(sf::RenderWindow& window) {
 
     bool hovOutput = aiOutputBtnBounds.contains(mPos);
     if (hovOutput) hoveredTooltip = assistOutputMode == 0
-        ? "The assistant sends back only the pixels it changes: quicker, and works up to 256x256"
-        : "The assistant redraws the whole canvas each time: slower, up to 128x128";
+        ? "The assistant sends back only the pixels it changes: quicker. Above 256x256 it works on the part your request is about"
+        : "The assistant redraws the whole canvas each time: slower. Above 128x128 it works on the part your request is about";
     WisdomUI::Theme::DrawSunsetButton(window, aiOutputBtnBounds, assistOutputMode == 0 ? "Output: Changes Only" : "Output: Whole Canvas", font, 12, false, hovOutput, false, 1.0f);
 
     bool hovClose = closeBtnBounds.contains(mPos);

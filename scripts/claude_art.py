@@ -17,6 +17,10 @@ options to make; extra options are written to temp_ai_output_2.png and _3.png. W
 several next frames are asked for at once they are drawn one after another, each from
 the one before it, and written to the same files in order (up to _4.png).
 
+A canvas too large to edit in one go is not turned away: Claude is shown all of it,
+picks the part the request is about, and works on that part only. The result is still
+the whole canvas, and temp_ai_note.txt says which part was worked on.
+
 The job arrives on stdin so neither the API key nor the user's prompt ever
 touches a command line:
     line 1: backend  ("cli" = Claude Code login, "api" = Anthropic API key)
@@ -52,7 +56,12 @@ MAX_CELLS = 128 * 128
 # When Claude answers with changes only, the canvas is read but never written back out
 # in full, so a larger one is affordable.
 MAX_CELLS_CHANGES = 256 * 256
-MAX_INPUT_COLORS = 40
+MAX_INPUT_COLORS = 64
+# A canvas above the limits is not turned away: Claude is first shown all of it and picks
+# the part the request is about, and only that part is worked on. This is the most it
+# is shown that way.
+MAX_FULL_CELLS = 2048 * 2048
+NOTE_PATH = "temp_ai_note.txt"
 CLI_TIMEOUT_SECONDS = 600
 # How many times Claude may look at its own result and correct it. Each round is one
 # more request, and the loop stops early as soon as Claude calls the result good.
@@ -62,7 +71,10 @@ REVIEW_ROUNDS = 2
 LAYER_CELL_BUDGET = 40000
 
 # '.' is transparent; every other symbol is an index into the palette.
-SYMBOLS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+# Digits and letters come first, so punctuation only turns up in drawings with more than
+# 62 colours. The quote and the backslash are left out because they would need escaping
+# inside the JSON strings.
+SYMBOLS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" + "!#$%&'()*+,-/:;<=>?@[]^_`{|}~"
 
 SYSTEM_PROMPT = (
     "You are a pixel-art assistant embedded in a drawing app. "
@@ -327,6 +339,49 @@ BETWEEN = (
     " and before the frame that follows it, which is given below, so it has to work as "
     "the in-between of the two"
 )
+# The canvas is larger than can be edited in one go: Claude first picks the part to work on.
+LOCATE = """An artist is working on a pixel-art drawing that is {width} pixels wide and {height} pixels
+tall. That is too large to edit in one go, so the work happens on one rectangular part
+of it. You are choosing that part; the drawing itself comes in the next step.
+
+{image_note}
+This map shows where the canvas has anything drawn on it. Each character stands for a
+block of {block} by {block} pixels: "#" has something in it, "." is empty. The number
+at the start of a row is the y of its top edge, and the character at position c in a
+row starts at x = c * {block}.
+{map}
+
+{request}
+
+Choose the rectangle the work has to happen in. It has to contain everything that will
+change, with enough of what surrounds it to match the style and line up with its
+neighbours. Its width times its height can be at most {limit} pixels (for example
+{side} by {side}), and smaller is quicker, so do not take more than the work needs. If
+the request concerns more of the canvas than fits, choose the part that matters most
+and say in "note", in a few words, what is left for another request. Otherwise leave
+"note" empty.
+
+Reply as {{"x": left, "y": top, "width": w, "height": h, "note": ""}}, in canvas pixels
+counted from 0 at the top left."""
+
+LOCATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "x": {"type": "integer"}, "y": {"type": "integer"},
+        "width": {"type": "integer"}, "height": {"type": "integer"},
+        "note": {"type": "string"},
+    },
+    "required": ["x", "y", "width", "height", "note"],
+    "additionalProperties": False,
+}
+
+MERGED = """\
+This drawing uses more colours than can be listed, so colours that are close to each
+other share one palette entry here. Pixels you leave as they are keep their true
+colours; only what you draw or change takes the palette colour you give it.
+
+"""
+
 BETWEEN_SEQUENCE = (
     " and before the frame given below as the one after it, which the new frames lead up to"
 )
@@ -415,10 +470,14 @@ def encode_canvas(img):
 
     if len(set(opaque)) > MAX_INPUT_COLORS:
         # Soft brushes and anti-aliasing produce hundreds of near-identical colours;
-        # snap them to a small palette so every pixel still gets one symbol.
-        quantized = img.convert("RGB").quantize(MAX_INPUT_COLORS, dither=Image.Dither.NONE).convert("RGB")
-        qx = quantized.load()
-        pixels = [qx[i % width, i // width] + (pixels[i][3],) for i in range(len(pixels))]
+        # snap them to a small palette so every pixel still gets one symbol. Only the
+        # drawn pixels are counted, so none of the palette goes to what lies under
+        # transparent ones.
+        strip = Image.new("RGB", (len(opaque), 1))
+        strip.putdata(opaque)
+        raw = strip.quantize(MAX_INPUT_COLORS, dither=Image.Dither.NONE).convert("RGB").tobytes()
+        reduced = iter(tuple(raw[i:i + 3]) for i in range(0, len(raw), 3))
+        pixels = [next(reduced) + (a,) if a >= 128 else (r, g, b, a) for (r, g, b, a) in pixels]
 
     palette = []
     index = {}
@@ -476,6 +535,29 @@ def decode_canvas(result, width, height):
             if 0 <= idx < len(colors):
                 out[x, y] = colors[idx]
     return img
+
+
+def keep_untouched(result, base):
+    """Gives pixels Claude left alone their real values back.
+
+    A whole-canvas reply is written in the colours Claude was shown: close colours merged
+    when there were too many, soft edges made fully opaque. Wherever the reply still says
+    what it was shown, the pixel was not changed, so it stays exactly as the artist had it."""
+    palette, rows = encode_canvas(base)
+    shown = decode_canvas({"palette": palette, "rows": rows}, base.width, base.height)
+    if shown.tobytes() == base.tobytes():
+        return result
+    out, seen, real = result.load(), shown.load(), base.load()
+    for y in range(base.height):
+        for x in range(base.width):
+            if out[x, y] == seen[x, y]:
+                out[x, y] = real[x, y]
+    return result
+
+
+def colours_merged(img):
+    found = img.getcolors(img.width * img.height) or []
+    return len({p[:3] for _, p in found if p[3] >= 128}) > MAX_INPUT_COLORS
 
 
 def extract_json(text):
@@ -634,12 +716,20 @@ def load_context():
     return ctx if isinstance(ctx, dict) else {}
 
 
+# Set once in main() when the canvas was too large and only a part of it is worked on:
+# (the part as a left/top/right/bottom box, the size of the whole canvas).
+REGION = None
+
+
 def open_matching(path, size):
     """An image the app saved next to the canvas, or None unless it is the same size."""
     try:
         img = Image.open(str(path)).convert("RGBA")
     except OSError:
         return None
+    # The app saved it for the whole canvas; the same part is cut out of it
+    if REGION is not None and img.size == REGION[1]:
+        img = img.crop(REGION[0])
     return img if img.size == size else None
 
 
@@ -910,7 +1000,7 @@ def first_pass(backend, api_key, img, hint, color, context, previous):
         try:
             if CHANGES_ONLY:
                 return apply_changes(img, ask(backend, api_key, prompt, images, CHANGES_SCHEMA), require_some=True)
-            return decode_canvas(ask(backend, api_key, prompt, images, RESULT_SCHEMA), img.width, img.height)
+            return keep_untouched(decode_canvas(ask(backend, api_key, prompt, images, RESULT_SCHEMA), img.width, img.height), img)
         except BadReplyError:
             if attempt == 1:
                 raise
@@ -943,7 +1033,60 @@ def review_pass(backend, api_key, img, edit, hint, color, context):
     print("claude_art: fixing - " + str(review.get("problems", "")), file=sys.stderr)
     if CHANGES_ONLY:
         return apply_changes(edit, review, require_some=False)
-    return decode_canvas(review, img.width, img.height)
+    return keep_untouched(decode_canvas(review, img.width, img.height), edit)
+
+
+def content_map(img, block):
+    """One text row per `block` pixel rows: '#' where a block has anything drawn in it."""
+    cols, rows = -(-img.width // block), -(-img.height // block)
+    drawn = img.getchannel("A").point(lambda a: 255 if a >= 128 else 0).convert("F")
+    cells = drawn.resize((cols, rows), Image.Resampling.BOX).load()
+    return "\n".join(
+        f"y={r * block:<5}" + "".join("#" if cells[c, r] > 0 else "." for c in range(cols))
+        for r in range(rows)
+    )
+
+
+def fit_region(reply, size, limit):
+    """Turns Claude's rectangle into a box that lies on the canvas and is within the limit."""
+    try:
+        x, y, w, h = (int(reply[k]) for k in ("x", "y", "width", "height"))
+    except (KeyError, TypeError, ValueError):
+        raise BadReplyError("Claude did not say which part of the canvas to work on. Try again.")
+    w, h = min(max(w, 16), size[0]), min(max(h, 16), size[1])
+    if w * h > limit:
+        # Too large: shrink it around its own centre, keeping its proportions
+        k = (limit / (w * h)) ** 0.5
+        cx, cy = x + w / 2, y + h / 2
+        w, h = max(1, int(w * k)), max(1, int(h * k))
+        x, y = int(cx - w / 2), int(cy - h / 2)
+    x, y = max(0, min(x, size[0] - w)), max(0, min(y, size[1] - h))
+    return (x, y, x + w, y + h)
+
+
+def locate(backend, api_key, img, hint, next_frame, limit):
+    """Asks Claude which part of a too-large canvas the request is about. Returns (box, note)."""
+    if next_frame:
+        request = "The artist asked for the next frame of this animation" + (f', and described what happens: "{hint}"' if hint else ".")
+    elif hint:
+        request = f'The artist typed this request: "{hint}"'
+    else:
+        request = "The artist is part-way through this drawing and asked for it to be finished."
+    block = max(8, -(-max(img.size) // 64))
+    side = int(limit ** 0.5)
+    images = [("canvas.png", "the whole canvas", img)]
+    prompt = LOCATE.format(
+        width=img.width, height=img.height, limit=limit, side=side, block=block,
+        image_note=image_note(backend, images), map=content_map(img, block), request=request,
+    )
+    for attempt in range(2):
+        try:
+            reply = ask(backend, api_key, prompt, images, LOCATE_SCHEMA)
+            note = " ".join(str(reply.get("note", "")).split())[:160] if isinstance(reply, dict) else ""
+            return fit_region(reply, img.size, limit), note
+        except BadReplyError:
+            if attempt == 1:
+                raise
 
 
 def option_path(number):
@@ -951,7 +1094,7 @@ def option_path(number):
 
 
 def main():
-    for path in [OUTPUT_PATH, ERROR_PATH, STATUS_PATH] + [option_path(n) for n in range(2, max(MAX_OPTIONS, MAX_NEW_FRAMES) + 1)]:
+    for path in [OUTPUT_PATH, ERROR_PATH, STATUS_PATH, NOTE_PATH] + [option_path(n) for n in range(2, max(MAX_OPTIONS, MAX_NEW_FRAMES) + 1)]:
         try:
             os.remove(path)
         except OSError:
@@ -972,12 +1115,31 @@ def main():
             raise BridgeError(f"Unknown backend '{backend}'.")
 
         ctx = load_context()
-        global NEXT_FRAME, CHANGES_ONLY
+        global NEXT_FRAME, CHANGES_ONLY, REGION
         CHANGES_ONLY = ctx.get("output") == "changes"
-        if img.width * img.height > (MAX_CELLS_CHANGES if CHANGES_ONLY else MAX_CELLS):
-            if CHANGES_ONLY:
-                raise BridgeError(f"That is {img.width}x{img.height} pixels; the assistant handles up to 256x256 at a time. Select a smaller area first.")
-            raise BridgeError(f"That is {img.width}x{img.height} pixels; with Output set to Whole Canvas the assistant handles up to 128x128. Switch Output to Changes Only, or select a smaller area.")
+        limit = MAX_CELLS_CHANGES if CHANGES_ONLY else MAX_CELLS
+        full, box = img, None
+        if img.width * img.height > limit:
+            if img.width * img.height > MAX_FULL_CELLS:
+                raise BridgeError(f"That is {img.width}x{img.height} pixels, which is more than the assistant can look over at once. Select or mark a smaller area first.")
+            set_status("Finding where to work")
+            box, note = locate(backend, api_key, full, hint, ctx.get("mode") == "next_frame", limit)
+            REGION = (box, full.size)
+            img = full.crop(box)
+            try:
+                with open(NOTE_PATH, "w", encoding="utf-8") as f:
+                    f.write(f"Worked on the {img.width}x{img.height} part at {box[0]}, {box[1]}" + (f". {note}" if note else ""))
+            except OSError:
+                pass
+
+        def save(edit, path):
+            # The app expects the canvas it sent, so a part goes back into the whole
+            if box is not None:
+                whole = full.copy()
+                whole.paste(edit, box[:2])
+                edit = whole
+            edit.save(path)
+
         current = int(ctx.get("frame", 1))
         before, after = load_neighbours(ctx, img.size)
         new_frames = 1
@@ -995,7 +1157,7 @@ def main():
             for step in range(1, new_frames + 1):
                 NEXT_FRAME["step"] = step
                 context, renders = build_context(ctx, img.size, before, after, current, own_canvas=(step == 1))
-                context += color_limit_text(allowed)
+                context += (MERGED if colours_merged(canvas) else "") + color_limit_text(allowed)
                 set_status(f"Drawing frame {step} of {new_frames}")
                 try:
                     edit = enforce_colors(first_pass(backend, api_key, canvas, hint, color, context, renders), canvas, allowed)
@@ -1015,13 +1177,13 @@ def main():
                     if fixed is None:
                         break
                     edit = enforce_colors(fixed, canvas, allowed)
-                edit.save(OUTPUT_PATH if step == 1 else option_path(step))
+                save(edit, OUTPUT_PATH if step == 1 else option_path(step))
                 drawn += 1
                 before, canvas, current = before + [canvas], edit, current + 1
             return
 
         context, previous = build_context(ctx, img.size, before, after, current)
-        context += color_limit_text(allowed)
+        context += (MERGED if colours_merged(img) else "") + color_limit_text(allowed)
         try:
             total = max(1, min(MAX_OPTIONS, int(ctx.get("options", 1))))
         except (TypeError, ValueError):
@@ -1054,7 +1216,7 @@ def main():
                     break
                 edit = enforce_colors(fixed, img, allowed)
                 if total == 1:
-                    edit.save(OUTPUT_PATH)
+                    save(edit, OUTPUT_PATH)
             if total > 1:
                 with checked_lock:
                     checked.append(number)
@@ -1071,7 +1233,7 @@ def main():
             jobs = [(n, s) for n, s in enumerate(sketches, 1) if not isinstance(s, BridgeError)]
             if not jobs:
                 raise sketches[0]
-            jobs[0][1].save(OUTPUT_PATH)
+            save(jobs[0][1], OUTPUT_PATH)
             if total > 1:
                 set_status("Checking how they look")
             edits = list(pool.map(check, jobs))
@@ -1082,7 +1244,7 @@ def main():
             if all(edit.tobytes() != other.tobytes() for other in distinct):
                 distinct.append(edit)
         for i, edit in enumerate(distinct):
-            edit.save(OUTPUT_PATH if i == 0 else option_path(i + 1))
+            save(edit, OUTPUT_PATH if i == 0 else option_path(i + 1))
     except BridgeError as e:
         with open(ERROR_PATH, "w", encoding="utf-8") as f:
             f.write(str(e))
