@@ -33,6 +33,7 @@
 #include "../core/GradientSystem.h"
 #include "../core/AssetManager.h"
 #include "AssetBrowserPanel.h"
+#include "ArcadeGame.h"
 
 #include "../UI/WorkspaceLayout.h"
 #include "../UI/Panels/TopBar.h"
@@ -43,77 +44,6 @@
 #include "../UI/Panels/StatusBar.h"
 #include "../core/GitImgClient.h"
 #include "../core/HandTracker.h"
-
-enum class GhostPersonality { Shadow, Speedy, Bashful, Pokey };
-enum class CollectibleType { Dot, PowerPellet, Cherry, Orange, Grape, Key };
-
-struct ArcadeGhost {
-    sf::Vector2f pos = { 0.f, 0.f };
-    sf::Vector2f vel = { 0.f, 0.f };
-    sf::Color baseColor = sf::Color::White;
-    GhostPersonality personality = GhostPersonality::Shadow;
-    int dir = 1;
-    float speed = 210.f;
-    float animTimer = 0.f;
-    bool isScared = false;
-    float scaredTimer = 0.f;
-    bool isEaten = false;
-    sf::Vector2f spawnPos = { 0.f, 0.f };
-};
-
-struct ArcadeCollectible {
-    sf::Vector2f pos = { 0.f, 0.f };
-    CollectibleType type = CollectibleType::Dot;
-    int points = 10;
-    bool collected = false;
-    float respawnTimer = 0.f;
-    float animPhase = 0.f;
-};
-
-struct ArcadeStationPortal {
-    std::string id = "";
-    std::string title = "";
-    std::string subtitle = "";
-    std::string keyShortcut = "";
-    sf::FloatRect bounds = { 0.f, 0.f, 0.f, 0.f };
-    sf::Color marqueeColor = sf::Color::White;
-    float pulse = 0.f;
-    float hoverAlpha = 0.f;
-    float triggerFlash = 0.f;
-    bool isArmed = true;
-};
-
-struct ArcadePacHero {
-    sf::Vector2f pos = { 960.f, 680.f };
-    sf::Vector2f vel = { 0.f, 0.f };
-    int dir = 0;
-    int nextDir = 0;
-    float speed = 280.f;
-    float mouthAnim = 0.f;
-    float deathAnim = 0.f;
-    bool isDying = false;
-    int lives = 3;
-    float invulnTimer = 0.f;
-};
-
-struct ArcadeParticleFX {
-    sf::Vector2f pos = { 0.f, 0.f };
-    sf::Vector2f vel = { 0.f, 0.f };
-    float life = 0.f;
-    float maxLife = 1.0f;
-    float size = 3.0f;
-    sf::Color color = sf::Color::White;
-};
-
-struct ArcadeScoreFloater {
-    std::string text = "";
-    sf::Vector2f pos = { 0.f, 0.f };
-    sf::Vector2f vel = { 0.f, -70.f };
-    float life = 0.85f;
-    float maxLife = 0.85f;
-    sf::Color color = sf::Color::White;
-};
-
 
 enum class MenuState {
     Main,
@@ -163,21 +93,7 @@ private:
     int m_lastTutorialIndex = -1;
     float m_screenTime = 0.0f;
     float m_tutorialTime = 0.0f;
-    bool m_isArcadePaused = false;
-    ArcadePacHero m_arcadeHero;
-    std::vector<ArcadeGhost> m_arcadeGhosts;
-    std::vector<ArcadeCollectible> m_arcadeCollectibles;
-    std::vector<ArcadeStationPortal> m_arcadePortals;
-    std::vector<sf::FloatRect> m_arcadeMazeWalls;
-    std::vector<ArcadeParticleFX> m_arcadeFX;
-    std::vector<ArcadeScoreFloater> m_arcadeFloaters;
-
-    float m_arcadeGlobalTime = 0.0f;
-    float m_arcadeMasterTimer = 0.0f;
-    int m_arcadeScore = 0;
-    int m_arcadeHighScore = 25000;
-    std::string m_arcadePendingAction = "";
-    float m_arcadeActionDelay = 0.0f;
+    ArcadeGame m_arcade;
 
     bool m_showEscapeMenu = false;
     sf::FloatRect m_startMenuFullscreenBtnBounds = sf::FloatRect(1440.f, 35.f, 150.f, 42.f);
@@ -208,17 +124,7 @@ private:
     void handleUnsavedWarningEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, Canvas& canvas, Timeline& timeline);
     bool handlePasteResolutionModalEvent(const sf::Event& event, sf::RenderWindow& window, Canvas& canvas, Timeline& timeline);
 
-    void initMinigame();
-    void updateMinigame(float dt, sf::Vector2f mousePos, sf::RenderWindow& window);
     void triggerArcadeStation(const std::string& id, sf::RenderWindow& window);
-    void spawnParticleBurst(sf::Vector2f pos, sf::Color col, int count, float spd);
-    void addFloatingText(const std::string& str, sf::Vector2f pos, sf::Color col);
-
-    void drawPixelHero(sf::RenderWindow& window);
-    void drawPixelGhost(sf::RenderWindow& window, const ArcadeGhost& g);
-    void drawPixelItem(sf::RenderWindow& window, sf::Vector2f pos, CollectibleType type, float anim);
-    void drawStationPortal(sf::RenderWindow& window, const ArcadeStationPortal& p, sf::Vector2f mousePos);
-    void drawArcadeBezelOverlay(sf::RenderWindow& window);
     AssetManager assetManager;
     std::unique_ptr<AssetBrowserPanel> assetBrowser;
     GradientConfig m_gradientConfig;
