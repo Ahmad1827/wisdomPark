@@ -115,14 +115,14 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir);\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\UI\Include;\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\Core\Include;C:\sfml\SFML-2.6.2\include;%(AdditionalIncludeDirectories);C:\Users\ahmad\source\repos\wisdomPark;C:\sfml\SFML-2.6.2\include;C:\Users\ahmad\source\repos\wisdomPark\src\SpriteEngine\UI\Include;C:\Users\ahmad\source\repos\wisdomPark\src\SpriteEngine\Core\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir);C:\sfml\SFML-2.6.2\include;%(AdditionalIncludeDirectories);C:\Users\ahmad\source\repos\wisdomPark;C:\sfml\SFML-2.6.2\include;C:\Users\ahmad\source\repos\wisdomPark\src\SpriteEngine\UI\Include;C:\Users\ahmad\source\repos\wisdomPark\src\SpriteEngine\Core\Include</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\build_win\UI\Debug;\\wsl.localhost\Ubuntu\home\ahmad\proiecte\SpriteSheetStudio\build_win\Core\Debug;C:\sfml\SFML-2.6.2\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);sfml-graphics.lib;sfml-window.lib;sfml-system.lib;sfml-network.lib;sfml-audio.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\sfml\SFML-2.6.2\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);sfml-graphics-d.lib;sfml-window-d.lib;sfml-system-d.lib;sfml-network-d.lib;sfml-audio-d.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
