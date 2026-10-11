@@ -36,6 +36,8 @@ private:
     sf::FloatRect aiOptionsBtnBounds;
     int assistColorMode = 0;
     int assistOptionCount = 1;
+    sf::FloatRect aiFrameCountBtnBounds;
+    int assistFrameCount = 1;
     sf::FloatRect closeBtnBounds;
 
     std::vector<std::pair<sf::FloatRect, sf::Color>> paletteSwatchBounds;
@@ -80,6 +82,8 @@ public:
     int getAssistColorMode() const { return assistColorMode; }
     // How many alternatives the assistant makes per request (1 to 3)
     int getAssistOptionCount() const { return assistOptionCount; }
+    // How many frames Draw Next Frame makes in one go (1 to 4)
+    int getAssistFrameCount() const { return assistFrameCount; }
     // true = the assistant answers with only the pixels it changes (quicker, larger canvases); false = it redraws the whole canvas
     bool getAssistChangesOnly() const { return assistOutputMode == 0; }
     bool containsPoint(sf::Vector2f point) const { return isVisible && sf::FloatRect(position.x, position.y, size.x, size.y).contains(point); }

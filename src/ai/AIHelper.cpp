@@ -1,5 +1,4 @@
 #include "AIHelper.h"
-#include "LocalPythonBridge.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -794,14 +793,9 @@ std::string AIHelper::startGeneratingComplexArt(sf::FloatRect bounds, const sf::
     }
 
     if (!usedDataset) {
-        std::vector<std::string> blueprint = generateFromLLM(currentTheme, provider, apiKey);
-
-        if (blueprint.empty()) {
-            std::cerr << "AI returned an empty blueprint. Falling back to procedural." << std::endl;
-            width = 20;
-            height = 20;
-            blueprint = generateDynamicBlueprint(rng, currentTheme);
-        }
+        width = 20;
+        height = 20;
+        std::vector<std::string> blueprint = generateDynamicBlueprint(rng, currentTheme);
 
         grid.clear();
         grid.resize(width * height, 0);
@@ -960,9 +954,4 @@ void AIHelper::parseCommand(const std::string& input, int& outQuantity, bool& ou
 
     if (outIsFill) outQuantity = 999;
     if (outTheme.empty()) outTheme = input;
-}
-
-std::vector<std::string> AIHelper::generateFromLLM(const std::string& theme, const std::string& provider, const std::string& apiKey) {
-    std::cout << "Requesting AI Blueprint for: " << theme << " using " << provider << std::endl;
-    return LocalPythonBridge::executeAndReadBlueprint(provider, apiKey, theme);
 }

@@ -24,9 +24,6 @@
     <ClCompile Include="src\ai\AIProvider.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\ai\LocalPythonBridge.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\core\Canvas.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -363,9 +360,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ai\AIProvider.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ai\LocalPythonBridge.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\AppState.h">

@@ -152,7 +152,6 @@
   <ItemGroup>
     <ClCompile Include="src\ai\AIHelper.cpp" />
     <ClCompile Include="src\ai\AIProvider.cpp" />
-    <ClCompile Include="src\ai\LocalPythonBridge.cpp" />
     <ClCompile Include="src\ai\AIManager.cpp" />
     <ClCompile Include="src\Application.cpp" />
     <ClCompile Include="src\core\AssetManager.cpp" />
@@ -269,7 +268,6 @@
     <ClInclude Include="src\ai\AIHelper.h" />
     <ClInclude Include="src\ai\AIProvider.h" />
     <ClInclude Include="src\ai\AIManager.h" />
-    <ClInclude Include="src\ai\LocalPythonBridge.h" />
     <ClInclude Include="src\Application.h" />
     <ClInclude Include="src\core\AppState.h" />
     <ClInclude Include="src\core\AssetManager.h" />

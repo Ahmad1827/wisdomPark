@@ -74,7 +74,6 @@ private:
     void clearGrid();
     std::vector<std::string> generateDynamicBlueprint(std::mt19937& rng, const std::string& theme);
     std::vector<std::string> generateWFCBuilding(std::mt19937& rng);
-    std::vector<std::string> generateFromLLM(const std::string& theme, const std::string& provider, const std::string& apiKey);
     void generateFromTemplate(std::mt19937& rng, const std::vector<std::string>& blueprint);
     void applyShading();
     void applyOutline();

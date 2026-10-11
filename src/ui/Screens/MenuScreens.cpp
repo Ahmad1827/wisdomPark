@@ -196,8 +196,9 @@ void UIManager::drawSettingsMenu(sf::RenderWindow& window) {
         sf::FloatRect card = SettingsSection(3);
         const std::string engine = ai.getActiveProvider();
         std::string engineNote;
-        if (engine == "Claude Code") engineNote = "Claude Code uses the login already on this computer. No key needed.";
-        else if (!ai.providerRequiresApiKey(engine)) engineNote = engine + " runs without an access key.";
+        if (engine == "Claude Code") engineNote = ai.testConnection(engine)
+            ? "Claude Code uses the login already on this computer. No key needed."
+            : "Claude Code was not found on this computer. Install it, or switch to Claude.";
         else if (ai.getApiKey(engine).empty()) engineNote = engine + " needs an access key before it can help.";
         else engineNote = engine + " is ready to use.";
 
@@ -289,7 +290,7 @@ void UIManager::drawTutorialsMenu(sf::RenderWindow& window) {
         "- Pack the entire timeline into compact sprite sheets ready for game engines.",
 
         "The Studio Assistant is optional. Pick its engine in Settings.\n\n"
-        "- Open the Color Assistant to generate 4-color shading ramps.\n"
+        "- Open the Studio Assistant to generate 4-color shading ramps.\n"
         "- Import palettes from Lospec links or paste hex codes directly.\n"
         "- All active palettes can be pinned and saved to your studio presets."
     };

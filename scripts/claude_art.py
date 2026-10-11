@@ -13,7 +13,9 @@ what the artist did with each result, so a follow-up such as "bigger" makes sens
 For an animation it lists the neighbouring frames, and it can ask for the next frame
 to be drawn instead of an edit to this one. It also says whether Claude should answer with the whole canvas or only with the
 pixels it changes, which is quicker and allows larger canvases. It can also hold a colour limit (the only colours new work may use) and a number of
-options to make; extra options are written to temp_ai_output_2.png and _3.png.
+options to make; extra options are written to temp_ai_output_2.png and _3.png. When
+several next frames are asked for at once they are drawn one after another, each from
+the one before it, and written to the same files in order (up to _4.png).
 
 The job arrives on stdin so neither the API key nor the user's prompt ever
 touches a command line:
@@ -31,6 +33,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image
@@ -38,6 +41,8 @@ from PIL import Image
 INPUT_PATH = "temp_ai_input.png"
 OUTPUT_PATH = "temp_ai_output.png"
 MAX_OPTIONS = 3
+# Next frames drawn in one request. Each is a request of its own plus its checks.
+MAX_NEW_FRAMES = 4
 ERROR_PATH = "temp_ai_error.txt"
 STATUS_PATH = "temp_ai_status.txt"
 CONTEXT_PATH = "temp_ai_context.json"
@@ -297,7 +302,7 @@ that comes right after it{between}. Your result is that new frame: the same scen
 moment later, as it should look on its own.
 
 {direction}
-
+{sequence}
 - Stay on model. Proportions, colours, outline weight and level of detail match this
   frame, so the two read as the same drawing when they are flipped back and forth.
 - Move only what moves. At {fps} frames a second one frame is a small step: a moving
@@ -321,6 +326,24 @@ DIRECTION_OPEN = (
 BETWEEN = (
     " and before the frame that follows it, which is given below, so it has to work as "
     "the in-between of the two"
+)
+BETWEEN_SEQUENCE = (
+    " and before the frame given below as the one after it, which the new frames lead up to"
+)
+# Several new frames were asked for in one go; each is drawn from the one before it.
+SEQUENCE = """
+The artist asked for {steps} new frames in a row. They are drawn one at a time and this
+is number {step}. {earlier}{pace}
+"""
+SEQUENCE_EARLIER = "The ones you already drew are the frames right before the canvas. "
+SEQUENCE_PACE_BETWEEN = (
+    "Together the new frames carry the drawing from where it started to the frame that "
+    "follows, in even steps, so this one covers about one part in {parts} of the distance "
+    "that is still left."
+)
+SEQUENCE_PACE_OPEN = (
+    "Spread the motion evenly over them: whatever happens should take all {steps} frames "
+    "and be complete in the last one, so this frame is one even step of it."
 )
 
 RESULT_SCHEMA = {
@@ -588,10 +611,16 @@ NEXT_FRAME = None
 
 def task_text(hint, color):
     if NEXT_FRAME is not None:
+        step, steps, following = NEXT_FRAME["step"], NEXT_FRAME["steps"], NEXT_FRAME["has_following"]
+        sequence = ""
+        if steps > 1:
+            pace = SEQUENCE_PACE_BETWEEN.format(parts=steps - step + 2) if following else SEQUENCE_PACE_OPEN.format(steps=steps)
+            sequence = SEQUENCE.format(steps=steps, step=step, earlier=SEQUENCE_EARLIER if step > 1 else "", pace=pace)
+        between = (BETWEEN_SEQUENCE if steps > 1 else BETWEEN) if following else ""
         return TASK_NEXT_FRAME.format(
-            between=BETWEEN if NEXT_FRAME["has_following"] else "",
+            between=between,
             direction=DIRECTION_GIVEN.format(request=hint) if hint else DIRECTION_OPEN,
-            fps=NEXT_FRAME["fps"], color=color,
+            sequence=sequence, fps=NEXT_FRAME["fps"], color=color,
         )
     return TASK_REQUEST.format(request=hint, color=color) if hint else TASK_FINISH
 
@@ -700,18 +729,30 @@ def color_limit_text(allowed):
     return COLOR_LIMIT.format(colors=" ".join("#%02x%02x%02x" % c for c in allowed)) + "\n"
 
 
-def frames_text(ctx, size):
-    """Returns (text, renders) for the frames around this one, nearest first in the budget."""
-    frames = [f for f in ctx.get("frames", []) if isinstance(f, dict)]
+def load_neighbours(ctx, size):
+    """The frames the app saved around the canvas: (those before it, oldest first; the one right after, or None)."""
     current = int(ctx.get("frame", 1))
+    found = {}
+    for frame in ctx.get("frames", []):
+        if isinstance(frame, dict):
+            img = open_matching(frame.get("file", ""), size)
+            if img is not None:
+                found[int(frame.get("number", 0))] = img
+    return [found[n] for n in sorted(found) if n < current], found.get(current + 1)
+
+
+def frames_text(ctx, before, after, current):
+    """Returns (text, renders) for the frames around frame `current`, nearest first in the budget."""
+    candidates = [(current - 1 - i, img) for i, img in enumerate(reversed(before))]
+    if after is not None:
+        candidates.append((current + 1, after))
     budget = LAYER_CELL_BUDGET
     shown = {}
-    for frame in sorted(frames, key=lambda f: abs(int(f.get("number", 0)) - current)):
-        img = open_matching(frame.get("file", ""), size)
-        if img is None or budget < size[0] * size[1]:
+    for number, img in sorted(candidates, key=lambda c: abs(c[0] - current)):
+        if budget < img.width * img.height:
             continue
-        budget -= size[0] * size[1]
-        shown[int(frame.get("number", 0))] = img
+        budget -= img.width * img.height
+        shown[number] = img
     if not shown:
         return "", []
 
@@ -731,11 +772,14 @@ def frames_text(ctx, size):
     return text, renders
 
 
-def build_context(ctx, size):
-    """Returns (text for the prompt, extra renders to show alongside the canvas)."""
-    frames, renders = frames_text(ctx, size)
-    text = layers_text(ctx, size) + frames + history_text(ctx)
-    previous = open_matching(ctx["previous"], size) if ctx.get("previous") and ctx.get("history") else None
+def build_context(ctx, size, before, after, current, own_canvas=True):
+    """Returns (text for the prompt, extra renders to show alongside the canvas).
+
+    `own_canvas` is False when the canvas is a frame Claude drew earlier in this request,
+    which the artist's layers and discarded result say nothing about."""
+    frames, renders = frames_text(ctx, before, after, current)
+    text = (layers_text(ctx, size) if own_canvas else "") + frames + history_text(ctx)
+    previous = open_matching(ctx["previous"], size) if own_canvas and ctx.get("previous") and ctx.get("history") else None
     if previous is not None:
         text += PREVIOUS.format(previous_json=canvas_json(*encode_canvas(previous))) + "\n"
         renders.append(("discarded.png", "your last result, which the artist discarded", previous))
@@ -907,7 +951,7 @@ def option_path(number):
 
 
 def main():
-    for path in [OUTPUT_PATH, ERROR_PATH, STATUS_PATH] + [option_path(n) for n in range(2, MAX_OPTIONS + 1)]:
+    for path in [OUTPUT_PATH, ERROR_PATH, STATUS_PATH] + [option_path(n) for n in range(2, max(MAX_OPTIONS, MAX_NEW_FRAMES) + 1)]:
         try:
             os.remove(path)
         except OSError:
@@ -934,14 +978,49 @@ def main():
             if CHANGES_ONLY:
                 raise BridgeError(f"That is {img.width}x{img.height} pixels; the assistant handles up to 256x256 at a time. Select a smaller area first.")
             raise BridgeError(f"That is {img.width}x{img.height} pixels; with Output set to Whole Canvas the assistant handles up to 128x128. Switch Output to Changes Only, or select a smaller area.")
+        current = int(ctx.get("frame", 1))
+        before, after = load_neighbours(ctx, img.size)
+        new_frames = 1
         if ctx.get("mode") == "next_frame":
-            current = int(ctx.get("frame", 1))
-            NEXT_FRAME = {
-                "fps": ctx.get("fps", 12),
-                "has_following": any(isinstance(f, dict) and f.get("number") == current + 1 for f in ctx.get("frames", [])),
-            }
-        context, previous = build_context(ctx, img.size)
+            try:
+                new_frames = max(1, min(MAX_NEW_FRAMES, int(ctx.get("new_frames", 1))))
+            except (TypeError, ValueError):
+                pass
+            NEXT_FRAME = {"fps": ctx.get("fps", 12), "has_following": after is not None, "step": 1, "steps": new_frames}
         allowed = allowed_colors(ctx, img, color)
+
+        if new_frames > 1:
+            # Each frame is drawn from the one before it, so they come one after another
+            canvas, drawn = img, 0
+            for step in range(1, new_frames + 1):
+                NEXT_FRAME["step"] = step
+                context, renders = build_context(ctx, img.size, before, after, current, own_canvas=(step == 1))
+                context += color_limit_text(allowed)
+                set_status(f"Drawing frame {step} of {new_frames}")
+                try:
+                    edit = enforce_colors(first_pass(backend, api_key, canvas, hint, color, context, renders), canvas, allowed)
+                except BridgeError as e:
+                    if drawn == 0:
+                        raise
+                    # The frames already drawn are still worth showing
+                    print(f"claude_art: stopped after {drawn} of {new_frames} frames - {e}", file=sys.stderr)
+                    break
+                for _ in range(REVIEW_ROUNDS):
+                    set_status(f"Checking frame {step} of {new_frames}")
+                    try:
+                        fixed = review_pass(backend, api_key, canvas, edit, hint, color, context)
+                    except BridgeError as e:
+                        print(f"claude_art: check skipped - {e}", file=sys.stderr)
+                        break
+                    if fixed is None:
+                        break
+                    edit = enforce_colors(fixed, canvas, allowed)
+                edit.save(OUTPUT_PATH if step == 1 else option_path(step))
+                drawn += 1
+                before, canvas, current = before + [canvas], edit, current + 1
+            return
+
+        context, previous = build_context(ctx, img.size, before, after, current)
         context += color_limit_text(allowed)
         try:
             total = max(1, min(MAX_OPTIONS, int(ctx.get("options", 1))))
@@ -955,6 +1034,8 @@ def main():
             except BridgeError as e:
                 return e
             return enforce_colors(edit, img, allowed)
+
+        checked, checked_lock = [], threading.Lock()
 
         def check(job):
             # There is already a usable result here, so a failed check keeps it rather
@@ -974,6 +1055,11 @@ def main():
                 edit = enforce_colors(fixed, img, allowed)
                 if total == 1:
                     edit.save(OUTPUT_PATH)
+            if total > 1:
+                with checked_lock:
+                    checked.append(number)
+                    if len(checked) < len(jobs):
+                        set_status(f"Checked {len(checked)} of {len(jobs)} options")
             return edit
 
         if NEXT_FRAME is not None:

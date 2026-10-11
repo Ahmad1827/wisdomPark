@@ -39,17 +39,19 @@ void AIPanel::init() {
 // The assistant's panel settings are kept between runs in a small text file next to the app
 void AIPanel::loadAssistPrefs() {
     std::ifstream in("assistant_prefs.txt");
-    int colors = 0, options = 1, output = 0;
+    int colors = 0, options = 1, output = 0, frames = 1;
     if (in >> colors >> options >> output) {
         assistColorMode = std::clamp(colors, 0, 2);
         assistOptionCount = std::clamp(options, 1, 3);
         assistOutputMode = std::clamp(output, 0, 1);
+        // Added later, so a file from an older version ends before it
+        if (in >> frames) assistFrameCount = std::clamp(frames, 1, 4);
     }
 }
 
 void AIPanel::saveAssistPrefs() const {
     std::ofstream out("assistant_prefs.txt", std::ios::trunc);
-    out << assistColorMode << " " << assistOptionCount << " " << assistOutputMode << "\n";
+    out << assistColorMode << " " << assistOptionCount << " " << assistOutputMode << " " << assistFrameCount << "\n";
 }
 
 void AIPanel::toggle() {
@@ -431,7 +433,8 @@ void AIPanel::update(float dt) {
     aiContourBtnBounds = sf::FloatRect(bx + 20.f + thirdW, by + 300.f, thirdW, 32.f);
     aiAskBtnBounds = sf::FloatRect(bx + 24.f + thirdW * 2.f, by + 300.f, thirdW, 32.f);
     float colorsW = (size.x - 36.f) * 0.62f;
-    aiNextFrameBtnBounds = sf::FloatRect(bx + 16.f, by + 338.f, size.x - 32.f, 32.f);
+    aiNextFrameBtnBounds = sf::FloatRect(bx + 16.f, by + 338.f, colorsW, 32.f);
+    aiFrameCountBtnBounds = sf::FloatRect(bx + 20.f + colorsW, by + 338.f, size.x - 36.f - colorsW, 32.f);
     aiColorsBtnBounds = sf::FloatRect(bx + 16.f, by + 376.f, colorsW, 28.f);
     aiOptionsBtnBounds = sf::FloatRect(bx + 20.f + colorsW, by + 376.f, size.x - 36.f - colorsW, 28.f);
     aiOutputBtnBounds = sf::FloatRect(bx + 16.f, by + 410.f, size.x - 32.f, 28.f);
@@ -467,7 +470,7 @@ void AIPanel::draw(sf::RenderWindow& window) {
     gripBg.setOutlineColor(WisdomUI::Theme::SunsetPlum);
     window.draw(gripBg);
 
-    WisdomUI::Theme::DrawCrispText(window, font, ":: COLOR ASSISTANT ::", 15, headerGripBounds.left + headerGripBounds.width / 2.0f, headerGripBounds.top + headerGripBounds.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
+    WisdomUI::Theme::DrawCrispText(window, font, ":: STUDIO ASSISTANT ::", 15, headerGripBounds.left + headerGripBounds.width / 2.0f, headerGripBounds.top + headerGripBounds.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
     WisdomUI::Theme::DrawCrispText(window, font, "Preset Palette:", 13, position.x + 16.f, position.y + 40.f, WisdomUI::Theme::TextSecondary);
 
@@ -520,8 +523,14 @@ void AIPanel::draw(sf::RenderWindow& window) {
     WisdomUI::Theme::DrawSunsetButton(window, aiAskBtnBounds, "Ask Assistant", font, 12, false, hovAsk, false, 1.0f);
 
     bool hovNextFrame = aiNextFrameBtnBounds.contains(mPos);
-    if (hovNextFrame) hoveredTooltip = "The assistant draws the next animation frame after this one; say what happens, or let it continue the motion";
-    WisdomUI::Theme::DrawSunsetButton(window, aiNextFrameBtnBounds, "Draw Next Frame", font, 12, false, hovNextFrame, false, 1.0f);
+    if (hovNextFrame) hoveredTooltip = assistFrameCount == 1
+        ? "The assistant draws the next animation frame after this one; say what happens, or let it continue the motion"
+        : "The assistant draws the next " + std::to_string(assistFrameCount) + " animation frames after this one; say what happens, or let it continue the motion";
+    WisdomUI::Theme::DrawSunsetButton(window, aiNextFrameBtnBounds, assistFrameCount == 1 ? "Draw Next Frame" : "Draw Next " + std::to_string(assistFrameCount) + " Frames", font, 12, false, hovNextFrame, false, 1.0f);
+
+    bool hovFrameCount = aiFrameCountBtnBounds.contains(mPos);
+    if (hovFrameCount) hoveredTooltip = "How many frames Draw Next Frame makes in one go, each drawn from the one before (more takes longer)";
+    WisdomUI::Theme::DrawSunsetButton(window, aiFrameCountBtnBounds, "Frames: " + std::to_string(assistFrameCount), font, 12, false, hovFrameCount, assistFrameCount > 1, 1.0f);
 
     static const char* kColorModes[] = { "Colours: Free", "Colours: Drawing Only", "Colours: This Palette" };
     bool hovColors = aiColorsBtnBounds.contains(mPos);
@@ -539,7 +548,7 @@ void AIPanel::draw(sf::RenderWindow& window) {
     WisdomUI::Theme::DrawSunsetButton(window, aiOutputBtnBounds, assistOutputMode == 0 ? "Output: Changes Only" : "Output: Whole Canvas", font, 12, false, hovOutput, false, 1.0f);
 
     bool hovClose = closeBtnBounds.contains(mPos);
-    if (hovClose) hoveredTooltip = "Close Color Assistant";
+    if (hovClose) hoveredTooltip = "Close Studio Assistant";
     WisdomUI::Theme::DrawSunsetButton(window, closeBtnBounds, "Close", font, 13, false, hovClose, false, 1.0f);
 
     if (isDropdownOpen) {
@@ -672,6 +681,12 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
 
         if (aiNextFrameBtnBounds.contains(mousePos)) {
             pendingAction = "action:ai_next_frame";
+            return true;
+        }
+
+        if (aiFrameCountBtnBounds.contains(mousePos)) {
+            assistFrameCount = assistFrameCount % 4 + 1;
+            saveAssistPrefs();
             return true;
         }
 

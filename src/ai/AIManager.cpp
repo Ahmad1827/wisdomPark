@@ -13,13 +13,13 @@ static sf::Image g_asyncInputImage;
 AIManager::AIManager() : aiEnabled(true) {}
 
 void AIManager::init() {
-    registerProvider(std::make_shared<GeminiProvider>());
-    registerProvider(std::make_shared<OpenAIProvider>());
-    registerProvider(std::make_shared<ClaudeProvider>());
+    // Claude Code comes first so it is the engine on a fresh install: it needs no key
     registerProvider(std::make_shared<ClaudeCodeProvider>());
-    registerProvider(std::make_shared<OpenRouterProvider>());
-    registerProvider(std::make_shared<OllamaProvider>());
+    registerProvider(std::make_shared<ClaudeProvider>());
+    const std::string fallback = activeProvider;
     loadSettingsLocally();
+    // Settings saved by an older version may name an engine that no longer exists
+    if (providers.find(activeProvider) == providers.end()) activeProvider = fallback;
 }
 
 void AIManager::abortTask() {
@@ -139,8 +139,9 @@ void AIManager::loadSettingsLocally() {
         for (int i = 0; i < keyCount; ++i) {
             std::string pName, pKey;
             std::getline(in, pName); std::getline(in, pKey);
+            if (providers.find(pName) == providers.end()) continue;
             apiKeys[pName] = decryptKey(pKey);
-            if (providers.find(pName) != providers.end()) providers[pName]->setApiKey(apiKeys[pName]);
+            providers[pName]->setApiKey(apiKeys[pName]);
         }
     }
 }

@@ -5,6 +5,7 @@
 #include <sstream>
 #include <filesystem>
 #include <mutex>
+#include <chrono>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -105,6 +106,7 @@ static AIResult runClaudeArt(const std::string& backend, const std::string& apiK
     std::filesystem::remove("temp_ai_status.txt", ec);
     std::filesystem::remove("temp_ai_output_2.png", ec);
     std::filesystem::remove("temp_ai_output_3.png", ec);
+    std::filesystem::remove("temp_ai_output_4.png", ec);
 
     char color[8];
     snprintf(color, sizeof(color), "#%02x%02x%02x", request.primaryColor.r, request.primaryColor.g, request.primaryColor.b);
@@ -126,30 +128,6 @@ static AIResult runClaudeArt(const std::string& backend, const std::string& apiK
     return res;
 }
 
-bool GeminiProvider::testConnection() { return !apiKey.empty(); }
-
-std::string GeminiProvider::getName() const { return "Gemini"; }
-
-AIResult GeminiProvider::process(const AIRequest& request) {
-    AIResult res;
-    std::string cmd = "python scripts/run_ai.py --provider gemini --key \"" + apiKey + "\" --prompt \"" + request.prompt + "\"";
-    int exitCode = std::system(cmd.c_str());
-    res.success = (exitCode == 0);
-    return res;
-}
-
-bool OpenAIProvider::testConnection() { return !apiKey.empty(); }
-
-std::string OpenAIProvider::getName() const { return "OpenAI"; }
-
-AIResult OpenAIProvider::process(const AIRequest& request) {
-    AIResult res;
-    std::string cmd = "python scripts/run_ai.py --provider openai --key \"" + apiKey + "\" --prompt \"" + request.prompt + "\"";
-    int exitCode = std::system(cmd.c_str());
-    res.success = (exitCode == 0);
-    return res;
-}
-
 bool ClaudeProvider::testConnection() { return !apiKey.empty(); }
 
 std::string ClaudeProvider::getName() const { return "Claude"; }
@@ -158,34 +136,28 @@ AIResult ClaudeProvider::process(const AIRequest& request) {
     return runClaudeArt("api", apiKey, request);
 }
 
-bool ClaudeCodeProvider::testConnection() { return true; }
+// True when the 'claude' command is on PATH, which is what the bridge looks for. The settings screen asks every
+// frame, so the answer is kept for a couple of seconds.
+bool ClaudeCodeProvider::testConnection() {
+#if defined(_WIN32)
+    static bool found = false;
+    static std::chrono::steady_clock::time_point checkedAt{};
+    const auto now = std::chrono::steady_clock::now();
+    if (checkedAt.time_since_epoch().count() != 0 && now - checkedAt < std::chrono::seconds(2)) return found;
+    checkedAt = now;
+    found = false;
+    char path[MAX_PATH];
+    for (const char* ext : { ".exe", ".cmd", ".bat" }) {
+        if (SearchPathA(nullptr, "claude", ext, MAX_PATH, path, nullptr) > 0) { found = true; break; }
+    }
+    return found;
+#else
+    return true;
+#endif
+}
 
 std::string ClaudeCodeProvider::getName() const { return "Claude Code"; }
 
 AIResult ClaudeCodeProvider::process(const AIRequest& request) {
     return runClaudeArt("cli", "", request);
-}
-
-bool OpenRouterProvider::testConnection() { return !apiKey.empty(); }
-
-std::string OpenRouterProvider::getName() const { return "OpenRouter"; }
-
-AIResult OpenRouterProvider::process(const AIRequest& request) {
-    AIResult res;
-    std::string cmd = "python scripts/run_ai.py --provider openrouter --key \"" + apiKey + "\" --prompt \"" + request.prompt + "\"";
-    int exitCode = std::system(cmd.c_str());
-    res.success = (exitCode == 0);
-    return res;
-}
-
-bool OllamaProvider::testConnection() { return true; }
-
-std::string OllamaProvider::getName() const { return "Ollama (Local)"; }
-
-AIResult OllamaProvider::process(const AIRequest& request) {
-    AIResult res;
-    std::string cmd = "python scripts/run_ai.py --provider ollama --key \"none\" --prompt \"" + request.prompt + "\"";
-    int exitCode = std::system(cmd.c_str());
-    res.success = (exitCode == 0);
-    return res;
 }

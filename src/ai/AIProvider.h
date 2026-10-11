@@ -50,20 +50,6 @@ public:
     virtual bool requiresApiKey() const { return true; }
 };
 
-class GeminiProvider : public AIProvider {
-public:
-    bool testConnection() override;
-    AIResult process(const AIRequest& request) override;
-    std::string getName() const override;
-};
-
-class OpenAIProvider : public AIProvider {
-public:
-    bool testConnection() override;
-    AIResult process(const AIRequest& request) override;
-    std::string getName() const override;
-};
-
 class ClaudeProvider : public AIProvider {
 public:
     bool testConnection() override;
@@ -73,21 +59,6 @@ public:
 
 // Claude through the user's own Claude Code login instead of an API key.
 class ClaudeCodeProvider : public AIProvider {
-public:
-    bool testConnection() override;
-    AIResult process(const AIRequest& request) override;
-    std::string getName() const override;
-    bool requiresApiKey() const override { return false; }
-};
-
-class OpenRouterProvider : public AIProvider {
-public:
-    bool testConnection() override;
-    AIResult process(const AIRequest& request) override;
-    std::string getName() const override;
-};
-
-class OllamaProvider : public AIProvider {
 public:
     bool testConnection() override;
     AIResult process(const AIRequest& request) override;

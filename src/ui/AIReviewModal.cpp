@@ -63,6 +63,7 @@ void AIReviewModal::open(const sf::Image& originalImg, const sf::Image& resultIm
     options.assign(1, resultImg);
     optionIndex = 0;
     nextFrameMode = false;
+    frameSequence = false;
 
     if (originalImg.getSize().x > 0 && originalImg.getSize().y > 0) {
         originalTexture.loadFromImage(originalImg);
@@ -121,7 +122,7 @@ void AIReviewModal::draw(sf::RenderWindow& window) {
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
     if (options.size() > 1) {
-        std::string label = "OPTION " + std::to_string(optionIndex + 1) + " OF " + std::to_string(options.size()) + "   (LEFT / RIGHT)";
+        std::string label = std::string(frameSequence ? "NEW FRAME " : "OPTION ") + std::to_string(optionIndex + 1) + " OF " + std::to_string(options.size()) + "   (LEFT / RIGHT)";
         WisdomUI::Theme::DrawCrispText(window, font, label, 12, 1010.f + 290.f, 195.f, WisdomUI::Theme::SunsetGold, sf::Color::Transparent, true, true);
         WisdomUI::Theme::DrawSunsetButton(window, prevOptionBounds, "<", font, 14, false, prevOptionBounds.contains(mPos), false, 1.0f);
         WisdomUI::Theme::DrawSunsetButton(window, nextOptionBounds, ">", font, 14, false, nextOptionBounds.contains(mPos), false, 1.0f);
@@ -131,7 +132,7 @@ void AIReviewModal::draw(sf::RenderWindow& window) {
     }
 
     if (nextFrameMode) {
-        WisdomUI::Theme::DrawSunsetButton(window, acceptNewLayerBtn.getGlobalBounds(), "Add As Next Frame", font, 12, false, acceptNewLayerBtn.getGlobalBounds().contains(mPos), true, 1.0f);
+        WisdomUI::Theme::DrawSunsetButton(window, acceptNewLayerBtn.getGlobalBounds(), isFrameSequence() ? "Add All " + std::to_string(options.size()) + " Frames" : "Add As Next Frame", font, 12, false, acceptNewLayerBtn.getGlobalBounds().contains(mPos), true, 1.0f);
         WisdomUI::Theme::DrawSunsetButton(window, rejectBtn.getGlobalBounds(), "Discard Result", font, 12, false, rejectBtn.getGlobalBounds().contains(mPos), true, 1.0f);
         return;
     }

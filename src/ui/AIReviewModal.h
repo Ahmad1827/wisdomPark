@@ -37,6 +37,8 @@ private:
 
     // The result is a new animation frame rather than an edit of this one
     bool nextFrameMode = false;
+    // The results are frames that follow one another, all kept together, rather than options to pick from
+    bool frameSequence = false;
 
     void showOption(int index);
 
@@ -48,6 +50,9 @@ public:
     void open(const sf::Image& originalImg, const sf::Image& resultImg);
     void open(const sf::Image& originalImg, const std::vector<sf::Image>& resultOptions);
     void setNextFrameMode(bool enabled) { nextFrameMode = enabled; }
+    void setFrameSequence(bool enabled) { frameSequence = enabled; }
+    bool isFrameSequence() const { return frameSequence && options.size() > 1; }
+    const std::vector<sf::Image>& getOptions() const { return options; }
     int getOptionIndex() const { return optionIndex; }
     int getOptionCount() const { return static_cast<int>(options.size()); }
     void close();
