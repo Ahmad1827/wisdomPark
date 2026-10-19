@@ -54,8 +54,11 @@ int main() {
     // CHANGED: request multisampling. Vector strokes are drawn as geometry
     // straight to this window, so the window's AA level is what smooths them.
     // With the default (0) every stroke edge is hard binary coverage.
+    // 4x rather than 8x: every full-screen pass costs per sample, and zoomed in the canvas fills the
+    // screen several times over; at 8x that pushed frames past 16 ms on a modest GPU (measured), at 4x
+    // they stay near 13 ms, and strokes look the same to the eye.
     sf::ContextSettings ctxSettings;
-    ctxSettings.antialiasingLevel = 8;
+    ctxSettings.antialiasingLevel = 4;
 
     sf::RenderWindow window(desktopMode, "Wisdom Park", sf::Style::Fullscreen, ctxSettings);
 

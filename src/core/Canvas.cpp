@@ -5515,45 +5515,64 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     // grows and shrinks with the canvas like a real one
     const float kFrameScale = 3.f;
     const float frameW = m_hasFrame ? m_frameTex[0].getSize().y * kFrameScale : 0.f;
-    const int kShadowSteps = 10;
-    for (int i = kShadowSteps; i >= 1; --i) {
-        float spread = frameW + i * 2.4f * screenPx;
-        sf::RectangleShape shadow(sf::Vector2f(cw + spread * 2.f, ch + spread * 2.f));
-        shadow.setPosition(-spread, -spread + 6.f * screenPx);
-        shadow.setFillColor(sf::Color(0, 0, 0, static_cast<sf::Uint8>(10 + (kShadowSteps - i) * 2)));
+    // Each step of the shadow is only the band outside the framed canvas (which covers the rest), all in one
+    // draw: zoomed in, whole-screen layers of shadow cost a weak GPU more than everything else put together
+    {
+        const int kShadowSteps = 10;
+        sf::VertexArray shadow(sf::Triangles);
+        float inL = -frameW, inT = -frameW, inR = cw + frameW, inB = ch + frameW;
+        auto strip = [&](float l, float t, float r, float b, sf::Color c) {
+            if (r <= l || b <= t) return;
+            sf::Vector2f p[4] = { { l, t }, { r, t }, { r, b }, { l, b } };
+            for (int k : { 0, 1, 2, 0, 2, 3 }) shadow.append(sf::Vertex(p[k], c));
+        };
+        for (int i = kShadowSteps; i >= 1; --i) {
+            float spread = frameW + i * 2.4f * screenPx;
+            float l = -spread, r = cw + spread;
+            float t = -spread + 6.f * screenPx, b = ch + spread + 6.f * screenPx;
+            sf::Color c(0, 0, 0, static_cast<sf::Uint8>(10 + (kShadowSteps - i) * 2));
+            strip(l, t, r, std::min(b, inT), c);
+            strip(l, std::max(t, inB), r, b, c);
+            strip(l, std::max(t, inT), std::min(r, inL), std::min(b, inB), c);
+            strip(std::max(l, inR), std::max(t, inT), r, std::min(b, inB), c);
+        }
         window.draw(shadow, frameStates);
     }
 
-    sf::RectangleShape bg(sf::Vector2f(canvasLogicalSize.x, canvasLogicalSize.y));
-    bg.setFillColor(sf::Color::White);
-    window.draw(bg, innerStates);
+    // In pixel mode the checkerboard below covers the whole canvas, so the white is only needed otherwise
+    if (!isPixelMode) {
+        sf::RectangleShape bg(sf::Vector2f(canvasLogicalSize.x, canvasLogicalSize.y));
+        bg.setFillColor(sf::Color::White);
+        window.draw(bg, innerStates);
+    }
 
     if (isPixelMode) {
         // Squares about 10 screen pixels across whatever the canvas size or zoom, so transparency reads as
         // a calm pattern instead of specks on a large canvas
         float logicalPerScreen = 1.f / std::max(0.0001f, texScale.x * viewScale);
         float tileSize = std::max(1.f, std::round(10.f * logicalPerScreen));
-        int cols = static_cast<int>(std::ceil(canvasLogicalSize.x / tileSize));
-        int rows = static_cast<int>(std::ceil(canvasLogicalSize.y / tileSize));
-        sf::VertexArray checkerboard(sf::Quads);
-        sf::Color c1(214, 214, 220);
-        sf::Color c2(246, 246, 248);
-
-        for (int r = 0; r < rows; ++r) {
-            for (int c = 0; c < cols; ++c) {
-                sf::Color color = ((r + c) % 2 == 0) ? c1 : c2;
-                float x = c * tileSize;
-                float y = r * tileSize;
-                float w = std::min(tileSize, static_cast<float>(canvasLogicalSize.x) - x);
-                float h = std::min(tileSize, static_cast<float>(canvasLogicalSize.y) - y);
-
-                checkerboard.append(sf::Vertex(sf::Vector2f(x, y), color));
-                checkerboard.append(sf::Vertex(sf::Vector2f(x + w, y), color));
-                checkerboard.append(sf::Vertex(sf::Vector2f(x + w, y + h), color));
-                checkerboard.append(sf::Vertex(sf::Vector2f(x, y + h), color));
-            }
+        // One quad with a repeating 2x2 texture, one texel per square: the same cost at every zoom (one
+        // shape per square came to a million shapes a frame when zoomed in on a large canvas)
+        static sf::Texture checker;
+        if (checker.getSize().x == 0) {
+            sf::Image img;
+            img.create(2, 2, sf::Color(214, 214, 220));
+            img.setPixel(1, 0, sf::Color(246, 246, 248));
+            img.setPixel(0, 1, sf::Color(246, 246, 248));
+            checker.loadFromImage(img);
+            checker.setRepeated(true);
+            checker.setSmooth(false);
         }
-        window.draw(checkerboard, innerStates);
+        float w = static_cast<float>(canvasLogicalSize.x);
+        float h = static_cast<float>(canvasLogicalSize.y);
+        sf::VertexArray quad(sf::Quads, 4);
+        quad[0] = sf::Vertex(sf::Vector2f(0.f, 0.f), sf::Vector2f(0.f, 0.f));
+        quad[1] = sf::Vertex(sf::Vector2f(w, 0.f), sf::Vector2f(w / tileSize, 0.f));
+        quad[2] = sf::Vertex(sf::Vector2f(w, h), sf::Vector2f(w / tileSize, h / tileSize));
+        quad[3] = sf::Vertex(sf::Vector2f(0.f, h), sf::Vector2f(0.f, h / tileSize));
+        sf::RenderStates checkerStates = innerStates;
+        checkerStates.texture = &checker;
+        window.draw(quad, checkerStates);
     }
 
     // A crisp edge just outside the canvas, so artwork drawn after it never covers it
