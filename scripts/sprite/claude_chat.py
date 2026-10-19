@@ -16,7 +16,8 @@ become timeline frames in order. Only frames whose render changed this turn are 
 back, so a frame the artist painted over by hand stays as it is unless Claude redraws it.
 
 Writes:
-    <dir>/reply.json    {"reply": text, "changed": [frame indices], "total": frames drawn}
+    <dir>/reply.json    {"reply": text, "changed": [frame indices], "total": frames drawn,
+                         "limits": plan usage Claude Code reported (or null), "cost": API-price estimate in USD}
     <dir>/frames/       every frame Claude's sprite.py draws (frames/NNN.png)
     <dir>/chat.jsonl    the conversation, one {"role", "text"} per line, for the chat panel
     temp_ai_status.txt  what Claude is doing right now (the app's loading screen shows it)
@@ -206,7 +207,8 @@ def main():
         shutil.copytree(os.path.join(workdir, "frames"), last)
 
     with open(os.path.join(workdir, "reply.json"), "w", encoding="utf-8") as f:
-        json.dump({"reply": reply, "changed": changed, "total": total}, f)
+        json.dump({"reply": reply, "changed": changed, "total": total,
+                   "limits": result.get("rate_windows"), "cost": result.get("total_cost_usd", 0)}, f)
     log_chat(workdir, "claude", reply)
     set_status(STATUS_PATH, "Done")
 

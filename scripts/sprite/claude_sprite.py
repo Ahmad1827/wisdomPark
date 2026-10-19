@@ -58,7 +58,9 @@ def run_claude(workdir, prompt, system_prompt, status, model="", effort="high", 
 
     Claude may only read, write and edit files in `workdir` and run `python render.py`.
     `status(text)` is called with a short line whenever Claude starts on something.
-    Returns (result event or None, number of renders, stderr text).
+    Returns (result event or None, number of renders, stderr text). The result carries
+    "rate_windows", the plan usage Claude Code last reported ({"five_hour": {"utilization",
+    "resetsAt"}, "seven_day": {...}}), when it reported any.
     """
     exe = shutil.which("claude")
     if not exe:
@@ -88,7 +90,7 @@ def run_claude(workdir, prompt, system_prompt, status, model="", effort="high", 
     drain = threading.Thread(target=lambda: err_chunks.append(proc.stderr.read()), daemon=True)
     drain.start()
 
-    result, renders = None, 0
+    result, renders, windows = None, 0, None
     for line in proc.stdout:
         try:
             event = json.loads(line)
@@ -103,6 +105,8 @@ def run_claude(workdir, prompt, system_prompt, status, model="", effort="high", 
                     if block.get("name") == "Bash":
                         renders += 1
                     status(describe_tool(block) + (f" (render {renders})" if block.get("name") == "Bash" else ""))
+        elif event.get("type") == "rate_limit_event":
+            windows = event.get("rate_limit_info", {}).get("unifiedWindows") or windows
         elif event.get("type") == "result":
             result = event
     try:
@@ -110,6 +114,8 @@ def run_claude(workdir, prompt, system_prompt, status, model="", effort="high", 
     except subprocess.TimeoutExpired:
         proc.kill()
     drain.join(timeout=5)
+    if result is not None and windows:
+        result["rate_windows"] = windows
     return result, renders, "".join(err_chunks)
 
 

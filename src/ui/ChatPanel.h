@@ -1,5 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -23,7 +24,8 @@ public:
     // What the estimate depends on besides the message: whether Claude already has a sprite going in this
     // project, and the size Claude will draw at. folderLabel is shown in the header like a terminal's working
     // folder; areaLabel says what Claude draws when it is not simply the whole canvas.
-    void setContext(const std::string& folderLabel, bool hasSprite, unsigned int width, unsigned int height, const std::string& areaLabel);
+    // scaled says the area is big enough that the detail setting decides how finely Claude draws it.
+    void setContext(const std::string& folderLabel, bool hasSprite, unsigned int width, unsigned int height, const std::string& areaLabel, bool scaled);
 
     // True when the event was meant for the panel (a click inside it, or typing while its box has focus)
     bool handleEvent(const sf::Event& event, sf::Vector2f mousePos);
@@ -33,8 +35,15 @@ public:
     std::string takeMessage();
     // The Claude Code model id to run on, empty for whatever Claude Code itself is set to
     std::string modelId() const;
+    // How finely Claude draws an area too big to draw pixel for pixel quickly: the longest side it draws at,
+    // 0 for every pixel of the canvas
+    int detailSide() const;
     // Called when the reply to the last message is back; a run that finished teaches the estimate
     void finishRun(bool success);
+    // The plan usage Claude Code reported at the end of the last run (fractions of the 5-hour and weekly limits,
+    // and when each resets), and what the run would have cost at API prices. Returns a line for the chat
+    // saying how much of the limit the run used, or "" when Claude Code reported nothing.
+    std::string reportUsage(float fiveHour, long long fiveHourResets, float week, long long weekResets, double cost);
     // The area button under the prompt box: whether the artist is dragging out an area on the canvas right
     // now, and the area marked so far ("" for none)
     void setMarking(bool marking, const std::string& markLabel);
@@ -54,6 +63,20 @@ private:
         std::string kind;   // "chat", "new" or "edit"
         int frames = 0;
         float seconds = 0.f;
+        // Share of the 5-hour limit it should use, in percent; below 0 until runs have shown how fast it goes
+        float percent = -1.f;
+    };
+    // The plan usage as last reported, and what runs have shown about how fast it goes
+    struct Usage {
+        float fiveHour = -1.f;
+        long long fiveHourResets = 0;
+        float week = -1.f;
+        long long weekResets = 0;
+        // Percent of the 5-hour limit used against API-price cost, over every run where both are known
+        double percentSum = 0.0;
+        double costSum = 0.0;
+        // Per model: API-price cost and seconds over its runs, so a time estimate turns into a cost
+        std::map<std::string, std::pair<double, double>> perModel;
     };
     // One finished run: what was estimated and how long it really took
     struct Timing {
@@ -81,6 +104,9 @@ private:
     bool m_marking = false;
     std::string m_markLabel;
     std::string m_areaText;
+    bool m_scaled = false;
+    int m_detail = 1;
+    std::string m_detailText;
     bool m_hasSprite = false;
     unsigned int m_canvasW = 32;
     unsigned int m_canvasH = 32;
@@ -88,6 +114,9 @@ private:
     int m_model = 0;
     bool m_pickerOpen = false;
     std::vector<Timing> m_timings;
+    Usage m_usage;
+    void saveUsage() const;
+    std::string usageLine() const;
     // The run in flight: its model and what it was estimated to take
     std::string m_runModel;
     float m_runEstimate = 0.f;
@@ -101,6 +130,7 @@ private:
     sf::FloatRect m_footerBounds;
     sf::FloatRect m_modelBounds;
     sf::FloatRect m_areaBounds;
+    sf::FloatRect m_detailBounds;
     sf::FloatRect m_pickerBounds;
     sf::FloatRect m_closeBounds;
     sf::FloatRect m_stopBounds;
@@ -116,6 +146,8 @@ private:
     void send();
     void runCommand(const std::string& command);
     void setModel(int index);
+    void setDetail(int index);
+    void saveChoices() const;
     Job estimate(const std::string& message, int model) const;
     std::string inputUtf8() const;
 };

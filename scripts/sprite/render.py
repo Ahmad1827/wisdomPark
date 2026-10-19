@@ -26,6 +26,8 @@ sys.path.insert(0, os.getcwd())
 from spritelib import Canvas  # noqa: E402
 
 ZOOM = 8
+# The enlarged sheet in preview.png is kept about this wide, so a big scene is not blown up to a huge image
+PREVIEW_SIDE = 1600
 MAX_ORPHANS_LISTED = 6
 
 
@@ -77,7 +79,8 @@ def build_preview(mod, sheet, frames):
     labels, then the sheet at 2x and 1x underneath so it can be judged at real size."""
     w, h = mod.WIDTH, mod.HEIGHT
     label_w = 60
-    big = sheet.resize((sheet.width * ZOOM, sheet.height * ZOOM), Image.NEAREST)
+    zoom = max(1, min(ZOOM, PREVIEW_SIDE // max(sheet.width, sheet.height)))
+    big = sheet.resize((sheet.width * zoom, sheet.height * zoom), Image.NEAREST)
     small2 = sheet.resize((sheet.width * 2, sheet.height * 2), Image.NEAREST)
     pad = 12
     motion = [motion_panel(anim, canvases) for anim, canvases in frames.items() if len(canvases) > 1]
@@ -88,22 +91,26 @@ def build_preview(mod, sheet, frames):
     out = Image.new("RGBA", (W, H), (40, 40, 48, 255))
     d = ImageDraw.Draw(out)
 
-    # checkerboard behind the enlarged sheet so transparency is visible
-    for y in range(0, big.height, ZOOM):
-        for x in range(0, big.width, ZOOM):
-            shade = (92, 92, 104, 255) if ((x // ZOOM // 2 + y // ZOOM // 2) % 2) else (78, 78, 90, 255)
-            d.rectangle([label_w + x, y, label_w + x + ZOOM - 1, y + ZOOM - 1], fill=shade)
+    # checkerboard behind the enlarged sheet so transparency is visible; its squares never get tiny
+    cell = max(zoom, 8)
+    for y in range(0, big.height, cell):
+        for x in range(0, big.width, cell):
+            shade = (92, 92, 104, 255) if ((x // cell + y // cell) % 2) else (78, 78, 90, 255)
+            d.rectangle([label_w + x, y, label_w + x + cell - 1, y + cell - 1], fill=shade)
     out.alpha_composite(big, (label_w, 0))
-    for x in range(0, big.width + 1, ZOOM):
-        strong = (x // ZOOM) % w == 0
-        d.line([label_w + x, 0, label_w + x, big.height], fill=(255, 255, 255, 150 if strong else 28), width=1)
-    for y in range(0, big.height + 1, ZOOM):
-        strong = (y // ZOOM) % h == 0
-        d.line([label_w, y, label_w + big.width, y], fill=(255, 255, 255, 150 if strong else 28), width=1)
+    # A grid line per pixel only while pixels are big enough to see between them; frame borders always
+    for x in range(0, big.width + 1, zoom):
+        strong = (x // zoom) % w == 0
+        if strong or zoom >= 4:
+            d.line([label_w + x, 0, label_w + x, big.height], fill=(255, 255, 255, 150 if strong else 28), width=1)
+    for y in range(0, big.height + 1, zoom):
+        strong = (y // zoom) % h == 0
+        if strong or zoom >= 4:
+            d.line([label_w, y, label_w + big.width, y], fill=(255, 255, 255, 150 if strong else 28), width=1)
     for row, (anim, canvases) in enumerate(frames.items()):
-        d.text((4, row * h * ZOOM + 4), anim, fill=(255, 255, 255, 255))
+        d.text((4, row * h * zoom + 4), anim, fill=(255, 255, 255, 255))
         for col in range(len(canvases)):
-            d.text((label_w + col * w * ZOOM + 3, row * h * ZOOM + 2), str(col), fill=(255, 230, 120, 255))
+            d.text((label_w + col * w * zoom + 3, row * h * zoom + 2), str(col), fill=(255, 230, 120, 255))
 
     y0 = big.height + pad
     d.text((4, y0), "2x / 1x", fill=(255, 255, 255, 255))
@@ -126,7 +133,7 @@ def motion_panel(anim, canvases):
     far the limbs actually travel (and whether anything drifts) is visible at a glance.
     The dashed line is the lowest drawn row of frame 0: the ground."""
     w, h = canvases[0].w, canvases[0].h
-    Z = MOTION_ZOOM
+    Z = max(1, min(MOTION_ZOOM, 480 // max(w, h)))
     panel = Image.new("RGBA", (w * Z, h * Z + 14), (24, 24, 30, 255))
     for i, c in enumerate(canvases):
         r, g, b = MOTION_COLORS[i % len(MOTION_COLORS)]

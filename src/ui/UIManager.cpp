@@ -225,9 +225,9 @@ static std::string g_chatShownDir;
 static std::string g_chatStatus;
 static float g_chatStatusTimer = 0.f;
 // Claude's drawing works one pixel at a time in Python and takes longer the more there is to draw, so it
-// draws at most this size at full detail; anything larger it draws small, and the app scales that up
+// draws at most this size pixel for pixel; anything larger it draws at the size the chat's detail setting
+// says, and the app scales that up
 static const int kChatMaxCanvas = 256;
-static const int kChatScaledSide = 160;
 
 // An area dragged out on the canvas for the chat, in canvas pixels. Unlike a selection it can cover empty
 // canvas, and it stays for the messages after until the artist clears it.
@@ -278,7 +278,8 @@ static ChatArea chatAreaFor(const Canvas& canvas) {
         }
     }
     int longest = std::max(area.rect.width, area.rect.height);
-    if (longest > kChatMaxCanvas) area.scale = (longest + kChatScaledSide - 1) / kChatScaledSide;
+    int side = g_chatPanel.detailSide();
+    if (longest > kChatMaxCanvas && side > 0) area.scale = (longest + side - 1) / side;
     return area;
 }
 
@@ -999,7 +1000,8 @@ void UIManager::sendChatMessage(Canvas& canvas, Timeline& timeline, const std::s
         std::string w = std::to_string(work.x) + "x" + std::to_string(work.y);
         if (where.empty()) where = "The canvas is " + std::to_string(size.x) + "x" + std::to_string(size.y) + ".";
         where += " You work at 1/" + s + " size: the canvas images are shrunk to " + w + ", and each pixel you draw becomes a "
-            + s + "x" + s + " block, so draw it as " + w + " pixel art.";
+            + s + "x" + s + " block, so draw it as " + w + " pixel art. That size is only how you work: to the artist, call it "
+            "their canvas (or their area) and don't mention " + w + " or the scaling.";
     }
     if (!where.empty()) job["area_note"] = where;
     AIRequest req;
@@ -1030,11 +1032,19 @@ void UIManager::applyChatReply(Canvas& canvas, Timeline& timeline, const AIResul
 
     std::string reply = "Done.";
     std::vector<int> changed;
+    std::string usageNote;
     try {
         std::ifstream in(dir + "/reply.json", std::ios::binary);
         nlohmann::json data = nlohmann::json::parse(in);
         reply = data.value("reply", reply);
         for (const auto& v : data["changed"]) changed.push_back(v.get<int>());
+        const nlohmann::json& limits = data.contains("limits") && data["limits"].is_object() ? data["limits"] : nlohmann::json::object();
+        if (limits.contains("five_hour")) {
+            const auto& five = limits["five_hour"];
+            const auto& week = limits.contains("seven_day") ? limits["seven_day"] : nlohmann::json::object();
+            usageNote = g_chatPanel.reportUsage(five.value("utilization", -1.f), five.value("resetsAt", 0LL),
+                week.value("utilization", -1.f), week.value("resetsAt", 0LL), data.value("cost", 0.0));
+        }
     }
     catch (...) {
         g_chatPanel.addMessage(ChatPanel::Role::Error, "Claude finished, but its reply could not be read.");
@@ -1046,6 +1056,7 @@ void UIManager::applyChatReply(Canvas& canvas, Timeline& timeline, const AIResul
         return;
     }
     g_chatPanel.addMessage(ChatPanel::Role::Claude, reply);
+    if (!usageNote.empty()) g_chatPanel.addMessage(ChatPanel::Role::Note, usageNote);
     if (changed.empty()) return;
     std::sort(changed.begin(), changed.end());
 
@@ -3610,7 +3621,8 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             ChatArea area = chatAreaFor(canvas);
             sf::Vector2u work = area.workSize();
             std::string label = activeProjectPath.empty() ? std::string("unsaved project") : std::filesystem::path(activeProjectPath).filename().string() + "/assistant";
-            g_chatPanel.setContext(label, std::filesystem::exists(chatDir + "/sprite.py", ec), work.x, work.y, chatAreaLabel(area));
+            bool scaled = std::max(area.rect.width, area.rect.height) > kChatMaxCanvas;
+            g_chatPanel.setContext(label, std::filesystem::exists(chatDir + "/sprite.py", ec), work.x, work.y, chatAreaLabel(area), scaled);
         }
         if (g_chatPending) {
             g_chatStatusTimer -= dt;

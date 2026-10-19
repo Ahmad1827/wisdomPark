@@ -375,3 +375,4 @@ assistant_prefs.txt
 arcade_highscore.txt
 chat_model.txt
 chat_timings.jsonl
+chat_usage.json
