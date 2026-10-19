@@ -205,6 +205,11 @@ private:
     sf::Sprite deskSprite;
     sf::Texture canvasTexture;
     sf::Sprite canvasSprite;
+    // The frame round the canvas (assets/textures/canvas_frame, made by scripts/tools/make_canvas_frame.py):
+    // top, bottom, left, right, the four corners (tl, tr, bl, br) and, for styles that have them, a bulb
+    sf::Texture m_frameTex[9];
+    bool m_hasFrame{ false };
+    bool m_hasFrameBulb{ false };
 
     BrushManager brushEngine;
     SelectionManager selection;
@@ -243,8 +248,6 @@ private:
 
     sf::Image layerSnapshot;
     std::vector<sf::Vector2i> activeStroke;
-    sf::Texture frameTex[8];
-    bool hasFrameAssets{ false };
 
     bool colorMatches(const sf::Color& a, const sf::Color& b) const;
     void executeGlobalFill(sf::Color targetColor, sf::Color replacementColor, sf::Image& image);

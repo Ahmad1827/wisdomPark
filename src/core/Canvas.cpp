@@ -414,7 +414,7 @@ fillTolerance(0.f), fillContiguous(true),
 activeLayer(1), onionSkinEnabled(true), onionSkinPrevOpacity(89.25f), onionSkinNextOpacity(89.25f), onionSkinPrevCount(1), onionSkinNextCount(1),
 viewScale(1.0f), targetScale(1.0f), canvasLogicalSize(DEFAULT_NORMAL_W, DEFAULT_NORMAL_H), zoomMultiplier(1.0f), panOffset(0.f, 0.f),
 isPixelMode(false), pixelBrushSize(1), m_pixelBrushShape(PixelBrushShape::Square), pixelGridEnabled(true), pixelSnapEnabled(true), tileModeX(false), tileModeY(false), pixelPerfectEnabled(false), isDirty(false),
-transformMode(TransformState::None), pendingTransform(false), currentRotation(0.0f), currentScale(1.0f, 1.0f), hasFrameAssets(false) {
+transformMode(TransformState::None), pendingTransform(false), currentRotation(0.0f), currentScale(1.0f, 1.0f) {
     brushEngine.initDefaultPresets();
     rebuildPixelBrushMask();
 }
@@ -773,24 +773,17 @@ void Canvas::initCustom(int width, int height) {
     resetView();
     isDirty = false;
 
-    hasFrameAssets = frameTex[0].loadFromFile("assets/textures/frame/top_left.png") &&
-        frameTex[1].loadFromFile("assets/textures/frame/top.png") &&
-        frameTex[2].loadFromFile("assets/textures/frame/top_right.png") &&
-        frameTex[3].loadFromFile("assets/textures/frame/left.png") &&
-        frameTex[4].loadFromFile("assets/textures/frame/right.png") &&
-        frameTex[5].loadFromFile("assets/textures/frame/bottom_left.png") &&
-        frameTex[6].loadFromFile("assets/textures/frame/bottom.png") &&
-        frameTex[7].loadFromFile("assets/textures/frame/bottom_right.png");
-
-    if (hasFrameAssets) {
-        for (int i = 0; i < 8; ++i) {
-            frameTex[i].setSmooth(false);
-        }
-        frameTex[1].setRepeated(true);
-        frameTex[3].setRepeated(true);
-        frameTex[4].setRepeated(true);
-        frameTex[6].setRepeated(true);
+    static const char* kFramePieces[9] = { "top", "bottom", "left", "right", "corner_tl", "corner_tr", "corner_bl", "corner_br", "bulb" };
+    m_hasFrame = true;
+    for (int i = 0; i < 8; ++i) {
+        m_hasFrame = m_frameTex[i].loadFromFile(std::string("assets/textures/canvas_frame/") + kFramePieces[i] + ".png") && m_hasFrame;
+        m_frameTex[i].setSmooth(false);
     }
+    // Only some frame styles have bulbs, so the frame does without one
+    m_hasFrameBulb = std::filesystem::exists("assets/textures/canvas_frame/bulb.png") && m_frameTex[8].loadFromFile("assets/textures/canvas_frame/bulb.png");
+    m_frameTex[8].setSmooth(false);
+    // The sides repeat along the canvas
+    for (int i = 0; i < 4; ++i) m_frameTex[i].setRepeated(true);
 }
 
 void Canvas::zoom(float delta) {
@@ -828,18 +821,19 @@ void Canvas::resetView() {
 }
 
 void Canvas::updateTransform(float dt, sf::FloatRect space) {
-    sf::FloatRect dBounds = deskSprite.getGlobalBounds();
+    // The view is fitted to the canvas alone; the desk sprite only anchors where the canvas is laid out
     sf::FloatRect cBounds = canvasSprite.getGlobalBounds();
 
-    float left = std::min(static_cast<float>(dBounds.left), static_cast<float>(cBounds.left));
-    float top = std::min(static_cast<float>(dBounds.top), static_cast<float>(cBounds.top));
-    float right = std::max(static_cast<float>(dBounds.left + dBounds.width), static_cast<float>(cBounds.left + cBounds.width));
-    float bottom = std::max(static_cast<float>(dBounds.top + dBounds.height), static_cast<float>(cBounds.top + cBounds.height));
+    float left = cBounds.left;
+    float top = cBounds.top;
+    float right = cBounds.left + cBounds.width;
+    float bottom = cBounds.top + cBounds.height;
 
     float unionW = right - left;
     float unionH = bottom - top;
 
-    float pad = 60.f;
+    // The canvas opens with room around it (its frame and shadow included), not filling the workspace
+    float pad = std::max(60.f, std::min(space.width, space.height) * 0.12f);
     space.left += pad; space.top += pad; space.width -= pad * 2.0f; space.height -= pad * 2.0f;
 
     float sX = space.width / unionW;
@@ -5500,8 +5494,6 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     g_activeWindow = &window;
     m_currentFrame = currentFrame;
 
-    window.draw(deskSprite, states);
-
     sf::Vector2f texScale(drawArea.width / static_cast<float>(canvasLogicalSize.x), drawArea.height / static_cast<float>(canvasLogicalSize.y));
     sf::Transform innerTransform = states.transform;
     innerTransform.translate(std::round(drawArea.left), std::round(drawArea.top));
@@ -5514,17 +5506,38 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     sf::RenderStates frameStates = states;
     frameStates.transform = frameTransform;
 
+    // The canvas floats on the workspace: a soft shadow under it, then a crisp edge. Sizes are in screen
+    // pixels, so they look the same at any zoom.
+    float screenPx = 1.f / std::max(0.01f, viewScale);
+    float cw = std::round(drawArea.width);
+    float ch = std::round(drawArea.height);
+    // The frame's pieces are pixel art drawn kFrameScale world pixels to each of their pixels, so the frame
+    // grows and shrinks with the canvas like a real one
+    const float kFrameScale = 3.f;
+    const float frameW = m_hasFrame ? m_frameTex[0].getSize().y * kFrameScale : 0.f;
+    const int kShadowSteps = 10;
+    for (int i = kShadowSteps; i >= 1; --i) {
+        float spread = frameW + i * 2.4f * screenPx;
+        sf::RectangleShape shadow(sf::Vector2f(cw + spread * 2.f, ch + spread * 2.f));
+        shadow.setPosition(-spread, -spread + 6.f * screenPx);
+        shadow.setFillColor(sf::Color(0, 0, 0, static_cast<sf::Uint8>(10 + (kShadowSteps - i) * 2)));
+        window.draw(shadow, frameStates);
+    }
+
     sf::RectangleShape bg(sf::Vector2f(canvasLogicalSize.x, canvasLogicalSize.y));
     bg.setFillColor(sf::Color::White);
     window.draw(bg, innerStates);
 
     if (isPixelMode) {
-        float tileSize = 4.0f;
+        // Squares about 10 screen pixels across whatever the canvas size or zoom, so transparency reads as
+        // a calm pattern instead of specks on a large canvas
+        float logicalPerScreen = 1.f / std::max(0.0001f, texScale.x * viewScale);
+        float tileSize = std::max(1.f, std::round(10.f * logicalPerScreen));
         int cols = static_cast<int>(std::ceil(canvasLogicalSize.x / tileSize));
         int rows = static_cast<int>(std::ceil(canvasLogicalSize.y / tileSize));
         sf::VertexArray checkerboard(sf::Quads);
-        sf::Color c1(190, 190, 190);
-        sf::Color c2(240, 240, 240);
+        sf::Color c1(214, 214, 220);
+        sf::Color c2(246, 246, 248);
 
         for (int r = 0; r < rows; ++r) {
             for (int c = 0; c < cols; ++c) {
@@ -5541,6 +5554,15 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
             }
         }
         window.draw(checkerboard, innerStates);
+    }
+
+    // A crisp edge just outside the canvas, so artwork drawn after it never covers it
+    {
+        sf::RectangleShape edge(sf::Vector2f(cw, ch));
+        edge.setFillColor(sf::Color::Transparent);
+        edge.setOutlineThickness(screenPx);
+        edge.setOutlineColor(sf::Color(0, 0, 0, 170));
+        window.draw(edge, frameStates);
     }
 
     // Prominent instructional banner when Symmetry tool is active
@@ -5775,91 +5797,49 @@ void Canvas::draw(sf::RenderWindow& window, int currentFrame, bool isPlaying, co
     selection.setHandleVisualSize(12.0f / handleDenom);
     selection.setShowHandles(pendingTransform);
 
-    const float frameThickness = 16.f;
-    sf::Color frameColor(45, 35, 25);
-    sf::Color shadowColor(20, 15, 10);
+    // The frame: the sides run along the canvas, the corner pieces sit on its corners, and for styles with
+    // bulbs a row of them runs round the middle of the board, spread evenly whatever the canvas size
+    if (m_hasFrame) {
+        float k = kFrameScale;
+        auto piece = [&](int i, float x, float y, int w = 0, int h = 0) {
+            sf::Sprite spr(m_frameTex[i]);
+            if (w > 0 && h > 0) spr.setTextureRect(sf::IntRect(0, 0, w, h));
+            spr.setScale(k, k);
+            spr.setPosition(x, y);
+            window.draw(spr, frameStates);
+        };
+        int fw = static_cast<int>(m_frameTex[0].getSize().y);
+        // Lengths in the pieces' own pixels, rounded up so the run reaches the corner that covers its end
+        int runX = static_cast<int>(std::ceil(cw / k));
+        int runY = static_cast<int>(std::ceil(ch / k));
+        piece(0, 0.f, -frameW, runX, fw);
+        piece(1, 0.f, ch, runX, fw);
+        piece(2, -frameW, 0.f, fw, runY);
+        piece(3, cw, 0.f, fw, runY);
+        float corner = m_frameTex[4].getSize().x * k;
+        piece(4, -frameW, -frameW);
+        piece(5, cw + frameW - corner, -frameW);
+        piece(6, -frameW, ch + frameW - corner);
+        piece(7, cw + frameW - corner, ch + frameW - corner);
 
-    if (hasFrameAssets) {
-        float cx = 0.f;
-        float cy = 0.f;
-        float cw = std::round(drawArea.width);
-        float ch = std::round(drawArea.height);
-
-        float tH = static_cast<float>(frameTex[1].getSize().y);
-        float trW = static_cast<float>(frameTex[2].getSize().x);
-        float lW = static_cast<float>(frameTex[3].getSize().x);
-        float rW = static_cast<float>(frameTex[4].getSize().x);
-        float bH = static_cast<float>(frameTex[6].getSize().y);
-        float brW = static_cast<float>(frameTex[7].getSize().x);
-
-        sf::Sprite sTopLeft(frameTex[0]);
-        sf::Sprite sTop(frameTex[1]);
-        sf::Sprite sTopRight(frameTex[2]);
-        sf::Sprite sLeft(frameTex[3]);
-        sf::Sprite sRight(frameTex[4]);
-        sf::Sprite sBotLeft(frameTex[5]);
-        sf::Sprite sBottom(frameTex[6]);
-        sf::Sprite sBotRight(frameTex[7]);
-
-        sTop.setPosition(cx, cy - tH);
-        sTop.setTextureRect(sf::IntRect(0, 0, static_cast<int>(cw), static_cast<int>(tH)));
-
-        sBottom.setPosition(cx, cy + ch);
-        sBottom.setTextureRect(sf::IntRect(0, 0, static_cast<int>(cw), static_cast<int>(bH)));
-
-        sLeft.setPosition(cx - lW, cy);
-        sLeft.setTextureRect(sf::IntRect(0, 0, static_cast<int>(lW), static_cast<int>(ch)));
-
-        sRight.setPosition(cx + cw, cy);
-        sRight.setTextureRect(sf::IntRect(0, 0, static_cast<int>(rW), static_cast<int>(ch)));
-
-        sTopLeft.setPosition(cx - lW, cy - tH);
-        sTopRight.setPosition(cx + cw - (trW - rW), cy - tH);
-        sBotLeft.setPosition(cx - lW, cy + ch);
-        sBotRight.setPosition(cx + cw - (brW - rW), cy + ch);
-
-        window.draw(sTop, frameStates);
-        window.draw(sBottom, frameStates);
-        window.draw(sLeft, frameStates);
-        window.draw(sRight, frameStates);
-        window.draw(sTopLeft, frameStates);
-        window.draw(sTopRight, frameStates);
-        window.draw(sBotLeft, frameStates);
-        window.draw(sBotRight, frameStates);
-    }
-    else {
-        float dw = std::round(drawArea.width);
-        float dh = std::round(drawArea.height);
-        float cx = 0.f;
-        float cy = 0.f;
-
-        sf::RectangleShape topEdge({ dw + 2 * frameThickness, frameThickness });
-        topEdge.setPosition(cx - frameThickness, cy - frameThickness);
-        topEdge.setFillColor(frameColor);
-
-        sf::RectangleShape bottomEdge({ dw + 2 * frameThickness, frameThickness });
-        bottomEdge.setPosition(cx - frameThickness, cy + dh);
-        bottomEdge.setFillColor(frameColor);
-
-        sf::RectangleShape leftEdge({ frameThickness, dh });
-        leftEdge.setPosition(cx - frameThickness, cy);
-        leftEdge.setFillColor(frameColor);
-
-        sf::RectangleShape rightEdge({ frameThickness, dh });
-        rightEdge.setPosition(cx + dw, cy);
-        rightEdge.setFillColor(frameColor);
-
-        sf::RectangleShape innerShadow({ dw, dh });
-        innerShadow.setPosition(cx, cy);
-        innerShadow.setFillColor(sf::Color::Transparent);
-        innerShadow.setOutlineThickness(1.5f);
-        innerShadow.setOutlineColor(shadowColor);
-
-        window.draw(topEdge, frameStates);
-        window.draw(bottomEdge, frameStates);
-        window.draw(leftEdge, frameStates);
-        window.draw(rightEdge, frameStates);
-        window.draw(innerShadow, frameStates);
+        // The bulbs sit on the middle of the board, about every 14 of the frame's pixels
+        if (m_hasFrameBulb) {
+            sf::Vector2u bulbSize = m_frameTex[8].getSize();
+            float half = bulbSize.x * k * 0.5f;
+            float mid = std::round(7.5f * k);
+            float spacing = 14.f * k;
+            auto bulbsAlong = [&](float length, auto place) {
+                int n = std::max(1, static_cast<int>(std::round(length / spacing)));
+                for (int i = 0; i < n; ++i) {
+                    sf::Vector2f p = place(std::round((i + 0.5f) * length / n));
+                    piece(8, p.x - half, p.y - half);
+                }
+            };
+            bulbsAlong(cw, [&](float p) { return sf::Vector2f(p, -frameW + mid); });
+            bulbsAlong(cw, [&](float p) { return sf::Vector2f(p, ch + frameW - mid); });
+            bulbsAlong(ch, [&](float p) { return sf::Vector2f(-frameW + mid, p); });
+            bulbsAlong(ch, [&](float p) { return sf::Vector2f(cw + frameW - mid, p); });
+        }
     }
 
     if (customGridEnabled && customGridSize >= 1) {
