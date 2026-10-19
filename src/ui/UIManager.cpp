@@ -224,8 +224,99 @@ static std::string g_chatSentDir;
 static std::string g_chatShownDir;
 static std::string g_chatStatus;
 static float g_chatStatusTimer = 0.f;
-// Claude's drawing works one pixel at a time in Python, so the chat stays with sprite-sized canvases
-static const unsigned int kChatMaxCanvas = 256;
+// Claude's drawing works one pixel at a time in Python and takes longer the more there is to draw, so it
+// draws at most this size at full detail; anything larger it draws small, and the app scales that up
+static const int kChatMaxCanvas = 256;
+static const int kChatScaledSide = 160;
+
+// An area dragged out on the canvas for the chat, in canvas pixels. Unlike a selection it can cover empty
+// canvas, and it stays for the messages after until the artist clears it.
+static bool g_chatMarking = false;
+static bool g_chatMarkDragging = false;
+static bool g_chatMarkActive = false;
+static sf::Vector2f g_chatMarkStart;
+static sf::Vector2f g_chatMarkEnd;
+
+static sf::IntRect chatMarkRect(const Canvas& canvas) {
+    sf::Vector2u size = canvas.getCanvasSize();
+    int left = std::clamp(static_cast<int>(std::floor(std::min(g_chatMarkStart.x, g_chatMarkEnd.x))), 0, static_cast<int>(size.x));
+    int top = std::clamp(static_cast<int>(std::floor(std::min(g_chatMarkStart.y, g_chatMarkEnd.y))), 0, static_cast<int>(size.y));
+    int right = std::clamp(static_cast<int>(std::ceil(std::max(g_chatMarkStart.x, g_chatMarkEnd.x))), 0, static_cast<int>(size.x));
+    int bottom = std::clamp(static_cast<int>(std::ceil(std::max(g_chatMarkStart.y, g_chatMarkEnd.y))), 0, static_cast<int>(size.y));
+    return sf::IntRect(left, top, right - left, bottom - top);
+}
+
+// The part of the canvas a chat message is about: the marked area, else the selection, else the whole canvas.
+// Claude draws it shrunk by `scale`, so each pixel it draws becomes a scale x scale block.
+struct ChatArea {
+    sf::IntRect rect;
+    int scale = 1;
+    bool selected = false;
+    sf::Vector2u workSize() const { return { static_cast<unsigned>((rect.width + scale - 1) / scale), static_cast<unsigned>((rect.height + scale - 1) / scale) }; }
+};
+static ChatArea g_chatSentArea;
+
+static ChatArea chatAreaFor(const Canvas& canvas) {
+    ChatArea area;
+    sf::Vector2u size = canvas.getCanvasSize();
+    area.rect = sf::IntRect(0, 0, static_cast<int>(size.x), static_cast<int>(size.y));
+    sf::IntRect mark = chatMarkRect(canvas);
+    if (g_chatMarkActive && mark.width >= 4 && mark.height >= 4) {
+        area.rect = mark;
+        area.selected = true;
+    }
+    else if (canvas.getSelection().isActive()) {
+        sf::FloatRect box = canvas.getSelection().getBoundingBox();
+        int left = static_cast<int>(std::floor(box.left));
+        int top = static_cast<int>(std::floor(box.top));
+        sf::IntRect sel(left, top, static_cast<int>(std::ceil(box.left + box.width)) - left, static_cast<int>(std::ceil(box.top + box.height)) - top);
+        sf::IntRect inside;
+        // A selection only a few pixels across is more likely a stray click than an area to draw in
+        if (sel.intersects(area.rect, inside) && inside.width >= 4 && inside.height >= 4) {
+            area.rect = inside;
+            area.selected = true;
+        }
+    }
+    int longest = std::max(area.rect.width, area.rect.height);
+    if (longest > kChatMaxCanvas) area.scale = (longest + kChatScaledSide - 1) / kChatScaledSide;
+    return area;
+}
+
+// The area cut out of a full frame at Claude's size: each block's middle pixel stands for the block, so a
+// drawing scaled up by growIntoArea comes back out exactly
+static sf::Image shrinkArea(const sf::Image& full, const ChatArea& area) {
+    sf::Vector2u work = area.workSize();
+    sf::Image out;
+    out.create(work.x, work.y, sf::Color::Transparent);
+    for (unsigned y = 0; y < work.y; ++y) {
+        for (unsigned x = 0; x < work.x; ++x) {
+            int sx = area.rect.left + std::min(static_cast<int>(x) * area.scale + area.scale / 2, area.rect.width - 1);
+            int sy = area.rect.top + std::min(static_cast<int>(y) * area.scale + area.scale / 2, area.rect.height - 1);
+            out.setPixel(x, y, full.getPixel(sx, sy));
+        }
+    }
+    return out;
+}
+
+// Claude's drawing scaled up with hard edges over the area of a full frame; the rest of the frame stays
+static void growIntoArea(sf::Image& full, const sf::Image& drawn, const ChatArea& area) {
+    sf::Vector2u work = drawn.getSize();
+    for (int y = 0; y < area.rect.height; ++y) {
+        for (int x = 0; x < area.rect.width; ++x) {
+            unsigned sx = std::min(static_cast<unsigned>(x / area.scale), work.x - 1);
+            unsigned sy = std::min(static_cast<unsigned>(y / area.scale), work.y - 1);
+            full.setPixel(area.rect.left + x, area.rect.top + y, drawn.getPixel(sx, sy));
+        }
+    }
+}
+
+// Says in the chat header what Claude will draw, when it is not simply the whole canvas
+static std::string chatAreaLabel(const ChatArea& area) {
+    sf::Vector2u work = area.workSize();
+    std::string label = area.selected ? "area " + std::to_string(area.rect.width) + "x" + std::to_string(area.rect.height) : "";
+    if (area.scale > 1) label += std::string(label.empty() ? "" : ", ") + "drawn " + std::to_string(work.x) + "x" + std::to_string(work.y) + " x" + std::to_string(area.scale);
+    return label;
+}
 
 // Each project keeps its conversation, Claude Code session and Claude's drawing code in <project>/assistant
 static std::string chatDirFor(const std::string& projectPath) {
@@ -867,14 +958,13 @@ void UIManager::sendChatMessage(Canvas& canvas, Timeline& timeline, const std::s
         return;
     }
     sf::Vector2u size = canvas.getCanvasSize();
-    if (size.x > kChatMaxCanvas || size.y > kChatMaxCanvas) {
-        g_chatPanel.addMessage(ChatPanel::Role::Error, "The chat draws sprites up to " + std::to_string(kChatMaxCanvas) + "x" + std::to_string(kChatMaxCanvas)
-            + "; this canvas is " + std::to_string(size.x) + "x" + std::to_string(size.y) + ". Use Ask Assistant (Ctrl+Shift+Space) for larger pictures.");
-        return;
-    }
+    // Read before the selection is committed below, which ends it
+    ChatArea area = chatAreaFor(canvas);
+    sf::Vector2u work = area.workSize();
 
     // The timeline goes to Claude as it is now: each frame as it looks, and Claude's own layer, so the bridge
-    // can tell which of Claude's frames the artist painted over since the last reply
+    // can tell which of Claude's frames the artist painted over since the last reply. Both are cut to the
+    // area and shrunk the way Claude will draw it.
     int curFrame = timeline.getCurrentFrame();
     canvas.commitSelection(curFrame);
     std::string dir = chatDirFor(activeProjectPath);
@@ -886,18 +976,32 @@ void UIManager::sendChatMessage(Canvas& canvas, Timeline& timeline, const std::s
     for (int i = 0; i < frameCount; ++i) {
         char name[32];
         snprintf(name, sizeof(name), "/canvas/frame_%03d.png", i);
-        canvas.flattenFrameToImage(i).saveToFile(dir + name);
+        shrinkArea(canvas.flattenFrameToImage(i), area).saveToFile(dir + name);
         sf::RenderTexture layerTex;
         if (claudeLayer >= 0 && canvas.renderLayerToTexture(i, claudeLayer, layerTex)) {
             snprintf(name, sizeof(name), "/canvas/claude_%03d.png", i);
-            layerTex.getTexture().copyToImage().saveToFile(dir + name);
+            shrinkArea(layerTex.getTexture().copyToImage(), area).saveToFile(dir + name);
         }
     }
 
     nlohmann::json job = {
-        {"dir", dir}, {"width", size.x}, {"height", size.y}, {"fps", timeline.getFps()},
+        {"dir", dir}, {"width", work.x}, {"height", work.y}, {"fps", timeline.getFps()},
         {"current_frame", curFrame}, {"frame_count", frameCount}, {"message", message}, {"model", g_chatPanel.modelId()}
     };
+    std::string where;
+    if (area.selected) {
+        where = "The artist marked a " + std::to_string(area.rect.width) + "x" + std::to_string(area.rect.height) + " area at ("
+            + std::to_string(area.rect.left) + ", " + std::to_string(area.rect.top) + ") of their " + std::to_string(size.x) + "x"
+            + std::to_string(size.y) + " canvas. You draw only that area; the rest of the canvas stays as it is.";
+    }
+    if (area.scale > 1) {
+        std::string s = std::to_string(area.scale);
+        std::string w = std::to_string(work.x) + "x" + std::to_string(work.y);
+        if (where.empty()) where = "The canvas is " + std::to_string(size.x) + "x" + std::to_string(size.y) + ".";
+        where += " You work at 1/" + s + " size: the canvas images are shrunk to " + w + ", and each pixel you draw becomes a "
+            + s + "x" + s + " block, so draw it as " + w + " pixel art.";
+    }
+    if (!where.empty()) job["area_note"] = where;
     AIRequest req;
     req.operation = AIOperation::Chat;
     req.prompt = job.dump();
@@ -909,6 +1013,7 @@ void UIManager::sendChatMessage(Canvas& canvas, Timeline& timeline, const std::s
     }
     g_chatPending = true;
     g_chatSentDir = dir;
+    g_chatSentArea = area;
     g_chatStatus = "Sending to Claude";
     g_chatStatusTimer = 0.f;
 }
@@ -948,7 +1053,6 @@ void UIManager::applyChatReply(Canvas& canvas, Timeline& timeline, const AIResul
     size_t undoDepth = canvas.getUndoDepth();
     int curFrame = timeline.getCurrentFrame();
     canvas.commitSelection(curFrame);
-    int artistLayer = canvas.getActiveLayer();
     int claudeLayer = findClaudeLayer(canvas);
     if (claudeLayer < 0) {
         canvas.addLayer(0, "Claude");
@@ -962,6 +1066,7 @@ void UIManager::applyChatReply(Canvas& canvas, Timeline& timeline, const AIResul
 
     int placed = 0;
     int added = 0;
+    int objects = 0;
     for (int index : changed) {
         while (static_cast<int>(canvas.getFrameCount()) <= index) {
             int at = static_cast<int>(canvas.getFrameCount());
@@ -972,19 +1077,26 @@ void UIManager::applyChatReply(Canvas& canvas, Timeline& timeline, const AIResul
         timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
         char name[32];
         snprintf(name, sizeof(name), "/frames/%03d.png", index);
+        sf::Image drawn;
+        if (!drawn.loadFromFile(dir + name)) continue;
+        // Claude drew the area it was sent; the rest of the Claude layer on this frame is kept
         sf::Image img;
-        if (!img.loadFromFile(dir + name)) continue;
-        canvas.setActiveLayer(claudeLayer, index);
-        if (canvas.applyImageToLayer(index, img, false)) ++placed;
+        sf::RenderTexture layerTex;
+        if (canvas.renderLayerToTexture(index, claudeLayer, layerTex)) img = layerTex.getTexture().copyToImage();
+        else img.create(canvas.getCanvasSize().x, canvas.getCanvasSize().y, sf::Color::Transparent);
+        growIntoArea(img, drawn, g_chatSentArea);
+        int made = canvas.setLayerAsObjects(index, claudeLayer, img);
+        if (made >= 0) { ++placed; objects += made; }
     }
-    canvas.setActiveLayer(artistLayer, curFrame);
+    // The Claude layer is left active, so the select tool picks up what Claude drew right away
+    canvas.setActiveLayer(claudeLayer, changed.front());
     timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
     canvas.collapseUndoSteps(undoDepth);
     timeline.setFrame(changed.front());
 
     std::string what = placed == 1 ? "frame " + std::to_string(changed.front() + 1) : std::to_string(placed) + " frames";
     if (added > 0) what += " (" + std::to_string(added) + " new)";
-    showMessage("Claude drew " + what + " on the Claude layer. Ctrl+Z undoes it", sf::Color::Green);
+    showMessage("Claude drew " + what + " as " + std::to_string(objects) + (objects == 1 ? " object" : " objects") + " on the Claude layer (now active, so the select tool picks them). Ctrl+Z undoes it", sf::Color::Green);
 }
 
 void UIManager::handleChatAction(const std::string& action, Canvas& canvas, Timeline& timeline) {
@@ -994,6 +1106,16 @@ void UIManager::handleChatAction(const std::string& action, Canvas& canvas, Time
         cancelClaudeArt();
     }
     else if (action == "close") m_activeRightTab = RightTabMode::None;
+    else if (action == "mark_area") {
+        // The button clears an area that is marked (or being marked), and otherwise starts marking one
+        if (g_chatMarking || g_chatMarkDragging || g_chatMarkActive) {
+            g_chatMarking = g_chatMarkDragging = g_chatMarkActive = false;
+        }
+        else {
+            g_chatMarking = true;
+            showMessage("Drag on the canvas to mark where Claude draws. Esc cancels", sf::Color(217, 119, 87));
+        }
+    }
     else if (action == "new_chat") {
         // Claude keeps its drawing code and what it last drew, so it can still pick up the sprite; only
         // the conversation starts over
@@ -2074,6 +2196,33 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
     else if (currentState == AppState::Painting) {
         if (m_showEscapeMenu) {
             if (handleEscapeMenuEvent(event, window, currentState, settings, canvas, timeline)) return;
+        }
+
+        // Marking the chat's area takes the canvas clicks (and Esc) until the area is dragged out
+        if (g_chatMarking || g_chatMarkDragging) {
+            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+                g_chatMarking = g_chatMarkDragging = false;
+                return;
+            }
+            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left
+                && canvas.getDrawArea().contains(logicalMousePos) && !g_chatPanel.containsPoint(mousePos)) {
+                g_chatMarkDragging = true;
+                g_chatMarkActive = false;
+                g_chatMarkStart = g_chatMarkEnd = toCanvasPixel(canvas, logicalMousePos);
+                return;
+            }
+            if (g_chatMarkDragging && event.type == sf::Event::MouseMoved) {
+                g_chatMarkEnd = toCanvasPixel(canvas, logicalMousePos);
+                return;
+            }
+            if (g_chatMarkDragging && event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+                g_chatMarkEnd = toCanvasPixel(canvas, logicalMousePos);
+                g_chatMarkDragging = g_chatMarking = false;
+                sf::IntRect rect = chatMarkRect(canvas);
+                // A plain click, or a sliver, marks nothing
+                g_chatMarkActive = rect.width >= 4 && rect.height >= 4;
+                return;
+            }
         }
 
         // The chat goes first so Esc can interrupt Claude or leave its box before it closes the dock
@@ -3447,16 +3596,21 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         if (chatDir != g_chatShownDir && !g_chatPending) {
             g_chatPanel.loadHistory(chatDir + "/chat.jsonl");
             g_chatShownDir = chatDir;
+            g_chatMarking = g_chatMarkDragging = g_chatMarkActive = false;
         }
-        // What the time estimate needs: whether Claude has a sprite going here already, and the canvas size
+        sf::IntRect chatMark = chatMarkRect(canvas);
+        g_chatPanel.setMarking(g_chatMarking || g_chatMarkDragging,
+            g_chatMarkActive ? "area " + std::to_string(chatMark.width) + "x" + std::to_string(chatMark.height) : "");
+        // What the time estimate needs: whether Claude has a sprite going here already, and the size it will draw at
         static float chatContextTimer = 0.f;
         chatContextTimer -= dt;
         if (chatContextTimer <= 0.f && m_activeRightTab == RightTabMode::Chat) {
             chatContextTimer = 1.f;
             std::error_code ec;
-            sf::Vector2u size = canvas.getCanvasSize();
+            ChatArea area = chatAreaFor(canvas);
+            sf::Vector2u work = area.workSize();
             std::string label = activeProjectPath.empty() ? std::string("unsaved project") : std::filesystem::path(activeProjectPath).filename().string() + "/assistant";
-            g_chatPanel.setContext(label, std::filesystem::exists(chatDir + "/sprite.py", ec), size.x, size.y);
+            g_chatPanel.setContext(label, std::filesystem::exists(chatDir + "/sprite.py", ec), work.x, work.y, chatAreaLabel(area));
         }
         if (g_chatPending) {
             g_chatStatusTimer -= dt;
@@ -3700,6 +3854,21 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         }
         else if (m_activeRightTab == RightTabMode::Properties) {
             rightProperties.draw(window);
+        }
+        // The chat's area, over the canvas, while the chat is open or Claude is drawing in it
+        if ((g_chatMarkDragging || g_chatMarkActive) && (m_activeRightTab == RightTabMode::Chat || g_chatPending)) {
+            sf::IntRect mark = chatMarkRect(canvas);
+            if (mark.width > 0 && mark.height > 0) {
+                sf::FloatRect area = canvas.getDrawArea();
+                sf::Vector2u cs = canvas.getCanvasSize();
+                sf::Vector2f unit(area.width / static_cast<float>(cs.x), area.height / static_cast<float>(cs.y));
+                sf::RectangleShape box(sf::Vector2f(mark.width * unit.x, mark.height * unit.y));
+                box.setPosition(area.left + mark.left * unit.x, area.top + mark.top * unit.y);
+                box.setFillColor(sf::Color(217, 119, 87, 30));
+                box.setOutlineColor(sf::Color(217, 119, 87));
+                box.setOutlineThickness(-2.f / std::max(0.01f, canvas.getTransform().getMatrix()[0]));
+                window.draw(box, canvas.getTransform());
+            }
         }
         // Drawn every frame so it can slide out after its tab is closed
         g_chatPanel.draw(window);

@@ -451,6 +451,10 @@ public:
     void importImageToActiveLayer(const std::string& filepath, int currentFrame);
     void replaceFrameImage(int frameIndex, const sf::Image& img);
     bool applyImageToLayer(int frameIndex, const sf::Image& img, bool asNewLayer, const std::string& newLayerName = "Layer");
+    // Replaces everything on one layer of one frame (its pixels and its image objects) with `img`, a full-canvas
+    // image, split into image objects: one per separate shape, so each can be selected and moved on its own.
+    // Returns how many objects it made, or -1 when the layer is locked or missing.
+    int setLayerAsObjects(int frameIndex, int layerIndex, const sf::Image& img);
 
     void enterTransformMode(int currentFrame);
     void applyTransform(int currentFrame);

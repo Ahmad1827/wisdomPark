@@ -4,6 +4,8 @@ the frames Claude drew out.
 The app sends a JSON job on stdin:
     {"dir": "projects/Knight.wpk/assistant", "width": 32, "height": 32, "fps": 12,
      "current_frame": 0, "frame_count": 3, "message": "now make him walk"}
+width and height are the size Claude draws at: the selected area or the whole canvas, shrunk when
+it is large (area_note then says so, and the app scales Claude's frames back up).
 and before that writes the timeline into <dir>/canvas/:
     frame_NNN.png   each frame as it looks (all visible layers)
     claude_NNN.png  each frame's "Claude" layer, when the project has one
@@ -78,6 +80,8 @@ def describe_canvas(job, workdir):
     canvas = os.path.join(workdir, "canvas")
     lines = [f"Canvas: {w}x{h} pixels. Timeline: {n} frame{'s' if n != 1 else ''} at {job.get('fps', 12)} fps; "
              f"the artist is looking at frame {job.get('current_frame', 0) + 1}."]
+    if job.get("area_note"):
+        lines.append(job["area_note"])
     drawn = [i for i in range(n) if not is_blank(os.path.join(canvas, "frame_%03d.png" % i))]
     if drawn:
         lines.append("The timeline as it looks now (all visible layers) is in canvas/frame_000.png to "

@@ -109,14 +109,20 @@ void ChatPanel::init() {
     }
 }
 
-void ChatPanel::setContext(const std::string& folderLabel, bool hasSprite, unsigned int width, unsigned int height) {
+void ChatPanel::setContext(const std::string& folderLabel, bool hasSprite, unsigned int width, unsigned int height, const std::string& areaLabel) {
     m_folderLabel = folderLabel;
+    m_areaLabel = areaLabel;
     m_hasSprite = hasSprite;
     m_canvasW = width;
     m_canvasH = height;
 }
 
 std::string ChatPanel::modelId() const { return kModels[m_model].id; }
+
+void ChatPanel::setMarking(bool marking, const std::string& markLabel) {
+    m_marking = marking;
+    m_markLabel = markLabel;
+}
 
 void ChatPanel::setModel(int index) {
     m_model = std::clamp(index, 0, kModelCount - 1);
@@ -267,8 +273,9 @@ void ChatPanel::runCommand(const std::string& command) {
         }
         addMessage(Role::Note, "No model called \"" + arg + "\". Try opus, sonnet, haiku, fable or default.");
     }
+    else if (name == "/area") m_pendingAction = "mark_area";
     else if (name == "/help") {
-        addMessage(Role::Note, "/model  pick the model Claude runs on\n/clear  start a new conversation\n"
+        addMessage(Role::Note, "/model  pick the model Claude runs on\n/area   mark where on the canvas Claude draws\n/clear  start a new conversation\n"
             "Enter sends, Shift+Enter adds a line, Esc stops Claude while it works. The time under the box is "
             "how long the typed request should take; it learns from your runs.");
     }
@@ -342,6 +349,9 @@ void ChatPanel::update(float dt, bool focusMode, bool isOpen, bool busy, const s
 
     std::string label = kModels[m_model].label;
     m_modelBounds = sf::FloatRect(m_footerBounds.left, m_footerBounds.top, (label.size() + 3) * m_charW, kLineHeight);
+    // Next to the model: the area Claude draws in, or the way to mark one
+    m_areaText = m_marking ? "[drag on canvas]" : !m_markLabel.empty() ? "[" + m_markLabel + " x]" : "[area]";
+    m_areaBounds = sf::FloatRect(m_modelBounds.left + m_modelBounds.width + m_charW, m_footerBounds.top, m_areaText.size() * m_charW + 8.f, kLineHeight);
     // While Claude works a stop button takes the right of the footer, where the estimate was
     float stopW = 8.f * m_charW + 12.f;
     m_stopBounds = sf::FloatRect(m_footerBounds.left + m_footerBounds.width - stopW, m_footerBounds.top - 1.f, stopW, kLineHeight + 2.f);
@@ -390,7 +400,7 @@ void ChatPanel::draw(sf::RenderWindow& window) {
     float hy = hb.top + 7.f;
     text(m_mark, hx, hy, kClaude);
     text("Claude Code", hx + 2.f * m_charW, hy, kText);
-    text(std::string(kModels[m_model].label) + "  /help for commands", hx + 2.f * m_charW, hy + kLineHeight, kDim);
+    text(std::string(kModels[m_model].label) + "  " + (m_areaLabel.empty() ? std::string("/help for commands") : m_areaLabel), hx + 2.f * m_charW, hy + kLineHeight, kDim);
     std::string folder = m_folderLabel;
     size_t maxChars = static_cast<size_t>((hb.width - 24.f) / m_charW) - 7;
     if (folder.size() > maxChars) folder = "..." + folder.substr(folder.size() - maxChars + 3);
@@ -526,12 +536,16 @@ void ChatPanel::draw(sf::RenderWindow& window) {
     arrow.setFillColor(modelHover ? kText : kDim);
     window.draw(arrow);
 
+    bool areaHover = m_areaBounds.contains(mPos);
+    if (areaHover) rect(m_areaBounds, kHover);
+    text(m_areaText, m_areaBounds.left + 4.f, m_footerBounds.top, m_marking || !m_markLabel.empty() ? kClaude : areaHover ? kText : kDim);
+
     std::string typed = inputUtf8();
     size_t start = typed.find_first_not_of(" \t\n");
     std::string right;
     sf::Color rightInk = kDim;
     if (m_busy) right = "";
-    else if (start == std::string::npos) right = "/help for commands";
+    else if (start == std::string::npos) right = m_areaBounds.width + m_modelBounds.width + 19.f * m_charW < m_footerBounds.width ? "/help for commands" : "";
     else if (typed[start] == '/') right = "command";
     else {
         Job job = estimate(typed, m_model);
@@ -539,7 +553,7 @@ void ChatPanel::draw(sf::RenderWindow& window) {
             : job.kind == "new" ? (job.frames > 1 ? "new sprite, " + std::to_string(job.frames) + " frames" : "new sprite")
             : (job.frames > 1 ? std::to_string(job.frames) + " frames" : "edit");
         right = roughTime(job.seconds) + " - " + what;
-        float room = m_footerBounds.width - m_modelBounds.width - 12.f;
+        float room = m_footerBounds.width - (m_areaBounds.left + m_areaBounds.width - m_footerBounds.left) - 12.f;
         if (right.size() * m_charW > room) right = roughTime(job.seconds);
         rightInk = kClaude;
     }
@@ -592,6 +606,7 @@ bool ChatPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
         if (m_closeBounds.contains(mousePos)) m_pendingAction = "close";
         else if (m_busy && m_stopBounds.contains(mousePos)) m_pendingAction = "stop";
         else if (m_modelBounds.contains(mousePos)) m_pickerOpen = true;
+        else if (m_areaBounds.contains(mousePos)) m_pendingAction = "mark_area";
         return true;
     }
     if (event.type == sf::Event::MouseWheelScrolled && m_panelBounds.contains(mousePos)) {

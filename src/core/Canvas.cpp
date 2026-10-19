@@ -6762,6 +6762,88 @@ void Canvas::replaceFrameImage(int frameIndex, const sf::Image& img) {
     }
 }
 
+int Canvas::setLayerAsObjects(int frameIndex, int layerIndex, const sf::Image& img) {
+    if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return -1;
+    if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[frameIndex].layers.size())) return -1;
+    Layer& layer = frames[frameIndex].layers[layerIndex];
+    if (layer.locked || !layer.texture) return -1;
+    int w = static_cast<int>(img.getSize().x);
+    int h = static_cast<int>(img.getSize().y);
+    if (w != static_cast<int>(canvasLogicalSize.x) || h != static_cast<int>(canvasLogicalSize.y)) return -1;
+    saveUndoState();
+
+    // Object indices shift when objects go, so nothing stays selected
+    clearObjectSelection();
+    m_canvasImages.erase(std::remove_if(m_canvasImages.begin(), m_canvasImages.end(),
+        [&](const CanvasImage& ci) { return ci.frame == frameIndex && ci.layer == layerIndex; }), m_canvasImages.end());
+    layer.texture->clear(sf::Color::Transparent);
+    layer.texture->display();
+    isDirty = true;
+
+    // Shapes are pixels reaching each other across gaps of up to one pixel, so an outline broken by a
+    // highlight, or an eye next to a face, stays with its shape instead of becoming an object of its own
+    const int reach = 2;
+    std::vector<int> owner(static_cast<size_t>(w) * h, -1);
+    struct Shape { int minX, minY, maxX, maxY; std::vector<sf::Vector2i> pixels; };
+    std::vector<Shape> shapes;
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            if (owner[y * w + x] >= 0 || img.getPixel(x, y).a == 0) continue;
+            Shape shape{ x, y, x, y, {} };
+            int id = static_cast<int>(shapes.size());
+            owner[y * w + x] = id;
+            shape.pixels.push_back({ x, y });
+            for (size_t head = 0; head < shape.pixels.size(); ++head) {
+                sf::Vector2i p = shape.pixels[head];
+                shape.minX = std::min(shape.minX, p.x); shape.maxX = std::max(shape.maxX, p.x);
+                shape.minY = std::min(shape.minY, p.y); shape.maxY = std::max(shape.maxY, p.y);
+                for (int dy = -reach; dy <= reach; ++dy) {
+                    for (int dx = -reach; dx <= reach; ++dx) {
+                        int nx = p.x + dx, ny = p.y + dy;
+                        if (nx < 0 || ny < 0 || nx >= w || ny >= h || owner[ny * w + nx] >= 0) continue;
+                        if (img.getPixel(nx, ny).a == 0) continue;
+                        owner[ny * w + nx] = id;
+                        shape.pixels.push_back({ nx, ny });
+                    }
+                }
+            }
+            shapes.push_back(std::move(shape));
+        }
+    }
+    // A scattered drawing (stars, rain, dithering) would make hundreds of specks; it stays one object instead
+    const size_t kMaxObjects = 48;
+    if (shapes.size() > kMaxObjects) {
+        Shape all{ w, h, -1, -1, {} };
+        for (auto& sh : shapes) {
+            all.minX = std::min(all.minX, sh.minX); all.minY = std::min(all.minY, sh.minY);
+            all.maxX = std::max(all.maxX, sh.maxX); all.maxY = std::max(all.maxY, sh.maxY);
+            all.pixels.insert(all.pixels.end(), sh.pixels.begin(), sh.pixels.end());
+        }
+        shapes.clear();
+        shapes.push_back(std::move(all));
+    }
+
+    for (const auto& sh : shapes) {
+        int sw = sh.maxX - sh.minX + 1;
+        int shh = sh.maxY - sh.minY + 1;
+        sf::Image part;
+        part.create(sw, shh, sf::Color::Transparent);
+        for (const auto& px : sh.pixels) part.setPixel(px.x - sh.minX, px.y - sh.minY, img.getPixel(px.x, px.y));
+        auto tex = std::make_shared<sf::Texture>();
+        tex->loadFromImage(part);
+        tex->setSmooth(!isPixelMode);
+        CanvasImage ci;
+        ci.id = ++m_nextImageId;
+        ci.frame = frameIndex;
+        ci.layer = layerIndex;
+        ci.texture = tex;
+        ci.image = part;
+        ci.bounds = sf::FloatRect(static_cast<float>(sh.minX), static_cast<float>(sh.minY), static_cast<float>(sw), static_cast<float>(shh));
+        m_canvasImages.push_back(std::move(ci));
+    }
+    return static_cast<int>(shapes.size());
+}
+
 bool Canvas::applyImageToLayer(int frameIndex, const sf::Image& img, bool asNewLayer, const std::string& newLayerName) {
     if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return false;
     if (img.getSize().x == 0 || img.getSize().y == 0) return false;

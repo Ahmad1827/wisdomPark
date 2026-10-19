@@ -21,12 +21,13 @@ public:
     void draw(sf::RenderWindow& window);
 
     // What the estimate depends on besides the message: whether Claude already has a sprite going in this
-    // project, and the canvas size. folderLabel is shown in the header like a terminal's working folder.
-    void setContext(const std::string& folderLabel, bool hasSprite, unsigned int width, unsigned int height);
+    // project, and the size Claude will draw at. folderLabel is shown in the header like a terminal's working
+    // folder; areaLabel says what Claude draws when it is not simply the whole canvas.
+    void setContext(const std::string& folderLabel, bool hasSprite, unsigned int width, unsigned int height, const std::string& areaLabel);
 
     // True when the event was meant for the panel (a click inside it, or typing while its box has focus)
     bool handleEvent(const sf::Event& event, sf::Vector2f mousePos);
-    // "send", "stop", "new_chat" or "close" after a click, Enter or a slash command, then empty until the next one
+    // "send", "stop", "new_chat", "mark_area" or "close" after a click, Enter or a slash command, then empty until the next one
     std::string takeAction();
     // The message typed when "send" came out; the box is cleared
     std::string takeMessage();
@@ -34,6 +35,9 @@ public:
     std::string modelId() const;
     // Called when the reply to the last message is back; a run that finished teaches the estimate
     void finishRun(bool success);
+    // The area button under the prompt box: whether the artist is dragging out an area on the canvas right
+    // now, and the area marked so far ("" for none)
+    void setMarking(bool marking, const std::string& markLabel);
 
     bool isTyping() const { return m_inputFocused && m_isOpen; }
     bool containsPoint(sf::Vector2f p) const { return m_isOpen && m_panelBounds.contains(p); }
@@ -73,6 +77,10 @@ private:
     float m_caretBlink = 0.f;
 
     std::string m_folderLabel;
+    std::string m_areaLabel;
+    bool m_marking = false;
+    std::string m_markLabel;
+    std::string m_areaText;
     bool m_hasSprite = false;
     unsigned int m_canvasW = 32;
     unsigned int m_canvasH = 32;
@@ -92,6 +100,7 @@ private:
     sf::FloatRect m_inputBounds;
     sf::FloatRect m_footerBounds;
     sf::FloatRect m_modelBounds;
+    sf::FloatRect m_areaBounds;
     sf::FloatRect m_pickerBounds;
     sf::FloatRect m_closeBounds;
     sf::FloatRect m_stopBounds;
