@@ -12,7 +12,10 @@ enum class AIOperation {
     Colorize,
     Inpaint,
     Outpaint,
-    GenerateFrame
+    GenerateFrame,
+    // A chat message: prompt holds the JSON job for scripts/sprite/claude_chat.py, which writes
+    // its reply and frames into the project's assistant folder instead of temp_ai_output.png
+    Chat
 };
 
 struct AIRequest {

@@ -9,6 +9,8 @@
 #include "../ui/AIPanel.h"
 #include "../ui/AIReviewModal.h"
 #include "../ui/LoadingScene.h"
+#include "../ui/ChatPanel.h"
+#include "json.hpp"
 #include <iostream>
 #include <algorithm>
 #include <ctime>
@@ -212,6 +214,33 @@ bool g_typingApiKey = false;
 static LoadingScene g_loadingScene;
 static bool g_loadingWasActive = false;
 static float g_loadingStatusTimer = 0.f;
+
+static ChatPanel g_chatPanel;
+// True while a chat message is with Claude. Unlike the other assistant requests the app stays usable
+// meanwhile, so the loading scene is not shown for it.
+static bool g_chatPending = false;
+// The assistant folder the pending message was sent from, and the one whose conversation the panel shows
+static std::string g_chatSentDir;
+static std::string g_chatShownDir;
+static std::string g_chatStatus;
+static float g_chatStatusTimer = 0.f;
+// Claude's drawing works one pixel at a time in Python, so the chat stays with sprite-sized canvases
+static const unsigned int kChatMaxCanvas = 256;
+
+// Each project keeps its conversation, Claude Code session and Claude's drawing code in <project>/assistant
+static std::string chatDirFor(const std::string& projectPath) {
+    return projectPath.empty() ? "projects/_unsaved_assistant" : projectPath + "/assistant";
+}
+
+// The layer Claude draws on, found by name since the artist can reorder layers; -1 when there is none yet
+static int findClaudeLayer(const Canvas& canvas) {
+    const Frame* f = canvas.getFrameReadOnly(0);
+    if (!f) return -1;
+    for (int i = 0; i < static_cast<int>(f->layers.size()); ++i) {
+        if (f->layers[i].name == "Claude") return i;
+    }
+    return -1;
+}
 
 // When the artist had a selection, only that area is sent to the assistant; these remember
 // where it came from so the answer can be put back into the full frame for review.
@@ -465,6 +494,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     AIManager::getInstance().init();
     g_aiPanel.init();
+    g_chatPanel.init();
     g_aiReviewModal.init();
 
     handTrackerSocket.bind(5005);
@@ -606,6 +636,10 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
         },
         [this]() {
             audioPanel.toggle();
+        },
+        [this]() {
+            m_activeRightTab = (m_activeRightTab == RightTabMode::Chat) ? RightTabMode::None : RightTabMode::Chat;
+            if (m_activeRightTab == RightTabMode::Chat) g_chatPanel.focusInput();
         }
     );
 
@@ -816,6 +850,159 @@ void UIManager::startAIAutocomplete(Canvas& canvas, Timeline& timeline, const st
         showMessage("Assistant: " + res.errorMessage, sf::Color::Red);
     }
     else if (g_assistHasRegion) showMessage(marked ? "Working on the marked area only" : "Working on the selected area only", sf::Color(0, 191, 255));
+}
+
+void UIManager::sendChatMessage(Canvas& canvas, Timeline& timeline, const std::string& message) {
+    AIManager& ai = AIManager::getInstance();
+    if (ai.isProcessingAsync()) {
+        g_chatPanel.addMessage(ChatPanel::Role::Error, "The assistant is still busy with another request.");
+        return;
+    }
+    if (ai.getActiveProvider() != "Claude Code") {
+        g_chatPanel.addMessage(ChatPanel::Role::Error, "The chat needs the Claude Code engine. Switch the Assistant Engine to Claude Code in Settings.");
+        return;
+    }
+    if (!ai.testConnection("Claude Code")) {
+        g_chatPanel.addMessage(ChatPanel::Role::Error, "Claude Code was not found on this computer. Install it, then try again.");
+        return;
+    }
+    sf::Vector2u size = canvas.getCanvasSize();
+    if (size.x > kChatMaxCanvas || size.y > kChatMaxCanvas) {
+        g_chatPanel.addMessage(ChatPanel::Role::Error, "The chat draws sprites up to " + std::to_string(kChatMaxCanvas) + "x" + std::to_string(kChatMaxCanvas)
+            + "; this canvas is " + std::to_string(size.x) + "x" + std::to_string(size.y) + ". Use Studio Assistant > Ask Assistant for larger pictures.");
+        return;
+    }
+
+    // The timeline goes to Claude as it is now: each frame as it looks, and Claude's own layer, so the bridge
+    // can tell which of Claude's frames the artist painted over since the last reply
+    int curFrame = timeline.getCurrentFrame();
+    canvas.commitSelection(curFrame);
+    std::string dir = chatDirFor(activeProjectPath);
+    std::error_code ec;
+    std::filesystem::remove_all(dir + "/canvas", ec);
+    std::filesystem::create_directories(dir + "/canvas", ec);
+    int frameCount = static_cast<int>(canvas.getFrameCount());
+    int claudeLayer = findClaudeLayer(canvas);
+    for (int i = 0; i < frameCount; ++i) {
+        char name[32];
+        snprintf(name, sizeof(name), "/canvas/frame_%03d.png", i);
+        canvas.flattenFrameToImage(i).saveToFile(dir + name);
+        sf::RenderTexture layerTex;
+        if (claudeLayer >= 0 && canvas.renderLayerToTexture(i, claudeLayer, layerTex)) {
+            snprintf(name, sizeof(name), "/canvas/claude_%03d.png", i);
+            layerTex.getTexture().copyToImage().saveToFile(dir + name);
+        }
+    }
+
+    nlohmann::json job = {
+        {"dir", dir}, {"width", size.x}, {"height", size.y}, {"fps", timeline.getFps()},
+        {"current_frame", curFrame}, {"frame_count", frameCount}, {"message", message}
+    };
+    AIRequest req;
+    req.operation = AIOperation::Chat;
+    req.prompt = job.dump();
+    g_chatPanel.addMessage(ChatPanel::Role::Artist, message);
+    AIResult res = ai.executeRequest(req);
+    if (!res.success) {
+        g_chatPanel.addMessage(ChatPanel::Role::Error, res.errorMessage);
+        return;
+    }
+    g_chatPending = true;
+    g_chatSentDir = dir;
+    g_chatStatus = "Sending to Claude";
+    g_chatStatusTimer = 0.f;
+}
+
+void UIManager::applyChatReply(Canvas& canvas, Timeline& timeline, const AIResult& result) {
+    g_chatPending = false;
+    g_chatStatus.clear();
+    const std::string dir = g_chatSentDir;
+    if (!result.success) {
+        g_chatPanel.addMessage(ChatPanel::Role::Error, result.errorMessage == "Task canceled by user." ? "Stopped." : result.errorMessage);
+        return;
+    }
+
+    std::string reply = "Done.";
+    std::vector<int> changed;
+    try {
+        std::ifstream in(dir + "/reply.json", std::ios::binary);
+        nlohmann::json data = nlohmann::json::parse(in);
+        reply = data.value("reply", reply);
+        for (const auto& v : data["changed"]) changed.push_back(v.get<int>());
+    }
+    catch (...) {
+        g_chatPanel.addMessage(ChatPanel::Role::Error, "Claude finished, but its reply could not be read.");
+        return;
+    }
+    // Another project was opened while Claude worked: its frames belong to the project it was asked in
+    if (dir != chatDirFor(activeProjectPath)) {
+        showMessage("Claude replied in another project; open it again to see the conversation", sf::Color::Yellow);
+        return;
+    }
+    g_chatPanel.addMessage(ChatPanel::Role::Claude, reply);
+    if (changed.empty()) return;
+    std::sort(changed.begin(), changed.end());
+
+    // All of it is one undo step: Ctrl+Z takes back the whole reply
+    size_t undoDepth = canvas.getUndoDepth();
+    int curFrame = timeline.getCurrentFrame();
+    canvas.commitSelection(curFrame);
+    int artistLayer = canvas.getActiveLayer();
+    int claudeLayer = findClaudeLayer(canvas);
+    if (claudeLayer < 0) {
+        canvas.addLayer(0, "Claude");
+        claudeLayer = findClaudeLayer(canvas);
+    }
+    const Frame* first = canvas.getFrameReadOnly(0);
+    if (claudeLayer < 0 || !first || first->layers[claudeLayer].locked) {
+        g_chatPanel.addMessage(ChatPanel::Role::Error, "The Claude layer is locked, so the frames could not be placed. Unlock it and ask again.");
+        return;
+    }
+
+    int placed = 0;
+    int added = 0;
+    for (int index : changed) {
+        while (static_cast<int>(canvas.getFrameCount()) <= index) {
+            int at = static_cast<int>(canvas.getFrameCount());
+            canvas.addFrameAt(at);
+            timeline.addFrameAt(at);
+            ++added;
+        }
+        timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+        char name[32];
+        snprintf(name, sizeof(name), "/frames/%03d.png", index);
+        sf::Image img;
+        if (!img.loadFromFile(dir + name)) continue;
+        canvas.setActiveLayer(claudeLayer, index);
+        if (canvas.applyImageToLayer(index, img, false)) ++placed;
+    }
+    canvas.setActiveLayer(artistLayer, curFrame);
+    timeline.syncWithCanvas(static_cast<int>(canvas.getFrameCount()));
+    canvas.collapseUndoSteps(undoDepth);
+    timeline.setFrame(changed.front());
+
+    std::string what = placed == 1 ? "frame " + std::to_string(changed.front() + 1) : std::to_string(placed) + " frames";
+    if (added > 0) what += " (" + std::to_string(added) + " new)";
+    showMessage("Claude drew " + what + " on the Claude layer. Ctrl+Z undoes it", sf::Color::Green);
+}
+
+void UIManager::handleChatAction(const std::string& action, Canvas& canvas, Timeline& timeline) {
+    if (action == "send") sendChatMessage(canvas, timeline, g_chatPanel.takeMessage());
+    else if (action == "stop") {
+        AIManager::getInstance().abortTask();
+        cancelClaudeArt();
+    }
+    else if (action == "close") m_activeRightTab = RightTabMode::None;
+    else if (action == "new_chat") {
+        // Claude keeps its drawing code and what it last drew, so it can still pick up the sprite; only
+        // the conversation starts over
+        std::string dir = chatDirFor(activeProjectPath);
+        std::error_code ec;
+        std::filesystem::remove(dir + "/session.txt", ec);
+        std::filesystem::remove(dir + "/chat.jsonl", ec);
+        g_chatPanel.clearMessages();
+        g_chatPanel.addMessage(ChatPanel::Role::Note, "New conversation. Claude forgets the chat but keeps the sprite it was drawing.");
+    }
 }
 
 // Send / Cancel sit to the right of the request box (promptBox is 600x50 at 660,780)
@@ -1281,7 +1468,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         return;
     }
 
-    if (AIManager::getInstance().isProcessingAsync()) {
+    if (AIManager::getInstance().isProcessingAsync() && !g_chatPending) {
         auto killAiProcess = [&]() {
             AIManager::getInstance().abortTask();
             // Ends only the assistant's own processes; other Python programs on the machine keep running
@@ -1939,6 +2126,10 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         if (m_fullscreenToggleRequested) {
             m_fullscreenToggleRequested = false;
             toggleFullscreen(window, settings);
+            return;
+        }
+        if (m_activeRightTab == RightTabMode::Chat && g_chatPanel.handleEvent(event, mousePos)) {
+            handleChatAction(g_chatPanel.takeAction(), canvas, timeline);
             return;
         }
         if (m_toolDock.HandleEvent(event, window)) return;
@@ -3065,7 +3256,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
     if (exportModal.getIsOpen()) exportModal.updateHover(mousePos);
     if (newProjectModal.getIsOpen()) newProjectModal.updateHover(mousePos);
 
-    bool assistantBusy = AIManager::getInstance().isProcessingAsync();
+    bool assistantBusy = AIManager::getInstance().isProcessingAsync() && !g_chatPending;
     if (assistantBusy) {
         if (!g_loadingWasActive) {
             g_loadingScene.reset();
@@ -3253,7 +3444,25 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         m_rightDockTabs.SetTabState("properties", m_activeRightTab == RightTabMode::Properties);
         m_rightDockTabs.SetTabState("assets", assetBrowser && assetBrowser->getIsVisible());
         m_rightDockTabs.SetTabState("audio", audioPanel.getIsVisible());
+        m_rightDockTabs.SetTabState("chat", m_activeRightTab == RightTabMode::Chat);
         m_rightDockTabs.Update(dt, mousePos);
+
+        // The panel shows the conversation of the project that is open, reloading it when that changes
+        std::string chatDir = chatDirFor(activeProjectPath);
+        if (chatDir != g_chatShownDir && !g_chatPending) {
+            g_chatPanel.loadHistory(chatDir + "/chat.jsonl");
+            g_chatShownDir = chatDir;
+        }
+        if (g_chatPending) {
+            g_chatStatusTimer -= dt;
+            if (g_chatStatusTimer <= 0.f) {
+                g_chatStatusTimer = 0.5f;
+                std::ifstream statusFile("temp_ai_status.txt");
+                std::string status;
+                if (statusFile && std::getline(statusFile, status) && !status.empty()) g_chatStatus = status;
+            }
+        }
+        g_chatPanel.update(dt, focusMode, m_activeRightTab == RightTabMode::Chat, g_chatPending, g_chatStatus);
         if (m_activeRightTab == RightTabMode::Layers) {
             layerPanel.update(dt, focusMode, true);
         }
@@ -3304,6 +3513,10 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         g_aiPanel.update(dt);
         audioPanel.updatePlayback(timeline.getCurrentFrame(), timeline.getFps(), timeline.isPlaying());
 
+        if (g_chatPending && AIManager::getInstance().hasAsyncFinished()) {
+            sf::Image unused;
+            applyChatReply(canvas, timeline, AIManager::getInstance().getAsyncResult(unused));
+        }
         if (AIManager::getInstance().hasAsyncFinished()) {
             sf::Image originalImage;
             AIResult asyncRes = AIManager::getInstance().getAsyncResult(originalImage);
@@ -3483,6 +3696,8 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         else if (m_activeRightTab == RightTabMode::Properties) {
             rightProperties.draw(window);
         }
+        // Drawn every frame so it can slide out after its tab is closed
+        g_chatPanel.draw(window);
 
         if (assetBrowser && assetBrowser->getIsVisible()) {
             assetBrowser->draw(window);
@@ -3693,7 +3908,7 @@ void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& ca
         if (exportModal.getIsOpen()) exportModal.draw(window);
         if (newProjectModal.getIsOpen()) newProjectModal.draw(window);
 
-        if (AIManager::getInstance().isProcessingAsync()) {
+        if (AIManager::getInstance().isProcessingAsync() && !g_chatPending) {
             g_loadingScene.draw(window, font, window.mapPixelToCoords(sf::Mouse::getPosition(window)));
         }
 

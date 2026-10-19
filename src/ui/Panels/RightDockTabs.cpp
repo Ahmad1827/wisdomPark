@@ -13,7 +13,8 @@ namespace WisdomUI {
         std::function<void()> onTogglePalette,
         std::function<void()> onToggleProperties,
         std::function<void()> onToggleAssets,
-        std::function<void()> onToggleAudio) {
+        std::function<void()> onToggleAudio,
+        std::function<void()> onToggleChat) {
         m_font = font;
         m_tabs.clear();
 
@@ -22,6 +23,7 @@ namespace WisdomUI {
         m_tabs.push_back({ "properties", "Settings & Properties", {}, onToggleProperties, false, 0.0f, 1.0f });
         m_tabs.push_back({ "assets", "Asset Browser", {}, onToggleAssets, false, 0.0f, 1.0f });
         m_tabs.push_back({ "audio", "Audio Timeline Track", {}, onToggleAudio, false, 0.0f, 1.0f });
+        m_tabs.push_back({ "chat", "Chat with Claude", {}, onToggleChat, false, 0.0f, 1.0f });
     }
 
     void RightDockTabs::SetBounds(const sf::FloatRect& bounds) {

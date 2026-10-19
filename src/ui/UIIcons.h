@@ -128,6 +128,18 @@ namespace WisdomUI {
                 drawPixel(5, 9, 4, 3);
                 drawPixel(12, 2, 2, 6);
             }
+            else if (id == "chat") {
+                // A speech bubble with three dots
+                drawPixel(3, 2, 10, 1);
+                drawPixel(3, 10, 10, 1);
+                drawPixel(2, 3, 1, 7);
+                drawPixel(13, 3, 1, 7);
+                drawPixel(4, 11, 2, 1);
+                drawPixel(4, 12, 1, 1);
+                drawPixel(4, 5, 2, 2);
+                drawPixel(7, 5, 2, 2);
+                drawPixel(10, 5, 2, 2);
+            }
             else if (id == "timeline") {
                 drawPixel(2, 4, 12, 8);
                 drawPixel(4, 2, 2, 2);

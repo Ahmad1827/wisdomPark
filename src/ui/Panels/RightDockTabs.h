@@ -25,7 +25,8 @@ namespace WisdomUI {
             std::function<void()> onTogglePalette,
             std::function<void()> onToggleProperties,
             std::function<void()> onToggleAssets,
-            std::function<void()> onToggleAudio);
+            std::function<void()> onToggleAudio,
+            std::function<void()> onToggleChat);
 
         void SetBounds(const sf::FloatRect& bounds);
         void SetTabState(const std::string& id, bool isToggled);

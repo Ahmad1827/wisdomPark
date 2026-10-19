@@ -129,11 +129,39 @@ static AIResult runClaudeArt(const std::string& backend, const std::string& apiK
     return res;
 }
 
+// Runs scripts/sprite/claude_chat.py with the chat job (request.prompt, JSON) on stdin. It needs Claude Code
+// itself, since Claude works in several steps there: writing its drawing code, rendering it and looking at it.
+static AIResult runClaudeChat(const AIRequest& request) {
+    AIResult res;
+    std::error_code ec;
+    std::filesystem::remove("temp_ai_error.txt", ec);
+    std::filesystem::remove("temp_ai_status.txt", ec);
+    int exitCode = 1;
+    if (!runWithStdin("python scripts/sprite/claude_chat.py", request.prompt, exitCode)) {
+        res.errorMessage = "Could not start Python. Is it installed and on PATH?";
+        return res;
+    }
+    res.success = exitCode == 0;
+    if (!res.success) {
+        std::ifstream err("temp_ai_error.txt");
+        std::stringstream ss;
+        ss << err.rdbuf();
+        res.errorMessage = ss.str();
+        if (res.errorMessage.empty()) res.errorMessage = "Python or scripts/sprite/claude_chat.py could not be run.";
+    }
+    return res;
+}
+
 bool ClaudeProvider::testConnection() { return !apiKey.empty(); }
 
 std::string ClaudeProvider::getName() const { return "Claude"; }
 
 AIResult ClaudeProvider::process(const AIRequest& request) {
+    if (request.operation == AIOperation::Chat) {
+        AIResult res;
+        res.errorMessage = "The chat needs the Claude Code engine. Switch the Assistant Engine to Claude Code in Settings.";
+        return res;
+    }
     return runClaudeArt("api", apiKey, request);
 }
 
@@ -160,5 +188,6 @@ bool ClaudeCodeProvider::testConnection() {
 std::string ClaudeCodeProvider::getName() const { return "Claude Code"; }
 
 AIResult ClaudeCodeProvider::process(const AIRequest& request) {
+    if (request.operation == AIOperation::Chat) return runClaudeChat(request);
     return runClaudeArt("cli", "", request);
 }

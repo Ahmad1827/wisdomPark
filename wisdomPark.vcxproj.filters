@@ -108,6 +108,9 @@
     <ClCompile Include="src\ui\AudioPanel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\ui\ChatPanel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\ai\AIManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -438,6 +441,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ui\AudioPanel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ui\ChatPanel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\ai\AIManager.h">

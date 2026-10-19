@@ -19,6 +19,7 @@
 #include "../core/Timeline.h"
 #include "../core/ExportManager.h"
 #include "../ai/AIHelper.h"
+#include "../ai/AIProvider.h"
 #include "Screens/ProjectBrowser.h"
 #include "Screens/ExportModal.h"
 #include "Screens/NewProjectModal.h"
@@ -59,7 +60,8 @@ enum class RightTabMode {
     Palette,
     Properties,
     Assets,
-    Audio
+    Audio,
+    Chat
 };
 
 class UIManager {
@@ -242,6 +244,11 @@ private:
     bool triggerSave(Canvas& canvas, Timeline& timeline);
     void startAIAutocomplete(Canvas& canvas, Timeline& timeline, const std::string& hint, bool nextFrame = false);
     void openAIPrompt(bool contour, bool nextFrame = false);
+    // The chat with Claude (right dock): sends a message with the timeline as it is now, and puts the
+    // frames Claude draws onto its own layer when the reply comes back
+    void sendChatMessage(Canvas& canvas, Timeline& timeline, const std::string& message);
+    void applyChatReply(Canvas& canvas, Timeline& timeline, const AIResult& result);
+    void handleChatAction(const std::string& action, Canvas& canvas, Timeline& timeline);
 
     std::string m_pendingCheckoutHash;
 

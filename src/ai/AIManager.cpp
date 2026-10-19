@@ -162,6 +162,9 @@ static void asyncAIWorker(std::shared_ptr<AIProvider> provider, AIRequest reques
         result.success = false;
         result.errorMessage = "Task canceled by user.";
     }
+    else if (request.operation == AIOperation::Chat) {
+        // The chat bridge reports through the project's assistant folder; its exit code is the whole answer
+    }
     else if (std::filesystem::exists("temp_ai_output.png")) {
         // Check that the external python file dropped a usable output asset
         sf::Image loadedResult;
@@ -200,7 +203,7 @@ AIResult AIManager::executeRequest(const AIRequest& request) {
     }
 
     addHistory(request.prompt, request.negativePrompt);
-    request.baseImage.saveToFile("temp_ai_input.png");
+    if (request.operation != AIOperation::Chat) request.baseImage.saveToFile("temp_ai_input.png");
     g_asyncInputImage = request.baseImage;
 
     g_aiFinished = false;
