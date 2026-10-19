@@ -373,3 +373,5 @@ temp_ai_note.txt
 temp_ai_context.json
 assistant_prefs.txt
 arcade_highscore.txt
+chat_model.txt
+chat_timings.jsonl
