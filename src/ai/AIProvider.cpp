@@ -30,7 +30,7 @@ void cancelClaudeArt() {
 }
 
 // Starts a command, feeds it `input` on stdin and waits for it. Returns false if it could not be started.
-static bool runWithStdin(const std::string& command, const std::string& input, int& exitCode) {
+static bool runWithStdin(const std::string& command, const std::string& input, int& exitCode, bool cancellable = true) {
 #if defined(_WIN32)
     // The app has no console of its own, so _popen would pop a cmd window over it; this keeps the child hidden
     SECURITY_ATTRIBUTES sa{ sizeof(sa), nullptr, TRUE };
@@ -64,7 +64,7 @@ static bool runWithStdin(const std::string& command, const std::string& input, i
         SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
         AssignProcessToJobObject(job, pi.hProcess);
     }
-    {
+    if (cancellable) {
         std::lock_guard<std::mutex> lock(g_artJobMutex);
         g_artJob = job;
     }
@@ -77,7 +77,7 @@ static bool runWithStdin(const std::string& command, const std::string& input, i
     WaitForSingleObject(pi.hProcess, INFINITE);
     DWORD code = 1;
     GetExitCodeProcess(pi.hProcess, &code);
-    {
+    if (cancellable) {
         std::lock_guard<std::mutex> lock(g_artJobMutex);
         g_artJob = nullptr;
     }
@@ -93,6 +93,10 @@ static bool runWithStdin(const std::string& command, const std::string& input, i
     exitCode = pclose(pipe);
     return true;
 #endif
+}
+
+bool runHiddenProcess(const std::string& command, int& exitCode) {
+    return runWithStdin(command, "", exitCode, false);
 }
 
 // Runs scripts/claude_art.py, which finishes the drawing in temp_ai_input.png (or

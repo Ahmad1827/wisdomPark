@@ -376,3 +376,4 @@ arcade_highscore.txt
 chat_model.txt
 chat_timings.jsonl
 chat_usage.json
+chat_usage_probe.json

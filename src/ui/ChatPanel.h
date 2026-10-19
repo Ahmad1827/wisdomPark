@@ -1,6 +1,8 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <atomic>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -115,6 +117,10 @@ private:
     bool m_pickerOpen = false;
     std::vector<Timing> m_timings;
     Usage m_usage;
+    // Asking Claude Code where the limits stand when the chat opens without a recent reading:
+    // 0 not asked, 1 asking, 2 answered, 3 failed (not asked again this session)
+    std::shared_ptr<std::atomic<int>> m_probe = std::make_shared<std::atomic<int>>(0);
+    void probeUsage();
     void saveUsage() const;
     std::string usageLine() const;
     // The run in flight: its model and what it was estimated to take

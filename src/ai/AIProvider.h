@@ -3,6 +3,10 @@
 #include <vector>
 #include <SFML/Graphics.hpp>
 
+// Runs a command with no window and waits for it; false when it could not be started. Unlike the
+// assistant's own runs, Stop does not end it.
+bool runHiddenProcess(const std::string& command, int& exitCode);
+
 enum class AIOperation {
     Generate,
     Edit,

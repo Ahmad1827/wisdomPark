@@ -1,11 +1,14 @@
 #include "ChatPanel.h"
 #include "UITheme.h"
+#include "../ai/AIProvider.h"
 #include "json.hpp"
 #include <algorithm>
 #include <cmath>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <regex>
+#include <thread>
 
 namespace {
     const unsigned int kTextSize = 15;
@@ -19,6 +22,7 @@ namespace {
     const char* kTimingsFile = "chat_timings.jsonl";
     // The plan usage Claude Code last reported, and how fast runs use it up
     const char* kUsageFile = "chat_usage.json";
+    const char* kProbeFile = "chat_usage_probe.json";
 
     // The colours of Claude Code in a dark terminal
     const sf::Color kBg(21, 21, 21);
@@ -272,6 +276,18 @@ std::string ChatPanel::reportUsage(float fiveHour, long long fiveHourResets, flo
     return "Used " + usedText + " of your 5-hour limit (now " + now + weekNow + ")";
 }
 
+void ChatPanel::probeUsage() {
+    m_probe->store(1);
+    std::shared_ptr<std::atomic<int>> state = m_probe;
+    std::thread([state]() {
+        std::error_code ec;
+        std::filesystem::remove(kProbeFile, ec);
+        int exitCode = 1;
+        bool ran = runHiddenProcess("python scripts/sprite/claude_usage.py", exitCode);
+        state->store(ran && exitCode == 0 ? 2 : 3);
+    }).detach();
+}
+
 void ChatPanel::saveUsage() const {
     nlohmann::json models = nlohmann::json::object();
     for (const auto& [id, cs] : m_usage.perModel) models[id] = { {"cost", cs.first}, {"seconds", cs.second} };
@@ -286,7 +302,9 @@ void ChatPanel::saveUsage() const {
 
 // "5h limit 42% (resets 20:00), week 5%", from the last run; a window that has reset since shows as such
 std::string ChatPanel::usageLine() const {
-    if (m_usage.fiveHour < 0.f) return "";
+    int probe = m_probe->load();
+    if (probe == 1) return "5h limit: checking...";
+    if (m_usage.fiveHour < 0.f) return probe == 3 ? "5h limit: unknown (is Claude Code set up?)" : "5h limit: ...";
     long long now = static_cast<long long>(std::time(nullptr));
     std::string line;
     if (now >= m_usage.fiveHourResets) line = "5h limit reset";
@@ -407,7 +425,8 @@ void ChatPanel::runCommand(const std::string& command) {
     else if (name == "/help") {
         addMessage(Role::Note, "/model  pick the model Claude runs on\n/area   mark where on the canvas Claude draws\n/detail low, medium, high or full: how finely a big canvas is drawn\n/clear  start a new conversation\n"
             "Enter sends, Shift+Enter adds a line, Esc stops Claude while it works. Under the box: how long the typed "
-            "request should take and how much of your 5-hour limit it should use; both learn from your runs.");
+            "request should take and how much of your 5-hour limit it should use (?% until two replies have shown how fast "
+            "Claude uses it); both learn from your runs.");
     }
     else addMessage(Role::Note, "Unknown command " + name + ". /help lists them.");
 }
@@ -454,6 +473,28 @@ void ChatPanel::update(float dt, bool focusMode, bool isOpen, bool busy, const s
     m_caretBlink += dt;
     if (!m_isOpen) { m_inputFocused = false; m_pickerOpen = false; }
 
+    // The limits show from the moment the chat opens: without a reading from this 5-hour window, Claude Code is asked
+    long long now = static_cast<long long>(std::time(nullptr));
+    if (m_isOpen && !m_busy && m_probe->load() == 0 && (m_usage.fiveHour < 0.f || now >= m_usage.fiveHourResets)) probeUsage();
+    if (m_probe->load() == 2) {
+        try {
+            std::ifstream in(kProbeFile, std::ios::binary);
+            nlohmann::json w = nlohmann::json::parse(in);
+            if (w.contains("five_hour")) {
+                m_usage.fiveHour = w["five_hour"].value("utilization", -1.f);
+                m_usage.fiveHourResets = w["five_hour"].value("resetsAt", 0LL);
+            }
+            if (w.contains("seven_day")) {
+                m_usage.week = w["seven_day"].value("utilization", -1.f);
+                m_usage.weekResets = w["seven_day"].value("resetsAt", 0LL);
+            }
+            saveUsage();
+        }
+        catch (...) {}
+        // Asked again only once this reading's window has reset
+        m_probe->store(m_usage.fiveHour >= 0.f ? 0 : 3);
+    }
+
     float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
     float statusBarH = WisdomUI::Theme::StatusBarHeight;
     float tabDockW = WisdomUI::Theme::ToolDockWidth;
@@ -464,7 +505,7 @@ void ChatPanel::update(float dt, bool focusMode, bool isOpen, bool busy, const s
     float innerW = m_width - kPad * 2.f;
 
     m_panelBounds = sf::FloatRect(x, topBarsH, m_width, bottom - topBarsH);
-    m_headerBounds = sf::FloatRect(x + kPad, topBarsH + kPad, innerW, 14.f + (m_usage.fiveHour >= 0.f ? 4.f : 3.f) * kLineHeight);
+    m_headerBounds = sf::FloatRect(x + kPad, topBarsH + kPad, innerW, 14.f + 4.f * kLineHeight);
     m_closeBounds = sf::FloatRect(m_headerBounds.left + innerW - 28.f, m_headerBounds.top + 4.f, 24.f, 24.f);
 
     // The prompt box grows with what is typed, up to a few lines, and the conversation gives up the room
@@ -483,8 +524,8 @@ void ChatPanel::update(float dt, bool focusMode, bool isOpen, bool busy, const s
     m_areaText = m_marking ? "[drag on canvas]" : !m_markLabel.empty() ? "[" + m_markLabel + " x]" : "[area]";
     m_areaBounds = sf::FloatRect(m_modelBounds.left + m_modelBounds.width + m_charW, m_footerBounds.top, m_areaText.size() * m_charW + 8.f, kLineHeight);
     // The detail only shows when the area is too big to draw pixel for pixel; a click goes to the next one
-    m_detailText = m_scaled ? std::string("[") + kDetails[m_detail].label + "]" : "";
-    m_detailBounds = sf::FloatRect(m_areaBounds.left + m_areaBounds.width + m_charW * 0.5f, m_footerBounds.top, m_scaled ? m_detailText.size() * m_charW + 8.f : 0.f, kLineHeight);
+    m_detailText = std::string("[") + kDetails[m_detail].label + "]";
+    m_detailBounds = sf::FloatRect(m_areaBounds.left + m_areaBounds.width + m_charW * 0.5f, m_footerBounds.top, m_detailText.size() * m_charW + 8.f, kLineHeight);
     // While Claude works a stop button takes the right of the footer, where the estimate was
     float stopW = 8.f * m_charW + 12.f;
     m_stopBounds = sf::FloatRect(m_footerBounds.left + m_footerBounds.width - stopW, m_footerBounds.top - 1.f, stopW, kLineHeight + 2.f);
@@ -674,26 +715,25 @@ void ChatPanel::draw(sf::RenderWindow& window) {
     bool areaHover = m_areaBounds.contains(mPos);
     if (areaHover) rect(m_areaBounds, kHover);
     text(m_areaText, m_areaBounds.left + 4.f, m_footerBounds.top, m_marking || !m_markLabel.empty() ? kClaude : areaHover ? kText : kDim);
-    if (m_scaled) {
-        bool detailHover = m_detailBounds.contains(mPos);
-        if (detailHover) rect(m_detailBounds, kHover);
-        text(m_detailText, m_detailBounds.left + 4.f, m_footerBounds.top, detailHover ? kText : kDim);
-    }
-    float leftEnd = (m_scaled ? m_detailBounds.left + m_detailBounds.width : m_areaBounds.left + m_areaBounds.width) - m_footerBounds.left;
+    bool detailHover = m_detailBounds.contains(mPos);
+    if (detailHover) rect(m_detailBounds, kHover);
+    text(m_detailText, m_detailBounds.left + 4.f, m_footerBounds.top, detailHover && m_scaled ? kText : kDim);
+    float leftEnd = m_detailBounds.left + m_detailBounds.width - m_footerBounds.left;
 
     std::string typed = inputUtf8();
     size_t start = typed.find_first_not_of(" \t\n");
     std::string right;
     sf::Color rightInk = kDim;
     if (m_busy) right = "";
-    else if (start == std::string::npos) right = leftEnd + 19.f * m_charW < m_footerBounds.width ? "/help for commands" : "";
+    else if (start == std::string::npos) right = leftEnd + 22.f * m_charW < m_footerBounds.width ? "type for time & usage" : "";
     else if (typed[start] == '/') right = "command";
     else {
         Job job = estimate(typed, m_model);
         std::string what = job.kind == "chat" ? "reply only"
             : job.kind == "new" ? (job.frames > 1 ? "new sprite, " + std::to_string(job.frames) + " frames" : "new sprite")
             : (job.frames > 1 ? std::to_string(job.frames) + " frames" : "edit");
-        std::string cost = job.percent < 0.f ? "" : job.percent < 1.f ? " <1%" : " ~" + std::to_string(static_cast<int>(std::round(job.percent))) + "%";
+        // "?%" until two finished runs have shown how fast Claude uses the limit
+        std::string cost = job.percent < 0.f ? " ?%" : job.percent < 1.f ? " <1%" : " ~" + std::to_string(static_cast<int>(std::round(job.percent))) + "%";
         right = roughTime(job.seconds) + cost + " - " + what;
         float room = m_footerBounds.width - leftEnd - 12.f;
         if (right.size() * m_charW > room) right = roughTime(job.seconds) + cost;
@@ -721,7 +761,7 @@ void ChatPanel::draw(sf::RenderWindow& window) {
             if (chosen) text(">", pb.left + 10.f, ry, kClaude);
             text(kModels[i].label, pb.left + 10.f + indent, ry, chosen ? kClaude : kText);
             Job rowJob = estimate(typed, i);
-            std::string rowCost = rowJob.percent < 0.f ? "" : rowJob.percent < 1.f ? "  <1%" : "  ~" + std::to_string(static_cast<int>(std::round(rowJob.percent))) + "%";
+            std::string rowCost = rowJob.percent < 0.f ? "  ?%" : rowJob.percent < 1.f ? "  <1%" : "  ~" + std::to_string(static_cast<int>(std::round(rowJob.percent))) + "%";
             std::string hint = (start != std::string::npos && typed[start] != '/') ? roughTime(rowJob.seconds) + rowCost
                 : (i == 0 ? "your Claude Code setting" : "");
             text(hint, pb.left + pb.width - 10.f - hint.size() * m_charW, ry, kDim);
@@ -751,7 +791,11 @@ bool ChatPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
         else if (m_busy && m_stopBounds.contains(mousePos)) m_pendingAction = "stop";
         else if (m_modelBounds.contains(mousePos)) m_pickerOpen = true;
         else if (m_areaBounds.contains(mousePos)) m_pendingAction = "mark_area";
-        else if (m_scaled && m_detailBounds.contains(mousePos)) setDetail((m_detail + 1) % kDetailCount);
+        else if (m_detailBounds.contains(mousePos)) {
+            if (m_scaled) setDetail((m_detail + 1) % kDetailCount);
+            else addMessage(Role::Note, "Detail is for canvases over 256px: low, medium, high or full sets how finely Claude draws them. "
+                "This one is small enough to draw pixel for pixel.");
+        }
         return true;
     }
     if (event.type == sf::Event::MouseWheelScrolled && m_panelBounds.contains(mousePos)) {
