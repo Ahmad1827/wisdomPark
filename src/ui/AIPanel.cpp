@@ -50,11 +50,6 @@ void AIPanel::loadAssistPrefs() {
     }
 }
 
-void AIPanel::saveAssistPrefs() const {
-    std::ofstream out("assistant_prefs.txt", std::ios::trunc);
-    out << assistColorMode << " " << assistOptionCount << " " << assistOutputMode << " " << assistFrameCount << " " << assistSelfCheck << "\n";
-}
-
 void AIPanel::toggle() {
     isVisible = !isVisible;
     if (!isVisible) {
@@ -452,26 +447,10 @@ void AIPanel::update(float dt) {
     sendAllBtnBounds = sf::FloatRect(x, y, w, 28.f);
     y += 38.f;
 
-    assistLabelY = y;
+    claudeLabelY = y;
     y += 18.f;
-    float thirdW = (w - 8.f) / 3.f;
-    aiFinishBtnBounds = sf::FloatRect(x, y, thirdW, 32.f);
-    aiContourBtnBounds = sf::FloatRect(x + thirdW + 4.f, y, thirdW, 32.f);
-    aiAskBtnBounds = sf::FloatRect(x + (thirdW + 4.f) * 2.f, y, thirdW, 32.f);
-    y += 36.f;
-    float wideW = (w - 4.f) * 0.62f;
-    aiNextFrameBtnBounds = sf::FloatRect(x, y, wideW, 32.f);
-    aiFrameCountBtnBounds = sf::FloatRect(x + wideW + 4.f, y, w - wideW - 4.f, 32.f);
-    y += 42.f;
-
-    settingsLabelY = y;
-    y += 18.f;
-    aiColorsBtnBounds = sf::FloatRect(x, y, wideW, 28.f);
-    aiOptionsBtnBounds = sf::FloatRect(x + wideW + 4.f, y, w - wideW - 4.f, 28.f);
-    y += 32.f;
-    aiOutputBtnBounds = sf::FloatRect(x, y, wideW, 28.f);
-    aiSelfCheckBtnBounds = sf::FloatRect(x + wideW + 4.f, y, w - wideW - 4.f, 28.f);
-    y += 38.f;
+    chatBtnBounds = sf::FloatRect(x, y, w, 34.f);
+    y += 44.f;
     closeBtnBounds = sf::FloatRect(x, y, w, 28.f);
     size.y = y + 28.f + 14.f - by;
 
@@ -508,8 +487,7 @@ void AIPanel::draw(sf::RenderWindow& window) {
     WisdomUI::Theme::DrawCrispText(window, font, ":: STUDIO ASSISTANT ::", 15, headerGripBounds.left + headerGripBounds.width / 2.0f, headerGripBounds.top + headerGripBounds.height / 2.0f, WisdomUI::Theme::SunsetAmber, sf::Color(14, 6, 20), true, true);
 
     drawSection(window, "PALETTE", paletteLabelY);
-    drawSection(window, "ASSISTANT", assistLabelY);
-    drawSection(window, "ASSISTANT SETTINGS", settingsLabelY);
+    drawSection(window, "CLAUDE", claudeLabelY);
 
     std::string currentPalName = palettes.empty() ? "None" : palettes[selectedPaletteIdx].name;
     bool hovDrop = dropdownBtnBounds.contains(mPos);
@@ -550,48 +528,9 @@ void AIPanel::draw(sf::RenderWindow& window) {
     if (hovSend) hoveredTooltip = "Transfer all swatches from this palette to Colors panel";
     WisdomUI::Theme::DrawSunsetButton(window, sendAllBtnBounds, "--> Send All to Colors Panel", font, 14, false, hovSend, false, 1.0f);
 
-    bool hovFinish = aiFinishBtnBounds.contains(mPos);
-    if (hovFinish) hoveredTooltip = "The assistant finishes the drawing on this frame [Ctrl+Space]";
-    WisdomUI::Theme::DrawSunsetButton(window, aiFinishBtnBounds, "Finish Drawing", font, 14, false, hovFinish, true, 1.0f);
-
-    bool hovContour = aiContourBtnBounds.contains(mPos);
-    if (hovContour) hoveredTooltip = "The assistant draws a contour of what you name, or of your drawing [Ctrl+Shift+O]";
-    WisdomUI::Theme::DrawSunsetButton(window, aiContourBtnBounds, "Make Contour", font, 14, false, hovContour, false, 1.0f);
-
-    bool hovAsk = aiAskBtnBounds.contains(mPos);
-    if (hovAsk) hoveredTooltip = "Type any request for the assistant to carry out on the canvas [Ctrl+Shift+Space]";
-    WisdomUI::Theme::DrawSunsetButton(window, aiAskBtnBounds, "Ask Assistant", font, 14, false, hovAsk, false, 1.0f);
-
-    bool hovNextFrame = aiNextFrameBtnBounds.contains(mPos);
-    if (hovNextFrame) hoveredTooltip = assistFrameCount == 1
-        ? "The assistant draws the next animation frame after this one; say what happens, or let it continue the motion"
-        : "The assistant draws the next " + std::to_string(assistFrameCount) + " animation frames after this one; say what happens, or let it continue the motion";
-    WisdomUI::Theme::DrawSunsetButton(window, aiNextFrameBtnBounds, assistFrameCount == 1 ? "Draw Next Frame" : "Draw Next " + std::to_string(assistFrameCount) + " Frames", font, 14, false, hovNextFrame, false, 1.0f);
-
-    bool hovFrameCount = aiFrameCountBtnBounds.contains(mPos);
-    if (hovFrameCount) hoveredTooltip = "How many frames Draw Next Frame makes in one go, each drawn from the one before (more takes longer)";
-    WisdomUI::Theme::DrawSunsetButton(window, aiFrameCountBtnBounds, "Frames: " + std::to_string(assistFrameCount), font, 14, false, hovFrameCount, assistFrameCount > 1, 1.0f);
-
-    static const char* kColorModes[] = { "Colours: Free", "Colours: Drawing Only", "Colours: This Palette" };
-    bool hovColors = aiColorsBtnBounds.contains(mPos);
-    if (hovColors) hoveredTooltip = "Limit the assistant to the colours already in your drawing, or to the palette selected above";
-    WisdomUI::Theme::DrawSunsetButton(window, aiColorsBtnBounds, kColorModes[assistColorMode], font, 14, false, hovColors, assistColorMode != 0, 1.0f);
-
-    bool hovOptions = aiOptionsBtnBounds.contains(mPos);
-    if (hovOptions) hoveredTooltip = "How many alternatives the assistant makes for you to pick from (more takes longer)";
-    WisdomUI::Theme::DrawSunsetButton(window, aiOptionsBtnBounds, "Options: " + std::to_string(assistOptionCount), font, 14, false, hovOptions, assistOptionCount > 1, 1.0f);
-
-    bool hovOutput = aiOutputBtnBounds.contains(mPos);
-    if (hovOutput) hoveredTooltip = assistOutputMode == 0
-        ? "The assistant sends back only the pixels it changes: quicker. Above 256x256 it works on the part your request is about"
-        : "The assistant redraws the whole canvas each time: slower. Above 128x128 it works on the part your request is about";
-    WisdomUI::Theme::DrawSunsetButton(window, aiOutputBtnBounds, assistOutputMode == 0 ? "Output: Changes Only" : "Output: Whole Canvas", font, 14, false, hovOutput, false, 1.0f);
-
-    bool hovSelfCheck = aiSelfCheckBtnBounds.contains(mPos);
-    if (hovSelfCheck) hoveredTooltip = assistSelfCheck
-        ? "The assistant looks over its result and fixes mistakes before showing it. Click for quicker, unchecked results"
-        : "Quick: the assistant shows its first attempt without checking it. Click to have it check its work again";
-    WisdomUI::Theme::DrawSunsetButton(window, aiSelfCheckBtnBounds, assistSelfCheck ? "Check: On" : "Check: Quick", font, 14, false, hovSelfCheck, assistSelfCheck == 0, 1.0f);
+    bool hovChat = chatBtnBounds.contains(mPos);
+    if (hovChat) hoveredTooltip = "Ask Claude to draw sprites and animation frames in the chat";
+    WisdomUI::Theme::DrawSunsetButton(window, chatBtnBounds, "Chat with Claude  >", font, 14, false, hovChat, true, 1.0f);
 
     bool hovClose = closeBtnBounds.contains(mPos);
     if (hovClose) hoveredTooltip = "Close Studio Assistant";
@@ -710,53 +649,8 @@ bool AIPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
             return true;
         }
 
-        if (aiFinishBtnBounds.contains(mousePos)) {
-            pendingAction = "action:ai_finish";
-            return true;
-        }
-
-        if (aiContourBtnBounds.contains(mousePos)) {
-            pendingAction = "action:ai_contour";
-            return true;
-        }
-
-        if (aiAskBtnBounds.contains(mousePos)) {
-            pendingAction = "action:ai_ask";
-            return true;
-        }
-
-        if (aiNextFrameBtnBounds.contains(mousePos)) {
-            pendingAction = "action:ai_next_frame";
-            return true;
-        }
-
-        if (aiFrameCountBtnBounds.contains(mousePos)) {
-            assistFrameCount = assistFrameCount % 4 + 1;
-            saveAssistPrefs();
-            return true;
-        }
-
-        if (aiSelfCheckBtnBounds.contains(mousePos)) {
-            assistSelfCheck = 1 - assistSelfCheck;
-            saveAssistPrefs();
-            return true;
-        }
-
-        if (aiColorsBtnBounds.contains(mousePos)) {
-            assistColorMode = (assistColorMode + 1) % 3;
-            saveAssistPrefs();
-            return true;
-        }
-
-        if (aiOptionsBtnBounds.contains(mousePos)) {
-            assistOptionCount = assistOptionCount % 3 + 1;
-            saveAssistPrefs();
-            return true;
-        }
-
-        if (aiOutputBtnBounds.contains(mousePos)) {
-            assistOutputMode = 1 - assistOutputMode;
-            saveAssistPrefs();
+        if (chatBtnBounds.contains(mousePos)) {
+            pendingAction = "action:open_chat";
             return true;
         }
 

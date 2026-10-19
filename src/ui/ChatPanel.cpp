@@ -4,24 +4,180 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <regex>
 
 namespace {
-    const unsigned int kTextSize = 18;
-    const float kLineHeight = 21.f;
-    const float kBubblePad = 9.f;
-    const float kBubbleGap = 10.f;
+    const unsigned int kTextSize = 15;
+    const float kLineHeight = 20.f;
+    const float kPad = 12.f;
+    const float kMessageGap = 12.f;
     const unsigned int kInputMaxLength = 1200;
     const int kInputMaxLines = 5;
+    const char* kModelFile = "chat_model.txt";
+    // Every finished run, so the estimate learns how long Claude really takes on this computer
+    const char* kTimingsFile = "chat_timings.jsonl";
+
+    // The colours of Claude Code in a dark terminal
+    const sf::Color kBg(21, 21, 21);
+    const sf::Color kEdge(58, 58, 58);
+    const sf::Color kText(232, 232, 232);
+    const sf::Color kDim(138, 138, 138);
+    const sf::Color kClaude(217, 119, 87);
+    const sf::Color kUserBg(44, 44, 44);
+    const sf::Color kError(255, 107, 107);
+    const sf::Color kBoxEdge(112, 112, 112);
+    const sf::Color kHover(48, 48, 48);
+
+    struct Model {
+        const char* label;
+        const char* id;
+        // How long it takes next to Opus on the same request, before any runs have been timed
+        float speed;
+    };
+    const Model kModels[] = {
+        { "Default", "", 1.0f },
+        { "Opus 5.5", "claude-opus-5-5", 1.0f },
+        { "Sonnet 5.5", "claude-sonnet-5-5", 0.65f },
+        { "Haiku 5.5", "claude-haiku-5-5", 0.4f },
+        { "Fable 5.1", "claude-fable-5-1", 1.0f },
+    };
+    const int kModelCount = static_cast<int>(sizeof(kModels) / sizeof(kModels[0]));
+
+    std::string lower(std::string s) {
+        for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return s;
+    }
+
+    // "~40s", "~2m 10s", "~12m"
+    std::string roughTime(float seconds) {
+        int s = static_cast<int>(std::round(seconds));
+        if (s < 55) return "~" + std::to_string(std::max(5, (s + 2) / 5 * 5)) + "s";
+        if (s < 600) {
+            s = (s + 5) / 10 * 10;
+            return "~" + std::to_string(s / 60) + "m" + (s % 60 ? " " + std::to_string(s % 60) + "s" : "");
+        }
+        return "~" + std::to_string((s + 30) / 60) + "m";
+    }
+
+    // "0:42", "12:05"
+    std::string clockTime(float seconds) {
+        int s = static_cast<int>(seconds);
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d:%02d", s / 60, s % 60);
+        return buf;
+    }
+
+    sf::String utf8(const std::string& s) { return sf::String::fromUtf8(s.begin(), s.end()); }
 }
 
 ChatPanel::ChatPanel() = default;
 
 void ChatPanel::init() {
-    m_font.loadFromFile("assets/Jersey10-Regular.ttf");
+    // A terminal font when Windows has one; the app's own font otherwise
+    if (!m_font.loadFromFile("C:/Windows/Fonts/CascadiaMono.ttf") && !m_font.loadFromFile("C:/Windows/Fonts/consola.ttf")) {
+        m_font.loadFromFile("assets/Jersey10-Regular.ttf");
+    }
+    m_charW = m_font.getGlyph('M', kTextSize, false).advance;
+
+    // Claude Code's spinner and mark, where the font has them
+    const sf::Uint32 stars[] = { 0x00B7, 0x2722, 0x2733, 0x2736, 0x273B, 0x273D };
+    bool haveStars = true;
+    for (sf::Uint32 c : stars) haveStars = haveStars && m_font.hasGlyph(c);
+    if (haveStars) {
+        for (sf::Uint32 c : stars) m_spinner += c;
+        for (int i = 4; i >= 1; --i) m_spinner += stars[i];
+    }
+    else m_spinner = "|/-\\";
+    m_mark = m_font.hasGlyph(0x273B) ? sf::String(static_cast<sf::Uint32>(0x273B)) : sf::String("*");
+
+    std::ifstream modelIn(kModelFile);
+    std::string saved;
+    if (std::getline(modelIn, saved)) {
+        for (int i = 0; i < kModelCount; ++i) {
+            if (saved == kModels[i].id || (i == 0 && saved == "default")) m_model = i;
+        }
+    }
+
+    std::ifstream timingsIn(kTimingsFile, std::ios::binary);
+    std::string line;
+    while (std::getline(timingsIn, line)) {
+        try {
+            nlohmann::json t = nlohmann::json::parse(line);
+            m_timings.push_back({ t.value("model", ""), t.value("estimate", 0.f), t.value("seconds", 0.f) });
+        }
+        catch (...) {}
+    }
+}
+
+void ChatPanel::setContext(const std::string& folderLabel, bool hasSprite, unsigned int width, unsigned int height) {
+    m_folderLabel = folderLabel;
+    m_hasSprite = hasSprite;
+    m_canvasW = width;
+    m_canvasH = height;
+}
+
+std::string ChatPanel::modelId() const { return kModels[m_model].id; }
+
+void ChatPanel::setModel(int index) {
+    m_model = std::clamp(index, 0, kModelCount - 1);
+    std::ofstream out(kModelFile);
+    out << (m_model == 0 ? "default" : kModels[m_model].id) << "\n";
+}
+
+ChatPanel::Job ChatPanel::estimate(const std::string& message, int model) const {
+    Job job;
+    std::string m = lower(message);
+    auto has = [&](std::initializer_list<const char*> words) {
+        for (const char* w : words) if (m.find(w) != std::string::npos) return true;
+        return false;
+    };
+
+    // How many frames the message asks for: a number of frames, an animation, or a single drawing
+    std::smatch found;
+    static const std::regex counted("(\\d+)\\s*-?\\s*frames?");
+    static const std::regex spelled("\\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\\s*-?\\s*frames?");
+    const char* numbers[] = { "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve" };
+    bool animated = has({ "walk", "run", "jump", "attack", "idle", "animat", "cycle", "loop", "swing", "blink", "wave" });
+    if (std::regex_search(m, found, counted)) job.frames = std::atoi(found[1].str().c_str());
+    else if (std::regex_search(m, found, spelled)) {
+        for (int i = 0; i < 11; ++i) if (found[1] == numbers[i]) job.frames = i + 2;
+    }
+    else job.frames = animated ? 6 : 1;
+    job.frames = std::clamp(job.frames, 1, 32);
+
+    bool drawing = animated || has({ "draw", "make", "create", "add", "change", "turn", "give", "paint", "colo", "fix",
+        "redo", "move", "frame", "sprite", "bigger", "smaller", "remove", "shade", "outline", "darker", "lighter", "put" });
+    float sizeFactor = 1.f + std::max(m_canvasW, m_canvasH) / 256.f;
+    if (!drawing) { job.kind = "chat"; job.seconds = 12.f; }
+    else if (!m_hasSprite) { job.kind = "new"; job.seconds = (90.f + 18.f * job.frames) * sizeFactor; }
+    else { job.kind = "edit"; job.seconds = (45.f + 14.f * job.frames) * sizeFactor; }
+    job.seconds *= kModels[model].speed;
+
+    // Scaled by how the last runs went against their estimates: this model's own when it has any
+    std::vector<float> ratios;
+    for (int pass = 0; pass < 2 && ratios.empty(); ++pass) {
+        for (auto it = m_timings.rbegin(); it != m_timings.rend() && ratios.size() < 8; ++it) {
+            if ((pass == 1 || it->model == kModels[model].id) && it->estimate > 0.f) ratios.push_back(it->seconds / it->estimate);
+        }
+    }
+    if (!ratios.empty()) {
+        std::nth_element(ratios.begin(), ratios.begin() + ratios.size() / 2, ratios.end());
+        job.seconds *= std::clamp(ratios[ratios.size() / 2], 0.3f, 4.f);
+    }
+    return job;
+}
+
+void ChatPanel::finishRun(bool success) {
+    if (success && m_runEstimate > 0.f && m_busyTime > 2.f) {
+        m_timings.push_back({ m_runModel, m_runEstimate, m_busyTime });
+        std::ofstream out(kTimingsFile, std::ios::app | std::ios::binary);
+        out << nlohmann::json{ {"model", m_runModel}, {"estimate", m_runEstimate}, {"seconds", m_busyTime} }.dump() << "\n";
+    }
+    m_runEstimate = 0.f;
 }
 
 void ChatPanel::addMessage(Role role, const std::string& utf8Text) {
-    m_messages.push_back({ role, sf::String::fromUtf8(utf8Text.begin(), utf8Text.end()) });
+    m_messages.push_back({ role, utf8(utf8Text) });
     m_scroll = 0.f;
 }
 
@@ -61,16 +217,62 @@ std::string ChatPanel::takeMessage() {
     return m;
 }
 
+std::string ChatPanel::inputUtf8() const {
+    std::basic_string<sf::Uint8> bytes = m_input.toUtf8();
+    return std::string(bytes.begin(), bytes.end());
+}
+
 void ChatPanel::send() {
-    if (m_busy) return;
-    std::basic_string<sf::Uint8> utf8 = m_input.toUtf8();
-    std::string text(utf8.begin(), utf8.end());
+    std::string text = inputUtf8();
+    size_t start = text.find_first_not_of(" \t\n");
     // Nothing but spaces is not a message
-    if (text.find_first_not_of(" \t") == std::string::npos) return;
+    if (start == std::string::npos) return;
+    if (text[start] == '/') {
+        runCommand(text.substr(start));
+        m_input.clear();
+        m_caret = 0;
+        return;
+    }
+    if (m_busy) return;
+    Job job = estimate(text, m_model);
+    m_runModel = kModels[m_model].id;
+    m_runEstimate = job.seconds;
     m_pendingMessage = text;
     m_pendingAction = "send";
     m_input.clear();
     m_caret = 0;
+}
+
+void ChatPanel::runCommand(const std::string& command) {
+    size_t space = command.find_first_of(" \t");
+    std::string name = lower(command.substr(0, space));
+    std::string arg;
+    if (space != std::string::npos) {
+        size_t a = command.find_first_not_of(" \t", space);
+        if (a != std::string::npos) arg = lower(command.substr(a, command.find_last_not_of(" \t\n") + 1 - a));
+    }
+
+    if (name == "/clear" || name == "/new") {
+        if (m_busy) addMessage(Role::Note, "Claude is still working. Wait for it, or press Esc to stop it.");
+        else m_pendingAction = "new_chat";
+    }
+    else if (name == "/model") {
+        if (arg.empty()) { m_pickerOpen = true; return; }
+        for (int i = 0; i < kModelCount; ++i) {
+            if (lower(kModels[i].label).find(arg) != std::string::npos || arg == kModels[i].id) {
+                setModel(i);
+                addMessage(Role::Note, std::string("Model set to ") + kModels[i].label);
+                return;
+            }
+        }
+        addMessage(Role::Note, "No model called \"" + arg + "\". Try opus, sonnet, haiku, fable or default.");
+    }
+    else if (name == "/help") {
+        addMessage(Role::Note, "/model  pick the model Claude runs on\n/clear  start a new conversation\n"
+            "Enter sends, Shift+Enter adds a line, Esc stops Claude while it works. The time under the box is "
+            "how long the typed request should take; it learns from your runs.");
+    }
+    else addMessage(Role::Note, "Unknown command " + name + ". /help lists them.");
 }
 
 std::vector<sf::String> ChatPanel::wrap(const sf::String& text, unsigned int size, float maxWidth) const {
@@ -84,7 +286,7 @@ std::vector<sf::String> ChatPanel::wrap(const sf::String& text, unsigned int siz
         sf::String tryLine = line.isEmpty() ? word : line + " " + word;
         if (widthOf(tryLine) <= maxWidth) { line = tryLine; word.clear(); return; }
         if (!line.isEmpty()) { lines.push_back(line); line.clear(); }
-        // A word wider than the bubble is broken wherever it runs out of room
+        // A word wider than the line is broken wherever it runs out of room
         while (widthOf(word) > maxWidth && word.getSize() > 1) {
             size_t cut = word.getSize() - 1;
             while (cut > 1 && widthOf(word.substring(0, cut)) > maxWidth) --cut;
@@ -107,11 +309,13 @@ std::vector<sf::String> ChatPanel::wrap(const sf::String& text, unsigned int siz
 
 void ChatPanel::update(float dt, bool focusMode, bool isOpen, bool busy, const std::string& status) {
     m_isOpen = isOpen && !focusMode;
+    // The clock starts over with each run and keeps its time after it, until finishRun has read it
+    if (busy && !m_busy) m_busyTime = 0.f;
+    if (busy) m_busyTime += dt;
     m_busy = busy;
     m_status = status;
-    m_busyTime = busy ? m_busyTime + dt : 0.f;
     m_caretBlink += dt;
-    if (!m_isOpen) m_inputFocused = false;
+    if (!m_isOpen) { m_inputFocused = false; m_pickerOpen = false; }
 
     float topBarsH = WisdomUI::Theme::TopBarHeight + WisdomUI::Theme::OptionsBarHeight;
     float statusBarH = WisdomUI::Theme::StatusBarHeight;
@@ -120,42 +324,80 @@ void ChatPanel::update(float dt, bool focusMode, bool isOpen, bool busy, const s
     m_currentX += (targetX - m_currentX) * 18.f * dt;
     float x = std::floor(m_currentX);
     float bottom = 1080.f - statusBarH;
+    float innerW = m_width - kPad * 2.f;
 
     m_panelBounds = sf::FloatRect(x, topBarsH, m_width, bottom - topBarsH);
-    m_headerBounds = sf::FloatRect(x, topBarsH, m_width, 40.f);
-    m_closeBounds = sf::FloatRect(x + m_width - 36.f, topBarsH + 6.f, 28.f, 28.f);
-    m_newChatBounds = sf::FloatRect(x + m_width - 132.f, topBarsH + 6.f, 90.f, 28.f);
+    m_headerBounds = sf::FloatRect(x + kPad, topBarsH + kPad, innerW, 14.f + 3.f * kLineHeight);
+    m_closeBounds = sf::FloatRect(m_headerBounds.left + innerW - 28.f, m_headerBounds.top + 4.f, 24.f, 24.f);
 
-    // The box grows with what is typed, up to a few lines, and the conversation gives up the room
-    float innerW = m_width - 24.f - 76.f;
-    int inputLines = std::clamp(static_cast<int>(wrap(m_input, kTextSize, innerW - 16.f).size()), 1, kInputMaxLines);
-    float inputH = 18.f + inputLines * kLineHeight;
-    float statusH = m_busy ? 30.f : 0.f;
-    m_inputBounds = sf::FloatRect(x + 12.f, bottom - 12.f - inputH, innerW, inputH);
-    m_sendBounds = sf::FloatRect(x + m_width - 12.f - 68.f, bottom - 12.f - inputH, 68.f, inputH);
-    float listTop = topBarsH + 48.f;
-    m_listBounds = sf::FloatRect(x + 8.f, listTop, m_width - 16.f, m_inputBounds.top - statusH - 10.f - listTop);
+    // The prompt box grows with what is typed, up to a few lines, and the conversation gives up the room
+    m_footerBounds = sf::FloatRect(x + kPad, bottom - kPad - kLineHeight, innerW, kLineHeight);
+    float textW = innerW - 16.f - 2.f * m_charW;
+    int inputLines = std::clamp(static_cast<int>(wrap(m_input, kTextSize, textW).size()), 1, kInputMaxLines);
+    float inputH = 14.f + inputLines * kLineHeight;
+    m_inputBounds = sf::FloatRect(x + kPad, m_footerBounds.top - 6.f - inputH, innerW, inputH);
+    float statusH = m_busy ? 2.f * kLineHeight + 8.f : 0.f;
+    float listTop = m_headerBounds.top + m_headerBounds.height + 12.f;
+    m_listBounds = sf::FloatRect(x + kPad, listTop, innerW, m_inputBounds.top - statusH - 10.f - listTop);
+
+    std::string label = kModels[m_model].label;
+    m_modelBounds = sf::FloatRect(m_footerBounds.left, m_footerBounds.top, (label.size() + 3) * m_charW, kLineHeight);
+    // While Claude works a stop button takes the right of the footer, where the estimate was
+    float stopW = 8.f * m_charW + 12.f;
+    m_stopBounds = sf::FloatRect(m_footerBounds.left + m_footerBounds.width - stopW, m_footerBounds.top - 1.f, stopW, kLineHeight + 2.f);
+    float pickerH = (kModelCount + 1) * kLineHeight + 12.f;
+    m_pickerBounds = sf::FloatRect(m_footerBounds.left, m_footerBounds.top - 4.f - pickerH, innerW, pickerH);
 }
 
 void ChatPanel::draw(sf::RenderWindow& window) {
     if (m_currentX >= 1919.f) return;
-    using namespace WisdomUI;
     sf::Vector2f mPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
-    sf::RectangleShape bg(sf::Vector2f(m_panelBounds.width, m_panelBounds.height));
-    bg.setPosition(m_panelBounds.left, m_panelBounds.top);
-    bg.setFillColor(Theme::SunsetSkyTop);
-    bg.setOutlineThickness(-1.f);
-    bg.setOutlineColor(Theme::Border);
-    window.draw(bg);
+    auto text = [&](const sf::String& s, float x, float y, sf::Color c) {
+        sf::Text t(s, m_font, kTextSize);
+        t.setFillColor(c);
+        t.setPosition(std::floor(x), std::floor(y + 1.f));
+        window.draw(t);
+        return t;
+    };
+    auto rect = [&](sf::FloatRect r, sf::Color fill, sf::Color edge = sf::Color::Transparent) {
+        sf::RectangleShape s(sf::Vector2f(r.width, r.height));
+        s.setPosition(std::floor(r.left), std::floor(r.top));
+        s.setFillColor(fill);
+        if (edge.a) { s.setOutlineThickness(-1.f); s.setOutlineColor(edge); }
+        window.draw(s);
+    };
+    // Claude Code's "⏺" in front of a reply
+    auto bullet = [&](float x, float y, sf::Color c) {
+        sf::CircleShape dot(3.5f);
+        dot.setFillColor(c);
+        dot.setPosition(std::floor(x + m_charW * 0.5f - 3.5f), std::floor(y + kLineHeight / 2.f - 2.5f));
+        window.draw(dot);
+    };
+    // And its "⎿" in front of a note under it
+    auto elbow = [&](float x, float y, sf::Color c) {
+        rect(sf::FloatRect(x + m_charW * 0.5f, y + 3.f, 1.f, 8.f), c);
+        rect(sf::FloatRect(x + m_charW * 0.5f, y + 10.f, m_charW, 1.f), c);
+    };
 
-    sf::RectangleShape header(sf::Vector2f(m_headerBounds.width, m_headerBounds.height));
-    header.setPosition(m_headerBounds.left, m_headerBounds.top);
-    header.setFillColor(Theme::SunsetDeepDark);
-    window.draw(header);
-    Theme::DrawCrispText(window, m_font, "CLAUDE CHAT", 20, m_headerBounds.left + 16.f, m_headerBounds.top + 20.f, Theme::SunsetAmber, sf::Color(14, 6, 20), false, true);
-    Theme::DrawSunsetButton(window, m_newChatBounds, "New Chat", m_font, 15, false, m_newChatBounds.contains(mPos) && !m_busy, false, 1.0f);
-    Theme::DrawSunsetButton(window, m_closeBounds, "X", m_font, 15, false, m_closeBounds.contains(mPos), true, 1.0f);
+    rect(m_panelBounds, kBg);
+    rect(sf::FloatRect(m_panelBounds.left, m_panelBounds.top, 1.f, m_panelBounds.height), kEdge);
+
+    // The welcome box Claude Code opens with
+    const sf::FloatRect& hb = m_headerBounds;
+    rect(hb, sf::Color::Transparent, kClaude);
+    float hx = hb.left + 12.f;
+    float hy = hb.top + 7.f;
+    text(m_mark, hx, hy, kClaude);
+    text("Claude Code", hx + 2.f * m_charW, hy, kText);
+    text(std::string(kModels[m_model].label) + "  /help for commands", hx + 2.f * m_charW, hy + kLineHeight, kDim);
+    std::string folder = m_folderLabel;
+    size_t maxChars = static_cast<size_t>((hb.width - 24.f) / m_charW) - 7;
+    if (folder.size() > maxChars) folder = "..." + folder.substr(folder.size() - maxChars + 3);
+    text(utf8("cwd: " + folder), hx + 2.f * m_charW, hy + 2.f * kLineHeight, kDim);
+    bool closeHover = m_closeBounds.contains(mPos);
+    if (closeHover) rect(m_closeBounds, kHover);
+    text("x", m_closeBounds.left + (m_closeBounds.width - m_charW) / 2.f, m_closeBounds.top + 1.f, closeHover ? kText : kDim);
 
     // The conversation, newest at the bottom. Only what falls inside the list area is drawn.
     sf::View oldView = window.getView();
@@ -169,101 +411,101 @@ void ChatPanel::draw(sf::RenderWindow& window) {
         list.width / viewSize.x * vp.width, list.height / viewSize.y * vp.height));
     window.setView(clip);
 
-    float bubbleMaxW = list.width * 0.82f;
+    float indent = 2.f * m_charW;
+    float textMaxW = list.width - indent - 10.f;
     float totalH = 0.f;
-    struct Laid { const Message* msg; std::vector<sf::String> lines; float w, h; };
+    struct Laid { const Message* msg; std::vector<sf::String> lines; float h; };
     std::vector<Laid> laid;
     for (const auto& m : m_messages) {
-        Laid l{ &m, wrap(m.text, kTextSize, bubbleMaxW - kBubblePad * 2.f), 0.f, 0.f };
-        sf::Text probe("", m_font, kTextSize);
-        for (const auto& ln : l.lines) { probe.setString(ln); l.w = std::max(l.w, probe.getLocalBounds().width); }
-        l.w += kBubblePad * 2.f;
-        l.h = l.lines.size() * kLineHeight + kBubblePad * 2.f;
-        totalH += l.h + kBubbleGap;
+        Laid l{ &m, wrap(m.text, kTextSize, textMaxW), 0.f };
+        l.h = l.lines.size() * kLineHeight + (m.role == Role::Artist ? 6.f : 0.f);
+        totalH += l.h + kMessageGap;
         laid.push_back(std::move(l));
     }
     m_maxScroll = std::max(0.f, totalH - list.height);
     m_scroll = std::clamp(m_scroll, 0.f, m_maxScroll);
 
     if (m_messages.empty()) {
-        const char* hint = "Talk to Claude about your sprite.\n\nTry: \"draw a knight facing right\", then \"now 6 frames of him walking\".\n\nWhat Claude draws lands on a layer called Claude, and your own layers are never touched. Ctrl+Z undoes a whole reply. You can keep drawing while Claude works.";
-        auto lines = wrap(sf::String(hint), 17, list.width - 24.f);
-        float y = list.top + 16.f;
-        for (const auto& ln : lines) {
-            sf::Text t(ln, m_font, 17);
-            t.setFillColor(Theme::TextMuted);
-            t.setPosition(std::floor(list.left + 12.f), std::floor(y));
-            window.draw(t);
-            y += 20.f;
+        const char* tips[] = {
+            "Tips for getting started:",
+            "",
+            "1. Ask for a sprite: \"draw a knight facing right\"",
+            "2. Then animate it: \"now 6 frames of him walking\"",
+            "3. Claude draws on a layer called Claude; your layers are never touched",
+            "4. Ctrl+Z undoes a whole reply. Keep drawing while Claude works",
+        };
+        float y = list.top + 4.f;
+        for (const char* tip : tips) {
+            for (const auto& ln : wrap(sf::String(tip), kTextSize, list.width - indent)) {
+                text(ln, list.left, y, tip[0] == 'T' ? kText : kDim);
+                y += kLineHeight;
+            }
         }
     }
 
     float y = list.top + list.height - totalH + m_scroll;
     for (const auto& l : laid) {
-        bool mine = l.msg->role == Role::Artist;
-        float bx = mine ? list.left + list.width - l.w - 4.f : list.left + 4.f;
         if (y + l.h >= list.top && y <= list.top + list.height) {
-            sf::RectangleShape bubble(sf::Vector2f(l.w, l.h));
-            bubble.setPosition(std::floor(bx), std::floor(y));
-            sf::Color fill = mine ? Theme::SunsetPlum : Theme::SunsetDeepDark;
-            sf::Color edge = mine ? Theme::SunsetViolet : Theme::Border;
-            sf::Color ink = Theme::TextPrimary;
-            if (l.msg->role == Role::Error) { fill = Theme::DangerIdle; edge = Theme::SunsetCoral; }
-            if (l.msg->role == Role::Note) { fill = sf::Color(0, 0, 0, 0); edge = sf::Color(0, 0, 0, 0); ink = Theme::TextMuted; }
-            bubble.setFillColor(fill);
-            bubble.setOutlineThickness(-1.f);
-            bubble.setOutlineColor(edge);
-            window.draw(bubble);
-            float ty = y + kBubblePad - 3.f;
+            Role role = l.msg->role;
+            float ty = y;
+            sf::Color ink = kText;
+            if (role == Role::Artist) {
+                rect(sf::FloatRect(list.left, y, list.width, l.h), kUserBg);
+                ty += 3.f;
+                text(">", list.left + 4.f, ty, kDim);
+                ink = kText;
+            }
+            else if (role == Role::Claude) bullet(list.left + 4.f, ty, kText);
+            else if (role == Role::Error) { bullet(list.left + 4.f, ty, kError); ink = kError; }
+            else { elbow(list.left + 4.f, ty, kDim); ink = kDim; }
             for (const auto& ln : l.lines) {
-                sf::Text t(ln, m_font, kTextSize);
-                t.setFillColor(ink);
-                t.setPosition(std::floor(bx + kBubblePad), std::floor(ty));
-                window.draw(t);
+                text(ln, list.left + 4.f + indent, ty, ink);
                 ty += kLineHeight;
             }
         }
-        y += l.h + kBubbleGap;
+        y += l.h + kMessageGap;
     }
     window.setView(oldView);
 
+    // While Claude works: the spinner, what it is doing, and how long it has been at it
     if (m_busy) {
-        int dots = static_cast<int>(m_busyTime * 3.f) % 4;
-        std::string line = (m_status.empty() ? std::string("Claude is working") : m_status) + std::string(dots, '.');
-        Theme::DrawCrispText(window, m_font, line, 17, m_panelBounds.left + 16.f, m_inputBounds.top - 20.f, Theme::SunsetGold, sf::Color(0, 0, 0, 160), false, true);
+        float sy = m_inputBounds.top - 8.f - 2.f * kLineHeight;
+        sf::Uint32 star = m_spinner[static_cast<size_t>(m_busyTime * 8.f) % m_spinner.getSize()];
+        text(sf::String(star), m_listBounds.left + 4.f, sy, kClaude);
+        std::string status = m_status.empty() ? std::string("Thinking") : m_status;
+        size_t room = static_cast<size_t>((m_listBounds.width - 4.f - indent) / m_charW) - 1;
+        if (status.size() + 3 > room) status = status.substr(0, room - 3);
+        sf::String line = utf8(status) + (m_font.hasGlyph(0x2026) ? sf::String(static_cast<sf::Uint32>(0x2026)) : sf::String("..."));
+        text(line, m_listBounds.left + 4.f + indent, sy, kClaude);
+        std::string timing = "(" + clockTime(m_busyTime);
+        if (m_runEstimate > 0.f) timing += (m_busyTime > m_runEstimate ? " - expected " : " of ") + roughTime(m_runEstimate);
+        timing += " - esc to interrupt)";
+        text(timing, m_listBounds.left + 4.f + indent, sy + kLineHeight, kDim);
     }
 
-    // The message box
-    sf::RectangleShape box(sf::Vector2f(m_inputBounds.width, m_inputBounds.height));
-    box.setPosition(m_inputBounds.left, m_inputBounds.top);
-    box.setFillColor(Theme::SunsetDeepDark);
-    box.setOutlineThickness(-1.5f);
-    box.setOutlineColor(m_inputFocused ? Theme::SunsetAmber : Theme::Border);
-    window.draw(box);
-
-    float textW = m_inputBounds.width - 16.f;
-    if (m_input.isEmpty()) {
-        Theme::DrawCrispText(window, m_font, m_busy ? "Claude is working..." : "Message Claude (Enter sends)", kTextSize, m_inputBounds.left + 8.f, m_inputBounds.top + m_inputBounds.height / 2.f, Theme::TextMuted, sf::Color::Transparent, false, true);
-    }
-    // Wrap with the caret marked, so it lands on the right line; only the last few lines show
-    std::vector<sf::String> lines = wrap(m_input, kTextSize, textW);
+    // The prompt box
+    rect(m_inputBounds, sf::Color::Transparent, m_inputFocused ? kBoxEdge : kEdge);
+    float tx = m_inputBounds.left + 8.f;
+    float ly = m_inputBounds.top + 7.f;
+    text(">", tx, ly, m_inputFocused ? kText : kDim);
+    tx += indent;
+    if (m_input.isEmpty()) text("Try \"draw a knight facing right\"", tx + (m_inputFocused ? m_charW : 0.f), ly, kDim);
+    // Wrap with the caret counted, so it lands on the right line; only the last few lines show
+    std::vector<sf::String> lines = wrap(m_input, kTextSize, m_inputBounds.width - 16.f - indent);
     int first = std::max(0, static_cast<int>(lines.size()) - kInputMaxLines);
-    float ly = m_inputBounds.top + 6.f;
     size_t consumed = 0;
     bool caretDrawn = false;
     for (int i = 0; i < static_cast<int>(lines.size()); ++i) {
         size_t len = lines[i].getSize();
         if (i >= first) {
-            sf::Text t(lines[i], m_font, kTextSize);
-            t.setFillColor(Theme::TextPrimary);
-            t.setPosition(std::floor(m_inputBounds.left + 8.f), std::floor(ly));
-            window.draw(t);
-            if (m_inputFocused && !caretDrawn && m_caret <= consumed + len && std::fmod(m_caretBlink, 1.f) < 0.6f) {
+            sf::Text t = text(lines[i], tx, ly, kText);
+            if (m_inputFocused && !caretDrawn && m_caret <= consumed + len) {
+                // A terminal's block cursor, with the letter under it in reverse
                 sf::Vector2f cp = t.findCharacterPos(m_caret - consumed);
-                sf::RectangleShape caret(sf::Vector2f(2.f, kLineHeight - 2.f));
-                caret.setPosition(std::floor(cp.x), std::floor(ly + 2.f));
-                caret.setFillColor(Theme::SunsetGold);
-                window.draw(caret);
+                if (std::fmod(m_caretBlink, 1.f) < 0.6f) {
+                    rect(sf::FloatRect(cp.x, ly + 1.f, m_charW, kLineHeight - 2.f), kText);
+                    if (m_caret < m_input.getSize() && m_input[m_caret] != '\n') text(sf::String(m_input[m_caret]), cp.x, ly, kBg);
+                }
                 caretDrawn = true;
             }
             ly += kLineHeight;
@@ -272,27 +514,84 @@ void ChatPanel::draw(sf::RenderWindow& window) {
         consumed += len + 1;
     }
 
-    // While Claude works the button stops it instead
-    bool canSend = !m_busy && !m_input.isEmpty();
-    if (m_busy) Theme::DrawSunsetButton(window, m_sendBounds, "Stop", m_font, 16, false, m_sendBounds.contains(mPos), true, 1.0f);
-    else Theme::DrawSunsetButton(window, m_sendBounds, "Send", m_font, 16, false, canSend && m_sendBounds.contains(mPos), canSend, 1.0f);
+    // Under the box: the model on the left, and on the right how long the typed request should take
+    bool modelHover = m_modelBounds.contains(mPos) || m_pickerOpen;
+    text(kModels[m_model].label, m_footerBounds.left + 4.f, m_footerBounds.top, modelHover ? kText : kDim);
+    sf::ConvexShape arrow(3);
+    float ax = m_footerBounds.left + 4.f + (std::string(kModels[m_model].label).size() + 1) * m_charW;
+    float ay = m_footerBounds.top + kLineHeight / 2.f - 1.f;
+    arrow.setPoint(0, sf::Vector2f(ax, ay - 2.f));
+    arrow.setPoint(1, sf::Vector2f(ax + 7.f, ay - 2.f));
+    arrow.setPoint(2, sf::Vector2f(ax + 3.5f, ay + 2.5f));
+    arrow.setFillColor(modelHover ? kText : kDim);
+    window.draw(arrow);
+
+    std::string typed = inputUtf8();
+    size_t start = typed.find_first_not_of(" \t\n");
+    std::string right;
+    sf::Color rightInk = kDim;
+    if (m_busy) right = "";
+    else if (start == std::string::npos) right = "/help for commands";
+    else if (typed[start] == '/') right = "command";
+    else {
+        Job job = estimate(typed, m_model);
+        std::string what = job.kind == "chat" ? "reply only"
+            : job.kind == "new" ? (job.frames > 1 ? "new sprite, " + std::to_string(job.frames) + " frames" : "new sprite")
+            : (job.frames > 1 ? std::to_string(job.frames) + " frames" : "edit");
+        right = roughTime(job.seconds) + " - " + what;
+        float room = m_footerBounds.width - m_modelBounds.width - 12.f;
+        if (right.size() * m_charW > room) right = roughTime(job.seconds);
+        rightInk = kClaude;
+    }
+    text(right, m_footerBounds.left + m_footerBounds.width - right.size() * m_charW - 4.f, m_footerBounds.top, rightInk);
+    if (m_busy) {
+        bool stopHover = m_stopBounds.contains(mPos);
+        rect(m_stopBounds, stopHover ? sf::Color(70, 30, 30) : sf::Color::Transparent, stopHover ? kError : kBoxEdge);
+        float sx = m_stopBounds.left + 8.f;
+        rect(sf::FloatRect(sx, m_stopBounds.top + kLineHeight / 2.f - 3.f, 8.f, 8.f), stopHover ? kError : kText);
+        text("Stop", sx + 2.f * m_charW, m_footerBounds.top, stopHover ? kError : kText);
+    }
+
+    // The model picker, like /model in Claude Code: each row says how long the typed request would take on it
+    if (m_pickerOpen) {
+        const sf::FloatRect& pb = m_pickerBounds;
+        rect(pb, kBg, kBoxEdge);
+        text("Select model", pb.left + 10.f, pb.top + 5.f, kClaude);
+        for (int i = 0; i < kModelCount; ++i) {
+            float ry = pb.top + 5.f + (i + 1) * kLineHeight;
+            sf::FloatRect row(pb.left + 2.f, ry, pb.width - 4.f, kLineHeight);
+            if (row.contains(mPos)) rect(row, kHover);
+            bool chosen = i == m_model;
+            if (chosen) text(">", pb.left + 10.f, ry, kClaude);
+            text(kModels[i].label, pb.left + 10.f + indent, ry, chosen ? kClaude : kText);
+            std::string hint = (start != std::string::npos && typed[start] != '/') ? roughTime(estimate(typed, i).seconds)
+                : (i == 0 ? "your Claude Code setting" : "");
+            text(hint, pb.left + pb.width - 10.f - hint.size() * m_charW, ry, kDim);
+        }
+    }
 }
 
 bool ChatPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
     if (!m_isOpen) return false;
 
     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        if (m_pickerOpen) {
+            m_pickerOpen = false;
+            if (m_pickerBounds.contains(mousePos)) {
+                int row = static_cast<int>((mousePos.y - m_pickerBounds.top - 5.f) / kLineHeight) - 1;
+                if (row >= 0 && row < kModelCount) setModel(row);
+                return true;
+            }
+            if (m_modelBounds.contains(mousePos)) return true;
+        }
         if (!m_panelBounds.contains(mousePos)) {
             m_inputFocused = false;
             return false;
         }
         m_inputFocused = m_inputBounds.contains(mousePos);
         if (m_closeBounds.contains(mousePos)) m_pendingAction = "close";
-        else if (m_newChatBounds.contains(mousePos) && !m_busy) m_pendingAction = "new_chat";
-        else if (m_sendBounds.contains(mousePos)) {
-            if (m_busy) m_pendingAction = "stop";
-            else send();
-        }
+        else if (m_busy && m_stopBounds.contains(mousePos)) m_pendingAction = "stop";
+        else if (m_modelBounds.contains(mousePos)) m_pickerOpen = true;
         return true;
     }
     if (event.type == sf::Event::MouseWheelScrolled && m_panelBounds.contains(mousePos)) {
@@ -301,6 +600,24 @@ bool ChatPanel::handleEvent(const sf::Event& event, sf::Vector2f mousePos) {
     }
     if (event.type == sf::Event::MouseButtonReleased || event.type == sf::Event::MouseMoved) {
         return m_panelBounds.contains(mousePos) && event.type != sf::Event::MouseMoved;
+    }
+
+    // The picker takes the arrows, Enter and Esc while it is open
+    if (m_pickerOpen && event.type == sf::Event::KeyPressed) {
+        switch (event.key.code) {
+        case sf::Keyboard::Up: setModel((m_model + kModelCount - 1) % kModelCount); break;
+        case sf::Keyboard::Down: setModel((m_model + 1) % kModelCount); break;
+        case sf::Keyboard::Enter:
+        case sf::Keyboard::Escape: m_pickerOpen = false; break;
+        default: break;
+        }
+        return true;
+    }
+    if (m_pickerOpen && event.type == sf::Event::TextEntered) return true;
+    // Esc interrupts Claude while it works, as in the terminal, wherever the focus is
+    if (m_busy && event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+        m_pendingAction = "stop";
+        return true;
     }
 
     if (!m_inputFocused) return false;

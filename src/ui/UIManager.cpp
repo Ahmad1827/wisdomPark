@@ -869,7 +869,7 @@ void UIManager::sendChatMessage(Canvas& canvas, Timeline& timeline, const std::s
     sf::Vector2u size = canvas.getCanvasSize();
     if (size.x > kChatMaxCanvas || size.y > kChatMaxCanvas) {
         g_chatPanel.addMessage(ChatPanel::Role::Error, "The chat draws sprites up to " + std::to_string(kChatMaxCanvas) + "x" + std::to_string(kChatMaxCanvas)
-            + "; this canvas is " + std::to_string(size.x) + "x" + std::to_string(size.y) + ". Use Studio Assistant > Ask Assistant for larger pictures.");
+            + "; this canvas is " + std::to_string(size.x) + "x" + std::to_string(size.y) + ". Use Ask Assistant (Ctrl+Shift+Space) for larger pictures.");
         return;
     }
 
@@ -896,7 +896,7 @@ void UIManager::sendChatMessage(Canvas& canvas, Timeline& timeline, const std::s
 
     nlohmann::json job = {
         {"dir", dir}, {"width", size.x}, {"height", size.y}, {"fps", timeline.getFps()},
-        {"current_frame", curFrame}, {"frame_count", frameCount}, {"message", message}
+        {"current_frame", curFrame}, {"frame_count", frameCount}, {"message", message}, {"model", g_chatPanel.modelId()}
     };
     AIRequest req;
     req.operation = AIOperation::Chat;
@@ -916,6 +916,7 @@ void UIManager::sendChatMessage(Canvas& canvas, Timeline& timeline, const std::s
 void UIManager::applyChatReply(Canvas& canvas, Timeline& timeline, const AIResult& result) {
     g_chatPending = false;
     g_chatStatus.clear();
+    g_chatPanel.finishRun(result.success);
     const std::string dir = g_chatSentDir;
     if (!result.success) {
         g_chatPanel.addMessage(ChatPanel::Role::Error, result.errorMessage == "Task canceled by user." ? "Stopped." : result.errorMessage);
@@ -2075,6 +2076,12 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
             if (handleEscapeMenuEvent(event, window, currentState, settings, canvas, timeline)) return;
         }
 
+        // The chat goes first so Esc can interrupt Claude or leave its box before it closes the dock
+        if (m_activeRightTab == RightTabMode::Chat && g_chatPanel.handleEvent(event, mousePos)) {
+            handleChatAction(g_chatPanel.takeAction(), canvas, timeline);
+            return;
+        }
+
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
             if (g_aiPanel.getIsVisible()) {
                 g_aiPanel.toggle();
@@ -2126,10 +2133,6 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
         if (m_fullscreenToggleRequested) {
             m_fullscreenToggleRequested = false;
             toggleFullscreen(window, settings);
-            return;
-        }
-        if (m_activeRightTab == RightTabMode::Chat && g_chatPanel.handleEvent(event, mousePos)) {
-            handleChatAction(g_chatPanel.takeAction(), canvas, timeline);
             return;
         }
         if (m_toolDock.HandleEvent(event, window)) return;
@@ -2516,17 +2519,9 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
                             showMessage("Added Color Advice Palette (Max 5)", sf::Color::Green);
                         }
                     }
-                    else if (action == "action:ai_finish") {
-                        startAIAutocomplete(canvas, timeline, "");
-                    }
-                    else if (action == "action:ai_contour") {
-                        openAIPrompt(true);
-                    }
-                    else if (action == "action:ai_ask") {
-                        openAIPrompt(false);
-                    }
-                    else if (action == "action:ai_next_frame") {
-                        openAIPrompt(false, true);
+                    else if (action == "action:open_chat") {
+                        m_activeRightTab = RightTabMode::Chat;
+                        g_chatPanel.focusInput();
                     }
                     else if (action == "close") {
                         canvas.setActiveTool(ToolType::Brush);
@@ -3452,6 +3447,16 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
         if (chatDir != g_chatShownDir && !g_chatPending) {
             g_chatPanel.loadHistory(chatDir + "/chat.jsonl");
             g_chatShownDir = chatDir;
+        }
+        // What the time estimate needs: whether Claude has a sprite going here already, and the canvas size
+        static float chatContextTimer = 0.f;
+        chatContextTimer -= dt;
+        if (chatContextTimer <= 0.f && m_activeRightTab == RightTabMode::Chat) {
+            chatContextTimer = 1.f;
+            std::error_code ec;
+            sf::Vector2u size = canvas.getCanvasSize();
+            std::string label = activeProjectPath.empty() ? std::string("unsaved project") : std::filesystem::path(activeProjectPath).filename().string() + "/assistant";
+            g_chatPanel.setContext(label, std::filesystem::exists(chatDir + "/sprite.py", ec), size.x, size.y);
         }
         if (g_chatPending) {
             g_chatStatusTimer -= dt;

@@ -24,27 +24,19 @@ private:
     sf::FloatRect randomBtnBounds;
     sf::FloatRect suggestBtnBounds;
     sf::FloatRect sendAllBtnBounds;
-    sf::FloatRect aiFinishBtnBounds;
-    sf::FloatRect aiContourBtnBounds;
-    sf::FloatRect aiAskBtnBounds;
-    sf::FloatRect aiColorsBtnBounds;
-    sf::FloatRect aiNextFrameBtnBounds;
-    sf::FloatRect aiOutputBtnBounds;
+    // Drawing with Claude happens in the chat in the right dock; this opens it
+    sf::FloatRect chatBtnBounds;
+    // The assistant shortcuts (Ctrl+Space and friends) still read these, as last saved in assistant_prefs.txt
     int assistOutputMode = 0;
     void loadAssistPrefs();
-    void saveAssistPrefs() const;
-    sf::FloatRect aiOptionsBtnBounds;
     int assistColorMode = 0;
     int assistOptionCount = 1;
-    sf::FloatRect aiFrameCountBtnBounds;
     int assistFrameCount = 1;
-    sf::FloatRect aiSelfCheckBtnBounds;
     int assistSelfCheck = 1;
     // Where each section heading sits; the layout runs top to bottom and the panel is as tall as it needs
     float paletteLabelY = 0.f;
     float swatchLabelY = 0.f;
-    float assistLabelY = 0.f;
-    float settingsLabelY = 0.f;
+    float claudeLabelY = 0.f;
     void drawSection(sf::RenderWindow& window, const std::string& label, float y);
     sf::FloatRect closeBtnBounds;
 
