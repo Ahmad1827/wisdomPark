@@ -251,6 +251,7 @@
     <ClCompile Include="src\ui\LayerPanel.cpp" />
     <ClCompile Include="src\ui\AudioPanel.cpp" />
     <ClCompile Include="src\ui\ChatPanel.cpp" />
+    <ClCompile Include="src\ui\LivingPark.cpp" />
     <ClCompile Include="src\ui\AIPanel.cpp" />
     <ClCompile Include="src\ui\AIReviewModal.cpp" />
     <ClCompile Include="src\ui\ArcadeGame.cpp" />
@@ -362,6 +363,7 @@
     <ClInclude Include="src\ui\AssetBrowserPanel.h" />
     <ClInclude Include="src\ui\AudioPanel.h" />
     <ClInclude Include="src\ui\ChatPanel.h" />
+    <ClInclude Include="src\ui\LivingPark.h" />
     <ClInclude Include="src\ui\AIPanel.h" />
     <ClInclude Include="src\ui\AIReviewModal.h" />
     <ClInclude Include="src\ui\ArcadeGame.h" />

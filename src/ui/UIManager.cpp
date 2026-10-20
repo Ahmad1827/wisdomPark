@@ -569,6 +569,7 @@ void UIManager::init(ProjectManager* pm, Canvas* baseCanvas) {
 
     bgTexture.loadFromFile("assets/landofwisdompark2.jfif");
     bgSprite.setTexture(bgTexture);
+    m_park.init();
 
     font.loadFromFile("assets/Jersey10-Regular.ttf");
 
@@ -1408,7 +1409,7 @@ void UIManager::drawStandardMainMenu(sf::RenderWindow& window) {
     Theme::DrawCrispText(window, font, "v0.1.0-alpha", 14, columnX, 1034.0f, faded(Theme::TextMuted, footA), faded(shadow, footA), false, true);
 }
 
-// Darkens the side of the artwork the menu sits on, and adds drifting fireflies.
+// Darkens the side of the artwork the menu sits on.
 void UIManager::drawMainMenuBackdrop(sf::RenderWindow& window) {
     const sf::Color dark(12, 6, 22);
 
@@ -1427,33 +1428,6 @@ void UIManager::drawMainMenuBackdrop(sf::RenderWindow& window) {
     gradient(420.0f, 1000.0f, 215.0f, 0.0f);
     if (!m_recentProjects.empty()) {
         gradient(1150.0f, 1920.0f, 0.0f, 150.0f);
-    }
-
-    drawFireflies(window);
-}
-
-void UIManager::drawFireflies(sf::RenderWindow& window) {
-    for (int i = 0; i < 34; ++i) {
-        float seed = static_cast<float>(i);
-        float speed = 14.0f + std::fmod(seed * 7.3f, 22.0f);
-        float baseX = std::fmod(seed * 197.3f, 1920.0f);
-        float travel = std::fmod(startupTime * speed + seed * 131.0f, 1180.0f);
-        float px = baseX + std::sin(startupTime * 0.5f + seed * 1.9f) * 26.0f;
-        float py = 1100.0f - travel;
-        float twinkle = 0.45f + 0.55f * std::sin(startupTime * 2.2f + seed * 2.7f);
-        float size = (i % 3 == 0) ? 4.0f : 3.0f;
-
-        sf::RectangleShape halo(sf::Vector2f(size * 3.0f, size * 3.0f));
-        halo.setOrigin(size * 1.5f, size * 1.5f);
-        halo.setPosition(std::floor(px), std::floor(py));
-        halo.setFillColor(sf::Color(255, 196, 110, static_cast<sf::Uint8>(std::max(0.0f, 34.0f * twinkle))));
-        window.draw(halo, sf::RenderStates(sf::BlendAdd));
-
-        sf::RectangleShape core(sf::Vector2f(size, size));
-        core.setOrigin(size * 0.5f, size * 0.5f);
-        core.setPosition(std::floor(px), std::floor(py));
-        core.setFillColor(sf::Color(255, 232, 160, static_cast<sf::Uint8>(std::max(0.0f, 210.0f * twinkle))));
-        window.draw(core, sf::RenderStates(sf::BlendAdd));
     }
 }
 
@@ -3241,6 +3215,7 @@ void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, Ap
 
 void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSettings& settings, float dt, Canvas& canvas, Timeline& timeline) {
     WisdomUI::Theme::BeginFrame(dt);
+    m_park.update(dt);
 
     static bool s_syncedInitialSettings = false;
     if (!s_syncedInitialSettings) {
@@ -3817,10 +3792,15 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
 void UIManager::draw(sf::RenderWindow& window, AppState currentState, Canvas& canvas, AIHelper& aiHelper, Timeline& timeline) {
     window.setView(WisdomUI::WorkspaceLayout::GetLetterboxView(window.getSize()));
 
-    bgSprite.setPosition(0.f, 0.f);
-    bgSprite.setScale(1920.f / bgTexture.getSize().x, 1080.f / bgTexture.getSize().y);
-    bgSprite.setColor(sf::Color::White);
-    window.draw(bgSprite);
+    if (m_park.isReady()) {
+        m_park.draw(window);
+    }
+    else {
+        bgSprite.setPosition(0.f, 0.f);
+        bgSprite.setScale(1920.f / bgTexture.getSize().x, 1080.f / bgTexture.getSize().y);
+        bgSprite.setColor(sf::Color::White);
+        window.draw(bgSprite);
+    }
 
     if (currentState == AppState::Welcome) {
         // The keybinds screen covers whatever menu it was opened from.

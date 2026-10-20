@@ -20,6 +20,7 @@
 #include "../core/ExportManager.h"
 #include "../ai/AIHelper.h"
 #include "../ai/AIProvider.h"
+#include "LivingPark.h"
 #include "Screens/ProjectBrowser.h"
 #include "Screens/ExportModal.h"
 #include "Screens/NewProjectModal.h"
@@ -87,7 +88,6 @@ private:
     std::vector<ProjectMetadata> m_recentProjects;
     bool m_wasOnMainMenu = false;
 
-    void drawFireflies(sf::RenderWindow& window);
     void drawSubScreenHeader(sf::RenderWindow& window, const std::string& title, const std::string& subtitle, float time);
     float m_keybindTime = 0.0f;
     bool m_keybindsWereOpen = false;
@@ -182,6 +182,8 @@ private:
 
     sf::Texture bgTexture;
     sf::Sprite bgSprite;
+    // The background brought to life; when its assets are missing the still picture above is drawn instead
+    LivingPark m_park;
     sf::Font font;
 
     ProjectBrowser projectBrowser;

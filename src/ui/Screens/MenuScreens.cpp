@@ -29,8 +29,6 @@ void UIManager::drawSubScreenHeader(sf::RenderWindow& window, const std::string&
     scrim[3] = sf::Vertex(sf::Vector2f(0.0f, 1080.0f), sf::Color(12, 6, 22, 196));
     window.draw(scrim);
 
-    drawFireflies(window);
-
     sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
     sf::FloatRect back = MenuLayout::BackButton();
     Theme::DrawSunsetButton(window, back, "<  BACK", font, 16, false, back.contains(mousePos), false, 1.0f);
