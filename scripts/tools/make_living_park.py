@@ -4,13 +4,13 @@ and where everything goes.
     python scripts/tools/make_living_park.py [--preview DIR]
 
 Reads assets/landofwisdompark2.jfif (left as it is) and writes, in assets/park/:
-    background.png    the scene at 1920x1080 with the Ferris wheel, the monorail train and the people painted
-                      into it taken out, and the stretch of coaster track the wheel used to hide painted in
+    background.png    the scene at 1920x1080 with the Ferris wheel, the monorail train, the people and the
+                      glowing atom painted into it taken out, the stretches of coaster track the wheel and
+                      the atom used to hide painted in, and a garden with a knight's statue where the atom stood
     wheel_front.png   the wheel's legs, drawn over the turning wheel so it turns behind them
-    atom_front.png    the glowing atom, drawn over the coaster train so the train passes behind it
     sprites.png       every moving thing, in one sheet
     layout.json       where things are: the coaster and monorail tracks, the lamps, signs and bulbs, the
-                      wheel, the lake, the skyline windows
+                      wheel, the lake, the skyline windows, the balloon seller's balloons
 
 All positions are in the app's 1920x1080 coordinates. --preview writes check images of each step.
 """
@@ -231,22 +231,475 @@ def take_out_wheel(img):
 
 # ---------------------------------------------------------------------------------------------- the atom
 
+# The glowing atom in the middle of the park is taken out and a garden with a knight's statue put in its place
 ATOM_BOX = (826, 360, 1124, 668)
+ATOM_SPHERES = [(977, 386), (905, 418), (1049, 423), (977, 448), (905, 482), (1049, 482), (849, 494), (1106, 494),
+                (977, 516), (905, 537), (1050, 532), (977, 578)]
+# The posts it stands on: (x, top, bottom)
+ATOM_POSTS = [(848, 494, 575), (1107, 494, 575), (905, 537, 628), (1050, 532, 628), (977, 578, 686)]
+# Below this the plaza is lit by its lamps, not by the atom
+PLAZA_TOP = 604
+# Where the middle of the statue's foot stands: the middle of the garden
+STATUE_AT = (977, 612)
 
 
-def atom_front(img):
-    """The atom's spheres, rods and their glow, so the coaster runs behind it."""
+def atom_area(original):
+    """The atom itself (spheres, rods, posts) and, around it, as far as its glow reaches."""
     x0, y0, x1, y1 = ATOM_BOX
-    a = img.astype(int)
+    a = original.astype(int)
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
-    warm = (r > 120) & (r - b > 25) & (g > 60)
-    front = np.zeros((img.shape[0], img.shape[1], 4), np.uint8)
-    front[..., :3] = img
-    sel = np.zeros(img.shape[:2], bool)
-    sel[y0:y1, x0:x1] = warm[y0:y1, x0:x1]
-    sel = cv2.dilate(sel.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
-    front[..., 3] = np.where(sel, 255, 0)
-    return front
+    solid = np.zeros(original.shape[:2], np.uint8)
+    solid[y0:y1, x0:x1] = ((r > 120) & (r - b > 25) & (g > 60))[y0:y1, x0:x1]
+    for cx, cy in ATOM_SPHERES:
+        cv2.circle(solid, (cx, cy), 31, 1, -1)
+    for px, top, bottom in ATOM_POSTS:
+        cv2.rectangle(solid, (px - 7, top), (px + 7, bottom), 1, -1)
+    solid = cv2.dilate(solid, np.ones((5, 5), np.uint8))
+    return solid, cv2.dilate(solid, np.ones((61, 61), np.uint8))
+
+
+def take_out_atom(bg, original):
+    """Takes the atom out. Its glow is light added over the scene, so that is taken back off, leaving the
+    trees, sky and lawn under it; the spheres, rods and posts themselves are filled in from round them."""
+    solid, halo = atom_area(original)
+
+    # The night scene is blue: red is under half the blue. What red there is over that is the atom's light,
+    # whose colour is (1, 0.58, 0.13); above the plaza it all comes off
+    f = bg.astype(np.float32)
+    light = np.clip((f[..., 0] - 0.45 * f[..., 2]) / 0.94, 0, None)
+    yy = np.arange(f.shape[0], dtype=np.float32)[:, None]
+    light *= halo * np.clip((PLAZA_TOP + 16 - yy) / 40.0, 0, 1)
+    clean = np.clip(f - light[..., None] * np.array([1.0, 0.58, 0.13], np.float32), 0, 255).astype(np.uint8)
+
+    # On the plaza only the posts and the lowest sphere go; the rest there is lit ground
+    holes = solid.copy()
+    holes[PLAZA_TOP:, :] = 0
+    for px, top, bottom in ATOM_POSTS:
+        cv2.rectangle(holes, (px - 7, top), (px + 7, bottom), 1, -1)
+    cv2.circle(holes, ATOM_SPHERES[-1], 31, 1, -1)
+    # and the shadow of its middle post on the plaza
+    cv2.ellipse(holes, (977, 678), (30, 22), 0, 0, 360, 1, -1)
+    filled = cv2.inpaint(clean, holes, 4, cv2.INPAINT_TELEA)
+    # Filled in on the scene's own pixel grid, three screen pixels to one
+    small = cv2.resize(filled, (W // 3, H // 3), interpolation=cv2.INTER_AREA)
+    blocky = cv2.resize(small, (W, H), interpolation=cv2.INTER_NEAREST)
+    out = bg.copy()
+    near = halo.astype(bool)
+    out[near] = clean[near]
+    out[holes.astype(bool)] = blocky[holes.astype(bool)]
+    return out
+
+
+def paint_track_behind_atom(bg, path):
+    """The stretch of coaster the atom hid, like the one behind the wheel."""
+    img = Image.fromarray(bg)
+    d = ImageDraw.Draw(img)
+    run = [p for p in path if 846 <= p[0] <= 1100]
+    for i, (x, y) in enumerate(run):
+        if i % 14 == 7:
+            d.rectangle([x - 1, y + 4, x + 1, 470], fill=POST)
+    d.line([(x, y + 4) for x, y in run], fill=RAIL_DARK, width=3)
+    d.line([(x, y) for x, y in run], fill=RAIL_DARK, width=3)
+    d.line([(x, y) for x, y in run], fill=RAIL, width=1)
+    return np.asarray(img).copy()
+
+
+SKY = (9, 9, 57)
+TREE_MASS = (8, 29, 58)
+TREE_TUFT = (13, 44, 64)
+# A round tree: outline, shade under the crown, the crown, its lit top, the trunk
+TREE = {"o": (6, 16, 38), "d": (11, 30, 58), "m": (16, 52, 66), "l": (24, 76, 78), "t": (62, 32, 82)}
+# The trees behind the statue: (x, foot y, crown radius), in screen pixels
+GARDEN_TREES = [(948, 540, 16), (1006, 536, 18), (912, 562, 24), (1044, 564, 23), (866, 588, 30), (1088, 584, 28)]
+
+
+# Bushes round the statue and in front of it: (x, foot y, half width, half height), screen pixels
+GARDEN_BUSHES = [
+    (930, 592, 12, 8), (1024, 592, 12, 8), (897, 600, 15, 10), (1057, 600, 15, 10),
+    (868, 614, 15, 10), (1086, 614, 15, 10), (905, 632, 16, 10), (1049, 632, 16, 10),
+    (935, 642, 10, 7), (1019, 642, 10, 7),
+]
+# A round stone planter with a bush in it, where the paths meet in front of the garden: (x, foot y)
+PLANTER = (977, 692)
+# A bush, in the colours of the scene's hedges: outline, the dark under it, its leaves, their lit tops
+BUSH = {"o": (6, 10, 40), "d": (10, 26, 58), "m": (18, 56, 70), "l": (32, 84, 82), "r": (48, 108, 94)}
+
+
+def tree_line_top(x):
+    """How high the dark trees behind the garden reach at x: a row of round crowns, higher on the left
+    where the trees beside it are taller."""
+    base = 418 - 22 * max(0.0, (900 - x) / 40.0)
+    bumps = 7 * math.sin(x / 13.0) + 4 * math.sin(x / 5.3 + 1.0)
+    return base - abs(bumps)
+
+
+def round_tree(radius):
+    """A round tree like the scene's own, on its three-pixel grid: a dark crown lit from above, a trunk."""
+    r = max(3, radius // 3)
+    w, h = 2 * r + 3, 2 * r + 5
+    grid = [["." for _ in range(w)] for _ in range(h)]
+    cx, cy = w // 2, r + 1
+    for y in range(h):
+        for x in range(w):
+            d = math.hypot(x - cx, (y - cy) * 1.1)
+            if d <= r:
+                lit = math.hypot(x - cx + r * 0.25, y - cy + r * 0.35)
+                grid[y][x] = "l" if lit < r * 0.35 else ("m" if lit < r * 0.8 and y <= cy + 1 else "d")
+            elif d <= r + 1:
+                grid[y][x] = "o"
+    for y in range(cy + r - 1, h):
+        if grid[y][cx] in ".od":
+            grid[y][cx] = "t"
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    px = im.load()
+    for y in range(h):
+        for x in range(w):
+            if grid[y][x] in TREE:
+                px[x, y] = TREE[grid[y][x]] + (255,)
+    return im.resize((w * 3, h * 3), Image.NEAREST)
+
+
+def round_bush(half_w, half_h, seed):
+    """A bush like the scene's hedges: a rounded body with a few soft lumps along its top, each column lit
+    at the top and going dark towards the ground, with a thin dark edge. Drawn two screen pixels to one so
+    the lumps come out round."""
+    rng = random.Random(seed)
+    rx, ry = max(4, half_w // 2), max(3, half_h // 2)
+    w, h = 2 * rx + 3, 2 * ry + 3
+    cx, base = w / 2 - 0.5, h - 2
+    n = max(2, round(rx / 3))
+    r = ry * 0.62
+    lumps = [(cx - rx + r + (2 * rx - 2 * r) * k / (n - 1), 1 + r + rng.uniform(0, 1.2), r + rng.uniform(-0.3, 0.5))
+             for k in range(n)]
+    filled = [[False] * w for _ in range(h)]
+    for y in range(h - 1):
+        for x in range(w):
+            body = ((x - cx) / (rx + 0.3)) ** 2 + ((y - (base - ry * 0.65)) / (ry * 0.75)) ** 2 <= 1.0
+            lump = any(math.hypot(x - lx, y - ly) <= lr for lx, ly, lr in lumps)
+            filled[y][x] = body or lump
+    grid = [["." for _ in range(w)] for _ in range(h)]
+    for x in range(w):
+        col = [y for y in range(h) if filled[y][x]]
+        if not col:
+            continue
+        top, bottom = col[0], col[-1]
+        for y in col:
+            depth = (y - top) / max(1.0, bottom - top)
+            grid[y][x] = "r" if depth < 0.12 and x < cx else "l" if depth < 0.32 else "m" if depth < 0.62 else "d"
+    out = [row[:] for row in grid]
+    for y in range(h):
+        for x in range(w):
+            if grid[y][x] == "." and any(0 <= x + dx < w and 0 <= y + dy < h and grid[y + dy][x + dx] != "."
+                                         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                out[y][x] = "o"
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    px = im.load()
+    for y in range(h):
+        for x in range(w):
+            if out[y][x] in BUSH:
+                px[x, y] = BUSH[out[y][x]] + (255,)
+    return im.resize((w * 2, h * 2), Image.NEAREST)
+
+
+# The old man who sells balloons, sitting by his cart behind the planter. He is drawn finer than the scene,
+# two screen pixels to one, so his face shows. o outline, C his cap, c its brim, H his white hair, F his
+# face, f its shade, E his eyes, B his beard, b its shade, S his red scarf, J his jacket, j its shade,
+# A the hand holding a balloon's string, P his trousers, p their shade, K his shoes, W the stool
+OLD_MAN = [
+    "....oooo....",
+    "...oCCCCo...",
+    "..oCCCCCCo..",
+    "..occccccco.",
+    ".oHFFFFFFHo.",
+    ".oHFEFFEFHo.",
+    ".oHFFFfFFHo.",
+    "..oBBffBBo..",
+    "..obBBBBbo..",
+    ".ooJSbbSJoo.",
+    "oJJJJSSJJJJo",
+    "oJjJJJJJJjJo",
+    "oAjJJJJJJjFo",
+    "ooPPPPPPPPoo",
+    ".oPPPPPPPPo.",
+    ".oPpoWWoPpo.",
+    ".oPpoWWoPpo.",
+    ".oKKo..oKKo.",
+    ".oooo..oooo.",
+]
+# His cart: a box painted in the park's pink and teal, on two wheels, with the pole for the balloons.
+# t its top, k the pink panels, q the teal stripe, n the shade under it, R the wheels, h their hubs
+CART = [
+    "........oo........",
+    "........oo........",
+    "........oo........",
+    "........oo........",
+    "........oo........",
+    "oooooooooooooooooo",
+    "otttttttttttttttto",
+    "okkkkkqqqqqqkkkkko",
+    "okkkkkqqqqqqkkkkko",
+    "oqqqqqqqqqqqqqqqqo",
+    "okkkkkqqqqqqkkkkko",
+    "onnnnnnnnnnnnnnnno",
+    "oooooooooooooooooo",
+    "..oRRo......oRRo..",
+    ".oRhhRo....oRhhRo.",
+    "..oRRo......oRRo..",
+    "...oo........oo...",
+]
+VENDOR = {
+    "o": (22, 14, 30), "C": (110, 72, 50), "c": (72, 46, 34), "H": (224, 220, 232), "F": (226, 172, 132),
+    "f": (184, 124, 96), "E": (40, 26, 30), "B": (236, 232, 242), "b": (172, 166, 188), "S": (186, 58, 72),
+    "J": (92, 108, 80), "j": (60, 72, 54), "A": (226, 172, 132), "P": (66, 60, 86), "p": (46, 42, 62),
+    "K": (44, 30, 28), "W": (122, 80, 54),
+    "t": (238, 150, 214), "k": (204, 84, 176), "q": (70, 196, 210), "n": (104, 40, 100), "R": (40, 30, 48),
+    "h": (150, 140, 170),
+}
+BALLOONS = [(244, 92, 170), (84, 210, 236), (250, 206, 96), (170, 120, 240), (255, 140, 96), (120, 230, 150)]
+# The balloons the app draws, filled in when the stand is put up
+BALLOON_STRINGS = []
+# Where the man sits and where his cart stands: the middle of their feet
+VENDOR_AT = (960, 676)
+CART_AT = (1012, 684)
+
+
+def grid_image(rows, colours, scale):
+    im = Image.new("RGBA", (len(rows[0]), len(rows)), (0, 0, 0, 0))
+    px = im.load()
+    for y, row in enumerate(rows):
+        for x, c in enumerate(row):
+            if c in colours:
+                px[x, y] = colours[c] + (255,)
+    return im.resize((im.width * scale, im.height * scale), Image.NEAREST)
+
+
+def balloon(d, cx, cy, colour):
+    """One balloon, two screen pixels to one like the man: round, a shine at the top left, a knot below."""
+    dark = tuple(int(c * 0.62) for c in colour)
+    light = tuple(min(255, int(c + (255 - c) * 0.55)) for c in colour)
+    pts = [(-1, -3), (0, -3), (1, -3), (-2, -2), (-1, -2), (0, -2), (1, -2), (2, -2), (-2, -1), (-1, -1), (0, -1),
+           (1, -1), (2, -1), (-2, 0), (-1, 0), (0, 0), (1, 0), (2, 0), (-1, 1), (0, 1), (1, 1), (0, 2)]
+    ring = {(-2, -3), (2, -3), (-3, -2), (3, -2), (-3, -1), (3, -1), (-3, 0), (3, 0), (-2, 1), (2, 1), (-1, 2),
+            (1, 2), (-1, -4), (0, -4), (1, -4), (0, 3)}
+    for x, y in ring:
+        d.rectangle([cx + 2 * x, cy + 2 * y, cx + 2 * x + 1, cy + 2 * y + 1], fill=(22, 14, 30))
+    for x, y in pts:
+        c = dark if (x >= 1 and y >= 0) or y >= 1 else colour
+        d.rectangle([cx + 2 * x, cy + 2 * y, cx + 2 * x + 1, cy + 2 * y + 1], fill=c)
+    for x, y in ((-1, -2), (-1, -1)):
+        d.rectangle([cx + 2 * x, cy + 2 * y, cx + 2 * x + 1, cy + 2 * y + 1], fill=light)
+
+
+def balloon_sprite(colour):
+    """A balloon on its own, for the app to move: its knot, where the string ties on, is at the middle of
+    its bottom edge."""
+    im = Image.new("RGBA", (14, 16), (0, 0, 0, 0))
+    balloon(ImageDraw.Draw(im), 6, 8, colour)
+    return im
+
+
+def put_up_balloon_stand(img):
+    """The cart and the old man on his stool beside it. Their balloons are not painted in: the app draws
+    them swaying on their strings, from where this says they are tied (the top of the cart's pole and the
+    man's hand) and where each floats at rest. Returns those, back to front."""
+    cart = grid_image(CART, VENDOR, 2)
+    cx, cy = CART_AT
+    left, top = cx - cart.width // 2, cy - cart.height
+    pole = (left + 17, top)
+    bunch = [(-14, -30), (-3, -36), (8, -31), (17, -24), (-8, -20), (4, -22), (-18, -18)]
+    balloons = []
+    for i, (bx, by) in enumerate(sorted(bunch, key=lambda b: b[1])):
+        balloons.append({"sprite": f"balloon{i % len(BALLOONS)}", "tied": list(pole),
+                         "knot": [pole[0] + bx + 1, pole[1] + by + 8]})
+    img.alpha_composite(cart, (left, top))
+    man = grid_image(OLD_MAN, VENDOR, 2)
+    mx, my = VENDOR_AT
+    mleft, mtop = mx - man.width // 2, my - man.height
+    hand = (mleft + 3, mtop + 25)
+    balloons.append({"sprite": "balloon0", "tied": list(hand), "knot": [hand[0] - 5, hand[1] - 34]})
+    img.alpha_composite(man, (mleft, mtop))
+    BALLOON_STRINGS[:] = balloons
+
+
+def plant_garden(bg, original):
+    """Where the atom stood: the sky and a row of dark trees behind the garden, faded in at the edges of
+    where the atom and its glow were, and into the lawn below."""
+    img = Image.fromarray(bg)
+    d = ImageDraw.Draw(img)
+    for x in range(780, 1170, 3):
+        top = int(tree_line_top(x)) // 3 * 3
+        d.rectangle([x, 330, x + 2, top - 1], fill=SKY)
+        d.rectangle([x, top, x + 2, 560], fill=TREE_MASS)
+        d.rectangle([x, top, x + 2, top + 2], fill=TREE_TUFT)
+    painted = np.asarray(img).astype(np.float32)
+    solid, halo = atom_area(original)
+    # All of it where the atom was, fading out over the glow round it
+    weight = cv2.GaussianBlur(cv2.dilate(solid, np.ones((31, 31), np.uint8)).astype(np.float32), (0, 0), 12)
+    yy = np.arange(H, dtype=np.float32)[:, None]
+    weight *= np.clip((548 - yy) / 40.0, 0, 1)
+    weight = np.clip(weight * 1.4, 0, 1)[..., None]
+    return (painted * weight + bg.astype(np.float32) * (1 - weight)).astype(np.uint8)
+
+
+# The pedestal: t the top of a ledge, c its front, u the shadow under the cap, m the shaft, n its shaded
+# side, g the brass plaque, x the plaque's lettering
+PEDESTAL = [
+    "oooooooooooooooooooooo",
+    "otttttttttttttttttttto",
+    "occcccccccccccccccccco",
+    "ouuuuuuuuuuuuuuuuuuuuo",
+    "..ommmmmmmmmmmmmmmno..",
+    "..ommmgggggggggmmmno..",
+    "..ommmgxxxxxxxgmmmno..",
+    "..ommmgggggggggmmmno..",
+    "..ommmmmmmmmmmmmmmno..",
+    "..ommmmmmmmmmmmmmmno..",
+    ".otttttttttttttttttto.",
+    ".occcccccccccccccccco.",
+    "oooooooooooooooooooooo",
+]
+# Stone for the knight: l lit from the left, s, d in shade, k the dark of the visor; the pedestal's own
+STONE = {
+    "o": (20, 14, 34), "l": (140, 134, 174), "s": (100, 94, 138), "d": (66, 60, 100), "k": (28, 22, 44),
+    "t": (96, 84, 130), "c": (70, 60, 102), "u": (40, 32, 62), "m": (78, 68, 110), "n": (54, 44, 80),
+    "g": (190, 146, 74), "x": (120, 86, 44),
+}
+# The paved round the statue stands on
+PAVING, PAVING_EDGE = (74, 58, 96), (46, 34, 66)
+
+
+def knight():
+    """A knight in armour, standing guard: a spear upright in his right hand, a shield on his left arm with
+    a chevron on it, a plume on his helm. Drawn on the scene's grid, one cell to three screen pixels, lit
+    from the left, with a dark outline round it all."""
+    w, h = 23, 38
+    g = [["." for _ in range(w)] for _ in range(h)]
+
+    def put(x, y, c):
+        if 0 <= x < w and 0 <= y < h:
+            g[y][x] = c
+
+    def rect(x0, y0, x1, y1, c):
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                put(x, y, c)
+
+    def shaded(x0, y0, x1, y1):
+        """A block of armour: its left column lit, its right column in shade."""
+        rect(x0, y0, x1, y1, "s")
+        rect(x0, y0, x0, y1, "l")
+        rect(x1, y0, x1, y1, "d")
+
+    # The spear, its head a leaf at the top
+    rect(4, 5, 4, 36, "d")
+    put(4, 1, "l")
+    rect(3, 2, 5, 3, "l")
+    put(5, 3, "s")
+    put(4, 4, "s")
+    rect(3, 5, 5, 5, "s")
+    # The plume, sweeping back off the top of the helm
+    for x, y in ((11, 1), (12, 1), (12, 2), (13, 2), (13, 3), (14, 3), (14, 4)):
+        put(x, y, "s")
+    put(11, 2, "l")
+    put(12, 3, "l")
+    # The great helm, its visor slit and breaths
+    shaded(9, 3, 14, 10)
+    put(9, 3, ".")
+    put(14, 3, ".")
+    rect(10, 6, 13, 6, "k")
+    put(13, 8, "k")
+    put(13, 9, "k")
+    rect(11, 4, 11, 9, "l")
+    # Gorget, shoulders, breastplate with its ridge, belt, the plates over the hips
+    rect(10, 11, 13, 11, "d")
+    shaded(6, 12, 17, 13)
+    shaded(8, 14, 15, 20)
+    rect(11, 14, 11, 19, "l")
+    rect(8, 21, 15, 21, "d")
+    shaded(7, 22, 16, 24)
+    # Legs, knees, feet
+    shaded(8, 25, 10, 34)
+    shaded(13, 25, 15, 34)
+    put(9, 29, "l")
+    put(14, 29, "l")
+    shaded(7, 35, 10, 36)
+    shaded(13, 35, 16, 36)
+    # His right arm down to the spear, the gauntlet round the shaft
+    shaded(6, 13, 7, 17)
+    shaded(5, 17, 6, 20)
+    rect(3, 19, 5, 21, "s")
+    put(3, 19, "l")
+    # The shield, a heater with a chevron, in front of his left side
+    rows = {14: (14, 21), 15: (14, 21), 16: (14, 21), 17: (14, 21), 18: (14, 21), 19: (14, 21), 20: (14, 21),
+            21: (14, 21), 22: (15, 20), 23: (15, 20), 24: (16, 19), 25: (16, 19), 26: (17, 18)}
+    for y, (x0, x1) in rows.items():
+        rect(x0, y, x1, y, "s")
+        put(x0, y, "l")
+        put(x1, y, "d")
+    rect(14, 14, 21, 14, "l")
+    for i, y in enumerate(range(17, 21)):
+        put(17 - i, y, "l")
+        put(18 + i, y, "l")
+    # The outline: every empty cell next to the figure
+    out = [row[:] for row in g]
+    for y in range(h):
+        for x in range(w):
+            if g[y][x] == "." and any(0 <= x + dx < w and 0 <= y + dy < h and g[y + dy][x + dx] != "."
+                                      for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                out[y][x] = "o"
+    return ["".join(row) for row in out]
+
+
+def statue():
+    """The knight on his pedestal, at three screen pixels to one like the rest of the scene."""
+    figure = knight()
+    w = max(len(PEDESTAL[0]), len(figure[0]))
+    rows = [r.center(w, ".") for r in figure] + [r.center(w, ".") for r in PEDESTAL]
+    # The figure's last row is its outline under the feet; the pedestal's cap takes its place
+    rows = rows[:len(figure) - 1] + rows[len(figure):]
+    im = Image.new("RGBA", (w, len(rows)), (0, 0, 0, 0))
+    px = im.load()
+    for y, row in enumerate(rows):
+        for x, c in enumerate(row):
+            if c in STONE:
+                px[x, y] = STONE[c] + (255,)
+    return im.resize((w * 3, len(rows) * 3), Image.NEAREST)
+
+
+def put_up_statue(bg):
+    """Round trees in the garden, in the middle of it the statue on a paved round with a soft shadow at its
+    foot, bushes round it, and in front the old man selling balloons behind a planter."""
+    img = Image.fromarray(bg).convert("RGBA")
+    for x, foot, radius in GARDEN_TREES:
+        tree = round_tree(radius)
+        img.alpha_composite(tree, (x - tree.width // 2, foot - tree.height))
+    sx, sy = STATUE_AT
+    d = ImageDraw.Draw(img)
+    d.ellipse([sx - 57, sy - 17, sx + 57, sy + 14], fill=PAVING_EDGE)
+    d.ellipse([sx - 54, sy - 15, sx + 54, sy + 11], fill=PAVING)
+    shadow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(shadow).ellipse([sx - 40, sy - 8, sx + 46, sy + 6], fill=(10, 6, 20, 130))
+    img = Image.alpha_composite(img, shadow)
+
+    def at_foot(im, x, foot):
+        return lambda: img.alpha_composite(im, (x - im.width // 2, foot - im.height))
+
+    def planter():
+        px_, py_ = PLANTER
+        d = ImageDraw.Draw(img)
+        d.ellipse([px_ - 24, py_ - 13, px_ + 24, py_ + 6], fill=PAVING_EDGE)
+        d.rectangle([px_ - 24, py_ - 4, px_ + 24, py_ - 3], fill=PAVING_EDGE)
+        d.ellipse([px_ - 21, py_ - 14, px_ + 21, py_ - 1], fill=PAVING)
+        d.ellipse([px_ - 18, py_ - 12, px_ + 18, py_ - 3], fill=(30, 22, 30))
+        bush = round_bush(20, 8, 99)
+        img.alpha_composite(bush, (px_ - bush.width // 2, py_ - 4 - bush.height))
+
+    # Back to front: whatever stands further forward is drawn over what is behind it
+    things = [(sy, at_foot(statue(), sx, sy)), (VENDOR_AT[1], lambda: put_up_balloon_stand(img)), (PLANTER[1], planter)]
+    things += [(foot, at_foot(round_bush(hw, hh, i), x, foot)) for i, (x, foot, hw, hh) in enumerate(GARDEN_BUSHES)]
+    for _, draw in sorted(things, key=lambda t: t[0]):
+        draw()
+    return np.asarray(img.convert("RGB")).copy()
 
 
 # ---------------------------------------------------------------------------------------------- the monorail
@@ -353,27 +806,19 @@ def take_out_people(img):
 # ---------------------------------------------------------------------------------------------- lights
 
 def find_lamps(img):
-    """Street lamps: small, very bright warm spots on the ground (not in the sky, not the atom)."""
+    """Street lamps: small, very bright warm spots on the ground (not in the sky, not where the atom was)."""
     a = img.astype(int)
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
     hot = ((r > 235) & (g > 200) & (b < 190)).astype(np.uint8)
     n, lab, stats, cent = cv2.connectedComponentsWithStats(hot)
     out = []
-    x0, y0, x1, y1 = ATOM_BOX
+    x0, y0, x1, y1 = ATOM_BOX[0], ATOM_BOX[1], ATOM_BOX[2], PLAZA_TOP + 30
     for i in range(1, n):
         x, y, w, h, area = stats[i]
         cx, cy = cent[i]
         if 3 <= area <= 200 and w <= 20 and h <= 20 and cy > 470 and not (x0 <= cx <= x1 and y0 <= cy <= y1):
             out.append([round(float(cx), 1), round(float(cy), 1)])
     return out
-
-
-def find_atom_spheres(img):
-    a = img.astype(int)
-    x0, y0, x1, y1 = ATOM_BOX
-    sub = ((a[y0:y1, x0:x1, 0] > 240) & (a[y0:y1, x0:x1, 1] > 210)).astype(np.uint8)
-    n, lab, stats, cent = cv2.connectedComponentsWithStats(sub)
-    return [[round(float(c[0]) + x0, 1), round(float(c[1]) + y0, 1)] for i, c in enumerate(cent) if i and stats[i][4] > 30]
 
 
 # Neon signs that flicker now and then: (x0, y0, x1, y1, glow colour)
@@ -548,10 +993,13 @@ def main():
     bg = paint_track_behind_wheel(bg, coaster)
     bg = take_out_train(bg)
     bg = take_out_people(bg)
+    bg = take_out_atom(bg, original)
+    bg = plant_garden(bg, original)
+    bg = paint_track_behind_atom(bg, coaster)
+    bg = put_up_statue(bg)
 
     # The front layers are kept to the area they cover, so drawing them is not a whole extra screen
     legs, legs_at = crop_to_content(legs)
-    atom, atom_at = crop_to_content(atom_front(original))
 
     atlas = Atlas()
     atlas.add("coaster_car", coaster_car())
@@ -562,6 +1010,8 @@ def main():
     atlas.add("bird0", bird(0))
     atlas.add("bird1", bird(1))
     atlas.add("dot", dot())
+    for i, colour in enumerate(BALLOONS):
+        atlas.add(f"balloon{i}", balloon_sprite(colour))
     for i, (cx0, cx1) in enumerate(TRAIN_CARS):
         car = Image.fromarray(original[TRAIN_TOP:TRAIN_BOTTOM, cx0:cx1]).convert("RGBA")
         # What looks the same as the scene with the train taken out is the scene, not the car
@@ -578,26 +1028,23 @@ def main():
         "sprites": rects,
         "background": "background.png",
         "wheel": dict(WHEEL, front="wheel_front.png", front_at=legs_at),
-        "atom_front": "atom_front.png",
-        "atom_front_at": atom_at,
         "coaster": {"points": [[round(x, 1), round(y, 1)] for x, y in coaster], "cars": 4,
                     "loop_from": loop_start(coaster),
                     "turn": [distance_along(coaster, TURN[0], last=False), distance_along(coaster, TURN[1], last=False)]},
         "monorail": {"points": [[round(float(x), 1), round(float(y), 1)] for x, y in resample(catmull_rom(MONORAIL_WAYPOINTS), 3.0)],
                      "cars": [f"train{i}" for i in range(len(TRAIN_CARS))]},
         "lamps": find_lamps(original),
-        "atom": find_atom_spheres(original),
         "signs": [list(s[:4]) + [list(s[4])] for s in SIGNS],
         "carousel": carousel_bulbs(),
         "lake": [[list(p) for p in poly] for poly in LAKE],
         "windows": skyline_windows(original),
         "sky": [120, 30, 1800, 150],
+        "balloons": BALLOON_STRINGS,
     }
 
     os.makedirs(OUT, exist_ok=True)
     Image.fromarray(bg).save(os.path.join(OUT, "background.png"))
     Image.fromarray(legs).save(os.path.join(OUT, "wheel_front.png"))
-    Image.fromarray(atom).save(os.path.join(OUT, "atom_front.png"))
     sheet.save(os.path.join(OUT, "sprites.png"))
     with open(os.path.join(OUT, "layout.json"), "w") as f:
         json.dump(layout, f, separators=(",", ":"))
@@ -608,13 +1055,12 @@ def main():
         b.crop((1040, 100, 1440, 520)).resize((800, 840), Image.NEAREST).save(os.path.join(args.preview, "wheel_removed.png"))
         b.crop((1380, 480, 1700, 580)).resize((960, 300), Image.NEAREST).save(os.path.join(args.preview, "train_removed.png"))
         b.crop((80, 520, 1120, 1000)).save(os.path.join(args.preview, "people_removed.png"))
+        b.crop((780, 330, 1180, 720)).resize((800, 780), Image.NEAREST).save(os.path.join(args.preview, "statue.png"))
         sheet.resize((sheet.width * 3, sheet.height * 3), Image.NEAREST).save(os.path.join(args.preview, "sprites_x3.png"))
         net = b.copy()
         d = ImageDraw.Draw(net)
         for p in layout["lamps"]:
             d.ellipse([p[0] - 5, p[1] - 5, p[0] + 5, p[1] + 5], outline=(0, 255, 0))
-        for p in layout["atom"]:
-            d.ellipse([p[0] - 8, p[1] - 8, p[0] + 8, p[1] + 8], outline=(255, 0, 0))
         for p in layout["carousel"]:
             d.point(tuple(p), fill=(0, 255, 255))
         for s in layout["signs"]:

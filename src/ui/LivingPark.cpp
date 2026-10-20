@@ -10,6 +10,8 @@ namespace {
     const float kPixel = 2.f;
     // How far apart the bulbs along the coaster are
     const float kBulbSpacing = 16.f;
+    // How much darker the scene is while the park is closed
+    const float kClosedShade = 0.55f;
 
     sf::Color withAlpha(sf::Color c, float a) {
         c.a = static_cast<sf::Uint8>(std::clamp(a, 0.f, 1.f) * 255.f);
@@ -66,10 +68,8 @@ bool LivingPark::init(const std::string& dir) {
     if (!m_background.loadFromFile(dir + "/" + L.value("background", "background.png"))) return false;
     if (!m_atlas.loadFromFile(dir + "/" + L.value("atlas", "sprites.png"))) return false;
     if (!m_wheelFront.loadFromFile(dir + "/" + L["wheel"].value("front", "wheel_front.png"))) return false;
-    if (!m_atomFront.loadFromFile(dir + "/" + L.value("atom_front", "atom_front.png"))) return false;
-    for (sf::Texture* t : { &m_background, &m_atlas, &m_wheelFront, &m_atomFront }) t->setSmooth(false);
+    for (sf::Texture* t : { &m_background, &m_atlas, &m_wheelFront }) t->setSmooth(false);
     m_wheelFrontAt = toVec(L["wheel"]["front_at"]);
-    m_atomFrontAt = toVec(L["atom_front_at"]);
 
     try {
         for (auto& [name, r] : L["sprites"].items()) m_sprites[name] = sf::IntRect(r[0], r[1], r[2], r[3]);
@@ -88,15 +88,10 @@ bool LivingPark::init(const std::string& dir) {
         m_spokes = wheel.value("spokes", 16);
         m_wheelTurn = wheel.value("turn_seconds", 40.f);
 
-        // Lamps glow warm and steady, with a slow breath and a rare flicker; the atom's spheres pulse in a
-        // wave; the carousel's bulbs chase round its canopy
+        // Lamps glow warm and steady, with a slow breath and a rare flicker; the carousel's bulbs chase round
+        // its canopy
         for (auto& p : L["lamps"]) {
             Glow g{ toVec(p), sf::Color(255, 196, 120), random(15.f, 19.f), random(0.f, 6.28f), random(0.6f, 1.4f), 0.55f };
-            m_glows.push_back(g);
-        }
-        for (auto& p : L["atom"]) {
-            sf::Vector2f pos = toVec(p);
-            Glow g{ pos, sf::Color(255, 170, 90), 30.f, (pos.x + pos.y) * 0.02f, 1.2f, 0.5f };
             m_glows.push_back(g);
         }
         int bulb = 0;
@@ -115,6 +110,21 @@ bool LivingPark::init(const std::string& dir) {
         for (auto& p : L["windows"]) {
             m_windows.push_back(toVec(p));
             m_windowPhase.push_back(random(0.f, 60.f));
+        }
+        // Opening order: the lamps from the entrance at the bottom of the picture outwards, the carousel's
+        // bulbs going round, and the signs buzzing on here and there
+        int bulbIndex = 0;
+        for (auto& g : m_glows) {
+            if (g.rate >= 3.f) g.opens = 1.6f + 0.03f * bulbIndex++;
+            else {
+                sf::Vector2f d = g.pos - sf::Vector2f(960.f, 1080.f);
+                g.opens = 0.3f + std::sqrt(d.x * d.x + d.y * d.y) / 700.f;
+            }
+        }
+        for (auto& sign : m_signs) sign.opens = random(0.7f, 2.2f);
+        for (auto& b : L.value("balloons", nlohmann::json::array())) {
+            Balloon balloon{ b["sprite"].get<std::string>(), toVec(b["tied"]), toVec(b["knot"]), random(0.f, 6.28f) };
+            m_balloons.push_back(balloon);
         }
         const auto& sky = L["sky"];
         m_sky = sf::FloatRect(sky[0], sky[1], sky[2].get<float>() - sky[0].get<float>(), sky[3].get<float>() - sky[1].get<float>());
@@ -135,6 +145,30 @@ bool LivingPark::init(const std::string& dir) {
 
 // ---------------------------------------------------------------------------------------------- bulbs
 
+void LivingPark::open() {
+    if (m_openedAt < 0.f) m_openedAt = m_time;
+}
+
+float LivingPark::lightUp(float opens) const {
+    float t = sinceOpening() - opens;
+    if (t < 0.f) return 0.f;
+    if (t < 0.05f) return 1.f;
+    if (t < 0.12f) return 0.f;
+    if (t < 0.17f) return 0.7f;
+    if (t < 0.22f) return 0.f;
+    return std::min(1.f, 0.6f + (t - 0.22f) * 2.f);
+}
+
+float LivingPark::closedDarkness() const {
+    float t = sinceOpening();
+    return t < 0.f ? 1.f : 1.f - smoothstep(0.2f, 3.2f, t);
+}
+
+float LivingPark::wheelSpin() const {
+    float t = sinceOpening();
+    return t < 0.f ? 0.f : smoothstep(2.2f, 6.f, t);
+}
+
 bool LivingPark::bulbOn(int i) const {
     // Eight seconds of each pattern, round and round
     int pattern = static_cast<int>(m_time / 8.f) % 3;
@@ -144,17 +178,19 @@ bool LivingPark::bulbOn(int i) const {
 }
 
 void LivingPark::drawBulbs(sf::VertexArray& lit, sf::VertexArray& unlit, const std::vector<sf::Vector2f>& at, int offset,
-    sf::Color a, sf::Color b, float radius) {
+    sf::Color a, sf::Color b, float radius, float opens, float step) {
     const sf::IntRect& dot = m_sprites["dot"];
     const sf::IntRect& glowSrc = m_sprites["glow"];
     sf::Vector2f glowMid(glowSrc.width * 0.5f, glowSrc.height * 0.5f);
     float size = radius * 2.f / glowSrc.width;
+    bool opening = sinceOpening() < opens + step * at.size() + 0.3f;
     for (size_t k = 0; k < at.size(); ++k) {
         int i = static_cast<int>(k) + offset;
         sf::Color c = i % 2 ? b : a;
-        if (bulbOn(i)) {
-            quad(lit, glowSrc, at[k], { size, size }, 0.f, glowMid, withAlpha(c, 0.95f));
-            quad(lit, dot, at[k], { 2.f, 2.f }, 0.f, { 0.5f, 0.5f }, withAlpha(sf::Color(255, 246, 236), 0.95f));
+        float on = opening ? lightUp(opens + step * k) : (bulbOn(i) ? 1.f : 0.f);
+        if (on > 0.f) {
+            quad(lit, glowSrc, at[k], { size, size }, 0.f, glowMid, withAlpha(c, 0.95f * on));
+            quad(lit, dot, at[k], { 2.f, 2.f }, 0.f, { 0.5f, 0.5f }, withAlpha(sf::Color(255, 246, 236), 0.95f * on));
         }
         else {
             quad(unlit, dot, at[k], { 2.f, 2.f }, 0.f, { 0.5f, 0.5f }, sf::Color(c.r / 3, c.g / 3, c.b / 3));
@@ -168,7 +204,8 @@ void LivingPark::update(float dt) {
     if (!m_ready) return;
     dt = std::min(dt, 0.1f);
     m_time += dt;
-    m_wheelAngle += 2.f * kPi / m_wheelTurn * dt;
+    // The wheel stands still while the park is closed and gathers speed once it opens
+    m_wheelAngle += 2.f * kPi / m_wheelTurn * wheelSpin() * dt;
 
     for (auto& g : m_glows) {
         if (g.flicker > 0.f) g.flicker -= dt;
@@ -303,7 +340,11 @@ void LivingPark::drawWheel(sf::RenderTarget& target) {
     m_wheelTex.draw(hub);
     m_wheelTex.display();
 
+    // Shaded like the rest of the scene while the park is closed
+    sf::Uint8 shade = static_cast<sf::Uint8>(255.f * (1.f - kClosedShade * closedDarkness()));
+    sf::Color tint(shade, shade, shade);
     sf::Sprite wheel(m_wheelTex.getTexture());
+    wheel.setColor(tint);
     wheel.setScale(2.f, 2.f);
     wheel.setPosition(std::round(m_wheelCenter.x - side), std::round(m_wheelCenter.y - side));
     target.draw(wheel);
@@ -323,28 +364,52 @@ void LivingPark::drawWheel(sf::RenderTarget& target) {
             midBulbs.push_back({ std::round(p.x), std::round(p.y) });
         }
         sf::VertexArray lit(sf::Quads), unlit(sf::Quads);
-        drawBulbs(lit, unlit, rimBulbs, 0, sf::Color(255, 220, 130), sf::Color(255, 110, 210), 12.f);
-        drawBulbs(lit, unlit, midBulbs, 1, sf::Color(90, 226, 255), sf::Color(90, 226, 255), 9.f);
+        drawBulbs(lit, unlit, rimBulbs, 0, sf::Color(255, 220, 130), sf::Color(255, 110, 210), 12.f, 2.4f, 0.04f);
+        drawBulbs(lit, unlit, midBulbs, 1, sf::Color(90, 226, 255), sf::Color(90, 226, 255), 9.f, 2.9f, 0.05f);
         target.draw(unlit, &m_atlas);
         sf::RenderStates add(&m_atlas);
         add.blendMode = sf::BlendAdd;
         target.draw(lit, add);
     }
 
-    // The gondolas hang from the rim and stay upright, swaying a little
+    // The gondolas hang from the rim and stay upright, swaying a little once the wheel turns
     sf::VertexArray va(sf::Quads);
     for (int i = 0; i < m_gondolas; ++i) {
         float a = m_wheelAngle + 2.f * kPi * i / m_gondolas;
         sf::Vector2f pin = m_wheelCenter + m_wheelRim * sf::Vector2f(std::cos(a), std::sin(a));
         const sf::IntRect& src = m_sprites[i % 2 ? "gondola_pink" : "gondola_teal"];
         float sway = 4.f * std::sin(m_time * 1.3f + i * 0.9f);
-        quad(va, src, { std::round(pin.x), std::round(pin.y) }, { kPixel, kPixel }, sway, { src.width * 0.5f, 0.f });
+        quad(va, src, { std::round(pin.x), std::round(pin.y) }, { kPixel, kPixel }, sway * wheelSpin(), { src.width * 0.5f, 0.f }, tint);
     }
     target.draw(va, &m_atlas);
 
     sf::Sprite legs(m_wheelFront);
+    legs.setColor(tint);
     legs.setPosition(m_wheelFrontAt);
     target.draw(legs);
+}
+
+void LivingPark::drawBalloons(sf::RenderTarget& target) {
+    // Each balloon drifts about where it floats at rest, in its own time, as if in a light breeze, the
+    // further from where its string is tied the further it goes; its string follows it
+    sf::Uint8 shade = static_cast<sf::Uint8>(255.f * (1.f - kClosedShade * closedDarkness()));
+    sf::Color tint(shade, shade, shade);
+    sf::Color string(static_cast<sf::Uint8>(200 * shade / 255), static_cast<sf::Uint8>(196 * shade / 255), static_cast<sf::Uint8>(214 * shade / 255));
+    sf::VertexArray strings(sf::Lines), balloons(sf::Quads);
+    for (const auto& b : m_balloons) {
+        sf::Vector2f d = b.knot - b.tied;
+        float reach = std::sqrt(d.x * d.x + d.y * d.y) / 30.f;
+        sf::Vector2f sway(3.f * std::sin(m_time * 0.9f + b.phase) + 1.2f * std::sin(m_time * 2.1f + b.phase * 1.7f),
+            1.4f * std::sin(m_time * 1.3f + b.phase * 0.6f));
+        sf::Vector2f knot = b.knot + sway * reach;
+        knot = { std::round(knot.x), std::round(knot.y) };
+        strings.append(sf::Vertex(b.tied + sf::Vector2f(0.5f, 0.5f), string));
+        strings.append(sf::Vertex(knot + sf::Vector2f(0.5f, 0.5f), string));
+        const sf::IntRect& src = m_sprites[b.sprite];
+        quad(balloons, src, knot, { 1.f, 1.f }, 0.f, { src.width * 0.5f, static_cast<float>(src.height) }, tint);
+    }
+    target.draw(strings);
+    target.draw(balloons, &m_atlas);
 }
 
 void LivingPark::draw(sf::RenderTarget& target) {
@@ -352,6 +417,15 @@ void LivingPark::draw(sf::RenderTarget& target) {
     sf::Sprite bg(m_background);
     bg.setScale(1920.f / m_background.getSize().x, 1080.f / m_background.getSize().y);
     target.draw(bg);
+
+    // While the park is closed the whole scene is in shade; the city's windows and the park's own lights
+    // are drawn over it
+    float dark = closedDarkness();
+    if (dark > 0.f) {
+        sf::RectangleShape shade({ 1920.f, 1080.f });
+        shade.setFillColor(withAlpha(sf::Color::Black, kClosedShade * dark));
+        target.draw(shade);
+    }
 
     sf::RenderStates add(&m_atlas);
     add.blendMode = sf::BlendAdd;
@@ -377,20 +451,18 @@ void LivingPark::draw(sf::RenderTarget& target) {
         target.draw(birds, &m_atlas);
     }
 
-    // The coaster's lights, then the atom in front of them
+    // The coaster's lights
     {
         sf::VertexArray lit(sf::Quads), unlit(sf::Quads);
-        drawBulbs(lit, unlit, m_coasterBulbs, 0, sf::Color(255, 96, 214), sf::Color(90, 226, 255), 10.f);
+        drawBulbs(lit, unlit, m_coasterBulbs, 0, sf::Color(255, 96, 214), sf::Color(90, 226, 255), 10.f, 1.4f, 0.012f);
         target.draw(unlit, &m_atlas);
         target.draw(lit, add);
-        sf::Sprite atom(m_atomFront);
-        atom.setPosition(m_atomFrontAt);
-        target.draw(atom);
     }
 
     drawWheel(target);
+    drawBalloons(target);
 
-    // Light: lamps, the atom, the carousel's bulbs, the signs
+    // Light: lamps, the carousel's bulbs, the signs
     {
         sf::VertexArray va(sf::Quads);
         for (const auto& g : m_glows) {
@@ -398,6 +470,8 @@ void LivingPark::draw(sf::RenderTarget& target) {
             if (g.rate >= 3.f) a = 0.35f + 0.65f * smoothstep(0.3f, 1.f, std::sin(m_time * g.rate - g.phase));    // chasing bulbs
             else a = 0.75f + 0.25f * std::sin(m_time * g.rate + g.phase);
             if (g.flicker > 0.f) a *= 0.15f;
+            a *= lightUp(g.opens);
+            if (a <= 0.f) continue;
             float size = g.radius * 2.f / glowSrc.width;
             quad(va, glowSrc, g.pos, { size, size }, 0.f, glowMid, withAlpha(g.color, a * g.strength));
         }
@@ -407,6 +481,8 @@ void LivingPark::draw(sf::RenderTarget& target) {
             float sx = s.box.width * 1.9f / glowSrc.width, sy = s.box.height * 2.4f / glowSrc.height;
             float a = 0.32f + 0.08f * std::sin(m_time * 2.1f + mid.x);
             if (s.off > 0.f) a *= 0.25f;
+            a *= lightUp(s.opens);
+            if (a <= 0.f) continue;
             quad(va, glowSrc, mid, { sx, sy }, 0.f, glowMid, withAlpha(s.color, a));
         }
         target.draw(va, add);

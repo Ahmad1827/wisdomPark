@@ -1546,6 +1546,11 @@ bool UIManager::triggerSave(Canvas& canvas, Timeline& timeline) {
 }
 
 void UIManager::handleEvent(const sf::Event& event, sf::RenderWindow& window, AppState& currentState, AppSettings& settings, Canvas& canvas, Timeline& timeline, AIHelper& aiHelper, ProjectManager& pm) {
+    // The park in the background opens with the first click or key press; after that this does nothing
+    if (event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::KeyPressed) {
+        m_park.open();
+    }
+
     if (event.type == sf::Event::MouseButtonReleased) {
         canvas.resetRecolorLatch();
     }
