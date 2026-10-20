@@ -363,6 +363,10 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 *.png
+# The living park on the home screen needs its images
+!assets/park/background.png
+!assets/park/sprites.png
+!assets/park/wheel_front.png
 /build-ship-windows
 
 # AI bridge scratch files
