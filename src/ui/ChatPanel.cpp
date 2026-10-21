@@ -412,6 +412,7 @@ void ChatPanel::runCommand(const std::string& command) {
         addMessage(Role::Note, "No model called \"" + arg + "\". Try opus, sonnet, haiku, fable or default.");
     }
     else if (name == "/area") m_pendingAction = "mark_area";
+    else if (name == "/sharpen") m_pendingAction = "sharpen";
     else if (name == "/detail") {
         for (int i = 0; i < kDetailCount; ++i) {
             if (arg == kDetails[i].label) {
@@ -423,7 +424,7 @@ void ChatPanel::runCommand(const std::string& command) {
         addMessage(Role::Note, "Detail is low, medium, high or full: how finely Claude draws a big canvas. Finer takes longer.");
     }
     else if (name == "/help") {
-        addMessage(Role::Note, "/model  pick the model Claude runs on\n/area   mark where on the canvas Claude draws\n/detail low, medium, high or full: how finely a big canvas is drawn\n/clear  start a new conversation\n"
+        addMessage(Role::Note, "/model  pick the model Claude runs on\n/area   mark where on the canvas Claude draws\n/detail low, medium, high or full: how finely a big canvas is drawn\n/sharpen sharpen Claude's older, blocky drawings on this canvas\n/clear  start a new conversation\n"
             "Enter sends, Shift+Enter adds a line, Esc stops Claude while it works. Under the box: how long the typed "
             "request should take and how much of your 5-hour limit it should use (?% until two replies have shown how fast "
             "Claude uses it); both learn from your runs.");
@@ -468,6 +469,29 @@ std::vector<sf::String> ChatPanel::wrap(const sf::String& text, unsigned int siz
     flushWord();
     if (!line.isEmpty() || lines.empty()) lines.push_back(line);
     return lines;
+}
+
+// What the right of the footer says, given the room next to the buttons: the full estimate when it fits
+// there, else the short one, else the full one again (it then gets a row of its own)
+std::string ChatPanel::footerRightText(float room, sf::Color& ink) const {
+    ink = kDim;
+    if (m_busy) return "";
+    std::string typed = inputUtf8();
+    size_t start = typed.find_first_not_of(" \t\n");
+    auto fits = [&](const std::string& s) { return s.size() * m_charW + 4.f <= room; };
+    // Only a hint, so it is left out rather than given a row
+    if (start == std::string::npos) return fits("type for time & usage") ? "type for time & usage" : "";
+    if (typed[start] == '/') return "command";
+    Job job = estimate(typed, m_model);
+    std::string what = job.kind == "chat" ? "reply only"
+        : job.kind == "new" ? (job.frames > 1 ? "new sprite, " + std::to_string(job.frames) + " frames" : "new sprite")
+        : (job.frames > 1 ? std::to_string(job.frames) + " frames" : "edit");
+    // "?%" until two finished runs have shown how fast Claude uses the limit
+    std::string cost = job.percent < 0.f ? " ?%" : job.percent < 1.f ? " <1%" : " ~" + std::to_string(static_cast<int>(std::round(job.percent))) + "%";
+    std::string full = roughTime(job.seconds) + cost + " - " + what;
+    std::string brief = roughTime(job.seconds) + cost;
+    ink = kClaude;
+    return fits(full) || !fits(brief) ? full : brief;
 }
 
 void ChatPanel::update(float dt, bool focusMode, bool isOpen, bool busy, const std::string& status) {
@@ -515,8 +539,34 @@ void ChatPanel::update(float dt, bool focusMode, bool isOpen, bool busy, const s
     m_headerBounds = sf::FloatRect(x + kPad, topBarsH + kPad, innerW, 14.f + 4.f * kLineHeight);
     m_closeBounds = sf::FloatRect(m_headerBounds.left + innerW - 28.f, m_headerBounds.top + 4.f, 24.f, 24.f);
 
+    // The footer: the model, the area and the detail on the left, and on the right how long the typed request
+    // should take, or the stop button while Claude works. When they would run into each other, the right side
+    // takes a row of its own under the buttons.
+    float footerLeft = x + kPad;
+    float footerEnd = footerLeft + innerW;
+    std::string label = kModels[m_model].label;
+    float modelW = (label.size() + 3) * m_charW;
+    // Next to the model: the area Claude draws in, or the way to mark one
+    m_areaText = m_marking ? "[drag on canvas]" : !m_markLabel.empty() ? "[" + m_markLabel + " x]" : "[area]";
+    float areaLeft = footerLeft + modelW + m_charW;
+    float areaW = m_areaText.size() * m_charW + 8.f;
+    // The detail only shows when the area is too big to draw pixel for pixel; a click goes to the next one
+    m_detailText = std::string("[") + kDetails[m_detail].label + "]";
+    float detailLeft = areaLeft + areaW + m_charW * 0.5f;
+    float detailW = m_detailText.size() * m_charW + 8.f;
+    float room = footerEnd - (detailLeft + detailW) - m_charW;
+    float stopW = 8.f * m_charW + 12.f;
+    m_footerRight = footerRightText(room, m_footerRightInk);
+    float rightW = m_busy ? stopW : m_footerRight.size() * m_charW + 4.f;
+    float rows = rightW > room ? 2.f : 1.f;
+    m_footerBounds = sf::FloatRect(footerLeft, bottom - kPad - rows * kLineHeight, innerW, rows * kLineHeight);
+    m_footerRightRow = m_footerBounds.top + (rows - 1.f) * kLineHeight;
+    m_modelBounds = sf::FloatRect(footerLeft, m_footerBounds.top, modelW, kLineHeight);
+    m_areaBounds = sf::FloatRect(areaLeft, m_footerBounds.top, areaW, kLineHeight);
+    m_detailBounds = sf::FloatRect(detailLeft, m_footerBounds.top, detailW, kLineHeight);
+    m_stopBounds = sf::FloatRect(footerEnd - stopW, m_footerRightRow - 1.f, stopW, kLineHeight + 2.f);
+
     // The prompt box grows with what is typed, up to a few lines, and the conversation gives up the room
-    m_footerBounds = sf::FloatRect(x + kPad, bottom - kPad - kLineHeight, innerW, kLineHeight);
     float textW = innerW - 16.f - 2.f * m_charW;
     int inputLines = std::clamp(static_cast<int>(wrap(m_input, kTextSize, textW).size()), 1, kInputMaxLines);
     float inputH = 14.f + inputLines * kLineHeight;
@@ -525,17 +575,6 @@ void ChatPanel::update(float dt, bool focusMode, bool isOpen, bool busy, const s
     float listTop = m_headerBounds.top + m_headerBounds.height + 12.f;
     m_listBounds = sf::FloatRect(x + kPad, listTop, innerW, m_inputBounds.top - statusH - 10.f - listTop);
 
-    std::string label = kModels[m_model].label;
-    m_modelBounds = sf::FloatRect(m_footerBounds.left, m_footerBounds.top, (label.size() + 3) * m_charW, kLineHeight);
-    // Next to the model: the area Claude draws in, or the way to mark one
-    m_areaText = m_marking ? "[drag on canvas]" : !m_markLabel.empty() ? "[" + m_markLabel + " x]" : "[area]";
-    m_areaBounds = sf::FloatRect(m_modelBounds.left + m_modelBounds.width + m_charW, m_footerBounds.top, m_areaText.size() * m_charW + 8.f, kLineHeight);
-    // The detail only shows when the area is too big to draw pixel for pixel; a click goes to the next one
-    m_detailText = std::string("[") + kDetails[m_detail].label + "]";
-    m_detailBounds = sf::FloatRect(m_areaBounds.left + m_areaBounds.width + m_charW * 0.5f, m_footerBounds.top, m_detailText.size() * m_charW + 8.f, kLineHeight);
-    // While Claude works a stop button takes the right of the footer, where the estimate was
-    float stopW = 8.f * m_charW + 12.f;
-    m_stopBounds = sf::FloatRect(m_footerBounds.left + m_footerBounds.width - stopW, m_footerBounds.top - 1.f, stopW, kLineHeight + 2.f);
     float pickerH = (kModelCount + 1) * kLineHeight + 12.f;
     m_pickerBounds = sf::FloatRect(m_footerBounds.left, m_footerBounds.top - 4.f - pickerH, innerW, pickerH);
 }
@@ -581,13 +620,16 @@ void ChatPanel::draw(sf::RenderWindow& window) {
     float hy = hb.top + 7.f;
     text(m_mark, hx, hy, kClaude);
     text("Claude Code", hx + 2.f * m_charW, hy, kText);
-    text(std::string(kModels[m_model].label) + "  " + (m_areaLabel.empty() ? std::string("/help for commands") : m_areaLabel), hx + 2.f * m_charW, hy + kLineHeight, kDim);
+    // Every line stays inside the box: what does not fit is cut with "..."
+    size_t lineChars = static_cast<size_t>((hb.width - 24.f) / m_charW) - 2;
+    auto fit = [&](const std::string& s) { return s.size() > lineChars ? s.substr(0, lineChars - 3) + "..." : s; };
+    text(fit(std::string(kModels[m_model].label) + "  " + (m_areaLabel.empty() ? std::string("/help for commands") : m_areaLabel)), hx + 2.f * m_charW, hy + kLineHeight, kDim);
     std::string folder = m_folderLabel;
-    size_t maxChars = static_cast<size_t>((hb.width - 24.f) / m_charW) - 7;
+    size_t maxChars = lineChars - 5;
     if (folder.size() > maxChars) folder = "..." + folder.substr(folder.size() - maxChars + 3);
     text(utf8("cwd: " + folder), hx + 2.f * m_charW, hy + 2.f * kLineHeight, kDim);
     std::string limits = usageLine();
-    if (!limits.empty()) text(limits, hx + 2.f * m_charW, hy + 3.f * kLineHeight, kDim);
+    if (!limits.empty()) text(fit(limits), hx + 2.f * m_charW, hy + 3.f * kLineHeight, kDim);
     bool closeHover = m_closeBounds.contains(mPos);
     if (closeHover) rect(m_closeBounds, kHover);
     text("x", m_closeBounds.left + (m_closeBounds.width - m_charW) / 2.f, m_closeBounds.top + 1.f, closeHover ? kText : kDim);
@@ -685,6 +727,7 @@ void ChatPanel::draw(sf::RenderWindow& window) {
         std::string timing = "(" + clockTime(m_busyTime);
         if (m_runEstimate > 0.f) timing += (m_busyTime > m_runEstimate ? " - expected " : " of ") + roughTime(m_runEstimate);
         timing += " - esc to interrupt)";
+        if (timing.size() > room) timing = timing.substr(0, room - 1) + ")";
         text(timing, m_listBounds.left + 4.f + indent, sy + kLineHeight, kDim);
     }
 
@@ -737,38 +780,19 @@ void ChatPanel::draw(sf::RenderWindow& window) {
     bool detailHover = m_detailBounds.contains(mPos);
     if (detailHover) rect(m_detailBounds, kHover);
     text(m_detailText, m_detailBounds.left + 4.f, m_footerBounds.top, detailHover && m_scaled ? kText : kDim);
-    float leftEnd = m_detailBounds.left + m_detailBounds.width - m_footerBounds.left;
-
-    std::string typed = inputUtf8();
-    size_t start = typed.find_first_not_of(" \t\n");
-    std::string right;
-    sf::Color rightInk = kDim;
-    if (m_busy) right = "";
-    else if (start == std::string::npos) right = leftEnd + 22.f * m_charW < m_footerBounds.width ? "type for time & usage" : "";
-    else if (typed[start] == '/') right = "command";
-    else {
-        Job job = estimate(typed, m_model);
-        std::string what = job.kind == "chat" ? "reply only"
-            : job.kind == "new" ? (job.frames > 1 ? "new sprite, " + std::to_string(job.frames) + " frames" : "new sprite")
-            : (job.frames > 1 ? std::to_string(job.frames) + " frames" : "edit");
-        // "?%" until two finished runs have shown how fast Claude uses the limit
-        std::string cost = job.percent < 0.f ? " ?%" : job.percent < 1.f ? " <1%" : " ~" + std::to_string(static_cast<int>(std::round(job.percent))) + "%";
-        right = roughTime(job.seconds) + cost + " - " + what;
-        float room = m_footerBounds.width - leftEnd - 12.f;
-        if (right.size() * m_charW > room) right = roughTime(job.seconds) + cost;
-        rightInk = kClaude;
-    }
-    text(right, m_footerBounds.left + m_footerBounds.width - right.size() * m_charW - 4.f, m_footerBounds.top, rightInk);
+    text(m_footerRight, m_footerBounds.left + m_footerBounds.width - m_footerRight.size() * m_charW - 4.f, m_footerRightRow, m_footerRightInk);
     if (m_busy) {
         bool stopHover = m_stopBounds.contains(mPos);
         rect(m_stopBounds, stopHover ? sf::Color(70, 30, 30) : sf::Color::Transparent, stopHover ? kError : kBoxEdge);
         float sx = m_stopBounds.left + 8.f;
         rect(sf::FloatRect(sx, m_stopBounds.top + kLineHeight / 2.f - 3.f, 8.f, 8.f), stopHover ? kError : kText);
-        text("Stop", sx + 2.f * m_charW, m_footerBounds.top, stopHover ? kError : kText);
+        text("Stop", sx + 2.f * m_charW, m_footerRightRow, stopHover ? kError : kText);
     }
 
     // The model picker, like /model in Claude Code: each row says how long the typed request would take on it
     if (m_pickerOpen) {
+        std::string typed = inputUtf8();
+        size_t start = typed.find_first_not_of(" \t\n");
         const sf::FloatRect& pb = m_pickerBounds;
         rect(pb, kBg, kBoxEdge);
         text("Select model", pb.left + 10.f, pb.top + 5.f, kClaude);

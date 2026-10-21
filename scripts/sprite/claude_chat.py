@@ -6,8 +6,9 @@ The app sends a JSON job on stdin:
      "current_frame": 0, "frame_count": 3, "message": "now make him walk"}
 width and height are the size Claude draws at: the selected area or the whole canvas, shrunk when
 it is large (area_note then says so, and the app scales Claude's frames back up). On an illustration
-canvas the job also has "scale" and "area_width", "area_height": the frames handed back are then also
-brought up to the area's full size here, with sharp edges, so they don't turn blocky when zoomed in.
+canvas the job also has "scale", "detail" and "area_width", "area_height": the frames handed back are
+then also brought up here, with sharp edges, to `detail` times the area's full size, so they stay crisp
+when the artist zooms in.
 and before that writes the timeline into <dir>/canvas/:
     frame_NNN.png   each frame as it looks (all visible layers)
     claude_NNN.png  each frame's "Claude" layer, when the project has one
@@ -21,7 +22,7 @@ Writes:
     <dir>/reply.json    {"reply": text, "changed": [frame indices], "total": frames drawn,
                          "limits": plan usage Claude Code reported (or null), "cost": API-price estimate in USD}
     <dir>/frames/       every frame Claude's sprite.py draws (frames/NNN.png)
-    <dir>/frames_full/  the frames handed back, at the area's full size (illustration canvases only)
+    <dir>/frames_full/  the frames handed back, at `detail` times the area's size (illustration canvases only)
     <dir>/chat.jsonl    the conversation, one {"role", "text"} per line, for the chat panel
     temp_ai_status.txt  what Claude is doing right now (the app's loading screen shows it)
     temp_ai_error.txt   why it failed, when it exits non-zero
@@ -42,9 +43,11 @@ from upscale import upscale  # noqa: E402
 STATUS_PATH = "temp_ai_status.txt"
 ERROR_PATH = "temp_ai_error.txt"
 # A frame brought up to full size reads back off the Claude layer a few shades different where its colours
-# blend, so the layer still counts as Claude's own while no channel is further off than this. Painting over
-# it by hand changes far more.
+# blend, and a little more along its edges, so the layer still counts as Claude's own while no more than
+# LAYER_STRAY of its pixels are further off than LAYER_TOLERANCE in any channel. Painting over it by hand
+# changes far more.
 LAYER_TOLERANCE = 40
+LAYER_STRAY = 0.01
 
 SYSTEM_PROMPT = """You are the pixel-art assistant inside wisdomPark, a sprite editor, talking with
 the artist in a chat panel next to their canvas. You draw by writing sprite.py with the drawing
@@ -79,7 +82,12 @@ def same_image(a, b, tolerance=0):
     if tolerance == 0:
         return data_a == data_b
     diff = ImageChops.difference(Image.frombytes("RGBA", size_a, data_a), Image.frombytes("RGBA", size_b, data_b))
-    return max(high for _, high in diff.getextrema()) <= tolerance
+    channels = diff.split()
+    worst = channels[0]
+    for c in channels[1:]:
+        worst = ImageChops.lighter(worst, c)
+    off = sum(worst.histogram()[tolerance + 1:])
+    return off <= LAYER_STRAY * size_a[0] * size_a[1]
 
 
 def is_blank(path):
@@ -165,19 +173,19 @@ def changed_frames(workdir, frame_count):
 
 
 def write_full_frames(workdir, changed, job):
-    """Full-size copies of the changed frames, for an illustration canvas Claude drew shrunk."""
+    """Sharp copies of the changed frames at `detail` times the area's full size, for an illustration canvas."""
     full = os.path.join(workdir, "frames_full")
     shutil.rmtree(full, ignore_errors=True)
-    scale = int(job.get("scale", 1))
-    if scale <= 1 or not changed:
+    if "detail" not in job or not changed:
         return
+    scale, detail = int(job.get("scale", 1)), int(job["detail"])
     os.makedirs(full)
-    area = (int(job["area_width"]), int(job["area_height"]))
+    area = (int(job["area_width"]) * detail, int(job["area_height"]) * detail)
     for n, i in enumerate(changed):
-        set_status(STATUS_PATH, f"Sharpening frame {n + 1} of {len(changed)} to full size")
+        set_status(STATUS_PATH, f"Sharpening frame {n + 1} of {len(changed)}")
         drawn = Image.open(os.path.join(workdir, "frames", "%03d.png" % i))
         # The last row and column of blocks reach past the area when its size is not a multiple of the scale
-        big = upscale(drawn, (drawn.width * scale, drawn.height * scale))
+        big = upscale(drawn, (drawn.width * scale * detail, drawn.height * scale * detail))
         big.crop((0, 0) + area).save(os.path.join(full, "%03d.png" % i))
 
 

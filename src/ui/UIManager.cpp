@@ -18,6 +18,7 @@
 #include <random>
 #include <fstream>
 #include <sstream>
+#include <thread>
 #include <windows.h>
 #include "../tools/CanvasTool.h"
 #include "../tools/SpriteSheetStudioTool.h"
@@ -228,6 +229,9 @@ static float g_chatStatusTimer = 0.f;
 // draws at most this size pixel for pixel; anything larger it draws at the size the chat's detail setting
 // says, and the app scales that up
 static const int kChatMaxCanvas = 256;
+// On an illustration canvas Claude's drawings are kept this many times finer than the canvas, sharpened by
+// the bridge, so they stay crisp when zoomed in instead of blurring
+static const unsigned int kChatDetail = 2;
 
 // An area dragged out on the canvas for the chat, in canvas pixels. Unlike a selection it can cover empty
 // canvas, and it stays for the messages after until the artist clears it.
@@ -332,6 +336,79 @@ static int findClaudeLayer(const Canvas& canvas) {
         if (f->layers[i].name == "Claude") return i;
     }
     return -1;
+}
+
+// "/sharpen" in the chat: drawings Claude put on an illustration canvas before they were kept finer than the
+// canvas blur when zoomed in, and the ones drawn shrunk are soft blocks. scripts/sprite/sharpen.py brings each
+// object on the Claude layer up to kChatDetail times its size with sharp edges (undoing the blocks first) in the
+// background; the objects keep their places and are swapped in when it is done.
+struct SharpenJob {
+    // 1 while the script runs, 2 when it finished, 3 when it could not be run
+    std::shared_ptr<std::atomic<int>> state;
+    std::string dir;
+};
+static SharpenJob g_sharpen;
+
+static void startSharpen(Canvas& canvas, const std::string& projectPath) {
+    auto note = [](const std::string& text) { g_chatPanel.addMessage(ChatPanel::Role::Note, text); };
+    if (g_sharpen.state) { note("Already sharpening. It will finish in a moment."); return; }
+    if (canvas.getPixelMode()) { note("Pixel art keeps its hard blocks, so there is nothing to sharpen here."); return; }
+    int claudeLayer = findClaudeLayer(canvas);
+    if (claudeLayer < 0) { note("This project has no Claude layer yet, so there is nothing to sharpen."); return; }
+
+    std::string dir = chatDirFor(projectPath) + "/sharpen";
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+    std::filesystem::create_directories(dir + "/in", ec);
+    int sent = 0;
+    for (const auto& ci : canvas.getCanvasImages()) {
+        // Objects already finer than their place on the canvas are sharp already
+        if (ci.layer != claudeLayer || !ci.texture || ci.texture->getSize().x > ci.bounds.width + 0.5f) continue;
+        sf::Image img = ci.image.getSize().x > 0 ? ci.image : ci.texture->copyToImage();
+        if (img.saveToFile(dir + "/in/" + std::to_string(ci.id) + ".png")) ++sent;
+    }
+    if (sent == 0) { note("Nothing to sharpen: Claude's drawings here are sharp already."); return; }
+
+    g_sharpen = { std::make_shared<std::atomic<int>>(1), dir };
+    std::shared_ptr<std::atomic<int>> state = g_sharpen.state;
+    std::thread([state, dir]() {
+        int exitCode = 1;
+        bool ran = runHiddenProcess("python scripts/sprite/sharpen.py \"" + dir + "\" " + std::to_string(kChatDetail), exitCode);
+        state->store(ran && exitCode == 0 ? 2 : 3);
+    }).detach();
+    note("Sharpening " + std::to_string(sent) + (sent == 1 ? " drawing" : " drawings") + " on the Claude layer...");
+}
+
+// Swaps in what the script sharpened, as one undo step, once it has finished
+static void finishSharpen(Canvas& canvas, const std::string& projectPath) {
+    if (!g_sharpen.state || g_sharpen.state->load() < 2) return;
+    bool ran = g_sharpen.state->load() == 2;
+    std::string dir = g_sharpen.dir;
+    g_sharpen.state.reset();
+    if (!ran) {
+        g_chatPanel.addMessage(ChatPanel::Role::Error, "Sharpening failed: Python or scripts/sprite/sharpen.py could not be run.");
+        return;
+    }
+    if (dir != chatDirFor(projectPath) + "/sharpen") {
+        g_chatPanel.addMessage(ChatPanel::Role::Note, "Another project was opened while sharpening, so nothing was changed. Run /sharpen again.");
+        return;
+    }
+    size_t undoDepth = canvas.getUndoDepth();
+    bool saved = false;
+    int done = 0;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(dir + "/out", ec)) {
+        int id = 0;
+        try { id = std::stoi(entry.path().stem().string()); }
+        catch (...) { continue; }
+        sf::Image img;
+        if (!img.loadFromFile(entry.path().string())) continue;
+        if (!saved) { canvas.saveUndoState(); saved = true; }
+        if (canvas.replaceCanvasImagePixels(id, img)) ++done;
+    }
+    if (saved) canvas.collapseUndoSteps(undoDepth);
+    if (done == 0) g_chatPanel.addMessage(ChatPanel::Role::Note, "Nothing needed sharpening: Claude's drawings here are already sharp.");
+    else g_chatPanel.addMessage(ChatPanel::Role::Note, "Sharpened " + std::to_string(done) + (done == 1 ? " drawing" : " drawings") + ". Ctrl+Z undoes it.");
 }
 
 // When the artist had a selection, only that area is sent to the assistant; these remember
@@ -1005,10 +1082,11 @@ void UIManager::sendChatMessage(Canvas& canvas, Timeline& timeline, const std::s
             "their canvas (or their area) and don't mention " + w + " or the scaling.";
     }
     if (!where.empty()) job["area_note"] = where;
-    // On an illustration canvas the bridge brings the frames back up to full size itself, with sharp edges,
-    // so they don't turn into soft blocks when zoomed in. Pixel art keeps its hard blocks.
-    if (area.scale > 1 && !canvas.getPixelMode()) {
+    // On an illustration canvas the bridge brings the frames up to kChatDetail times the area's full size itself,
+    // with sharp edges, so they don't turn soft when zoomed in. Pixel art keeps its hard pixels.
+    if (!canvas.getPixelMode()) {
         job["scale"] = area.scale;
+        job["detail"] = kChatDetail;
         job["area_width"] = area.rect.width;
         job["area_height"] = area.rect.height;
     }
@@ -1103,16 +1181,23 @@ void UIManager::applyChatReply(Canvas& canvas, Timeline& timeline, const AIResul
         sf::RenderTexture layerTex;
         if (canvas.renderLayerToTexture(index, claudeLayer, layerTex)) img = layerTex.getTexture().copyToImage();
         else img.create(canvas.getCanvasSize().x, canvas.getCanvasSize().y, sf::Color::Transparent);
-        // The bridge's full-size copy, when it made one, replaces the area outright; otherwise the frame is scaled up in blocks
-        sf::Image full;
+        growIntoArea(img, drawn, g_chatSentArea);
+        // The bridge's sharp copy, finer than the canvas, is what the objects are cut from; the rest of the layer
+        // is rendered just as fine, so what was there keeps its detail too
+        sf::Image full, fine;
+        const sf::Image* detail = nullptr;
         snprintf(name, sizeof(name), "/frames_full/%03d.png", index);
         const sf::IntRect& rect = g_chatSentArea.rect;
-        if (g_chatSentArea.scale > 1 && std::filesystem::exists(dir + name) && full.loadFromFile(dir + name)
-            && full.getSize() == sf::Vector2u(static_cast<unsigned>(rect.width), static_cast<unsigned>(rect.height))) {
-            img.copy(full, static_cast<unsigned>(rect.left), static_cast<unsigned>(rect.top), sf::IntRect(0, 0, 0, 0), false);
+        if (!canvas.getPixelMode() && std::filesystem::exists(dir + name) && full.loadFromFile(dir + name)
+            && full.getSize() == sf::Vector2u(rect.width * kChatDetail, rect.height * kChatDetail)) {
+            sf::RenderTexture fineTex;
+            if (canvas.renderLayerToTexture(index, claudeLayer, fineTex, kChatDetail)) {
+                fine = fineTex.getTexture().copyToImage();
+                fine.copy(full, rect.left * kChatDetail, rect.top * kChatDetail, sf::IntRect(0, 0, 0, 0), false);
+                detail = &fine;
+            }
         }
-        else growIntoArea(img, drawn, g_chatSentArea);
-        int made = canvas.setLayerAsObjects(index, claudeLayer, img);
+        int made = canvas.setLayerAsObjects(index, claudeLayer, img, detail);
         if (made >= 0) { ++placed; objects += made; }
     }
     // The Claude layer is left active, so the select tool picks up what Claude drew right away
@@ -1143,6 +1228,7 @@ void UIManager::handleChatAction(const std::string& action, Canvas& canvas, Time
             showMessage("Drag on the canvas to mark where Claude draws. Esc cancels", sf::Color(217, 119, 87));
         }
     }
+    else if (action == "sharpen") startSharpen(canvas, activeProjectPath);
     else if (action == "new_chat") {
         // Claude keeps its drawing code and what it last drew, so it can still pick up the sprite; only
         // the conversation starts over
@@ -3629,6 +3715,7 @@ void UIManager::update(sf::RenderWindow& window, AppState currentState, AppSetti
             }
         }
         g_chatPanel.update(dt, focusMode, m_activeRightTab == RightTabMode::Chat, g_chatPending, g_chatStatus);
+        finishSharpen(canvas, activeProjectPath);
         if (m_activeRightTab == RightTabMode::Layers) {
             layerPanel.update(dt, focusMode, true);
         }

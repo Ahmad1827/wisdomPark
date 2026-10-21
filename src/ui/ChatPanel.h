@@ -145,6 +145,11 @@ private:
     sf::FloatRect m_pickerBounds;
     sf::FloatRect m_closeBounds;
     sf::FloatRect m_stopBounds;
+    // The right of the footer: how long the typed request should take, on the footer's own row or, when it
+    // would run into the buttons there, on a row of its own under them (the stop button goes there too)
+    std::string m_footerRight;
+    sf::Color m_footerRightInk;
+    float m_footerRightRow = 0.f;
 
     // How far the conversation is scrolled up from its newest message, in pixels
     float m_scroll = 0.f;
@@ -161,4 +166,5 @@ private:
     void saveChoices() const;
     Job estimate(const std::string& message, int model) const;
     std::string inputUtf8() const;
+    std::string footerRightText(float room, sf::Color& ink) const;
 };

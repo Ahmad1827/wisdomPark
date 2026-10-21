@@ -579,18 +579,22 @@ void Canvas::drawLayerContent(sf::RenderTarget& target, int frameIndex, int laye
     target.setView(savedView);
 }
 
-bool Canvas::renderLayerToTexture(int frameIndex, int layerIndex, sf::RenderTexture& out) {
+bool Canvas::renderLayerToTexture(int frameIndex, int layerIndex, sf::RenderTexture& out, unsigned int detail) {
     if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return false;
     if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[frameIndex].layers.size())) return false;
 
-    if (out.getSize() != canvasLogicalSize) {
+    detail = std::max(1u, detail);
+    sf::Vector2u size(canvasLogicalSize.x * detail, canvasLogicalSize.y * detail);
+    if (out.getSize() != size) {
         sf::ContextSettings ctx;
         ctx.antialiasingLevel = isPixelMode ? 0 : 8;
-        if (!out.create(canvasLogicalSize.x, canvasLogicalSize.y, ctx)) {
-            if (!out.create(canvasLogicalSize.x, canvasLogicalSize.y)) return false;
+        if (!out.create(size.x, size.y, ctx)) {
+            if (!out.create(size.x, size.y)) return false;
         }
         out.setSmooth(!isPixelMode);
     }
+    // Drawn in canvas coordinates whatever the size
+    out.setView(sf::View(sf::FloatRect(0.f, 0.f, static_cast<float>(canvasLogicalSize.x), static_cast<float>(canvasLogicalSize.y))));
 
     out.clear(sf::Color::Transparent);
     drawLayerContent(out, frameIndex, layerIndex, sf::RenderStates::Default, false);
@@ -2653,18 +2657,19 @@ void Canvas::recolorActiveSelection(sf::Color newColor) {
             sf::Image& img = getCanvasImageCPU(ci);
             int iw = static_cast<int>(img.getSize().x);
             int ih = static_cast<int>(img.getSize().y);
-            int bx = static_cast<int>(std::round(ci.bounds.left));
-            int by = static_cast<int>(std::round(ci.bounds.top));
             bool imgMod = false;
+            // Image pixels per canvas pixel: an object can be scaled, or hold a finer image than its place
+            float px = iw / std::max(1.f, ci.bounds.width);
+            float py = ih / std::max(1.f, ci.bounds.height);
 
-            int x0 = std::max(0, static_cast<int>(std::floor(selBox.left)) - bx);
-            int y0 = std::max(0, static_cast<int>(std::floor(selBox.top)) - by);
-            int x1 = std::min(iw, static_cast<int>(std::ceil(selBox.left + selBox.width)) - bx);
-            int y1 = std::min(ih, static_cast<int>(std::ceil(selBox.top + selBox.height)) - by);
+            int x0 = std::max(0, static_cast<int>(std::floor((selBox.left - ci.bounds.left) * px)));
+            int y0 = std::max(0, static_cast<int>(std::floor((selBox.top - ci.bounds.top) * py)));
+            int x1 = std::min(iw, static_cast<int>(std::ceil((selBox.left + selBox.width - ci.bounds.left) * px)));
+            int y1 = std::min(ih, static_cast<int>(std::ceil((selBox.top + selBox.height - ci.bounds.top) * py)));
 
             for (int ly = y0; ly < y1; ++ly) {
                 for (int lx = x0; lx < x1; ++lx) {
-                    if (isInside(static_cast<float>(bx + lx) + 0.5f, static_cast<float>(by + ly) + 0.5f)) {
+                    if (isInside(ci.bounds.left + (lx + 0.5f) / px, ci.bounds.top + (ly + 0.5f) / py)) {
                         sf::Color c = img.getPixel(lx, ly);
                         if (c.a > 0) {
                             sf::Uint8 a = (newColor.a == 255) ? c.a : static_cast<sf::Uint8>((static_cast<int>(c.a) * static_cast<int>(newColor.a)) / 255);
@@ -6761,7 +6766,7 @@ void Canvas::replaceFrameImage(int frameIndex, const sf::Image& img) {
     }
 }
 
-int Canvas::setLayerAsObjects(int frameIndex, int layerIndex, const sf::Image& img) {
+int Canvas::setLayerAsObjects(int frameIndex, int layerIndex, const sf::Image& img, const sf::Image* detailImg) {
     if (frameIndex < 0 || frameIndex >= static_cast<int>(frames.size())) return -1;
     if (layerIndex < 0 || layerIndex >= static_cast<int>(frames[frameIndex].layers.size())) return -1;
     Layer& layer = frames[frameIndex].layers[layerIndex];
@@ -6811,7 +6816,8 @@ int Canvas::setLayerAsObjects(int frameIndex, int layerIndex, const sf::Image& i
     }
     // A scattered drawing (stars, rain, dithering) would make hundreds of specks; it stays one object instead
     const size_t kMaxObjects = 48;
-    if (shapes.size() > kMaxObjects) {
+    bool merged = shapes.size() > kMaxObjects;
+    if (merged) {
         Shape all{ w, h, -1, -1, {} };
         for (auto& sh : shapes) {
             all.minX = std::min(all.minX, sh.minX); all.minY = std::min(all.minY, sh.minY);
@@ -6822,15 +6828,38 @@ int Canvas::setLayerAsObjects(int frameIndex, int layerIndex, const sf::Image& i
         shapes.push_back(std::move(all));
     }
 
-    for (const auto& sh : shapes) {
+    // How many times finer the detail image is; it is only used when it is exactly that many times the canvas
+    int k = 1;
+    if (detailImg && w > 0 && h > 0 && detailImg->getSize().x % w == 0 && detailImg->getSize().x / w > 1
+        && detailImg->getSize().y == detailImg->getSize().x / w * h) k = static_cast<int>(detailImg->getSize().x / w);
+
+    for (size_t id = 0; id < shapes.size(); ++id) {
+        const Shape& sh = shapes[id];
         int sw = sh.maxX - sh.minX + 1;
         int shh = sh.maxY - sh.minY + 1;
         sf::Image part;
-        part.create(sw, shh, sf::Color::Transparent);
-        for (const auto& px : sh.pixels) part.setPixel(px.x - sh.minX, px.y - sh.minY, img.getPixel(px.x, px.y));
+        if (k == 1) {
+            part.create(sw, shh, sf::Color::Transparent);
+            for (const auto& px : sh.pixels) part.setPixel(px.x - sh.minX, px.y - sh.minY, img.getPixel(px.x, px.y));
+        }
+        else {
+            // The shape's box at the finer size; a fine pixel belongs to the shape when its canvas pixel does, or
+            // when that canvas pixel is empty (the soft edge of a sharpened shape reaches a little past it)
+            part.create(sw * k, shh * k, sf::Color::Transparent);
+            for (int y = 0; y < shh * k; ++y) {
+                for (int x = 0; x < sw * k; ++x) {
+                    int cx = sh.minX + x / k, cy = sh.minY + y / k;
+                    int o = owner[cy * w + cx];
+                    if (o != -1 && !merged && o != static_cast<int>(id)) continue;
+                    part.setPixel(x, y, detailImg->getPixel(sh.minX * k + x, sh.minY * k + y));
+                }
+            }
+        }
         auto tex = std::make_shared<sf::Texture>();
         tex->loadFromImage(part);
         tex->setSmooth(!isPixelMode);
+        // Finer than the canvas, so it is shrunk on screen at ordinary zoom: mipmaps keep that clean
+        if (k > 1) tex->generateMipmap();
         CanvasImage ci;
         ci.id = ++m_nextImageId;
         ci.frame = frameIndex;
@@ -6841,6 +6870,23 @@ int Canvas::setLayerAsObjects(int frameIndex, int layerIndex, const sf::Image& i
         m_canvasImages.push_back(std::move(ci));
     }
     return static_cast<int>(shapes.size());
+}
+
+bool Canvas::replaceCanvasImagePixels(int id, const sf::Image& img) {
+    for (auto& ci : m_canvasImages) {
+        if (ci.id != id) continue;
+        if (!ci.texture) return false;
+        // A new texture rather than the old one rewritten: undo snapshots still share the old one
+        auto tex = std::make_shared<sf::Texture>();
+        if (!tex->loadFromImage(img)) return false;
+        tex->setSmooth(ci.texture->isSmooth());
+        if (img.getSize().x > ci.bounds.width + 0.5f) tex->generateMipmap();
+        ci.texture = tex;
+        ci.image = img;
+        isDirty = true;
+        return true;
+    }
+    return false;
 }
 
 bool Canvas::applyImageToLayer(int frameIndex, const sf::Image& img, bool asNewLayer, const std::string& newLayerName) {

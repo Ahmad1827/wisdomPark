@@ -293,6 +293,9 @@ public:
         }
     }
     void clearCanvasImages() { m_canvasImages.clear(); }
+    // Swaps the pixels of the object with this id for `img`, which may be finer than the object's place on the
+    // canvas (it is drawn scaled into the same bounds). No undo step of its own.
+    bool replaceCanvasImagePixels(int id, const sf::Image& img);
     void clearObjectSelection() {
         m_selectedStrokes.clear();
         m_selectedImages.clear();
@@ -387,7 +390,8 @@ public:
     sf::Color getSecondaryColor() const;
     void setFillSettings(float tolerance, bool contiguous);
 
-    bool renderLayerToTexture(int frameIndex, int layerIndex, sf::RenderTexture& out);
+    // `detail` renders it that many times finer than the canvas, for objects that hold finer images
+    bool renderLayerToTexture(int frameIndex, int layerIndex, sf::RenderTexture& out, unsigned int detail = 1);
 
     void saveUndoState();
     size_t getUndoDepth() const { return undoHistory.size(); }
@@ -457,7 +461,9 @@ public:
     // Replaces everything on one layer of one frame (its pixels and its image objects) with `img`, a full-canvas
     // image, split into image objects: one per separate shape, so each can be selected and moved on its own.
     // Returns how many objects it made, or -1 when the layer is locked or missing.
-    int setLayerAsObjects(int frameIndex, int layerIndex, const sf::Image& img);
+    // `detailImg`, when given, is the same picture a whole number of times finer: the objects are cut from it
+    // instead, so they stay crisp when zoomed in, while `img` still decides where the shapes are.
+    int setLayerAsObjects(int frameIndex, int layerIndex, const sf::Image& img, const sf::Image* detailImg = nullptr);
 
     void enterTransformMode(int currentFrame);
     void applyTransform(int currentFrame);
