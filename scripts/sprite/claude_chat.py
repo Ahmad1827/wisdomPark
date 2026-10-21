@@ -5,7 +5,9 @@ The app sends a JSON job on stdin:
     {"dir": "projects/Knight.wpk/assistant", "width": 32, "height": 32, "fps": 12,
      "current_frame": 0, "frame_count": 3, "message": "now make him walk"}
 width and height are the size Claude draws at: the selected area or the whole canvas, shrunk when
-it is large (area_note then says so, and the app scales Claude's frames back up).
+it is large (area_note then says so, and the app scales Claude's frames back up). On an illustration
+canvas the job also has "scale" and "area_width", "area_height": the frames handed back are then also
+brought up to the area's full size here, with sharp edges, so they don't turn blocky when zoomed in.
 and before that writes the timeline into <dir>/canvas/:
     frame_NNN.png   each frame as it looks (all visible layers)
     claude_NNN.png  each frame's "Claude" layer, when the project has one
@@ -19,6 +21,7 @@ Writes:
     <dir>/reply.json    {"reply": text, "changed": [frame indices], "total": frames drawn,
                          "limits": plan usage Claude Code reported (or null), "cost": API-price estimate in USD}
     <dir>/frames/       every frame Claude's sprite.py draws (frames/NNN.png)
+    <dir>/frames_full/  the frames handed back, at the area's full size (illustration canvases only)
     <dir>/chat.jsonl    the conversation, one {"role", "text"} per line, for the chat panel
     temp_ai_status.txt  what Claude is doing right now (the app's loading screen shows it)
     temp_ai_error.txt   why it failed, when it exits non-zero
@@ -30,13 +33,18 @@ import shutil
 import subprocess
 import sys
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from claude_sprite import ClaudeMissing, copy_support_files, run_claude, set_status  # noqa: E402
+from upscale import upscale  # noqa: E402
 
 STATUS_PATH = "temp_ai_status.txt"
 ERROR_PATH = "temp_ai_error.txt"
+# A frame brought up to full size reads back off the Claude layer a few shades different where its colours
+# blend, so the layer still counts as Claude's own while no channel is further off than this. Painting over
+# it by hand changes far more.
+LAYER_TOLERANCE = 40
 
 SYSTEM_PROMPT = """You are the pixel-art assistant inside wisdomPark, a sprite editor, talking with
 the artist in a chat panel next to their canvas. You draw by writing sprite.py with the drawing
@@ -62,8 +70,16 @@ def norm_bytes(path):
     return img.size, bytes(data)
 
 
-def same_image(a, b):
-    return os.path.exists(a) and os.path.exists(b) and norm_bytes(a) == norm_bytes(b)
+def same_image(a, b, tolerance=0):
+    if not (os.path.exists(a) and os.path.exists(b)):
+        return False
+    (size_a, data_a), (size_b, data_b) = norm_bytes(a), norm_bytes(b)
+    if size_a != size_b:
+        return False
+    if tolerance == 0:
+        return data_a == data_b
+    diff = ImageChops.difference(Image.frombytes("RGBA", size_a, data_a), Image.frombytes("RGBA", size_b, data_b))
+    return max(high for _, high in diff.getextrema()) <= tolerance
 
 
 def is_blank(path):
@@ -95,7 +111,7 @@ def describe_canvas(job, workdir):
     for i in range(n):
         mine = os.path.join(canvas, "claude_%03d.png" % i)
         last = os.path.join(workdir, "last", "%03d.png" % i)
-        if os.path.exists(mine) and os.path.exists(last) and not same_image(mine, last):
+        if os.path.exists(mine) and os.path.exists(last) and not same_image(mine, last, LAYER_TOLERANCE):
             edited.append(i)
     if edited:
         lines.append("The artist painted over your drawing by hand since your last turn on frame"
@@ -141,11 +157,28 @@ def changed_frames(workdir, frame_count):
             if not same_image(new, last):
                 changed.append(i)
         elif os.path.exists(mine):
-            if not same_image(new, mine):
+            if not same_image(new, mine, LAYER_TOLERANCE):
                 changed.append(i)
         elif not is_blank(new):
             changed.append(i)
     return changed, total
+
+
+def write_full_frames(workdir, changed, job):
+    """Full-size copies of the changed frames, for an illustration canvas Claude drew shrunk."""
+    full = os.path.join(workdir, "frames_full")
+    shutil.rmtree(full, ignore_errors=True)
+    scale = int(job.get("scale", 1))
+    if scale <= 1 or not changed:
+        return
+    os.makedirs(full)
+    area = (int(job["area_width"]), int(job["area_height"]))
+    for n, i in enumerate(changed):
+        set_status(STATUS_PATH, f"Sharpening frame {n + 1} of {len(changed)} to full size")
+        drawn = Image.open(os.path.join(workdir, "frames", "%03d.png" % i))
+        # The last row and column of blocks reach past the area when its size is not a multiple of the scale
+        big = upscale(drawn, (drawn.width * scale, drawn.height * scale))
+        big.crop((0, 0) + area).save(os.path.join(full, "%03d.png" % i))
 
 
 def fail(text, workdir=None):
@@ -201,6 +234,7 @@ def main():
             fail(f"Claude drew {size[0]}x{size[1]} frames but the canvas is {job['width']}x{job['height']}. "
                  "Ask it to match the canvas size.", workdir)
         changed, total = changed_frames(workdir, int(job["frame_count"]))
+        write_full_frames(workdir, changed, job)
         # What Claude drew this turn is what the next turn compares against
         last = os.path.join(workdir, "last")
         shutil.rmtree(last, ignore_errors=True)

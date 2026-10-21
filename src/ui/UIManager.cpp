@@ -1005,6 +1005,13 @@ void UIManager::sendChatMessage(Canvas& canvas, Timeline& timeline, const std::s
             "their canvas (or their area) and don't mention " + w + " or the scaling.";
     }
     if (!where.empty()) job["area_note"] = where;
+    // On an illustration canvas the bridge brings the frames back up to full size itself, with sharp edges,
+    // so they don't turn into soft blocks when zoomed in. Pixel art keeps its hard blocks.
+    if (area.scale > 1 && !canvas.getPixelMode()) {
+        job["scale"] = area.scale;
+        job["area_width"] = area.rect.width;
+        job["area_height"] = area.rect.height;
+    }
     AIRequest req;
     req.operation = AIOperation::Chat;
     req.prompt = job.dump();
@@ -1096,7 +1103,15 @@ void UIManager::applyChatReply(Canvas& canvas, Timeline& timeline, const AIResul
         sf::RenderTexture layerTex;
         if (canvas.renderLayerToTexture(index, claudeLayer, layerTex)) img = layerTex.getTexture().copyToImage();
         else img.create(canvas.getCanvasSize().x, canvas.getCanvasSize().y, sf::Color::Transparent);
-        growIntoArea(img, drawn, g_chatSentArea);
+        // The bridge's full-size copy, when it made one, replaces the area outright; otherwise the frame is scaled up in blocks
+        sf::Image full;
+        snprintf(name, sizeof(name), "/frames_full/%03d.png", index);
+        const sf::IntRect& rect = g_chatSentArea.rect;
+        if (g_chatSentArea.scale > 1 && std::filesystem::exists(dir + name) && full.loadFromFile(dir + name)
+            && full.getSize() == sf::Vector2u(static_cast<unsigned>(rect.width), static_cast<unsigned>(rect.height))) {
+            img.copy(full, static_cast<unsigned>(rect.left), static_cast<unsigned>(rect.top), sf::IntRect(0, 0, 0, 0), false);
+        }
+        else growIntoArea(img, drawn, g_chatSentArea);
         int made = canvas.setLayerAsObjects(index, claudeLayer, img);
         if (made >= 0) { ++placed; objects += made; }
     }

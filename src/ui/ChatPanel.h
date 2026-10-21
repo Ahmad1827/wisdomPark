@@ -16,6 +16,11 @@ public:
     struct Message {
         Role role;
         sf::String text;
+        // The text wrapped to the list and laid out, kept until the list's width changes: building an sf::Text
+        // for every line every frame was most of what the open panel cost
+        mutable std::vector<sf::String> lines;
+        mutable std::vector<sf::Text> texts;
+        mutable float wrappedWidth = -1.f;
     };
 
     ChatPanel();

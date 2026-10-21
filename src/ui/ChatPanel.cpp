@@ -433,8 +433,15 @@ void ChatPanel::runCommand(const std::string& command) {
 
 std::vector<sf::String> ChatPanel::wrap(const sf::String& text, unsigned int size, float maxWidth) const {
     std::vector<sf::String> lines;
-    sf::Text probe("", m_font, size);
-    auto widthOf = [&](const sf::String& s) { probe.setString(s); return probe.getLocalBounds().width; };
+    // Glyph advances added up: laying out an sf::Text for every word tried made the panel crawl
+    auto widthOf = [&](const sf::String& s) {
+        float w = 0.f;
+        for (size_t i = 0; i < s.getSize(); ++i) {
+            if (i > 0) w += m_font.getKerning(s[i - 1], s[i], size);
+            w += m_font.getGlyph(s[i], size, false).advance;
+        }
+        return w;
+    };
 
     sf::String line, word;
     auto flushWord = [&]() {
@@ -600,11 +607,21 @@ void ChatPanel::draw(sf::RenderWindow& window) {
     float indent = 2.f * m_charW;
     float textMaxW = list.width - indent - 10.f;
     float totalH = 0.f;
-    struct Laid { const Message* msg; std::vector<sf::String> lines; float h; };
+    struct Laid { const Message* msg; const std::vector<sf::String>* lines; float h; };
     std::vector<Laid> laid;
     for (const auto& m : m_messages) {
-        Laid l{ &m, wrap(m.text, kTextSize, textMaxW), 0.f };
-        l.h = l.lines.size() * kLineHeight + (m.role == Role::Artist ? 6.f : 0.f);
+        if (m.wrappedWidth != textMaxW) {
+            m.lines = wrap(m.text, kTextSize, textMaxW);
+            m.wrappedWidth = textMaxW;
+            sf::Color ink = m.role == Role::Error ? kError : m.role == Role::Note ? kDim : kText;
+            m.texts.clear();
+            for (const auto& ln : m.lines) {
+                m.texts.emplace_back(ln, m_font, kTextSize);
+                m.texts.back().setFillColor(ink);
+            }
+        }
+        Laid l{ &m, &m.lines, 0.f };
+        l.h = l.lines->size() * kLineHeight + (m.role == Role::Artist ? 6.f : 0.f);
         totalH += l.h + kMessageGap;
         laid.push_back(std::move(l));
     }
@@ -634,18 +651,20 @@ void ChatPanel::draw(sf::RenderWindow& window) {
         if (y + l.h >= list.top && y <= list.top + list.height) {
             Role role = l.msg->role;
             float ty = y;
-            sf::Color ink = kText;
             if (role == Role::Artist) {
                 rect(sf::FloatRect(list.left, y, list.width, l.h), kUserBg);
                 ty += 3.f;
                 text(">", list.left + 4.f, ty, kDim);
-                ink = kText;
             }
             else if (role == Role::Claude) bullet(list.left + 4.f, ty, kText);
-            else if (role == Role::Error) { bullet(list.left + 4.f, ty, kError); ink = kError; }
-            else { elbow(list.left + 4.f, ty, kDim); ink = kDim; }
-            for (const auto& ln : l.lines) {
-                text(ln, list.left + 4.f + indent, ty, ink);
+            else if (role == Role::Error) bullet(list.left + 4.f, ty, kError);
+            else elbow(list.left + 4.f, ty, kDim);
+            for (sf::Text& t : l.msg->texts) {
+                // Lines scrolled out of the list are skipped
+                if (ty + kLineHeight >= list.top && ty <= list.top + list.height) {
+                    t.setPosition(std::floor(list.left + 4.f + indent), std::floor(ty + 1.f));
+                    window.draw(t);
+                }
                 ty += kLineHeight;
             }
         }
